@@ -1,0 +1,15 @@
+{
+  "name": "SengokuChronicle.Domain",
+  "rootNamespace": "SengokuChronicle.Domain",
+  "references": [],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "defineConstraints": [],
+  "assemblyReferences": [],
+  "assemblyDefinitionReferences": [],
+  "versionDefines": [],
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "useUnityAssemblies": false,
+  "isTestAssembly": false
+}

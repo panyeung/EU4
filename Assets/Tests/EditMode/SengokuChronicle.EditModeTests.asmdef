@@ -1,0 +1,27 @@
+{
+  "name": "SengokuChronicle.EditModeTests",
+  "rootNamespace": "SengokuChronicle.EditModeTests",
+  "references": [
+    "SengokuChronicle.Domain",
+    "SengokuChronicle.Application"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "defineConstraints": [],
+  "assemblyReferences": [],
+  "assemblyDefinitionReferences": [
+    "SengokuChronicle.Domain",
+    "SengokuChronicle.Application"
+  ],
+  "versionDefines": [],
+  "precompiledReferences": [
+    "Unity.TestRunner",
+    "UnityEditor.TestRunner",
+    "nunit.framework"
+  ],
+  "autoReferenced": false,
+  "useUnityAssemblies": false,
+  "isTestAssembly": true
+}
