@@ -13,6 +13,7 @@ namespace SengokuChronicle.Application
     {
         public WorldClock WorldClock { get; private set; }
         public LocationId CurrentLocation { get; private set; }
+        private CharacterRelationships _relationships;
 
         private void Awake()
         {
@@ -25,6 +26,27 @@ namespace SengokuChronicle.Application
         {
             WorldClock = new WorldClock();
             CurrentLocation = LocationId.Kiyosu;
+            _relationships = new CharacterRelationships();
+        }
+
+        /// <summary>Reads the player's relationship with a known NPC.</summary>
+        public RelationshipResult TryGetRelationship(CharacterId npcId)
+        {
+            EnsureRelationships();
+            return _relationships.TryGet(npcId);
+        }
+
+        /// <summary>Applies an integer delta to one NPC relationship, clamped to [-100, 100].</summary>
+        public RelationshipResult TryChangeRelationship(CharacterId npcId, int delta)
+        {
+            EnsureRelationships();
+            return _relationships.TryChange(npcId, delta);
+        }
+
+        private void EnsureRelationships()
+        {
+            if (_relationships == null)
+                _relationships = new CharacterRelationships();
         }
 
         /// <summary>创建新游戏会话，日期固定为 1560-04-01，位置固定为清洲。</summary>
