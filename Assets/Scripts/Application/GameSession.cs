@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using UnityEngine;
 using SengokuChronicle.Domain;
 
@@ -14,6 +16,49 @@ namespace SengokuChronicle.Application
         public WorldClock WorldClock { get; private set; }
         public LocationId CurrentLocation { get; private set; }
         private CharacterRelationships _relationships;
+        private readonly Dictionary<Guid, DialogueState> _dialogues = new Dictionary<Guid, DialogueState>();
+
+        private sealed class DialogueState
+        {
+            public CharacterId CharacterId;
+            public DialogueDefinition Definition;
+            public string CurrentNodeId;
+            public bool Ended;
+        }
+
+
+        public DialogueStartResult TryStartDialogue(CharacterId characterId)
+        {
+            if (!BranchingDialogueCatalog.TryGet(characterId, out DialogueDefinition definition) || !definition.TryGetNode(definition.StartNodeId, out _))
+                return new DialogueStartResult(Guid.Empty, string.Empty, false, "No dialogue is configured for this character.");
+            Guid id = Guid.NewGuid();
+            _dialogues.Add(id, new DialogueState { CharacterId = characterId, Definition = definition, CurrentNodeId = definition.StartNodeId });
+            return new DialogueStartResult(id, definition.StartNodeId, true, string.Empty);
+        }
+
+        public DialogueSelectionResult TrySelectDialogueOption(Guid dialogueInstanceId, string nodeId, DialogueOptionId optionId)
+        {
+            if (!_dialogues.TryGetValue(dialogueInstanceId, out DialogueState state))
+                return new DialogueSelectionResult(string.Empty, false, false, "Dialogue instance is invalid.", false, default);
+            if (state.Ended || !string.Equals(state.CurrentNodeId, nodeId, StringComparison.Ordinal) || !state.Definition.TryGetNode(nodeId, out DialogueNode node))
+                return new DialogueSelectionResult(state.CurrentNodeId, state.Ended, false, "Dialogue node is invalid or no longer current.", false, default);
+            DialogueOption selected = null;
+            foreach (DialogueOption option in node.Options) if (option != null && option.Id == optionId) { selected = option; break; }
+            if (selected == null || !state.Definition.TryGetNode(selected.TargetNodeId, out DialogueNode target))
+                return new DialogueSelectionResult(state.CurrentNodeId, false, false, "Dialogue option or target is invalid.", false, default);
+            bool hasEffect = !selected.EffectTarget.IsEmpty && selected.RelationshipDelta != 0;
+            RelationshipResult relationship = default;
+            if (hasEffect)
+            {
+                EnsureRelationships();
+                relationship = _relationships.TryGet(selected.EffectTarget);
+                if (!relationship.Succeeded) return new DialogueSelectionResult(state.CurrentNodeId, false, false, relationship.Error, false, relationship);
+            }
+            state.CurrentNodeId = target.Id;
+            state.Ended = target.Options.Count == 0;
+            if (hasEffect) relationship = _relationships.TryChange(selected.EffectTarget, selected.RelationshipDelta);
+            return new DialogueSelectionResult(state.CurrentNodeId, state.Ended, true, string.Empty, hasEffect && relationship.Succeeded, relationship);
+        }
 
         private void Awake()
         {
