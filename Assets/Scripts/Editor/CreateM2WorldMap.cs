@@ -325,7 +325,7 @@ namespace SengokuChronicle.Editor
             townRt.offsetMin = new Vector2(12, 12);
             townRt.offsetMax = new Vector2(-12, -12);
             Image townImg = Undo.AddComponent<Image>(townRoot);
-            townImg.color = new Color(0.07f, 0.07f, 0.1f, 0.96f);
+            townImg.color = new Color(0.07f, 0.07f, 0.1f, 1f);
 
             Text townTitleText = CreateUIText(townRoot.transform, "TownMenuTitleText", font, "城镇", 26, TextAnchor.MiddleCenter,
                 new Vector2(0, 210), new Vector2(400, 50));

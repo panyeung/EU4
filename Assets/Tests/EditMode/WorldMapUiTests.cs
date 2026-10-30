@@ -61,7 +61,8 @@ namespace SengokuChronicle.Tests.EditMode
 
             _townRoot = new GameObject("TownMenuRoot", typeof(RectTransform));
             _townRoot.transform.SetParent(null);
-            _townRoot.AddComponent<Image>();
+            Image townBackground = _townRoot.AddComponent<Image>();
+            townBackground.color = new Color(0.1f, 0.1f, 0.1f, 0.25f);
             _townRoot.SetActive(false);
 
             _townTitle = CreateText("TownTitle");
@@ -170,6 +171,14 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(_session.WorldClock.CurrentDate, Is.EqualTo(new GameDate(1560, 4, 2)));
             Assert.That(_controller.InTownMenu, Is.True);
             Assert.That(_townRoot.activeSelf, Is.True);
+            Assert.That(_townRoot.GetComponent<Image>().color.a, Is.EqualTo(1f));
+            Assert.That(_marker.gameObject.activeSelf, Is.False);
+            Assert.That(_feedback.gameObject.activeSelf, Is.False);
+            Assert.That(_destName.gameObject.activeSelf, Is.False);
+            Assert.That(_travel.gameObject.activeSelf, Is.False);
+            Assert.That(_arrival.gameObject.activeSelf, Is.False);
+            Assert.That(_confirm.gameObject.activeSelf, Is.False);
+            Assert.That(_cancel.gameObject.activeSelf, Is.False);
             Assert.That(_controller.Feedback, Does.Contain("抵达"));
             Assert.That(_townTitle.text, Does.Contain("热田"));
         }
@@ -223,6 +232,13 @@ namespace SengokuChronicle.Tests.EditMode
 
             Assert.That(_controller.InTownMenu, Is.False);
             Assert.That(_townRoot.activeSelf, Is.False);
+            Assert.That(_marker.gameObject.activeSelf, Is.True);
+            Assert.That(_feedback.gameObject.activeSelf, Is.True);
+            Assert.That(_destName.gameObject.activeSelf, Is.True);
+            Assert.That(_travel.gameObject.activeSelf, Is.True);
+            Assert.That(_arrival.gameObject.activeSelf, Is.True);
+            Assert.That(_confirm.gameObject.activeSelf, Is.True);
+            Assert.That(_cancel.gameObject.activeSelf, Is.True);
             Assert.That(_controller.Feedback, Does.Contain("返回地图"));
         }
 

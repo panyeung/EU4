@@ -243,6 +243,7 @@ namespace SengokuChronicle.Presentation
             _inTownMenu = false;
             if (townMenuRoot != null)
                 townMenuRoot.SetActive(false);
+            SetMapContentVisible(true);
             SetFeedback($"返回地图，当前位置：{LocationId.GetChineseName(gameSession != null ? gameSession.CurrentLocation : default)}。请选择目的地。");
             RefreshAll();
         }
@@ -382,8 +383,18 @@ namespace SengokuChronicle.Presentation
         public void OpenTownMenu()
         {
             _inTownMenu = true;
+            SetMapContentVisible(false);
             if (townMenuRoot != null)
+            {
+                Image townBackground = townMenuRoot.GetComponent<Image>();
+                if (townBackground != null)
+                {
+                    Color backgroundColor = townBackground.color;
+                    backgroundColor.a = 1f;
+                    townBackground.color = backgroundColor;
+                }
                 townMenuRoot.SetActive(true);
+            }
 
             if (townMenuTitleText != null && gameSession != null)
                 townMenuTitleText.text = $"{LocationId.GetChineseName(gameSession.CurrentLocation)} 镇";
@@ -400,6 +411,26 @@ namespace SengokuChronicle.Presentation
                 t.text = $"{label}：未开放";
                 t.enabled = false; // 未开放：显式禁用
             }
+        }
+
+        private void SetMapContentVisible(bool visible)
+        {
+            SetVisible(locationMarkerText, visible);
+            SetVisible(feedbackText, visible);
+            SetVisible(destinationNameText, visible);
+            SetVisible(travelTimeText, visible);
+            SetVisible(arrivalDateText, visible);
+            SetVisible(confirmButton, visible);
+            SetVisible(cancelButton, visible);
+            SetVisible(kiyosuButton, visible);
+            SetVisible(atsutaButton, visible);
+            SetVisible(nagoyaButton, visible);
+        }
+
+        private static void SetVisible(Behaviour component, bool visible)
+        {
+            if (component != null)
+                component.gameObject.SetActive(visible);
         }
 
         private void SetFeedback(string message)
