@@ -6,6 +6,7 @@ Audit date: 2026-10-29 (Pacific/Honolulu)
 
 - M2 World Map, Travel and Town Menus feedback update is ready for a revised Play Demo, pending user acceptance.
 - The original `feature/m2-world-map` demo branch remains frozen and unchanged. This follow-up is isolated on `feature/m2-ui-overlap-fix`.
+- The overlap fix is committed as `9c2ac69` and pushed to the matching origin branch.
 - Unity Editor 6000.6.6f1 is open on `C:\Users\panye\orca\workspaces\SengokuChronicle-M2\m2-ui-overlap-fix`, with `FoundationScene` loaded.
 - The existing M3 branch remains separate. Nothing has been merged to `main`.
 

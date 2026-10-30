@@ -2,7 +2,7 @@
 
 ## Start
 
-Open `Assets/Scenes/FoundationScene.unity` in Unity 6000.6.6f1 and press **Play**. Use the mouse to select a destination, then choose **Confirm Travel** or **Cancel**. In a town menu, choose **Return to Map**.
+Open `Assets/Scenes/FoundationScene.unity` in Unity 6000.6.6f1 and press **Play**. Use the mouse to select a destination (清洲, 热田, or 那古野), then click **确认出发** to travel or **取消** to return to the map. In a town, click **返回地图**.
 
 ## Try
 
@@ -26,4 +26,7 @@ Town facilities, characters, missions, and save/load are not part of M2. The Pha
 
 ## Next
 
-This feedback update is on `feature/m2-ui-overlap-fix`. After this demo is accepted, merge and tag M2, then continue with M3 characters and relationships. The commit hash is in the handoff.
+Branch: `feature/m2-ui-overlap-fix`  
+Overlap fix commit: `9c2ac69`
+
+After this demo is accepted, merge and tag M2, then continue with M3 characters and relationships.
