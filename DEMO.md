@@ -26,7 +26,7 @@ Town facilities, characters, missions, and save/load are not part of M2. The Pha
 
 ## Next
 
-Branch: `feature/m2-ui-overlap-fix`  
-Overlap fix commit: `9c2ac69`
+- Branch: `feature/m2-ui-overlap-fix`
+- Overlap fix commit: `9c2ac69`
 
 After this demo is accepted, merge and tag M2, then continue with M3 characters and relationships.
