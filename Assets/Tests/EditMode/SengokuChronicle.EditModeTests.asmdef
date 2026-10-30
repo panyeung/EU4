@@ -3,7 +3,9 @@
   "rootNamespace": "SengokuChronicle.EditModeTests",
   "references": [
     "SengokuChronicle.Domain",
-    "SengokuChronicle.Application"
+    "SengokuChronicle.Application",
+    "SengokuChronicle.Presentation",
+    "SengokuChronicle.Editor"
   ],
   "includePlatforms": [
     "Editor"
@@ -13,7 +15,9 @@
   "assemblyReferences": [],
   "assemblyDefinitionReferences": [
     "SengokuChronicle.Domain",
-    "SengokuChronicle.Application"
+    "SengokuChronicle.Application",
+    "SengokuChronicle.Presentation",
+    "SengokuChronicle.Editor"
   ],
   "versionDefines": [],
   "precompiledReferences": [
@@ -21,7 +25,7 @@
     "UnityEditor.TestRunner",
     "nunit.framework"
   ],
-  "autoReferenced": false,
+  "autoReferenced": true,
   "useUnityAssemblies": false,
   "isTestAssembly": true
 }

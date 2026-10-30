@@ -1,0 +1,22 @@
+{
+  "name": "SengokuChronicle.Editor",
+  "rootNamespace": "",
+  "references": [
+    "SengokuChronicle.Domain",
+    "SengokuChronicle.Application",
+    "SengokuChronicle.Presentation",
+    "Unity.InputSystem"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "defineConstraints": [],
+  "assemblyReferences": [],
+  "assemblyDefinitionReferences": [],
+  "versionDefines": [],
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "useUnityAssemblies": true,
+  "isTestAssembly": false
+}

@@ -4,13 +4,15 @@ using SengokuChronicle.Domain;
 namespace SengokuChronicle.Application
 {
     /// <summary>
-    /// 游戏会话 MonoBehaviour：M1 范围只初始化并持有纯 C# WorldClock 状态。
-    /// 挂载在场景中的 GameObject 上，新局固定从 1560-04-01 开始。
+    /// 游戏会话 MonoBehaviour：持有 WorldClock 与当前位置，并提供
+    /// 旅行预览与确认旅行的最小 API。
+    /// 新局固定从 1560-04-01 开始，当前位置固定为清洲。
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class GameSession : MonoBehaviour
     {
         public WorldClock WorldClock { get; private set; }
+        public LocationId CurrentLocation { get; private set; }
 
         private void Awake()
         {
@@ -18,16 +20,17 @@ namespace SengokuChronicle.Application
                 InitNewGame();
         }
 
-        /// <summary>以新局状态重置/初始化时钟（1560-04-01）。</summary>
+        /// <summary>以新局状态重置/初始化时钟（1560-04-01）与位置（清洲）。</summary>
         public void InitNewGame()
         {
             WorldClock = new WorldClock();
+            CurrentLocation = LocationId.Kiyosu;
         }
 
-        /// <summary>创建新游戏会话，日期固定为 1560-04-01。返回一个挂载在临时 GameObject 上的实例。</summary>
+        /// <summary>创建新游戏会话，日期固定为 1560-04-01，位置固定为清洲。</summary>
         public static GameSession NewGame()
         {
-            var go = new GameObject("GameSession_NewGame");
+            var go = new GameObject(nameof(GameSession));
             var session = go.AddComponent<GameSession>();
             session.InitNewGame();
             return session;
@@ -47,6 +50,56 @@ namespace SengokuChronicle.Application
             if (WorldClock == null)
                 InitNewGame();
             return WorldClock.AdvanceDays(count);
+        }
+
+        /// <summary>
+        /// 预览前往 destination 的旅行：返回目的地 ID、中文名称、耗时与预计到达 GameDate。
+        /// 绝不修改当前日期或位置；可直接丢弃。
+        /// 未知地点、当前位置、无直达路线或日期越界均返回 null。
+        /// </summary>
+        public TravelPreview? PreviewTravel(LocationId destination)
+        {
+            if (WorldClock == null)
+                InitNewGame();
+
+            if (!destination.IsValid)
+                return null;
+            if (destination == CurrentLocation)
+                return null;
+            if (!WorldMapRules.TryGetTravelDays(CurrentLocation, destination, out int days))
+                return null;
+            if (!GameDate.TryAddDays(WorldClock.CurrentDate, days, out GameDate arrival))
+                return null;
+
+            return new TravelPreview(destination, LocationId.GetChineseName(destination), days, arrival);
+        }
+
+        /// <summary>
+        /// 确认旅行：重新校验目标/路线/耗时/日期后推进 WorldClock 并更新位置。
+        /// 不盲信过期或伪造的预览数据；任何失败均返回 false 且日期与位置均保持不变。
+        /// </summary>
+        public bool ConfirmTravel(TravelPreview preview)
+        {
+            if (WorldClock == null)
+                InitNewGame();
+
+            if (!preview.Destination.IsValid)
+                return false;
+            if (preview.Destination == CurrentLocation)
+                return false;
+            if (!WorldMapRules.TryGetTravelDays(CurrentLocation, preview.Destination, out int days))
+                return false;
+            if (days != preview.TravelDays)
+                return false;
+            if (!GameDate.TryAddDays(WorldClock.CurrentDate, days, out GameDate arrival))
+                return false;
+            if (arrival != preview.EstimatedArrivalDate)
+                return false;
+
+            if (!WorldClock.AdvanceDays(days))
+                return false;
+            CurrentLocation = preview.Destination;
+            return true;
         }
     }
 }

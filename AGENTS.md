@@ -246,6 +246,18 @@ For trivial bug fixes and existing-code maintenance,
 
 avoid unnecessary external research.
 
+## Lead Orchestrator project rules
+
+The current lead prompt governs process. Keep the GDD authoritative for game design. Preserve existing branches and checkpoint commits. Work on feature or integration branches; merge to `main` and tag a milestone only after the user accepts its demo. Never force-push, rewrite history, or delete a branch containing unmerged work.
+
+Stay in this repository. Use no paid services, subscriptions, assets, or APIs. Do not change OpenCode providers, API keys, or plans. Do not copy material from Taiko Risshiden or another commercial game. Use original, CC0, or permissively licensed content and list every source and license in `ASSETS.md`. Record new Unity packages and their reason in `DECISIONS.md`. Preserve `.meta` files and GUIDs; leave `Library` and `Temp` untouched.
+
+Before Unity work, check the running Editor process and its `-projectPath`. Keep one Unity Editor per project folder; never run batchmode against a folder held by the user's Editor. Use that Editor's Test Runner and `Editor.log` for compilation and tests. The standard Windows log is `%LOCALAPPDATA%\Unity\Editor\Editor.log`; also check `<project>\Logs\Editor.log`. Record compilation, EditMode tests, Console counts, and Play Mode evidence separately. Do not infer runtime behavior from compilation. The audited host has no .NET SDK, so `dotnet` is not the Unity build path; no Unity bridge/MCP is configured.
+
+Only the lead or one designated integration worker edits scenes, prefabs, or `ProjectSettings`. Parallel workers in separate worktrees may edit C# logic, text data, tests, docs, and research. Keep gameplay rules in plain C# where practical, use asmdefs, and preserve `PlayerMovement2D` behavior. Editor scene generators use one Undo group, validate before saving, roll back with Undo on exceptions, and never reload a scene for rollback. Place generated UI beneath one fixed root.
+
+End each milestone with a playable demo. Require successful compilation, zero Console errors, the intended scene, and a playable headline loop; verify save/load when it is in scope. Freeze the demo worktree while the user evaluates it. User Play Mode acceptance is required before marking the demo accepted, merging to `main`, or tagging it.
+
 ## Unity implementation and QA workflow
 
 For Unity coding tasks, UnityCoder implements the requested changes on the existing task and, when ready, calls `kanban_request_review(reviewer="qatester")` with changed files, tests, and verification evidence. QATester reviews that same task. For correctable defects, QATester records actionable findings and calls `kanban_request_changes`; Kanban returns the task to UnityCoder for correction and same-task re-review. QATester calls `kanban_complete` only after review passes with verified results. Do not create a separate QA card for this same-task review flow, and never mark a feature ready based on implementation completion alone.
