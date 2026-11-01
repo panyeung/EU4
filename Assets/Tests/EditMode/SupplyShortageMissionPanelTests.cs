@@ -1,5 +1,6 @@
 ﻿using NUnit.Framework;
 using UnityEngine;
+using System.Reflection;
 using UnityEngine.UI;
 using SengokuChronicle.Application;
 using SengokuChronicle.Domain;
@@ -160,23 +161,31 @@ namespace SengokuChronicle.Tests.EditMode
         [Test]
         public void Panel_RemovesListenersWhileDisabledAndRestoresOnEnable()
         {
-            // Drive callbacks explicitly for this non-ExecuteAlways EditMode fixture.
+            // Direct calls avoid EditMode SendMessage guards; Play Mode dispatch is not tested.
             _panel.enabled = false;
-            _panel.SendMessage("OnDisable", SendMessageOptions.RequireReceiver);
+            InvokeLifecycle("OnDisable");
             _accept.onClick.Invoke();
             Assert.That(_session.SupplyShortageStage, Is.EqualTo(SupplyShortageStage.NotAccepted));
             _panel.enabled = true;
-            _panel.SendMessage("OnEnable", SendMessageOptions.RequireReceiver);
+            InvokeLifecycle("OnEnable");
             _accept.onClick.Invoke();
             Assert.That(_session.SupplyShortageStage, Is.EqualTo(SupplyShortageStage.Accepted));
             Assert.That(_feedback.text, Does.Contain("已领取补给短缺任务"));
             Travel(LocationId.Atsuta);
-            _panel.SendMessage("OnDestroy", SendMessageOptions.RequireReceiver);
+            InvokeLifecycle("OnDestroy");
             _investigate.onClick.Invoke();
             Assert.That(_session.SupplyShortageStage, Is.EqualTo(SupplyShortageStage.Accepted));
             Object.DestroyImmediate(_panel);
             _investigate.onClick.Invoke();
             Assert.That(_session.SupplyShortageStage, Is.EqualTo(SupplyShortageStage.Accepted));
+        }
+
+        private void InvokeLifecycle(string methodName)
+        {
+            MethodInfo method = typeof(SupplyShortageMissionPanel).GetMethod(
+                methodName, BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(method, Is.Not.Null, $"Missing lifecycle method: {methodName}");
+            method.Invoke(_panel, null);
         }
 
         private void Travel(LocationId destination)
