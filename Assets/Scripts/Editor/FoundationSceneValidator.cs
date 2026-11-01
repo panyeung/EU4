@@ -30,12 +30,18 @@ namespace SengokuChronicle.Editor
             Transform townRoot = mapRoot != null ? mapRoot.Find("TownMenuRoot") : null;
             WorldMapController controller = mapRoot != null ? mapRoot.GetComponent<WorldMapController>() : null;
             TownNpcDialoguePanel panel = FindComponent<TownNpcDialoguePanel>(scene);
+            SupplyShortageMissionPanel missionPanel = FindComponent<SupplyShortageMissionPanel>(scene);
 
             CheckFound(report, ref errors, "Canvas", canvas);
             CheckFound(report, ref errors, "Canvas/M2WorldMapRoot", mapRoot);
             CheckFound(report, ref errors, "Canvas/M2WorldMapRoot/TownMenuRoot", townRoot);
             CheckFound(report, ref errors, "WorldMapController", controller);
             CheckFound(report, ref errors, "TownNpcDialoguePanel", panel);
+            CheckFound(report, ref errors, "SupplyShortageMissionPanel", missionPanel);
+            if (!AddM4SupplyShortageMissionPanel.Validate(scene, out string missionError))
+                AddError(report, ref errors, missionError);
+            else
+                report.AppendLine("PASS M4a mission hierarchy, unique objects, bindings, and containment.");
 
             if (controller != null)
             {
@@ -45,7 +51,7 @@ namespace SengokuChronicle.Editor
                     "destinationNameText", "travelTimeText", "arrivalDateText", "confirmButton", "cancelButton",
                     "returnToMapButton", "kiyosuButton", "atsutaButton", "nagoyaButton", "townMenuRoot",
                     "townMenuTitleText", "facility1Text", "facility2Text", "facility3Text",
-                    "townNpcDialoguePanel", "openNpcRosterButton");
+                    "townNpcDialoguePanel", "openNpcRosterButton", "supplyShortageMissionPanel");
             }
 
             if (panel != null)
@@ -55,6 +61,14 @@ namespace SengokuChronicle.Editor
                     "townMenuRoot", "rosterRoot", "rosterContent", "npcRowPrefab", "rosterStatusText",
                     "dialogueRoot", "dialogueText", "optionsContent", "optionButtonPrefab",
                     "backToRosterButton", "rosterBackToTownButton", "backToTownButton");
+            }
+
+            if (missionPanel != null)
+            {
+                report.AppendLine("\nSUPPLY SHORTAGE MISSION PANEL REFERENCES:");
+                CheckReferences(report, ref errors, missionPanel,
+                    "gameSession", "panelRoot", "stageText", "objectiveText", "meritText", "feedbackText",
+                    "acceptButton", "investigateButton", "negotiateButton", "reportButton");
             }
 
             report.AppendLine("\nHIERARCHY AND RECTTRANSFORMS:");
