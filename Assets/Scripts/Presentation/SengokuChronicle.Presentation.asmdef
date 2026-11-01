@@ -3,7 +3,8 @@
   "rootNamespace": "SengokuChronicle.Presentation",
   "references": [
     "SengokuChronicle.Application",
-    "SengokuChronicle.Domain"
+    "SengokuChronicle.Domain",
+    "SengokuChronicle.Persistence"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],

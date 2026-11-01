@@ -1,5 +1,7 @@
 namespace SengokuChronicle.Domain
 {
+    using System;
+
     public enum SupplyShortageStage
     {
         NotAccepted,
@@ -28,8 +30,35 @@ namespace SengokuChronicle.Domain
     /// <summary>One supply shortage mission; actions never advance time or move the player.</summary>
     public sealed class SupplyShortageMission
     {
+        public const int RewardMerit = 10;
+
         public SupplyShortageStage Stage { get; private set; }
         public int Merit { get; private set; }
+
+        public SupplyShortageMission()
+        {
+        }
+
+        private SupplyShortageMission(SupplyShortageStage stage, int merit)
+        {
+            Stage = stage;
+            Merit = merit;
+        }
+
+        /// <summary>
+        /// Rebuilds a mission from saved stage data. Merit is derived from the stage,
+        /// so a completed mission can never restore a different reward amount.
+        /// Returns null for an undefined stage.
+        /// </summary>
+        public static SupplyShortageMission TryRestore(SupplyShortageStage stage)
+        {
+            if (!Enum.IsDefined(typeof(SupplyShortageStage), stage))
+                return null;
+
+            return new SupplyShortageMission(
+                stage,
+                stage == SupplyShortageStage.RewardClaimed ? RewardMerit : 0);
+        }
 
         public SupplyShortageActionResult TryAccept(LocationId location)
         {
@@ -72,7 +101,7 @@ namespace SengokuChronicle.Domain
                 return Result(false, "请返回清洲报告。");
 
             Stage = SupplyShortageStage.RewardClaimed;
-            Merit += 10;
+            Merit = RewardMerit;
             return Result(true, "报告完成，获得10功绩。");
         }
 

@@ -1,5 +1,7 @@
 namespace SengokuChronicle.Domain
 {
+    using System;
+
     public enum MarketTallyStage
     {
         NotAccepted,
@@ -26,8 +28,35 @@ namespace SengokuChronicle.Domain
 
     public sealed class MarketTallyMission
     {
+        public const int RewardMerit = 5;
+
         public MarketTallyStage Stage { get; private set; }
         public int Merit { get; private set; }
+
+        public MarketTallyMission()
+        {
+        }
+
+        private MarketTallyMission(MarketTallyStage stage, int merit)
+        {
+            Stage = stage;
+            Merit = merit;
+        }
+
+        /// <summary>
+        /// Rebuilds a mission from saved stage data. Merit is derived from the stage,
+        /// so a completed mission can never restore a different reward amount.
+        /// Returns null for an undefined stage.
+        /// </summary>
+        public static MarketTallyMission TryRestore(MarketTallyStage stage)
+        {
+            if (!Enum.IsDefined(typeof(MarketTallyStage), stage))
+                return null;
+
+            return new MarketTallyMission(
+                stage,
+                stage == MarketTallyStage.RewardClaimed ? RewardMerit : 0);
+        }
 
         public MarketTallyActionResult TryAccept(LocationId location)
         {
@@ -59,7 +88,7 @@ namespace SengokuChronicle.Domain
                 return Result(false, "请在那古野向酒井 次郎兵衛报告。");
 
             Stage = MarketTallyStage.RewardClaimed;
-            Merit = 5;
+            Merit = RewardMerit;
             return Result(true, "市集账目报告完成，获得5功绩。");
         }
 

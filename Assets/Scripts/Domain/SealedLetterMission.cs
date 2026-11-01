@@ -1,5 +1,7 @@
 namespace SengokuChronicle.Domain
 {
+    using System;
+
     public enum SealedLetterStage
     {
         NotAccepted,
@@ -25,8 +27,35 @@ namespace SengokuChronicle.Domain
 
     public sealed class SealedLetterMission
     {
+        public const int RewardMerit = 5;
+
         public SealedLetterStage Stage { get; private set; }
         public int Merit { get; private set; }
+
+        public SealedLetterMission()
+        {
+        }
+
+        private SealedLetterMission(SealedLetterStage stage, int merit)
+        {
+            Stage = stage;
+            Merit = merit;
+        }
+
+        /// <summary>
+        /// Rebuilds a mission from saved stage data. Merit is derived from the stage,
+        /// so a completed mission can never restore a different reward amount.
+        /// Returns null for an undefined stage.
+        /// </summary>
+        public static SealedLetterMission TryRestore(SealedLetterStage stage)
+        {
+            if (!Enum.IsDefined(typeof(SealedLetterStage), stage))
+                return null;
+
+            return new SealedLetterMission(
+                stage,
+                stage == SealedLetterStage.RewardClaimed ? RewardMerit : 0);
+        }
 
         public SealedLetterActionResult TryAccept(LocationId location)
         {
@@ -47,7 +76,7 @@ namespace SengokuChronicle.Domain
                 return Result(false, "请在那古野向星野 彩交付密信。");
 
             Stage = SealedLetterStage.RewardClaimed;
-            Merit = 5;
+            Merit = RewardMerit;
             return Result(true, "密信已送达，获得5功绩。");
         }
 
