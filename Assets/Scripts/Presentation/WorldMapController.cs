@@ -87,6 +87,13 @@ namespace SengokuChronicle.Presentation
         [SerializeField]
         private Text[] facilityTexts;
 
+        [Header("Town NPCs")]
+        [SerializeField]
+        private TownNpcDialoguePanel townNpcDialoguePanel;
+
+        [SerializeField]
+        private Button openNpcRosterButton;
+
         // ---- 公开状态（测试断言用）----
 
         /// <summary>是否位于城镉菜单。</summary>
@@ -128,11 +135,23 @@ namespace SengokuChronicle.Presentation
             if (worldClockPanel == null)
                 worldClockPanel = FindAnyObjectByType<WorldClockPanel>();
             BindButtonListeners(true);
+            BindTownNpcButton(true);
+            if (townNpcDialoguePanel != null)
+                townNpcDialoguePanel.BindWorldMapController(this);
             RefreshAll();
         }
 
-        private void OnEnable() => BindButtonListeners(true);
-        private void OnDisable() => BindButtonListeners(false);
+        private void OnEnable()
+        {
+            BindButtonListeners(true);
+            BindTownNpcButton(true);
+        }
+
+        private void OnDisable()
+        {
+            BindButtonListeners(false);
+            BindTownNpcButton(false);
+        }
 
         // ---- 公开 API（Editor 生成器与测试注入）----
 
@@ -241,6 +260,8 @@ namespace SengokuChronicle.Presentation
         public void ReturnToMap()
         {
             _inTownMenu = false;
+            if (townNpcDialoguePanel != null)
+                townNpcDialoguePanel.Close();
             if (townMenuRoot != null)
                 townMenuRoot.SetActive(false);
             SetMapContentVisible(true);
@@ -296,6 +317,44 @@ namespace SengokuChronicle.Presentation
                 nagoyaButton.onClick.RemoveListener(OnNagoyaClicked);
                 if (add) nagoyaButton.onClick.AddListener(OnNagoyaClicked);
             }
+        }
+
+        /// <summary>绑定城镇 NPC 名单按钮；重复调用不会叠加监听。</summary>
+        public void BindTownNpcRoster(
+            TownNpcDialoguePanel panel, Button openRosterButton)
+        {
+            if (openNpcRosterButton != null)
+                openNpcRosterButton.onClick.RemoveListener(OpenNpcRoster);
+
+            townNpcDialoguePanel = panel;
+            openNpcRosterButton = openRosterButton;
+
+            if (townNpcDialoguePanel != null)
+                townNpcDialoguePanel.BindWorldMapController(this);
+
+            BindTownNpcButton(isActiveAndEnabled);
+        }
+
+        private void BindTownNpcButton(bool add)
+        {
+            if (openNpcRosterButton == null)
+                return;
+
+            openNpcRosterButton.onClick.RemoveListener(OpenNpcRoster);
+            if (add)
+                openNpcRosterButton.onClick.AddListener(OpenNpcRoster);
+        }
+
+        /// <summary>显示会话当前地点对应的 NPC 名单。</summary>
+        public void OpenNpcRoster()
+        {
+            if (!_inTownMenu ||
+                gameSession == null ||
+                townNpcDialoguePanel == null)
+                return;
+
+            townNpcDialoguePanel.BindWorldMapController(this);
+            townNpcDialoguePanel.OpenRoster(gameSession);
         }
 
         /// <summary>Editor generator only: bind the three fixed location buttons + labels.</summary>
@@ -384,6 +443,8 @@ namespace SengokuChronicle.Presentation
         {
             _inTownMenu = true;
             SetMapContentVisible(false);
+            if (townNpcDialoguePanel != null)
+                townNpcDialoguePanel.Close();
             if (townMenuRoot != null)
             {
                 Image townBackground = townMenuRoot.GetComponent<Image>();

@@ -17,3 +17,9 @@
 - Decision: Keep the world-map travel panel below M1 controls, hide map controls while the town menu is open, and make the town panel background opaque.
 - Alternatives: Leave both panels visible under a translucent overlay or create a separate town scene.
 - Reason: The user's demo feedback identified overlapping panels. Reusing the existing town panel keeps the flow in one scene while making the active screen clear.
+
+## 2026-10-29 - Isolate M3 integration from existing user work
+
+- Decision: Integrate the accepted M2 base and committed M3-01 through M3-03 work on `feature/m3-accepted-integration`, preserving the existing M3 worktree and its uncommitted M3-04 changes.
+- Alternatives: Merge into or update the existing M3 worktree, or discard its WIP and restart M3.
+- Reason: The existing M3 worktree has changes in the same scene and controller files, so an isolated branch avoids overwriting or disturbing them while retaining useful M3 work.

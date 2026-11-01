@@ -98,6 +98,9 @@ namespace SengokuChronicle.Tests.EditMode
                 var advBtn = advanceButtonGo.GetComponent<Button>();
                 wcp.SetDependencies(session, advBtn, dateText);
 
+                // Freeze this synthetic preview fixture at reference resolution; the separate
+                // FoundationScene geometry tests retain and inspect their serialized CanvasScaler.
+                canvasScaler.enabled = false;
                 PrepareCanvasGeometry(_scene, canvasRect, canvasScaler);
             }
             catch

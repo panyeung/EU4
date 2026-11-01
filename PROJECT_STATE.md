@@ -1,30 +1,32 @@
-﻿# Project State - Sengoku Chronicle
+# Project State - Sengoku Chronicle
 
-Audit date: 2026-10-29 (Pacific/Honolulu)
+Audit date: 2026-10-31 (Pacific/Honolulu)
+
+## Accepted milestone
+
+- M1 is accepted.
+- M2 Play Demo is accepted, merged to `main` at `f3094e8`, and tagged `demo-M2`.
 
 ## Current milestone
 
-- M2 World Map, Travel and Town Menus feedback update is ready for a revised Play Demo, pending user acceptance.
-- The original `feature/m2-world-map` demo branch remains frozen and unchanged. This follow-up is isolated on `feature/m2-ui-overlap-fix`.
-- The overlap fix is committed as `9c2ac69` and pushed to the matching origin branch.
-- Unity Editor 6000.6.6f1 is open on `C:\Users\panye\orca\workspaces\SengokuChronicle-M2\m2-ui-overlap-fix`, with `FoundationScene` loaded.
-- The existing M3 branch remains separate. Nothing has been merged to `main`.
+- M3 Characters and Relationships is on `feature/m3-accepted-integration`, based on accepted M2 plus committed M3-01 through M3-03 work.
+- Scene integration and verification for the M3 demo candidate are complete. An independent read-only review found no Critical or Important findings; user acceptance is still pending.
+- The separate `C:\Users\panye\EU4-m3` worktree contains uncommitted M3-04 changes and remains untouched.
 
-## Verification
+## Verification evidence
 
-- Unity Editor compiled the updated scripts after an explicit Assets > Refresh. The EditMode Test Runner found 73 tests; all 73 passed with 0 failures.
-- The Editor Console showed 0 errors after the updated test run and Play Mode walkthrough.
-- Play Mode verified the separated world-map panel, a one-day Kiyosu-to-Atsuta preview and arrival, an opaque town screen with map controls hidden, and return to map with Atsuta marked current.
-- The earlier M2 walkthrough also verified cancellation preserves date and location and direct Atsuta-to-Nagoya travel is unavailable. No standalone player build was run.
+- Unity 6000.6.6f1 was open on this exact worktree with `FoundationScene` loaded.
+- Unity script compilation completed; the current project `Logs/Editor.log` contains no C# compiler diagnostics. The EditMode suite loaded and ran, providing an additional compile check.
+- `FoundationSceneValidator` wrote `Logs/SceneValidationReport.txt`: `RESULT: PASS; Errors: 0`. It found all scene objects and serialized controller/dialogue references and recorded the hierarchy and RectTransforms.
+- Unity Test Runner EditMode: 136 passed, 0 failed.
+- Unity Test Runner PlayMode: no tests are present.
+- Manual Play Mode: from Kiyosu on 1560-04-01, travel preview to Atsuta showed a one-day trip and 1560-04-02 arrival. Atsuta opened with only Kuroda Iori in the NPC roster at relationship 0. Accepting the dialogue branch displayed “Trust is earned.” and relationship +10. Returning to the town and then the map preserved Atsuta and 1560-04-02.
+- After the walkthrough and exiting Play Mode, the Editor Console counters showed 0 errors and 0 warnings.
+- The independent review noted minor follow-ups: dialogue instances are not reclaimed/reset, character role-to-ID validation could be stricter, and the scene validator reports RectTransform values without enforcing layout bounds. It did not judge visual correctness of every layout.
 
-## Feedback update and next step
+## Worktree and next step
 
-- Feedback: the map and town panels overlapped. The existing safe layout updater now places the map panel in the lower canvas area; the town screen hides map-only controls and uses an opaque background.
-- M2 includes the three-location map, travel preview/confirm/cancel, and a town menu with locked facility placeholders.
-- Characters, missions, and save/load are later Phase 1 milestones.
-- This revised demo candidate is ready for user evaluation. After the user says **Accepted**, merge and tag M2, then begin M3. Preserve the original branch and both demo checkpoints.
-
-## Preserved worktree changes
-
-- Original M2 worktree changes remain untouched: `.vscode/settings.json`, `ProjectSettings/Packages/com.unity.learn.iet-framework/Settings.json`, `.audit_scene_tree.json`, and `ProjectSettings/SceneTemplateSettings.json`.
-- The isolated feedback worktree retains `.vscode/settings.json`, `ProjectSettings/Packages/com.unity.learn.iet-framework/Settings.json`, and `ProjectSettings/SceneTemplateSettings.json`; none are included in the demo commit.
+- M3 integration candidate is prepared on the feature branch. Keep it isolated from the accepted M2 branch and the separate M3 WIP worktree.
+- `M3_DEMO.md` contains the user-facing acceptance path and evidence summary.
+- The Kanban review tools are not available in this session; the independent read-only review is recorded in this handoff. Publish the feature branch and deliver the M3 Play Demo for user evaluation. Do not mark M3 accepted or merge/tag it before the user accepts it.
+- M4a and later milestones remain out of scope until M3 is accepted.
