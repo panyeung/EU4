@@ -101,6 +101,32 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
+        public void CurrentLocationButton_EntersStartingTownWithoutTravel()
+        {
+            Button kiyosu = CreateButton("Kiyosu");
+            Button atsuta = CreateButton("Atsuta");
+            Button nagoya = CreateButton("Nagoya");
+            foreach (Button button in new[] { kiyosu, atsuta, nagoya })
+                button.transform.SetParent(_go.transform, false);
+            _controller.BindLocationButtons(kiyosu, null, atsuta, null, nagoya, null);
+            GameDate startingDate = _session.WorldClock.CurrentDate;
+            LocationId startingLocation = _session.CurrentLocation;
+
+            Assert.That(startingLocation, Is.EqualTo(LocationId.Kiyosu));
+            Assert.That(_controller.InTownMenu, Is.False);
+            Assert.That(kiyosu.interactable, Is.True, "The starting town must be enterable from the map.");
+            kiyosu.onClick.Invoke();
+
+            Assert.That(_controller.InTownMenu, Is.True);
+            Assert.That(_townRoot.activeSelf, Is.True);
+            Assert.That(_townTitle.text, Does.Contain("清洲"));
+            Assert.That(_session.WorldClock.CurrentDate, Is.EqualTo(startingDate));
+            Assert.That(_session.CurrentLocation, Is.EqualTo(startingLocation));
+            Assert.That(_controller.CurrentPreview, Is.Null);
+            Assert.That(_controller.SelectedDestination, Is.Null);
+        }
+
+        [Test]
         public void SelectDestination_Valid_PreviewsWithoutMutatingDateOrLocation()
         {
             _controller.SelectDestination(LocationId.Atsuta);
