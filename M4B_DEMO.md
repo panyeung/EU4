@@ -1,6 +1,7 @@
-# M4b Two Simple Missions — Demo Candidate
+# M4b Two Simple Missions — Accepted Demo
 
 **Status: Accepted by the user on 2026-11-01.**
+**Checkpoint:** `70ac62f0d8a9866488ae194c3cf55c68a8be2e29`, tagged `demo-M4b` and fast-forwarded into local `main`. No remote push was made.
 
 ## Scope
 
@@ -37,4 +38,4 @@
 5. Complete M4a as a regression and verify aggregate merit reaches 20 at most.
 6. Repeat final actions and attempt wrong-location actions; rewards, date, and location must remain unchanged.
 
-The user must explicitly accept the playable demo before an M4b checkpoint, merge, or tag.
+The user accepted the playable demo on 2026-11-01 before the M4b checkpoint, merge, and tag were created.

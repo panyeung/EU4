@@ -86,3 +86,5 @@
 - [x] Update `M4B_DEMO.md`, `PROJECT_STATE.md`, `PHASE1_ROADMAP.md`, and `DECISIONS.md` with observed results only.
 - [ ] Complete the Kanban same-task QATester workflow; Kanban tools are unavailable in this session. Independent technical QA review accepted with no blocking defects.
 - [x] Wait for explicit user Play Mode acceptance before creating the final checkpoint commit, merge, or tag; the user accepted M4b on 2026-11-01.
+
+Integration complete: checkpoint `70ac62f0d8a9866488ae194c3cf55c68a8be2e29` is tagged `demo-M4b` and fast-forwarded into local `main`. No remote push was made. The exact Console counters and runtime merit/date values remain unrecorded.
