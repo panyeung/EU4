@@ -94,6 +94,9 @@ namespace SengokuChronicle.Presentation
         [SerializeField]
         private Button openNpcRosterButton;
 
+        [Header("Supply Shortage Mission")]
+        [SerializeField] private SupplyShortageMissionPanel supplyShortageMissionPanel;
+
         // ---- 公开状态（测试断言用）----
 
         /// <summary>是否位于城镉菜单。</summary>
@@ -138,6 +141,7 @@ namespace SengokuChronicle.Presentation
             BindTownNpcButton(true);
             if (townNpcDialoguePanel != null)
                 townNpcDialoguePanel.BindWorldMapController(this);
+            BindSupplyShortageMissionPanel(supplyShortageMissionPanel);
             RefreshAll();
         }
 
@@ -260,6 +264,8 @@ namespace SengokuChronicle.Presentation
         public void ReturnToMap()
         {
             _inTownMenu = false;
+            if (supplyShortageMissionPanel != null)
+                supplyShortageMissionPanel.Close();
             if (townNpcDialoguePanel != null)
                 townNpcDialoguePanel.Close();
             if (townMenuRoot != null)
@@ -280,6 +286,8 @@ namespace SengokuChronicle.Presentation
             RefreshButtons();
             if (worldClockPanel != null)
                 worldClockPanel.Refresh();
+            if (supplyShortageMissionPanel != null)
+                supplyShortageMissionPanel.Refresh();
         }
 
         // ---- 内部 ----
@@ -442,6 +450,11 @@ namespace SengokuChronicle.Presentation
         public void OpenTownMenu()
         {
             _inTownMenu = true;
+            if (supplyShortageMissionPanel != null)
+            {
+                supplyShortageMissionPanel.Bind(gameSession);
+                supplyShortageMissionPanel.Open();
+            }
             SetMapContentVisible(false);
             if (townNpcDialoguePanel != null)
                 townNpcDialoguePanel.Close();
@@ -472,6 +485,18 @@ namespace SengokuChronicle.Presentation
                 t.text = $"{label}：未开放";
                 t.enabled = false; // 未开放：显式禁用
             }
+        }
+
+        public void BindSupplyShortageMissionPanel(SupplyShortageMissionPanel panel)
+        {
+            if (supplyShortageMissionPanel != null && supplyShortageMissionPanel != panel)
+                supplyShortageMissionPanel.Close();
+            supplyShortageMissionPanel = panel;
+            if (panel == null)
+                return;
+            panel.Bind(gameSession);
+            if (_inTownMenu) panel.Open();
+            else panel.Close();
         }
 
         private void SetMapContentVisible(bool visible)
