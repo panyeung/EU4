@@ -16,8 +16,8 @@
 - NPC 日课/自主行为（Phase 1 明确排除项，需谨慎设计规模）。
 - 势力/城经营与战斗：远期，暂不立项。
 
-## M7 当前候选状态（2026-11-01）
+## M7 已接受状态（2026-11-01）
 
-M7 在 `feature/m5-save-slot` 实现（用户指定沿用同一分支与工作树），尚未获得用户接受。新增 `PromotionRules`（Domain，纯静态）、`GameSession.Rank/RankName`（派生，不入存档）、`RankPanel`（Presentation，幂等刷新 + Update 轮询）、`DemoSummaryPanel` 文案升级与事务式更新器 `AddM7RankPanel`（`M7RankText` 位于地图左上安全区 (-450,100) 240×40）。Validator 已加入 M7 层级/绑定/分离检查。
+M7 在 `feature/m5-save-slot` 实现（用户指定沿用同一分支与工作树），并已获得用户 Play Mode 接受（用户报告 `pass`）。新增 `PromotionRules`（Domain，纯静态）、`GameSession.Rank/RankName`（派生，不入存档）、`RankPanel`（Presentation，幂等刷新 + Update 轮询）、`DemoSummaryPanel` 文案升级与事务式更新器 `AddM7RankPanel`（`M7RankText` 位于地图左上安全区 (-450,100) 240×40）。Validator 已加入 M7 层级/绑定/分离检查。
 
-验证证据（2026-11-01）：batchmode 编译无 `error CS`；EditMode 425/425 通过（集成前 22:19:48Z、集成后 22:36:35Z，0 failed / 0 skipped）；`RunBatchIntegration` 保存 `FoundationScene`（+96/−1，唯一删除行为 Unity 对 `M6TitleLabel` 惰性字段 `m_MaxSize` 的再归一化，`m_BestFit: 0`，非代码改动）；`Logs/SceneValidationReport.txt` 报告 M7 PASS 且 `RESULT: PASS; Errors: 0`。Console 计数与 Play Mode 尚待用户按 `M7_DEMO.md` 验收。用户接受前不得创建最终 checkpoint、合并 `main` 或打 `demo-M7` 标签。
+验证证据（2026-11-01）：batchmode 编译无 `error CS`；EditMode 425/425 通过（集成前 22:19:48Z、集成后 22:36:35Z，0 failed / 0 skipped）；`RunBatchIntegration` 保存 `FoundationScene`（+96/−1，唯一删除行为 Unity 对 `M6TitleLabel` 惰性字段 `m_MaxSize` 的再归一化，`m_BestFit: 0`，非代码改动）；`Logs/SceneValidationReport.txt` 报告 M7 PASS 且 `RESULT: PASS; Errors: 0`。用户执行 Play Mode 验收并报告通过；具体军阶数值与 Console 计数未由代理独立记录，验收以用户报告为准。

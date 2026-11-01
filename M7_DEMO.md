@@ -1,6 +1,6 @@
 # M7 Merit & Promotion — Candidate
 
-**Status: Candidate; Play Mode acceptance pending.**
+**Status: Accepted by user Play Mode run on 2026-11-01.**
 **Branch:** `feature/m5-save-slot` (user directed continuing on the same branch and worktree)
 **Design:** `docs/superpowers/specs/2026-11-01-m7-merit-promotion-design.md`
 **Plan:** `docs/superpowers/plans/2026-11-01-m7-merit-promotion.md`
@@ -28,8 +28,8 @@
 - **Scene integration:** `RunBatchIntegration` opened FoundationScene, ran the transactional updater, and saved (`m7-integration.log`: `M7 rank integration completed and FoundationScene was saved.`); no rollback warnings. The scene diff is +96/−1; the single changed line is Unity re-normalizing the dormant `m_MaxSize` (0..40→44) on `M6TitleLabel`, whose `m_BestFit: 0` — an inert serialization artifact, not a code edit.
 - **Scene validation:** fresh `Logs/SceneValidationReport.txt` reports `FOUND RankPanel: GameSession`, `BOUND GameSession.rankText -> M7RankText (Text)`, `PASS M7 rank panel hierarchy, bindings, containment, and map separation.`, and `RESULT: PASS; Errors: 0`.
 - **EditMode (post-integration, final):** `m7-final-editmode.xml` reports `total="425" passed="425" failed="0" inconclusive="0" skipped="0"` (start 2026-11-01 22:36:35Z).
+- **Play Mode acceptance:** the user ran the acceptance path in the Editor on this worktree and reported `pass` on 2026-11-01. Exact observed rank values and Console counters were not supplied by the user; acceptance rests on their report alongside the recorded compile, EditMode 425/425 (both pre- and post-integration runs), integration, and validator evidence above.
 - **Console:** not captured. Batchmode logs are not the Editor Console, so no Console counters are claimed.
-- **Play Mode:** not run yet; see the acceptance path below.
 
 ## Required Play Mode acceptance path
 
@@ -39,4 +39,4 @@
 4. 存档 → exit and re-enter Play → 继续 → the rank line and summary show the same rank; retry a completed mission's final action → merit and rank stay unchanged.
 5. Report the observed values and Console counters.
 
-User acceptance is required before the final M7 checkpoint, merge to `main`, or a `demo-M7` tag.
+Accepted by the user on 2026-11-01; the final M7 checkpoint, merge to `main`, and `demo-M7` tag followed that acceptance.
