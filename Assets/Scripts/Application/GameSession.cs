@@ -16,7 +16,11 @@ namespace SengokuChronicle.Application
         public WorldClock WorldClock { get; private set; }
         public LocationId CurrentLocation { get; private set; }
         public SupplyShortageStage SupplyShortageStage => _supplyShortageMission.Stage;
-        public int Merit => _supplyShortageMission.Merit;
+        public SealedLetterStage SealedLetterStage => _sealedLetterMission.Stage;
+        public MarketTallyStage MarketTallyStage => _marketTallyMission.Stage;
+        public int Merit => _supplyShortageMission.Merit + _sealedLetterMission.Merit + _marketTallyMission.Merit;
+        private SealedLetterMission _sealedLetterMission = new SealedLetterMission();
+        private MarketTallyMission _marketTallyMission = new MarketTallyMission();
         private SupplyShortageMission _supplyShortageMission = new SupplyShortageMission();
         private CharacterRelationships _relationships;
         private readonly Dictionary<Guid, DialogueState> _dialogues = new Dictionary<Guid, DialogueState>();
@@ -76,6 +80,33 @@ namespace SengokuChronicle.Application
             CurrentLocation = LocationId.Kiyosu;
             _relationships = new CharacterRelationships();
             _supplyShortageMission = new SupplyShortageMission();
+            _sealedLetterMission = new SealedLetterMission();
+            _marketTallyMission = new MarketTallyMission();
+        }
+
+        public SealedLetterActionResult TryAcceptSealedLetterMission()
+        {
+            return _sealedLetterMission.TryAccept(CurrentLocation);
+        }
+
+        public SealedLetterActionResult TryDeliverSealedLetter()
+        {
+            return _sealedLetterMission.TryDeliver(CurrentLocation);
+        }
+
+        public MarketTallyActionResult TryAcceptMarketTallyMission()
+        {
+            return _marketTallyMission.TryAccept(CurrentLocation);
+        }
+
+        public MarketTallyActionResult TryInvestigateMarketTally()
+        {
+            return _marketTallyMission.TryInvestigate(CurrentLocation);
+        }
+
+        public MarketTallyActionResult TryReportMarketTally()
+        {
+            return _marketTallyMission.TryReport(CurrentLocation);
         }
 
         public SupplyShortageActionResult TryAcceptSupplyShortageMission()

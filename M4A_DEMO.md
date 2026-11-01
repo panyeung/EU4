@@ -47,7 +47,7 @@ Source changes since accepted M3 base `a93887c`:
 - `Assets/Tests/EditMode/AddM4SupplyShortageMissionPanelTests.cs` and `.meta`
 - Approved design and implementation plan under `docs/superpowers/`.
 
-The current Unity scene change is present in the working tree and remains uncommitted pending user Play Mode acceptance.
+The accepted scene change is included in checkpoint `9c10959e5792777ea433a16c590034f406dccba1` and tagged `demo-M4a`.
 
 ## Final checkpoint
 

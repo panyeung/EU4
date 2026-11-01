@@ -31,3 +31,17 @@
 - Reason: This is the first complete mission; the fixed state transitions and one-time reward are directly testable without coupling mission rules to UI/dialogue or adding unused infrastructure. Research found no external implementation with a better fit than a focused custom model.
 - Scope: Mission actions do not advance time or location. `InitNewGame` resets mission state and merit. Persistence is deferred to M5. No new package or asset is required.
 - Status: Approved design; implementation is in progress and remains a demo candidate until scene validation, full verification, and user Play Mode evaluation pass.
+
+## 2026-11-01 - Add two fixed M4b missions
+
+- Decision: Use Suzu's Kiyosu-to-Nagoya sealed-letter delivery and Jirobei's Nagoya-to-Kiyosu market-tally investigation with Genzaemon, then report back to Jirobei. Award +5 merit once per completed mission.
+- Alternatives: Leave the two Phase 1 mission slots empty, add new NPCs, or introduce reusable quest authoring.
+- Reason: This completes the GDD's three-mission scope using only the existing five NPCs and three towns. The focused models follow the approved M4a pattern; research found external quest frameworks add unnecessary dependencies and infrastructure.
+- Constraints: Mission actions never advance time; existing travel does. No package, asset, persistence, or generic framework is added. M5 remains the persistence milestone.
+- Verification snapshot (2026-11-01): latest source compiled in the existing Editor; EditMode Run All passed 322/322; FoundationScene updater saved and the fresh validator report passed with zero errors; independent technical QA accepted with no blocking defects. The user reported the requested Play Mode loop passed and explicitly accepted M4b. Exact runtime values and Console counters were not supplied. Kanban review tools were unavailable in this session.
+## 2026-11-01 - Keep the mission panel within its validated town footprint
+
+- Decision: Show the existing M4a mission by default and add a page toggle to the two M4b rows inside the same 280-by-240 root.
+- Alternatives: Expand the root across the town controls or move existing NPC and return controls.
+- Reason: Static layout review found the expanded root would cover the NPC roster and part of the return control. The page switch preserves the scene's existing control positions and the M4a default flow.
+- Verification: The M4b validator checks separation from the town title, NPC roster, and return button; updater tests assert the controls do not overlap and their geometry rolls back on failure. All four M4b updater tests passed, and the fresh FoundationScene validator passes.

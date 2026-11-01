@@ -42,6 +42,10 @@ namespace SengokuChronicle.Editor
                 AddError(report, ref errors, missionError);
             else
                 report.AppendLine("PASS M4a mission hierarchy, unique objects, bindings, and containment.");
+            if (!AddM4bMissionBoard.Validate(scene, out string m4bError))
+                AddError(report, ref errors, m4bError);
+            else
+                report.AppendLine("PASS M4b mission board hierarchy, unique controls, bindings, and containment.");
 
             if (controller != null)
             {
@@ -68,7 +72,9 @@ namespace SengokuChronicle.Editor
                 report.AppendLine("\nSUPPLY SHORTAGE MISSION PANEL REFERENCES:");
                 CheckReferences(report, ref errors, missionPanel,
                     "gameSession", "panelRoot", "stageText", "objectiveText", "meritText", "feedbackText",
-                    "acceptButton", "investigateButton", "negotiateButton", "reportButton");
+                    "acceptButton", "investigateButton", "negotiateButton", "reportButton",
+                    "sealedLetterStageText", "sealedLetterObjectiveText", "sealedLetterFeedbackText", "sealedLetterActionButton",
+                    "marketTallyStageText", "marketTallyObjectiveText", "marketTallyFeedbackText", "marketTallyActionButton");
             }
 
             report.AppendLine("\nHIERARCHY AND RECTTRANSFORMS:");

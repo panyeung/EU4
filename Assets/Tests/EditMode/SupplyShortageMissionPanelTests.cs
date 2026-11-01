@@ -17,6 +17,11 @@ namespace SengokuChronicle.Tests.EditMode
         private SupplyShortageMissionPanel _panel;
         private Text _stage, _objective, _merit, _feedback;
         private Button _accept, _investigate, _negotiate, _report;
+        private Text _letterStage, _letterObjective, _letterFeedback;
+        private Button _letterAction;
+        private Text _tallyStage, _tallyObjective, _tallyFeedback;
+        private Button _tallyAction;
+        private Button _missionBoardToggle;
 
         [SetUp]
         public void SetUp()
@@ -29,8 +34,15 @@ namespace SengokuChronicle.Tests.EditMode
             _merit = Text("Merit"); _feedback = Text("Feedback");
             _accept = Button("Accept"); _investigate = Button("Investigate");
             _negotiate = Button("Negotiate"); _report = Button("Report");
+            _letterStage = Text("LetterStage"); _letterObjective = Text("LetterObjective");
+            _letterFeedback = Text("LetterFeedback"); _letterAction = Button("LetterAction");
+            _tallyStage = Text("TallyStage"); _tallyObjective = Text("TallyObjective");
+            _tallyFeedback = Text("TallyFeedback"); _tallyAction = Button("TallyAction");
+            _missionBoardToggle = Button("MissionBoardToggle");
             _panel.BindReferences(_root, _stage, _objective, _merit, _feedback,
                 _accept, _investigate, _negotiate, _report);
+            _panel.BindM4bReferences(_letterStage, _letterObjective, _letterFeedback,
+                _letterAction, _tallyStage, _tallyObjective, _tallyFeedback, _tallyAction, _missionBoardToggle);
             _panel.Bind(_session);
             _panel.Open();
         }
@@ -156,6 +168,7 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.DoesNotThrow(() => { _panel.Open(); _panel.Refresh(); _panel.Close(); });
             _accept.onClick.Invoke(); // Rebinding removed listeners from the old reference.
             Assert.That(_session.SupplyShortageStage, Is.EqualTo(SupplyShortageStage.NotAccepted));
+            Assert.DoesNotThrow(() => _panel.BindM4bReferences(null, null, null, null, null, null, null, null, null));
         }
 
         [Test]
@@ -178,6 +191,105 @@ namespace SengokuChronicle.Tests.EditMode
             Object.DestroyImmediate(_panel);
             _investigate.onClick.Invoke();
             Assert.That(_session.SupplyShortageStage, Is.EqualTo(SupplyShortageStage.Accepted));
+        }
+
+        [Test]
+        public void Panel_ShowsAndCompletesSealedLetterAtCorrectLocations()
+        {
+            _panel.ToggleMissionBoardPage();
+            Assert.That(_letterStage.text, Does.Contain("未领取"));
+            Assert.That(_letterObjective.text, Does.Contain("橘"));
+            AssertAction(_letterAction, true, true);
+            _letterAction.onClick.Invoke();
+            Assert.That(_session.SealedLetterStage, Is.EqualTo(SealedLetterStage.Accepted));
+            Assert.That(_letterObjective.text, Does.Contain("星野"));
+            AssertAction(_letterAction, true, false);
+            Travel(LocationId.Nagoya);
+            _panel.Refresh();
+            AssertAction(_letterAction, true, true);
+            _letterAction.onClick.Invoke();
+            Assert.That(_letterStage.text, Does.Contain("完成"));
+            AssertAction(_letterAction, false, false);
+            Assert.That(_merit.text, Does.Contain("5"));
+            Assert.That(_session.SealedLetterStage, Is.EqualTo(SealedLetterStage.RewardClaimed));
+            _letterAction.onClick.Invoke();
+            Assert.That(_session.Merit, Is.EqualTo(5));
+        }
+
+        [Test]
+        public void Panel_ShowsAndCompletesMarketTallyAtCorrectLocations()
+        {
+            _panel.ToggleMissionBoardPage();
+            Assert.That(_tallyObjective.text, Does.Contain("酒井"));
+            AssertAction(_tallyAction, true, false);
+            Travel(LocationId.Nagoya);
+            _panel.Refresh();
+            _tallyAction.onClick.Invoke();
+            Assert.That(_session.MarketTallyStage, Is.EqualTo(MarketTallyStage.Accepted));
+            Assert.That(_tallyObjective.text, Does.Contain("森"));
+            AssertAction(_tallyAction, true, false);
+            Travel(LocationId.Kiyosu);
+            _panel.Refresh();
+            _tallyAction.onClick.Invoke();
+            Assert.That(_session.MarketTallyStage, Is.EqualTo(MarketTallyStage.Investigated));
+            Assert.That(_tallyObjective.text, Does.Contain("返回"));
+            AssertAction(_tallyAction, true, false);
+            Travel(LocationId.Nagoya);
+            _panel.Refresh();
+            _tallyAction.onClick.Invoke();
+            Assert.That(_session.MarketTallyStage, Is.EqualTo(MarketTallyStage.RewardClaimed));
+            Assert.That(_session.Merit, Is.EqualTo(5));
+            Assert.That(_merit.text, Does.Contain("5"));
+            _tallyAction.onClick.Invoke();
+            Assert.That(_session.Merit, Is.EqualTo(5));
+        }
+
+        [Test]
+        public void Panel_RefreshesBothMissionRowsAfterTravelAndHidesActionsWhenComplete()
+        {
+            _panel.ToggleMissionBoardPage();
+            _letterAction.onClick.Invoke();
+            _tallyAction.onClick.Invoke();
+            Assert.That(_letterFeedback.text, Is.Not.Empty);
+            Assert.That(_tallyFeedback.text, Is.Not.Empty);
+            Travel(LocationId.Nagoya);
+            _panel.Refresh();
+            AssertAction(_letterAction, true, true);
+            AssertAction(_tallyAction, true, true);
+            _letterAction.onClick.Invoke();
+            Assert.That(_merit.text, Does.Contain("5"));
+            AssertAction(_letterAction, false, false);
+            AssertAction(_tallyAction, true, true);
+        }
+
+        [Test]
+        public void Panel_ClearsM4bFeedbackWhenBoundToNewGameSession()
+        {
+            _panel.ToggleMissionBoardPage();
+            _letterAction.onClick.Invoke();
+            Assert.That(_letterFeedback.text, Is.Not.Empty);
+            GameSession replacement = GameSession.NewGame();
+            _panel.Bind(replacement);
+            Assert.That(_letterFeedback.text, Is.Empty);
+            Assert.That(_tallyFeedback.text, Is.Empty);
+            Object.DestroyImmediate(replacement.gameObject);
+        }
+
+        [Test]
+        public void Panel_ToggleSwitchesBetweenM4aAndM4bWithoutChangingMissionState()
+        {
+            Assert.That(_panel.IsM4bPage, Is.False);
+            AssertAction(_accept, true, true);
+            AssertAction(_letterAction, false, false);
+            _missionBoardToggle.onClick.Invoke();
+            Assert.That(_panel.IsM4bPage, Is.True);
+            AssertAction(_accept, false, false);
+            AssertAction(_letterAction, true, true);
+            Assert.That(_session.SupplyShortageStage, Is.EqualTo(SupplyShortageStage.NotAccepted));
+            _missionBoardToggle.onClick.Invoke();
+            Assert.That(_panel.IsM4bPage, Is.False);
+            AssertAction(_accept, true, true);
+            AssertAction(_letterAction, false, false);
         }
 
         private void InvokeLifecycle(string methodName)

@@ -102,3 +102,11 @@ Unity 6000.6.6f1 EditMode 全套测试于 2026-11-01 16:06:30Z 通过：214/214�
 ## 跨阶段交付要求
 
 每张完成卡用中文说明系统用途和重要脚本；列变更文件、实际自动化测试及结果、相关 Play Mode 步骤、限制/未解决事项、Git diff 简述；架构变化同步 `ARCHITECTURE.md`。不得宣称未真实执行的编译、测试或 Play Mode 通过。
+
+## Status update — 2026-11-01
+
+M2 is accepted. M3 and M4a are accepted as recorded in `PROJECT_STATE.md` and `M4A_DEMO.md`; M4a is checkpointed as `demo-M4a`. M4b is the next planned milestone on `feature/m4b-simple-missions`. Its design and implementation plan are saved under `docs/superpowers/`. The two mission models, session actions, panel extension, updater, validator, and tests are in progress. The scene has not yet been integrated or accepted.
+
+## M4b verification update — 2026-11-01
+
+M4b code compiled in the existing Unity Editor after Refresh. EditMode Run All passed 322/322 (0 failed, 0 skipped), including all four `AddM4bMissionBoardTests`. The validated updater saved `FoundationScene`; the fresh project validator report passes with zero errors and a clean scene. The user reported the requested mission playtest passed and explicitly accepted M4b on 2026-11-01. Independent technical QA accepted the scoped implementation with no blocking defects. Runtime values and exact Console counters were not recorded separately. The milestone is being checkpointed and merged locally; Kanban review tools were unavailable in this session and no remote push is planned.

@@ -124,3 +124,7 @@ M4a 采用固定任务模型，不引入通用任务图、事件总线或任务�
 5. 在 Project 窗口双击 `Assets/Scenes/FoundationScene.unity` 打开。
 6. 点击 Play 按钮，观察日期显示为 `1560-04-01`，点击「推进一天」按钮后日期递增。
 7. 如行为符合预期，批准本卡并建立 checkpoint commit。
+
+## M4b 实现：两项固定 Phase 1 任务
+
+M4b 在 M4a 的固定 C# 模式上增加 `SealedLetterMission` 与 `MarketTallyMission`。各自持有明确阶段并在最终有效动作时一次性增加 5 merit；`GameSession.Merit` 汇总三项固定任务的已领取奖励。新局重置两个新模型。uGUI 保留 M4a 默认页，并通过页签切换到两项 M4b 任务行；固定根对象维持 280×240，不遮挡城镇标题、NPC 或返回按钮。Unity Editor 更新器在一个 Undo 组中增量添加控件并调整 M4a 按钮，验证引用、布局和相邻控件间距后才保存。任务动作不推进日期或地点；旅行仍由 `ConfirmTravel` 独立校验和推进。没有新增通用任务框架、外部 package、NPC 或存档逻辑；持久化仍属于 M5。

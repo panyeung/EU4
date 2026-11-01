@@ -185,8 +185,8 @@ namespace SengokuChronicle.Editor
             if (!Bound(controller, "supplyShortageMissionPanel", panel) ||
                 !Bound(panel, "gameSession", session) || !Bound(panel, "panelRoot", root.gameObject))
                 return Invalid(out error, "Mission controller, session, or panelRoot reference is unbound or points outside the mission hierarchy.");
-            if (root.childCount != 8)
-                return Invalid(out error, "Mission root must contain exactly four texts and four buttons.");
+            if (root.childCount < 8)
+                return Invalid(out error, "Mission root must contain at least the four M4a texts and four buttons.");
             for (int i = 0; i < 4; i++)
             {
                 string textName = i == 3 ? feedbackName : TextNames[i];
