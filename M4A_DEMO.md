@@ -1,8 +1,8 @@
 # M4a Supply Shortage — Demo Candidate
 
-**Status: Candidate assembled; user Play Mode evaluation and acceptance remain pending.** This document records the current evidence and remaining gates; it does not indicate milestone acceptance.
+**Status: User accepted the M4a demo.** EditMode, scene validation, and user-reported Play Mode checks are recorded below.
 
-Scene integration commit: `6cba4ba` (`feat(m4a): integrate mission panel in foundation scene`). Source implementation commits are based on accepted M3 `a93887c`; no final checkpoint, merge, or tag has been created.
+Source implementation commits are based on accepted M3 `a93887c`; relevant fixes are `5fdde00` (enter current town) and `74948b9` (unique mission feedback name and safe scene migration). The integrated scene is now dirty relative to `6cba4ba` because the reviewed updater migrated its feedback object name. No final checkpoint, merge, or tag has been created.
 
 ## Intended playable walkthrough
 
@@ -21,13 +21,14 @@ Scene integration commit: `6cba4ba` (`feat(m4a): integrate mission panel in foun
 ## Verification evidence
 
 - Unity version: 6000.6.6f1; the single existing Editor is open on this M4a worktree.
-- Compile: the existing Editor rebuilt the script and EditMode test assemblies successfully during the latest run (`Tundra build success`; no C# compiler errors found in the current project log).
-- EditMode (2026-11-01 05:18:09 local): **203 passed, 0 failed, 0 skipped, 203 total** (1.110 sec). The same-task Task 2 static review approved `c326e63` with no findings. The prior `SendMessage` log failure is cleared.
-- Console: the AI Assistant package writes `NoSubscription` as `Debug.Log` informational messages. The latest project log has no C# compiler errors, `Debug.LogError`, or exception from the current test/validation runs. The live Console counter after clearing older test history is still unverified.
-- Scene integration: the reviewed updater reported “M4a mission panel validated and FoundationScene saved.” The saved diff adds the mission hierarchy and controller binding; the existing NPC roster return button block remains unchanged.
-- Project scene validation: `Logs/SceneValidationReport.txt` records `RESULT: PASS; Errors: 0`; `FoundationScene` was loaded and clean, and all M4a panel references were bound.
-- Play Mode walkthrough: pending. Runtime behavior has not been demonstrated in this candidate.
-- User acceptance: pending; the user plans to evaluate during Play Test.
+- Compile: after the final button-label change, the existing Editor logged a successful Tundra build; no C# compiler diagnostics appear in `Logs/Editor.log`.
+- EditMode (2026-11-01 16:06:30Z / 06:06:30 local): **214 passed, 0 failed, 0 skipped, 214 total**. This includes `CurrentLocationButton_EntersStartingTownWithoutTravel`, the legacy feedback migration test, and all three M2 layout regressions. Task 2 and Task 3 same-task static reviews approved their respective fixes.
+- Console: the user replied `pass` after being asked to clear the Console and run the mission walkthrough. Exact Console counters and individual runtime values were not supplied, so this remains a user-reported result rather than independently verified evidence.
+- Scene migration: the reviewed updater renamed the M4 child from `FeedbackText` to `MissionFeedbackText`, preserving the M2 map's unique `FeedbackText`; the saved `FoundationScene` diff contains that single object-name change.
+- Project scene validation: the fresh `Logs/SceneValidationReport.txt` records `RESULT: PASS; Errors: 0`, with all M4a panel references bound.
+- Play Mode walkthrough: user-reported pass after the request to play the complete Kiyosu → Atsuta → Kiyosu loop; no independent runtime capture was made.
+- Visual follow-up: the supplied screenshot showed the current-town button hint wrapping and looking inconsistent beside other town buttons. All three buttons now show only their town names; the separate current-location marker identifies the current town. The user reported the visual re-check passed.
+- User acceptance: explicitly accepted by the user on 2026-11-01. Console counters and individual runtime values were not provided; the user reported pass after being asked to clear Console and complete the walkthrough.
 
 ## Changed files
 
@@ -39,18 +40,15 @@ Source changes since accepted M3 base `a93887c`:
 - `Assets/Scripts/Presentation/WorldMapController.cs`
 - `Assets/Scripts/Editor/AddM4SupplyShortageMissionPanel.cs` and `.meta`
 - `Assets/Scripts/Editor/FoundationSceneValidator.cs`
+- `Assets/Scenes/FoundationScene.unity` (mission panel integration and reviewed feedback-name migration)
 - `Assets/Tests/EditMode/SupplyShortageMissionTests.cs` and `.meta`
 - `Assets/Tests/EditMode/GameSessionMissionTests.cs` and `.meta`
 - `Assets/Tests/EditMode/SupplyShortageMissionPanelTests.cs` and `.meta`
 - `Assets/Tests/EditMode/AddM4SupplyShortageMissionPanelTests.cs` and `.meta`
 - Approved design and implementation plan under `docs/superpowers/`.
 
-The lead's pending documentation updates are excluded from this source list. The final report will add scene changes, exact final commit range, and the final review status after those gates are complete.
+The current Unity scene change is present in the working tree and remains uncommitted pending user Play Mode acceptance.
 
-## Remaining gates
+## Final checkpoint
 
-- Resolve the sole EditMode failure and obtain a fresh full-suite passing result from the existing Editor.
-- Resolve or otherwise establish a zero-error Console state, recording the actual source and evidence.
-- Have the lead run the reviewed updater in the existing Editor; validate and inspect `FoundationScene` and its report.
-- Play the complete Kiyosu → Atsuta → Kiyosu loop, confirm feedback and exactly-once reward behavior, and record actual results.
-- Obtain explicit user Play Mode acceptance before creating the final checkpoint, merging, or tagging.
+The accepted candidate is checkpointed on `feature/m4a-supply-shortage-task`, tagged `demo-M4a`, and fast-forwarded to local `main`. No remote push was made.

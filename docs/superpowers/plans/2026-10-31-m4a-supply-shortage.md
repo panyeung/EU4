@@ -97,8 +97,10 @@
 - Create/update: `M4A_DEMO.md`, `PROJECT_STATE.md`, `PHASE1_ROADMAP.md`, `ARCHITECTURE.md`, `DECISIONS.md`.
 
 - [x] Update architecture and decisions with the fixed state machine, one-time +10 merit, no package/reuse decision, and M4a limitations.
-- [ ] Run full EditMode tests, check compile and Console separately, then manually play the entire mission from new game through one-time report.
-- [ ] Complete same-task QA review with the available review route; record evidence and actionable defects. If formal Kanban tools remain unavailable, say so and use an independent diff review.
-- [ ] Prepare `M4A_DEMO.md` with changed files, exact test results, scene-validation results, Play Mode walkthrough, and unresolved limitations; do not claim acceptance.
-- [ ] Freeze the M4a demo worktree and ask the user to accept the playable demo. Only after explicit acceptance create the final checkpoint commit, merge, and tag.
+- [x] Run full EditMode tests and check compilation separately: 214/214 passed at 2026-11-01 16:06:30Z after the final button-label change; latest project log records a successful Tundra build with no C# compiler diagnostics.
+- [x] Complete same-task static QA reviews for Task 2 and Task 3; both approved. Live Console error counters remain unverified.
+- [x] Update `M4A_DEMO.md` with exact test results, scene-validation results, Play Mode walkthrough, and unresolved limitations; do not claim acceptance.
+- [x] Record user-reported `pass` after request to clear Console and play the full mission; exact counters and runtime values were not supplied.
+- [x] User reported the consistent town-name-only button layout passed the visual re-check.
+- [x] User explicitly accepted the demo; create the final checkpoint, tag `demo-M4a`, and fast-forward local `main` without pushing.
 

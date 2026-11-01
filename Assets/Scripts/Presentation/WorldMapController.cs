@@ -408,10 +408,9 @@ namespace SengokuChronicle.Presentation
         {
             if (button == null)
                 return;
-            bool isCurrent = gameSession != null && location == gameSession.CurrentLocation;
             button.interactable = true;
             if (label != null)
-                label.text = $"{LocationId.GetChineseName(location)}{(isCurrent ? " 《当前，点击进入》" : "")}";
+                label.text = LocationId.GetChineseName(location);
         }
 
         private void RefreshCurrentDate()

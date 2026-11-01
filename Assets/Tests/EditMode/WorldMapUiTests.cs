@@ -110,7 +110,7 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(startingLocation, Is.EqualTo(LocationId.Kiyosu));
             Assert.That(_controller.InTownMenu, Is.False);
             Assert.That(kiyosu.interactable, Is.True, "The starting town must be enterable from the map.");
-            Assert.That(kiyosu.GetComponentInChildren<Text>().text, Does.Contain("进入"));
+            Assert.That(kiyosu.GetComponentInChildren<Text>().text, Is.EqualTo("清洲"));
             kiyosu.onClick.Invoke();
 
             Assert.That(_controller.InTownMenu, Is.True);
@@ -138,6 +138,8 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(_controller.SelectedDestination, Is.EqualTo(destination));
             Assert.That(_controller.CurrentPreview.HasValue, Is.True);
             Assert.That(_controller.CurrentPreview.Value.Destination, Is.EqualTo(destination));
+            Assert.That(buttons[buttonIndex].GetComponentInChildren<Text>().text,
+                Is.EqualTo(LocationId.GetChineseName(destination)));
             Assert.That(_confirm.interactable, Is.True);
             Assert.That(_session.WorldClock.CurrentDate, Is.EqualTo(startingDate));
             Assert.That(_session.CurrentLocation, Is.EqualTo(LocationId.Kiyosu));
@@ -157,8 +159,9 @@ namespace SengokuChronicle.Tests.EditMode
             GameDate arrivalDate = _session.WorldClock.CurrentDate;
 
             Assert.That(buttons[buttonIndex].interactable, Is.True);
-            Assert.That(buttons[buttonIndex].GetComponentInChildren<Text>().text, Does.Contain("进入"));
-            Assert.That(buttons[0].GetComponentInChildren<Text>().text, Does.Not.Contain("进入"));
+            Assert.That(buttons[buttonIndex].GetComponentInChildren<Text>().text,
+                Is.EqualTo(LocationId.GetChineseName(destination)));
+            Assert.That(buttons[0].GetComponentInChildren<Text>().text, Is.EqualTo("清洲"));
             buttons[buttonIndex].onClick.Invoke();
 
             Assert.That(_controller.InTownMenu, Is.True);

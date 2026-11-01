@@ -3947,7 +3947,7 @@ GameObject:
   - component: {fileID: 1275749389}
   - component: {fileID: 1275749388}
   m_Layer: 0
-  m_Name: FeedbackText
+  m_Name: MissionFeedbackText
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
