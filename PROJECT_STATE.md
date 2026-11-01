@@ -53,7 +53,7 @@ Implementation: a new `SengokuChronicle.Persistence` assembly holds `SaveData` (
 Verification evidence (2026-11-01):
 
 - Compilation: Unity 6000.6.6f1 batchmode imported and compiled this worktree with no `error CS` lines in `m5-batchmode.log`.
-- EditMode: `m5-editmode-results.xml` reports 381 total, 381 passed, 0 failed, 0 inconclusive, 0 skipped (start 17:41:08Z).
+- EditMode: the final integrated run (`m5-final-editmode.xml`) reports 381 total, 381 passed, 0 failed, 0 inconclusive, 0 skipped (start 17:47:34Z); the earlier pre-scene run reported the same totals.
 - FoundationScene: the updater saved the scene; the diff adds 536 lines and removes none. The fresh `Logs/SceneValidationReport.txt` reports `FOUND SaveLoadPanel: M5SaveLoadRoot`, the M5 hierarchy/binding/separation check passing, and `RESULT: PASS; Errors: 0`.
 - Console: not captured. Batchmode logs are not the Editor Console, so no Console counters are claimed.
 - Play Mode: not run in this session; the open Editor stayed on the M4b worktree. Date/location/mission/merit/relationship restoration and the no-duplicate-reward check still need Play Mode evidence.
