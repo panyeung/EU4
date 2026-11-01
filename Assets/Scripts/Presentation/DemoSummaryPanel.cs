@@ -12,7 +12,7 @@ namespace SengokuChronicle.Presentation
     [DisallowMultipleComponent]
     public sealed class DemoSummaryPanel : MonoBehaviour
     {
-        public const string SummaryFormat = "Phase 1 演示完成。总功绩：{0}。";
+        public const string SummaryFormat = "Phase 1 演示完成。总功绩：{0} · {1}。";
 
         [SerializeField]
         private GameSession gameSession;
@@ -51,7 +51,7 @@ namespace SengokuChronicle.Presentation
             bool complete = gameSession != null && gameSession.IsDemoComplete;
             summaryText.gameObject.SetActive(complete);
             if (complete)
-                summaryText.text = string.Format(SummaryFormat, gameSession.Merit);
+                summaryText.text = string.Format(SummaryFormat, gameSession.Merit, gameSession.RankName);
         }
     }
 }

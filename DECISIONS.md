@@ -61,3 +61,10 @@
 - Alternatives: A separate title scene with `DontDestroyOnLoad` handoff, disabling every gameplay root individually, or a scene reload on New Game.
 - Reason: One overlay sibling gates all input with zero change to the save format, the map controller, or the scene set; it keeps the single-writer scene flow and the transactional updater pattern already validated in M2–M5.
 - Verification: EditMode 401/401 (0 failed, 0 skipped) pre- and post-integration; the batchmode run saved FoundationScene via `AddM6TitleScreen.RunBatchIntegration`; `Logs/SceneValidationReport.txt` reports the M6 PASS line with `RESULT: PASS; Errors: 0`. Play Mode acceptance pending.
+
+## 2026-11-01 - M7 derives rank from merit with a pure threshold table
+
+- Decision: Add `Domain/PromotionRules` (immutable ascending table: 足轻0/番头5/组头10/武士头20) and derive `GameSession.Rank/RankName` from `Merit`. Rank is display-only, never saved; the map gets one `M7RankText` line via the transactional updater; the M6 summary names the rank.
+- Alternatives: Store rank in the save (new field/version), add a XP or event system, or use historical office names with era考据 claims.
+- Reason: Derivation keeps the M5 save format frozen and makes rank impossible to forge or double-claim; the threshold table is testable pure C#; the rank names are explicitly game-abstracted growth labels, honoring the GDD's no-unverified-history rule while Phase 1's max merit (20) lands exactly on the top rank as a clean demo ending.
+- Verification: EditMode 425/425 (0 failed, 0 skipped) pre- and post-integration; `RunBatchIntegration` saved FoundationScene with `RESULT: PASS; Errors: 0` including the M7 checks. Play Mode acceptance pending.

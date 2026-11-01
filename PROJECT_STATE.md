@@ -74,3 +74,11 @@ Verification evidence (2026-11-01): batchmode compile without `error CS`; EditMo
 M1–M5 remain accepted. M6 (title screen & Phase 1 demo packaging) is implemented on `feature/m5-save-slot` and was accepted by the user's Play Mode run on 2026-11-01 (`pass`). Exact runtime values and Console counters were not supplied; the acceptance rests on the user's report alongside the recorded compile, EditMode 401/401 (both runs), integration, and validator evidence.
 
 Next step: the M6 checkpoint is merged to `main` and tagged `demo-M6` after the user's acceptance.
+
+## M7 accepted update — 2026-11-01 (Phase 2)
+
+M1–M6 remain accepted; `demo-M6` is merged and pushed. M7 (功名晋升 / merit & promotion) is the first Phase 2 milestone, implemented on `feature/m5-save-slot` (user directive) and accepted by the user's Play Mode `pass` on 2026-11-01.
+
+Implementation: pure-C# `PromotionRules` maps total merit to four game-abstracted ranks (足轻0/番头5/组头10/武士头20 — simplified growth labels, not historical offices); `GameSession.Rank/RankName` are derived (no save-format change); `RankPanel` adds a permanent map-screen line with next-rank threshold; the M6 demo summary now names the final rank; `AddM7RankPanel` is the transactional scene updater and the project validator checks M7. Design/plan: `docs/superpowers/specs/2026-11-01-m7-merit-promotion-design.md`, `docs/superpowers/plans/2026-11-01-m7-merit-promotion.md`; roadmap in `PHASE2_ROADMAP.md`.
+
+Verification evidence (2026-11-01): batchmode compile without `error CS`; EditMode 425/425 passed (0 failed, 0 skipped) pre-integration (22:19:48Z) and post-integration (22:36:35Z); `RunBatchIntegration` saved FoundationScene (+96/−1; the single removal is Unity re-normalizing the inert `m_MaxSize` on `M6TitleLabel`, `m_BestFit: 0`); `Logs/SceneValidationReport.txt` reports the M7 PASS line and `RESULT: PASS; Errors: 0`. The user ran the Play Mode acceptance path and reported `pass` on 2026-11-01; exact rank values and Console counters were not independently captured.

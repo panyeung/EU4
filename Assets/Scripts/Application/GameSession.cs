@@ -27,6 +27,12 @@ namespace SengokuChronicle.Application
             SealedLetterStage == SealedLetterStage.RewardClaimed &&
             MarketTallyStage == MarketTallyStage.RewardClaimed;
 
+        /// <summary>当前军阶：由派生的总功绩推导，不进入存档。</summary>
+        public PromotionRank Rank => PromotionRules.RankFor(Merit);
+
+        /// <summary>当前军阶中文名。</summary>
+        public string RankName => PromotionRules.ChineseName(Rank);
+
         private SealedLetterMission _sealedLetterMission = new SealedLetterMission();
         private MarketTallyMission _marketTallyMission = new MarketTallyMission();
         private SupplyShortageMission _supplyShortageMission = new SupplyShortageMission();
