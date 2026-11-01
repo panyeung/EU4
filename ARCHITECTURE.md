@@ -132,3 +132,6 @@ M4b 在 M4a 的固定 C# 模式上增加 `SealedLetterMission` 与 `MarketTallyM
 ## M5/M6 实现：存档槽与标题封装
 
 M5 增加 `SengokuChronicle.Persistence`（`SaveData` v1、校验器、原子单槽存储）与 `GameSession.CaptureSave/TryApplySave/SaveTo/LoadFrom`，地图界面加入 `M5SaveLoadRoot`；merit 由任务阶段推导、不入档，读档不可能重复领奖。M6 在同一分支上增加标题封装：`TitleScreenController`（Presentation）以 `Canvas/M6TitleRoot` 全屏不透明、raycast-blocking 覆盖层门控 Play Mode 启动，「新游戏」调用 `InitNewGame`，「继续」走与 M5 相同的原子 `LoadFrom` 路径，失败仅提示不改状态；`GameSession.IsDemoComplete` 为纯域规则，`DemoSummaryPanel` 只做展示轮询。两个根（标题根与地图内 `M6DemoSummaryText`）在保存的场景中均为 inactive，由运行时激活；标题根必须是 Canvas 中地图根之后的最后一个兄弟以保证覆盖渲染次序。场景集成沿用同一事务式更新器模式（`AddM6TitleScreen`），Validator 报告唯一层级、绑定、包含与分离检查。
+## M7 实现：功名晋升（Phase 2 起点）
+
+M7 引入 `Domain/PromotionRules`：以升序不可变阈值表把 `GameSession.Merit` 映射到四个游戏化军阶（足轻0、番头5、组头10、武士头20；为简化成长标签，不代表史实官职）。军阶是纯派生值：`GameSession.Rank/RankName` 不新增状态、不写入存档，读档无法伪造或重复晋升。`Presentation/RankPanel` 与 `DemoSummaryPanel` 同模式（幂等 `Refresh()` + Update 轮询，规则本体留在 Domain）。场景集成沿用事务式更新器模式（`AddM7RankPanel`）：`M7RankText` 插在 `TownMenuRoot` 之前，验证包含性与对既有地图/M5/M6 控件的分离后才保存。Phase 1 满功绩 20 恰达最高阶，作为演示完美收尾；Phase 2 后续内容（更多 merit 来源或更高层阶）须另行立项。

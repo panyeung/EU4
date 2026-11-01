@@ -4697,6 +4697,85 @@ RectTransform:
   m_AnchoredPosition: {x: 460, y: -110}
   m_SizeDelta: {x: 260, y: 44}
   m_Pivot: {x: 0.5, y: 0.5}
+--- !u!1 &995774992
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 995774995}
+  - component: {fileID: 995774994}
+  - component: {fileID: 995774993}
+  m_Layer: 0
+  m_Name: M7RankText
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &995774993
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 995774992}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5f7201a12d95ffc409449d95f23cf332, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Text
+  m_Material: {fileID: 0}
+  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_RaycastTarget: 0
+  m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
+  m_Maskable: 1
+  m_OnCullStateChanged:
+    m_PersistentCalls:
+      m_Calls: []
+  m_FontData:
+    m_Font: {fileID: 10102, guid: 0000000000000000e000000000000000, type: 0}
+    m_FontSize: 11
+    m_FontStyle: 0
+    m_BestFit: 0
+    m_MinSize: 10
+    m_MaxSize: 40
+    m_Alignment: 4
+    m_AlignByGeometry: 0
+    m_RichText: 1
+    m_HorizontalOverflow: 0
+    m_VerticalOverflow: 0
+    m_LineSpacing: 1
+  m_Text: "\u529F\u540D\uFF1A0 \xB7 \u8DB3\u8F7B\uFF08\u4E0B\u4E00\u9636 \u756A\u5934 5\uFF09"
+--- !u!222 &995774994
+CanvasRenderer:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 995774992}
+  m_CullTransparentMesh: 1
+--- !u!224 &995774995
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 995774992}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1545502404}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0.5, y: 0.5}
+  m_AnchorMax: {x: 0.5, y: 0.5}
+  m_AnchoredPosition: {x: -450, y: 100}
+  m_SizeDelta: {x: 240, y: 40}
+  m_Pivot: {x: 0.5, y: 0.5}
 --- !u!1 &1086242024
 GameObject:
   m_ObjectHideFlags: 0
@@ -5104,6 +5183,7 @@ GameObject:
   - component: {fileID: 1156767147}
   - component: {fileID: 1156767150}
   - component: {fileID: 1156767149}
+  - component: {fileID: 1156767151}
   m_Layer: 0
   m_Name: GameSession
   m_TagString: Untagged
@@ -5170,6 +5250,20 @@ MonoBehaviour:
   newGameButton: {fileID: 304306458}
   continueButton: {fileID: 494155506}
   statusText: {fileID: 1534027306}
+--- !u!114 &1156767151
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1156767146}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b0951af8551fae3478a6e1c2f3c1831f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: SengokuChronicle.Presentation::SengokuChronicle.Presentation.RankPanel
+  gameSession: {fileID: 1156767147}
+  rankText: {fileID: 995774993}
 --- !u!1 &1198619148
 GameObject:
   m_ObjectHideFlags: 0
@@ -6864,6 +6958,7 @@ RectTransform:
   - {fileID: 460730122}
   - {fileID: 2075204244}
   - {fileID: 979549322}
+  - {fileID: 995774995}
   - {fileID: 1447859597}
   m_Father: {fileID: 654662336}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
@@ -7663,7 +7758,7 @@ MonoBehaviour:
     m_FontStyle: 0
     m_BestFit: 0
     m_MinSize: 10
-    m_MaxSize: 40
+    m_MaxSize: 44
     m_Alignment: 4
     m_AlignByGeometry: 0
     m_RichText: 1
