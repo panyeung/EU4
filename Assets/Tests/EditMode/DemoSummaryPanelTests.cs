@@ -92,6 +92,7 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(_panel.IsShowing, Is.True);
             Assert.That(_summaryText.text, Does.Contain("Phase 1 演示完成"));
             Assert.That(_summaryText.text, Does.Contain("总功绩：20"));
+            Assert.That(_summaryText.text, Does.Contain("武士头"));
         }
 
         [Test]

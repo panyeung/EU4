@@ -34,6 +34,7 @@ namespace SengokuChronicle.Editor
             SaveLoadPanel saveLoadPanel = FindComponent<SaveLoadPanel>(scene);
             TitleScreenController titleController = FindComponent<TitleScreenController>(scene);
             DemoSummaryPanel demoPanel = FindComponent<DemoSummaryPanel>(scene);
+            RankPanel rankPanel = FindComponent<RankPanel>(scene);
 
             CheckFound(report, ref errors, "Canvas", canvas);
             CheckFound(report, ref errors, "Canvas/M2WorldMapRoot", mapRoot);
@@ -44,6 +45,7 @@ namespace SengokuChronicle.Editor
             CheckFound(report, ref errors, "SaveLoadPanel", saveLoadPanel);
             CheckFound(report, ref errors, "TitleScreenController", titleController);
             CheckFound(report, ref errors, "DemoSummaryPanel", demoPanel);
+            CheckFound(report, ref errors, "RankPanel", rankPanel);
             if (!AddM4SupplyShortageMissionPanel.Validate(scene, out string missionError))
                 AddError(report, ref errors, missionError);
             else
@@ -60,6 +62,10 @@ namespace SengokuChronicle.Editor
                 AddError(report, ref errors, m6Error);
             else
                 report.AppendLine("PASS M6 title screen hierarchy, bindings, gating, and demo summary.");
+            if (!AddM7RankPanel.Validate(scene, out string m7Error))
+                AddError(report, ref errors, m7Error);
+            else
+                report.AppendLine("PASS M7 rank panel hierarchy, bindings, containment, and map separation.");
 
             if (controller != null)
             {
@@ -110,6 +116,13 @@ namespace SengokuChronicle.Editor
                 report.AppendLine("\nDEMO SUMMARY PANEL REFERENCES:");
                 CheckReferences(report, ref errors, demoPanel,
                     "gameSession", "summaryText");
+            }
+
+            if (rankPanel != null)
+            {
+                report.AppendLine("\nRANK PANEL REFERENCES:");
+                CheckReferences(report, ref errors, rankPanel,
+                    "gameSession", "rankText");
             }
 
             report.AppendLine("\nHIERARCHY AND RECTTRANSFORMS:");
