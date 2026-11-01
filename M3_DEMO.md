@@ -24,4 +24,4 @@ The other dialogue choice is covered by EditMode tests; town-specific roster ass
 
 ## Status
 
-This is a demo candidate for user evaluation. Independent read-only review found no Critical or Important findings; formal Kanban review tools are unavailable in this session. M3 is not accepted yet. Do not merge or tag before user acceptance.
+M3 was accepted by the user on 2026-10-31, merged to `main` at `2ca9463`, and tagged `demo-M3`. Independent read-only review found no Critical or Important findings. Formal Kanban review tools were unavailable in this session.

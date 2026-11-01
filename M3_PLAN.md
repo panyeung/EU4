@@ -11,7 +11,7 @@ Deliver the Phase 1 character interaction loop: five fictional NPCs with stable 
 3. Verify all UI references and RectTransforms with the FoundationScene text validator; update layout through the existing transactional updater if required. **Done**; validator reports PASS with 0 errors.
 4. Compile in Unity 6000.6.6f1; run EditMode tests and available PlayMode tests; check Console errors. **Done**; 136 EditMode tests passed, no PlayMode tests are present, and Console showed 0 errors/warnings.
 5. Walk the Play Mode demo path and perform an independent diff/evidence review. **Done**; the review found no Critical or Important findings and listed minor follow-ups in `PROJECT_STATE.md`.
-6. Update state/demo docs, push the feature branch, and deliver the M3 Play Demo for user acceptance. **Done**; branch is published and the demo is handed off, with user acceptance pending.
+6. Update state/demo docs, push the feature branch, and deliver the M3 Play Demo for user acceptance. **Done**; branch is published, the user accepted the demo, and the milestone is merged and tagged `demo-M3`.
 
 ## Acceptance
 

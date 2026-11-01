@@ -6,11 +6,12 @@ Audit date: 2026-10-31 (Pacific/Honolulu)
 
 - M1 is accepted.
 - M2 Play Demo is accepted, merged to `main` at `f3094e8`, and tagged `demo-M2`.
+- M3 Town NPC Dialogue is accepted, merged to `main` at `2ca9463`, and tagged `demo-M3`.
 
 ## Current milestone
 
-- M3 Characters and Relationships is on `feature/m3-accepted-integration`, based on accepted M2 plus committed M3-01 through M3-03 work.
-- Scene integration and verification for the M3 demo candidate are complete. An independent read-only review found no Critical or Important findings; user acceptance is still pending.
+- M3 Characters and Relationships is accepted on `main` at `2ca9463` and tagged `demo-M3`, based on accepted M2 plus M3-01 through M3-03 work.
+- Scene integration, verification, independent review, and user acceptance for M3 are complete. The independent read-only review found no Critical or Important findings; minor follow-ups are recorded below.
 - The separate `C:\Users\panye\EU4-m3` worktree contains uncommitted M3-04 changes and remains untouched.
 
 ## Verification evidence
@@ -26,7 +27,7 @@ Audit date: 2026-10-31 (Pacific/Honolulu)
 
 ## Worktree and next step
 
-- M3 integration candidate is prepared on the feature branch. Keep it isolated from the accepted M2 branch and the separate M3 WIP worktree.
+- The published `feature/m3-accepted-integration` branch is preserved at the accepted M3 checkpoint. The separate `C:\Users\panye\EU4-m3` M3-04 worktree remains untouched.
 - `M3_DEMO.md` contains the user-facing acceptance path and evidence summary.
-- The Kanban review tools are not available in this session; the independent read-only review is recorded in this handoff. The feature branch is published to `origin` at `0fc8e21`; the M3 Play Demo is handed off for user evaluation. Do not mark M3 accepted or merge/tag it before the user accepts it.
+- The Kanban review tools were not available; the independent read-only review and user acceptance are recorded in this handoff.
 - M4a and later milestones remain out of scope until M3 is accepted.
