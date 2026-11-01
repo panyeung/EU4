@@ -93,6 +93,12 @@ M0 设计批准
 
 M3 的独立角色/关系规则可在 M2 完成后进入游戏 UI；为避免多人同时编辑场景，建议同一时间只派一个整合性 Unity 卡，其他纯规则工作若独立且不碰共用场景才并行。无需为这些卡再拆大量 QA 子卡，沿用同卡审核流程。每项需要人工 Play Mode 检查的任务，QA 审查通过后仍须用户明确接受；QA 通过不等同于用户验收。用户未批准前不要创建上述卡片。
 
+## M4a 当前候选状态（2026-11-01）
+
+M3 已获接受，M4a 补给短缺任务正在 `feature/m4a-supply-shortage-task` 的单一隔离工作树中实现。用户批准固定任务模型、使用 Atsuta 的黑田伊织作为商人、Kiyosu 报告后一次性增加 10 merit。任务规则保持纯 C#；不新增 package 或通用任务框架。
+
+Unity 6000.6.6f1 EditMode 全套测试现为 203/203 通过（2026-11-01 05:18:09 local），覆盖修正 `c326e63`；Task 2 同卡静态审核通过。经审核的 M4a 更新器已通过其结构验证并保存 `FoundationScene`；项目级 Validator 报告为 `PASS; Errors: 0`。当前 Editor 日志的 AI Toolkit `NoSubscription` 是该包以 `Debug.Log` 写出的普通日志；当前日志未发现 `Debug.LogError`、异常或 C# 编译错误，但尚未核实清空历史记录后的 Editor Console 计数。Play Mode 演示和用户验收未完成。未满足零 Console 错误和完整玩法演示前，不交付 M4a demo，也不创建最终 checkpoint、合并或标签。
+
 ## 跨阶段交付要求
 
 每张完成卡用中文说明系统用途和重要脚本；列变更文件、实际自动化测试及结果、相关 Play Mode 步骤、限制/未解决事项、Git diff 简述；架构变化同步 `ARCHITECTURE.md`。不得宣称未真实执行的编译、测试或 Play Mode 通过。

@@ -30,4 +30,12 @@ Audit date: 2026-10-31 (Pacific/Honolulu)
 - The published `feature/m3-accepted-integration` branch is preserved at the accepted M3 checkpoint. The separate `C:\Users\panye\EU4-m3` M3-04 worktree remains untouched.
 - `M3_DEMO.md` contains the user-facing acceptance path and evidence summary.
 - The Kanban review tools were not available; the independent read-only review and user acceptance are recorded in this handoff.
-- M4a and later milestones remain out of scope until M3 is accepted.
+- M4a is the active candidate; later milestones remain out of scope until M4a is accepted.
+
+## M4a candidate update — 2026-11-01
+
+M3 is accepted; M4a is now the active milestone on `feature/m4a-supply-shortage-task` in its isolated worktree. The mission model, uGUI panel/controller, updater, validator, and EditMode coverage are implemented in source. The FoundationScene has not yet been integrated by the lead updater, and the candidate is not ready for Play Mode evaluation.
+
+Latest existing-Editor EditMode run (2026-11-01 05:18:09 local): 203 total, 203 passed, 0 failed, 0 skipped, after `c326e63`. The Task 2 static same-task review approved the test-only reflection correction with no findings. Unity rebuilt assemblies successfully during the run; no C# compiler errors appear in the current project log. The `NoSubscription` messages come from AI Assistant code calling `Debug.Log`; the current log has no `Debug.LogError`, exception, or C# compiler diagnostics, but the live Editor Console error counter has not been checked after clearing prior results.
+
+The reviewed updater validated and saved `Assets/Scenes/FoundationScene.unity`, committed as scene integration `6cba4ba`. The project-wide validator wrote `Logs/SceneValidationReport.txt`: `RESULT: PASS; Errors: 0`, with the scene loaded and clean and all M4a references bound. The scene diff adds the mission UI and controller binding; the existing NPC roster return button's serialized block is unchanged. Play Mode walkthrough, fresh zero-error Editor Console counter evidence, and user acceptance remain pending. No final checkpoint, merge, or tag has been created.

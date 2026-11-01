@@ -45,13 +45,13 @@
 - `TryAccept(LocationId location)`, `TryInvestigate(LocationId location)`, `TryNegotiate(LocationId location, CharacterId merchantId)`, `TryReport(LocationId location)`: each returns `SupplyShortageActionResult`.
 - `GameSession.SupplyShortageStage`, `GameSession.Merit`, `TryAcceptSupplyShortageMission()`, `TryInvestigateSupplyShortage()`, `TryNegotiateSupplyShortage(CharacterId merchantId)`, `TryReportSupplyShortage()` delegate using `CurrentLocation`.
 
-- [ ] Write `NewMission_StartsNotAcceptedWithZeroMerit`, `Accept_SucceedsOnlyInKiyosu`, `Investigate_RequiresAcceptanceInAtsuta`, `Negotiate_RequiresInvestigationAndKurodaInAtsuta`, `Report_RequiresNegotiationAndKiyosu`, and `Report_AwardsTenMeritExactlyOnce`; assert exact stage/merit.
-- [ ] Write parameterized `RejectedAction_PreservesMissionAndWorldState` cases for wrong location/stage, non-Kuroda/unknown merchant, and duplicate actions; assert stage, merit, date, and location remain unchanged.
-- [ ] Write `InitNewGame_ResetsMissionAndMerit` after intermediate and claimed states, and `MissionActions_DoNotAdvanceClockOrChangeLocation`.
-- [ ] Run the focused tests in the M4a Editor once the user has opened this worktree; confirm they fail before implementation.
-- [ ] Implement the mission-specific state machine and `GameSession` APIs; the report action transitions to `RewardClaimed` and awards 10 atomically.
-- [ ] Run focused then full EditMode tests; report exact Unity Test Runner results.
-- [ ] After task review passes, commit this task as `feat(m4a): add supply shortage mission state`.
+- [x] Write `NewMission_StartsNotAcceptedWithZeroMerit`, `Accept_SucceedsOnlyInKiyosu`, `Investigate_RequiresAcceptanceInAtsuta`, `Negotiate_RequiresInvestigationAndKurodaInAtsuta`, `Report_RequiresNegotiationAndKiyosu`, and `Report_AwardsTenMeritExactlyOnce`; assert exact stage/merit.
+- [x] Write parameterized `RejectedAction_PreservesMissionAndWorldState` cases for wrong location/stage, non-Kuroda/unknown merchant, and duplicate actions; assert stage, merit, date, and location remain unchanged.
+- [x] Write `InitNewGame_ResetsMissionAndMerit` after intermediate and claimed states, and `MissionActions_DoNotAdvanceClockOrChangeLocation`.
+- [ ] Run focused tests before implementation and confirm they fail (not performed; the first M4a Editor run was after source implementation).
+- [x] Implement the mission-specific state machine and `GameSession` APIs; the report action transitions to `RewardClaimed` and awards 10 atomically.
+- [x] Run the full EditMode suite; the focused mission and GameSession tests are included in that run, with exact results recorded.
+- [x] After task review passes, commit this task as `feat(m4a): add supply shortage mission state`.
 
 ### Task 2: uGUI Mission Panel and Controller Wiring
 
@@ -65,11 +65,11 @@
 - `SupplyShortageMissionPanel.Open()` / `Close()` control visibility; `Refresh()` renders stage, current objective, merit, action availability, and feedback.
 - The panel calls only the four `GameSession` mission use cases from Task 1. `WorldMapController` opens it on entering a town and closes it on return to map.
 
-- [ ] Add `Panel_ShowsKiyosuAcceptBeforeAcceptance`, `Panel_ShowsAtsutaInvestigationThenNegotiation`, and `Panel_ShowsKiyosuReportOnlyAfterNegotiation`; assert objective, merit, and action visibility/interactability.
-- [ ] Add `Panel_RefreshesAcrossTownAndReturn`, `Panel_ShowsOperationFeedback`, `Panel_DisablesRepeatedReport`, and `Panel_HandlesMissingSessionOrReferences`; assert safe UI behavior and application-level rejection.
-- [ ] Implement the panel and controller binding; keep mission logic out of `MonoBehaviour` and keep relationship dialogue behavior unchanged.
-- [ ] Run focused and full EditMode suites in the M4a Editor.
-- [ ] After task review passes, commit this task as `feat(m4a): add mission progress panel`.
+- [x] Add `Panel_ShowsKiyosuAcceptBeforeAcceptance`, `Panel_ShowsAtsutaInvestigationThenNegotiation`, and `Panel_ShowsKiyosuReportOnlyAfterNegotiation`; assert objective, merit, and action visibility/interactability.
+- [x] Add `Panel_RefreshesAcrossTownAndReturn`, `Panel_ShowsOperationFeedback`, `Panel_DisablesRepeatedReport`, and `Panel_HandlesMissingSessionOrReferences`; assert safe UI behavior and application-level rejection.
+- [x] Implement the panel and controller binding; keep mission logic out of `MonoBehaviour` and keep relationship dialogue behavior unchanged.
+- [x] Run the full EditMode suite in the M4a Editor; focused panel tests are included in that run.
+- [x] After task review passes, commit this task as `feat(m4a): add mission progress panel`.
 
 ### Task 3: Safe FoundationScene Integration
 
@@ -84,19 +84,19 @@
 - Public test seam: `AddM4SupplyShortageMissionPanel.Update(Scene scene)` returning a typed result without saving; menu path additionally requires the active scene to be `Assets/Scenes/FoundationScene.unity` and clean.
 - The validator checks a single mission panel under the fixed `M2WorldMapRoot/TownMenuRoot` hierarchy and all serialized references.
 
-- [ ] Write `Updater_RefusesWrongOrDirtyScene`, `Updater_RefusesMissingOrDuplicateRoots`, `Updater_BuildsAndBindsMissionPanelUnderTownRoot`, and `Updater_RollsBackOnValidationFailure`; assert no partial object remains on failure.
-- [ ] Implement preflight, one Undo group, UI construction/binding, structural validation, rollback, and save only after validation; never modify existing object GUIDs or unknown objects.
-- [ ] Update `FoundationSceneValidator` to report missing/duplicate mission UI and unbound references as errors.
-- [ ] Run updater and validator from the open M4a Editor; inspect the saved scene and report `SceneValidationReport.txt` result.
-- [ ] Commit the Editor updater, validator, and tests as `feat(m4a): add safe mission panel updater`; obtain the static task review before running the updater.
-- [ ] The lead alone runs the reviewed updater in the open M4a Editor and saves the resulting scene; commit that generated scene as `feat(m4a): integrate mission panel in foundation scene` after Unity validation passes.
+- [x] Write `Updater_RefusesWrongOrDirtyScene`, `Updater_RefusesMissingOrDuplicateRoots`, `Updater_BuildsAndBindsMissionPanelUnderTownRoot`, and `Updater_RollsBackOnValidationFailure`; assert no partial object remains on failure.
+- [x] Implement preflight, one Undo group, UI construction/binding, structural validation, rollback, and save only after validation; never modify existing object GUIDs or unknown objects.
+- [x] Update `FoundationSceneValidator` to report missing/duplicate mission UI and unbound references as errors.
+- [x] Run updater and validator from the open M4a Editor; inspect the saved scene and report `SceneValidationReport.txt` result.
+- [x] Commit the Editor updater, validator, and tests as `feat(m4a): add safe mission panel updater`; obtain the static task review before running the updater.
+- [x] The lead alone runs the reviewed updater in the open M4a Editor and saves the resulting scene; commit that generated scene as `feat(m4a): integrate mission panel in foundation scene` after Unity validation passes (`6cba4ba`).
 
 ### Task 4: Demo Evidence, Review, and Handoff
 
 **Files:**
 - Create/update: `M4A_DEMO.md`, `PROJECT_STATE.md`, `PHASE1_ROADMAP.md`, `ARCHITECTURE.md`, `DECISIONS.md`.
 
-- [ ] Update architecture and decisions with the fixed state machine, one-time +10 merit, no package/reuse decision, and M4a limitations.
+- [x] Update architecture and decisions with the fixed state machine, one-time +10 merit, no package/reuse decision, and M4a limitations.
 - [ ] Run full EditMode tests, check compile and Console separately, then manually play the entire mission from new game through one-time report.
 - [ ] Complete same-task QA review with the available review route; record evidence and actionable defects. If formal Kanban tools remain unavailable, say so and use an independent diff review.
 - [ ] Prepare `M4A_DEMO.md` with changed files, exact test results, scene-validation results, Play Mode walkthrough, and unresolved limitations; do not claim acceptance.

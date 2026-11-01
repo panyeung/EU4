@@ -76,6 +76,12 @@ Unity 类型留在表现/定义/持久化适配边界；规则程序集可在后
 - 优先 Unity Editor 脚本和受支持 API 创建场景/Prefab；避免直接编辑 `.unity`/`.prefab` YAML，保持 `.meta`/GUID。
 - 不安装新包、不加框架，除非有经评估且批准的明确需求。
 
+## M4a 实现：补给短缺任务
+
+M4a 采用固定任务模型，不引入通用任务图、事件总线或任务编辑器。`SupplyShortageMission` 在 Domain 层用普通 C# 管理阶段与 merit；`GameSession` 根据当前地点协调显式用例；uGUI 任务面板只显示进度并转发操作。流程为 `NotAccepted → Accepted → Investigated → Negotiated → RewardClaimed`：清洲接受任务、热田调查并与黑田伊织交涉、返回清洲报告；有效报告恰好增加 10 merit，后续报告不会重复奖励。任务操作不推进日期或地点，新局会重置任务和 merit。
+
+该阶段复用现有 Atsuta NPC 黑田伊织，不增加角色定义。任务状态当前属于运行时状态；存档与恢复仍留待 M5。FoundationScene 的 UI 更新由经过预检与验证的 Unity Editor 更新器完成，不直接编辑场景 YAML。M4a 不增加包、资产或第三方运行时代码。
+
 ## M1 架构概览（已落地）
 
 > 实现日期：2026-10-20；Kanban 卡片 t_6ec3a019。分层 + asmdef 隔离：Presentation → Application → Domain；EditMode 测试程序集引用 Domain + Application。
