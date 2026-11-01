@@ -69,4 +69,8 @@ Implementation: `TitleScreenController` boots Play Mode to a full-screen title o
 
 Verification evidence (2026-11-01): batchmode compile without `error CS`; EditMode 401/401 passed (0 failed, 0 skipped) both pre-integration (21:27:53Z) and post-integration (21:45:01Z); `RunBatchIntegration` saved FoundationScene (+764/−12 lines, the removals are Unity re-serialization of existing blocks); `Logs/SceneValidationReport.txt` reports the M6 PASS line and `RESULT: PASS; Errors: 0`. Console counters and Play Mode are not yet captured; see `M6_DEMO.md`.
 
-Next step: user Play Mode acceptance per `M6_DEMO.md`. Do not create the final M6 checkpoint, merge to `main`, or tag `demo-M6` before explicit acceptance.
+## M6 accepted update — 2026-11-01
+
+M1–M5 remain accepted. M6 (title screen & Phase 1 demo packaging) is implemented on `feature/m5-save-slot` and was accepted by the user's Play Mode run on 2026-11-01 (`pass`). Exact runtime values and Console counters were not supplied; the acceptance rests on the user's report alongside the recorded compile, EditMode 401/401 (both runs), integration, and validator evidence.
+
+Next step: the M6 checkpoint is merged to `main` and tagged `demo-M6` after the user's acceptance.

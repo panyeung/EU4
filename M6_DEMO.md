@@ -1,6 +1,6 @@
 # M6 Title Screen & Demo Packaging — Candidate
 
-**Status: Candidate; Play Mode acceptance pending.**
+**Status: Accepted by user Play Mode run on 2026-11-01.**
 **Branch:** `feature/m5-save-slot` (user directed continuing M6 on the same branch and worktree)
 **Design:** `docs/superpowers/specs/2026-11-01-m6-title-demo-packaging-design.md`
 **Plan:** `docs/superpowers/plans/2026-11-01-m6-title-demo-packaging.md`
@@ -27,8 +27,8 @@
 - **Scene integration:** `RunBatchIntegration` opened FoundationScene, ran the transactional updater, and saved; batch log line `M6 title integration completed and FoundationScene was saved.` with no rollback warnings. The scene diff is +764/−12 (the removed lines are Unity re-serializing existing Image/reference blocks; no controls were deleted).
 - **Scene validation:** fresh `Logs/SceneValidationReport.txt` reports `FOUND TitleScreenController: GameSession`, `PASS M6 title screen hierarchy, bindings, gating, and demo summary.`, `BOUND GameSession.titleRoot/newGameButton/continueButton/statusText/summaryText`, `M6TitleRoot [inactive]` as the last Canvas child, and `RESULT: PASS; Errors: 0`.
 - **EditMode (post-integration, final):** `m6-final-editmode.xml` reports `total="401" passed="401" failed="0" inconclusive="0" skipped="0"` (start 2026-11-01 21:45:01Z).
+- **Play Mode acceptance:** the user ran the acceptance path in the open Editor (6000.6.6f1, PID 44880) on this worktree and reported `pass` on 2026-11-01. Exact observed values and Console counters were not supplied by the user, so acceptance rests on their report; the agent verified the scene's M6 structure and bindings via the validator report above but did not independently record runtime results.
 - **Console:** not captured. Batchmode logs are not the Editor Console, so no Console counters are claimed.
-- **Play Mode:** not run yet; see the acceptance path below.
 
 ## Required Play Mode acceptance path
 
@@ -40,4 +40,4 @@
 6. Complete all three missions (or continue a completed save): the map shows 「Phase 1 演示完成。总功绩：20。」.
 7. Report the observed values and Console counters.
 
-User Play Mode acceptance is required before the final M6 checkpoint, merge to `main`, or a `demo-M6` tag.
+Accepted by the user on 2026-11-01; the final M6 checkpoint, merge to `main`, and `demo-M6` tag followed that acceptance.
