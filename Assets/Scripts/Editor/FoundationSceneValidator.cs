@@ -32,6 +32,8 @@ namespace SengokuChronicle.Editor
             TownNpcDialoguePanel panel = FindComponent<TownNpcDialoguePanel>(scene);
             SupplyShortageMissionPanel missionPanel = FindComponent<SupplyShortageMissionPanel>(scene);
             SaveLoadPanel saveLoadPanel = FindComponent<SaveLoadPanel>(scene);
+            TitleScreenController titleController = FindComponent<TitleScreenController>(scene);
+            DemoSummaryPanel demoPanel = FindComponent<DemoSummaryPanel>(scene);
 
             CheckFound(report, ref errors, "Canvas", canvas);
             CheckFound(report, ref errors, "Canvas/M2WorldMapRoot", mapRoot);
@@ -40,6 +42,8 @@ namespace SengokuChronicle.Editor
             CheckFound(report, ref errors, "TownNpcDialoguePanel", panel);
             CheckFound(report, ref errors, "SupplyShortageMissionPanel", missionPanel);
             CheckFound(report, ref errors, "SaveLoadPanel", saveLoadPanel);
+            CheckFound(report, ref errors, "TitleScreenController", titleController);
+            CheckFound(report, ref errors, "DemoSummaryPanel", demoPanel);
             if (!AddM4SupplyShortageMissionPanel.Validate(scene, out string missionError))
                 AddError(report, ref errors, missionError);
             else
@@ -52,6 +56,10 @@ namespace SengokuChronicle.Editor
                 AddError(report, ref errors, m5Error);
             else
                 report.AppendLine("PASS M5 save/load hierarchy, unique controls, bindings, and map separation.");
+            if (!AddM6TitleScreen.Validate(scene, out string m6Error))
+                AddError(report, ref errors, m6Error);
+            else
+                report.AppendLine("PASS M6 title screen hierarchy, bindings, gating, and demo summary.");
 
             if (controller != null)
             {
@@ -88,6 +96,20 @@ namespace SengokuChronicle.Editor
                 report.AppendLine("\nSAVE/LOAD PANEL REFERENCES:");
                 CheckReferences(report, ref errors, saveLoadPanel,
                     "gameSession", "worldMapController", "saveButton", "loadButton", "statusText");
+            }
+
+            if (titleController != null)
+            {
+                report.AppendLine("\nTITLE SCREEN CONTROLLER REFERENCES:");
+                CheckReferences(report, ref errors, titleController,
+                    "gameSession", "worldMapController", "titleRoot", "newGameButton", "continueButton", "statusText");
+            }
+
+            if (demoPanel != null)
+            {
+                report.AppendLine("\nDEMO SUMMARY PANEL REFERENCES:");
+                CheckReferences(report, ref errors, demoPanel,
+                    "gameSession", "summaryText");
             }
 
             report.AppendLine("\nHIERARCHY AND RECTTRANSFORMS:");

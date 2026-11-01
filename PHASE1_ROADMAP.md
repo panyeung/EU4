@@ -118,3 +118,13 @@ M2 is accepted. M3 and M4a are accepted as recorded in `PROJECT_STATE.md` and `M
 ## M4b verification update — 2026-11-01
 
 M4b code compiled in the existing Unity Editor after Refresh. EditMode Run All passed 322/322 (0 failed, 0 skipped), including all four `AddM4bMissionBoardTests`. The validated updater saved `FoundationScene`; the fresh project validator report passes with zero errors and a clean scene. The user reported the requested mission playtest passed and explicitly accepted M4b on 2026-11-01. Independent technical QA accepted the scoped implementation with no blocking defects. Runtime values and exact Console counters were not recorded separately. Checkpoint `70ac62f0d8a9866488ae194c3cf55c68a8be2e29` is tagged `demo-M4b` and fast-forwarded into local `main`; Kanban review tools were unavailable in this session and no remote push was made.
+
+## M5 accepted update — 2026-11-01
+
+M5（版本化单槽存档 + 地图存档/读档控件）已获用户 Play Mode 接受（用户报告 `pass`）。存档文件 `save-slot-1.json` 记录了 `saveFormatVersion: 1`、日期 `1560-04-05`、地点 `owari.kiyosu`、`supplyShortageStage: 4` 与五条关系值；本次运行未改变地点与关系值，Console 计数与读档细节未由代理独立记录。EditMode 终验 381/381；Validator 报告 `RESULT: PASS; Errors: 0`。checkpoint 合并 `main`（`d920571`）、打 `demo-M5` 标签并已推送 GitHub。
+
+## M6 已接受状态（2026-11-01）
+
+M6（标题界面与 Phase 1 演示封装）在 `feature/m5-save-slot` 实现（用户指定沿用同一分支与工作树），并已获得用户 Play Mode 接受（用户报告 `pass`）。Play Mode 启动进入全屏标题覆盖层 `M6TitleRoot`（新游戏/继续/状态行）；「继续」直接读取 M5 单槽，缺档/坏档/不支持版本均清晰提示且不会改动会话或槽文件；`GameSession.IsDemoComplete`（纯 C# 规则）驱动地图上的「Phase 1 演示完成。总功绩：20。」收尾行。场景集成沿用事务式更新器 `AddM6TitleScreen`（一个 Undo 组、验证后保存、失败回滚），Validator 已加入 M6 层级/绑定检查。
+
+验证证据（2026-11-01）：batchmode 编译无 `error CS`；EditMode 401/401 通过（集成前 21:27:53Z 与集成后 21:45:01Z 各一轮，0 failed / 0 skipped）；`RunBatchIntegration` 保存 `FoundationScene`（+764/−12，删除行均为 Unity 重序列化既有块）；`Logs/SceneValidationReport.txt` 报告 M6 PASS 且 `RESULT: PASS; Errors: 0`。用户在同一工作树的编辑器中执行 Play Mode 验收并报告 `pass`（2026-11-01）；具体运行时数值与 Console 计数未另行记录，验收以用户报告为准。
