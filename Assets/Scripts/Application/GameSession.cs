@@ -15,6 +15,9 @@ namespace SengokuChronicle.Application
     {
         public WorldClock WorldClock { get; private set; }
         public LocationId CurrentLocation { get; private set; }
+        public SupplyShortageStage SupplyShortageStage => _supplyShortageMission.Stage;
+        public int Merit => _supplyShortageMission.Merit;
+        private SupplyShortageMission _supplyShortageMission = new SupplyShortageMission();
         private CharacterRelationships _relationships;
         private readonly Dictionary<Guid, DialogueState> _dialogues = new Dictionary<Guid, DialogueState>();
 
@@ -72,6 +75,27 @@ namespace SengokuChronicle.Application
             WorldClock = new WorldClock();
             CurrentLocation = LocationId.Kiyosu;
             _relationships = new CharacterRelationships();
+            _supplyShortageMission = new SupplyShortageMission();
+        }
+
+        public SupplyShortageActionResult TryAcceptSupplyShortageMission()
+        {
+            return _supplyShortageMission.TryAccept(CurrentLocation);
+        }
+
+        public SupplyShortageActionResult TryInvestigateSupplyShortage()
+        {
+            return _supplyShortageMission.TryInvestigate(CurrentLocation);
+        }
+
+        public SupplyShortageActionResult TryNegotiateSupplyShortage(CharacterId merchantId)
+        {
+            return _supplyShortageMission.TryNegotiate(CurrentLocation, merchantId);
+        }
+
+        public SupplyShortageActionResult TryReportSupplyShortage()
+        {
+            return _supplyShortageMission.TryReport(CurrentLocation);
         }
 
         /// <summary>Reads the player's relationship with a known NPC.</summary>
