@@ -28,5 +28,5 @@ Audit date: 2026-10-31 (Pacific/Honolulu)
 
 - M3 integration candidate is prepared on the feature branch. Keep it isolated from the accepted M2 branch and the separate M3 WIP worktree.
 - `M3_DEMO.md` contains the user-facing acceptance path and evidence summary.
-- The Kanban review tools are not available in this session; the independent read-only review is recorded in this handoff. Publish the feature branch and deliver the M3 Play Demo for user evaluation. Do not mark M3 accepted or merge/tag it before the user accepts it.
+- The Kanban review tools are not available in this session; the independent read-only review is recorded in this handoff. The feature branch is published to `origin` at `0fc8e21`; the M3 Play Demo is handed off for user evaluation. Do not mark M3 accepted or merge/tag it before the user accepts it.
 - M4a and later milestones remain out of scope until M3 is accepted.
