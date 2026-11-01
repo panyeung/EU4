@@ -60,3 +60,13 @@ Verification evidence (2026-11-01):
 - Remote state (verified 2026-11-01): `origin/main` is `24102fe`; tags `demo-M2`, `demo-M3`, `demo-M4a`, and `demo-M4b` exist on `origin`.
 
 Next step: the M5 checkpoint is merged to `main` and tagged `demo-M5` after the user's acceptance.
+
+## M6 candidate update — 2026-11-01
+
+M1–M5 remain accepted. M6 (title screen & Phase 1 demo packaging) is implemented on `feature/m5-save-slot` (same branch and worktree per the user) and is a demo candidate, not accepted.
+
+Implementation: `TitleScreenController` boots Play Mode to a full-screen title overlay (「新游戏」/「继续」, status line), wiring 继续 to the M5 single slot with graceful missing/corrupt/unsupported-version handling and no session mutation on failure; `DemoSummaryPanel` + `GameSession.IsDemoComplete` add the demo closing line on the map; `AddM6TitleScreen` is the transactional scene updater and `FoundationSceneValidator` checks M6 hierarchy/bindings. Design and plan: `docs/superpowers/specs/2026-11-01-m6-title-demo-packaging-design.md` and `docs/superpowers/plans/2026-11-01-m6-title-demo-packaging.md`.
+
+Verification evidence (2026-11-01): batchmode compile without `error CS`; EditMode 401/401 passed (0 failed, 0 skipped) both pre-integration (21:27:53Z) and post-integration (21:45:01Z); `RunBatchIntegration` saved FoundationScene (+764/−12 lines, the removals are Unity re-serialization of existing blocks); `Logs/SceneValidationReport.txt` reports the M6 PASS line and `RESULT: PASS; Errors: 0`. Console counters and Play Mode are not yet captured; see `M6_DEMO.md`.
+
+Next step: user Play Mode acceptance per `M6_DEMO.md`. Do not create the final M6 checkpoint, merge to `main`, or tag `demo-M6` before explicit acceptance.

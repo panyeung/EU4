@@ -128,3 +128,7 @@ M4a 采用固定任务模型，不引入通用任务图、事件总线或任务�
 ## M4b 实现：两项固定 Phase 1 任务
 
 M4b 在 M4a 的固定 C# 模式上增加 `SealedLetterMission` 与 `MarketTallyMission`。各自持有明确阶段并在最终有效动作时一次性增加 5 merit；`GameSession.Merit` 汇总三项固定任务的已领取奖励。新局重置两个新模型。uGUI 保留 M4a 默认页，并通过页签切换到两项 M4b 任务行；固定根对象维持 280×240，不遮挡城镇标题、NPC 或返回按钮。Unity Editor 更新器在一个 Undo 组中增量添加控件并调整 M4a 按钮，验证引用、布局和相邻控件间距后才保存。任务动作不推进日期或地点；旅行仍由 `ConfirmTravel` 独立校验和推进。没有新增通用任务框架、外部 package、NPC 或存档逻辑；持久化仍属于 M5。
+
+## M5/M6 实现：存档槽与标题封装
+
+M5 增加 `SengokuChronicle.Persistence`（`SaveData` v1、校验器、原子单槽存储）与 `GameSession.CaptureSave/TryApplySave/SaveTo/LoadFrom`，地图界面加入 `M5SaveLoadRoot`；merit 由任务阶段推导、不入档，读档不可能重复领奖。M6 在同一分支上增加标题封装：`TitleScreenController`（Presentation）以 `Canvas/M6TitleRoot` 全屏不透明、raycast-blocking 覆盖层门控 Play Mode 启动，「新游戏」调用 `InitNewGame`，「继续」走与 M5 相同的原子 `LoadFrom` 路径，失败仅提示不改状态；`GameSession.IsDemoComplete` 为纯域规则，`DemoSummaryPanel` 只做展示轮询。两个根（标题根与地图内 `M6DemoSummaryText`）在保存的场景中均为 inactive，由运行时激活；标题根必须是 Canvas 中地图根之后的最后一个兄弟以保证覆盖渲染次序。场景集成沿用同一事务式更新器模式（`AddM6TitleScreen`），Validator 报告唯一层级、绑定、包含与分离检查。

@@ -54,3 +54,10 @@
 - Reason: Phase 1 state is about ten fields of plain data; `JsonUtility` needs no dependency, and the atomic replace preserves the previous slot on failure. Mission stages are stored instead of merit, so a completed reward cannot be duplicated on load.
 - Scope: No new package, asset, scene, or serializer abstraction. Save/load UI is one compact map-screen control; scene integration follows the existing transactional updater pattern.
 - Status: Implementation and tests are written; Unity compilation, EditMode tests, scene integration, and Play Mode acceptance are still pending.
+
+## 2026-11-01 - M6 title overlay gates Play Mode on the existing scene
+
+- Decision: Package the Phase 1 demo with a full-screen `Canvas/M6TitleRoot` overlay (新游戏/继续 + status line) activated by `TitleScreenController` at Play Mode start, plus a demo-completion line driven by the pure rule `GameSession.IsDemoComplete`. Both roots are saved inactive; the title root is the last Canvas sibling with an opaque raycast-blocking Image. Continue reuses the M5 atomic `GameSession.LoadFrom` path unchanged.
+- Alternatives: A separate title scene with `DontDestroyOnLoad` handoff, disabling every gameplay root individually, or a scene reload on New Game.
+- Reason: One overlay sibling gates all input with zero change to the save format, the map controller, or the scene set; it keeps the single-writer scene flow and the transactional updater pattern already validated in M2–M5.
+- Verification: EditMode 401/401 (0 failed, 0 skipped) pre- and post-integration; the batchmode run saved FoundationScene via `AddM6TitleScreen.RunBatchIntegration`; `Logs/SceneValidationReport.txt` reports the M6 PASS line with `RESULT: PASS; Errors: 0`. Play Mode acceptance pending.
