@@ -20,6 +20,13 @@ namespace SengokuChronicle.Application
         public SealedLetterStage SealedLetterStage => _sealedLetterMission.Stage;
         public MarketTallyStage MarketTallyStage => _marketTallyMission.Stage;
         public int Merit => _supplyShortageMission.Merit + _sealedLetterMission.Merit + _marketTallyMission.Merit;
+
+        /// <summary>Phase 1 演示收尾条件：三项任务均已到达结算（RewardClaimed）阶段。</summary>
+        public bool IsDemoComplete =>
+            SupplyShortageStage == SupplyShortageStage.RewardClaimed &&
+            SealedLetterStage == SealedLetterStage.RewardClaimed &&
+            MarketTallyStage == MarketTallyStage.RewardClaimed;
+
         private SealedLetterMission _sealedLetterMission = new SealedLetterMission();
         private MarketTallyMission _marketTallyMission = new MarketTallyMission();
         private SupplyShortageMission _supplyShortageMission = new SupplyShortageMission();
