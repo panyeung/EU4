@@ -248,7 +248,7 @@ avoid unnecessary external research.
 
 ## Lead Orchestrator project rules
 
-The current lead prompt governs process. Keep the GDD authoritative for game design. Preserve existing branches and checkpoint commits. Work on feature or integration branches; merge to `main` and tag a milestone only after the user accepts its demo. Never force-push, rewrite history, or delete a branch containing unmerged work.
+The current lead prompt governs process. Keep the GDD authoritative for game design. Preserve existing branches and checkpoint commits. Work on feature or integration branches; merge to `main` and tag a milestone only after the user accepts its demo. Never force-push, rewrite history, or delete a branch containing unmerged work. After every checkpoint commit, milestone merge, or tag, push it to GitHub (`origin`) immediately — branch, `main`, and tag — and report the resulting remote refs.
 
 Stay in this repository. Use no paid services, subscriptions, assets, or APIs. Do not change OpenCode providers, API keys, or plans. Do not copy material from Taiko Risshiden or another commercial game. Use original, CC0, or permissively licensed content and list every source and license in `ASSETS.md`. Record new Unity packages and their reason in `DECISIONS.md`. Preserve `.meta` files and GUIDs; leave `Library` and `Temp` untouched.
 
