@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using SengokuChronicle.Domain;
+using SengokuChronicle.Persistence;
 
 namespace SengokuChronicle.Application
 {
@@ -82,6 +83,119 @@ namespace SengokuChronicle.Application
             _supplyShortageMission = new SupplyShortageMission();
             _sealedLetterMission = new SealedLetterMission();
             _marketTallyMission = new MarketTallyMission();
+            _dialogues.Clear();
+        }
+
+        /// <summary>Captures the current runtime state as versioned save data.</summary>
+        public SaveData CaptureSave()
+        {
+            EnsureRelationships();
+            GameDate date = WorldClock != null ? WorldClock.CurrentDate : SengokuChronicle.Domain.WorldClock.NewGameDate;
+
+            return new SaveData
+            {
+                saveFormatVersion = SaveDataValidator.CurrentVersion,
+                year = date.Year,
+                month = date.Month,
+                day = date.Day,
+                locationId = CurrentLocation.Value,
+                supplyShortageStage = (int)_supplyShortageMission.Stage,
+                sealedLetterStage = (int)_sealedLetterMission.Stage,
+                marketTallyStage = (int)_marketTallyMission.Stage,
+                relationships = CaptureRelationships()
+            };
+        }
+
+        /// <summary>
+        /// Validates and applies save data atomically: replacement state is built first,
+        /// so a rejected load leaves the live session untouched. Clears transient dialogue state.
+        /// </summary>
+        public SaveOperationResult TryApplySave(SaveData data)
+        {
+            SaveOperationResult validation = SaveDataValidator.Validate(data);
+            if (!validation.Succeeded)
+                return validation;
+
+            if (!GameDate.TryParse(data.year, data.month, data.day, out GameDate date))
+                return InvalidSave("存档日期无效。");
+            if (!LocationId.TryParse(data.locationId, out LocationId location))
+                return InvalidSave("存档地点无效。");
+
+            SupplyShortageMission supplyShortage =
+                SupplyShortageMission.TryRestore((SupplyShortageStage)data.supplyShortageStage);
+            SealedLetterMission sealedLetter =
+                SealedLetterMission.TryRestore((SealedLetterStage)data.sealedLetterStage);
+            MarketTallyMission marketTally =
+                MarketTallyMission.TryRestore((MarketTallyStage)data.marketTallyStage);
+            if (supplyShortage == null || sealedLetter == null || marketTally == null)
+                return InvalidSave("存档任务阶段无效。");
+
+            var relationships = new CharacterRelationships();
+            if (data.relationships != null)
+            {
+                foreach (RelationshipSaveEntry entry in data.relationships)
+                {
+                    if (entry == null || !CharacterId.TryParse(entry.characterId, out CharacterId npcId))
+                        return InvalidSave("存档关系数据无效。");
+
+                    RelationshipResult changed = relationships.TryChange(npcId, entry.value);
+                    if (!changed.Succeeded)
+                        return InvalidSave(changed.Error);
+                }
+            }
+
+            WorldClock = new WorldClock(date);
+            CurrentLocation = location;
+            _supplyShortageMission = supplyShortage;
+            _sealedLetterMission = sealedLetter;
+            _marketTallyMission = marketTally;
+            _relationships = relationships;
+            _dialogues.Clear();
+            return SaveOperationResult.Success();
+        }
+
+        /// <summary>Saves the current session to the supplied single slot.</summary>
+        public SaveOperationResult SaveTo(SaveSlotStore store)
+        {
+            if (store == null)
+                return SaveOperationResult.Failure(SaveErrorCode.WriteFailed, "存档槽为空。");
+
+            return store.Save(CaptureSave());
+        }
+
+        /// <summary>Loads the supplied single slot and applies it atomically.</summary>
+        public SaveOperationResult LoadFrom(SaveSlotStore store)
+        {
+            if (store == null)
+                return SaveOperationResult.Failure(SaveErrorCode.ReadFailed, "存档槽为空。");
+
+            SaveLoadResult loaded = store.Load();
+            if (!loaded.Succeeded)
+                return SaveOperationResult.Failure(loaded.Error, loaded.Message);
+
+            return TryApplySave(loaded.Data);
+        }
+
+        private RelationshipSaveEntry[] CaptureRelationships()
+        {
+            var entries = new List<RelationshipSaveEntry>();
+            foreach (CharacterDefinition npc in CharacterCatalog.Npcs)
+            {
+                RelationshipResult result = _relationships.TryGet(npc.Id);
+                if (result.Succeeded)
+                    entries.Add(new RelationshipSaveEntry
+                    {
+                        characterId = npc.Id.Value,
+                        value = result.CurrentValue
+                    });
+            }
+
+            return entries.ToArray();
+        }
+
+        private static SaveOperationResult InvalidSave(string message)
+        {
+            return SaveOperationResult.Failure(SaveErrorCode.InvalidData, message);
         }
 
         public SealedLetterActionResult TryAcceptSealedLetterMission()

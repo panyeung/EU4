@@ -66,7 +66,7 @@ Unity 类型留在表现/定义/持久化适配边界；规则程序集可在后
 
 ## 存档策略
 
-单槽，格式版本字段必需；Phase 1 只保存恢复当前演示所需的最小状态。定义稳定 ID 用于跨运行时引用；读取时发现不支持版本、缺失数据或未知 ID，应提供可理解的错误并保留原存档，禁止静默覆盖。具体序列化器、位置和迁移策略留待 M5 技术任务确认；不预先增加依赖。
+单槽，格式版本字段必需；Phase 1 只保存恢复当前演示所需的最小状态。M5 实现为独立 `SengokuChronicle.Persistence` 程序集：`SaveData`（`saveFormatVersion = 1`）只含日期、地点、三个任务阶段和 NPC 关系值；任务 merit 不写入存档，而由任务阶段推导，避免重复领奖。序列化使用 Unity 内置 `JsonUtility`，单槽位于 `<Application.persistentDataPath>/SengokuChronicle/save-slot-1.json`。保存先写同目录临时文件，再用 `File.Replace`/`File.Move` 原子替换；任何失败都保留原槽。读取区分未找到、读取失败、JSON 损坏、版本不支持、数据无效，并以结果对象返回错误；加载前先校验，全部替换状态在局部构造完成后再一次性赋给 `GameSession`，失败不改变运行状态。稳定 ID 用于跨运行时引用；迁移策略仍留待未来版本，不预先增加依赖。
 
 ## 重要技术决策
 

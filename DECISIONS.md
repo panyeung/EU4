@@ -39,9 +39,18 @@
 - Reason: This completes the GDD's three-mission scope using only the existing five NPCs and three towns. The focused models follow the approved M4a pattern; research found external quest frameworks add unnecessary dependencies and infrastructure.
 - Constraints: Mission actions never advance time; existing travel does. No package, asset, persistence, or generic framework is added. M5 remains the persistence milestone.
 - Verification snapshot (2026-11-01): latest source compiled in the existing Editor; EditMode Run All passed 322/322; FoundationScene updater saved and the fresh validator report passed with zero errors; independent technical QA accepted with no blocking defects. The user reported the requested Play Mode loop passed and explicitly accepted M4b. Exact runtime values and Console counters were not supplied. Checkpoint `70ac62f0d8a9866488ae194c3cf55c68a8be2e29` is tagged `demo-M4b` and fast-forwarded into local `main`; no remote push was made. Kanban review tools were unavailable in this session.
+
 ## 2026-11-01 - Keep the mission panel within its validated town footprint
 
 - Decision: Show the existing M4a mission by default and add a page toggle to the two M4b rows inside the same 280-by-240 root.
 - Alternatives: Expand the root across the town controls or move existing NPC and return controls.
 - Reason: Static layout review found the expanded root would cover the NPC roster and part of the return control. The page switch preserves the scene's existing control positions and the M4a default flow.
 - Verification: The M4b validator checks separation from the town title, NPC roster, and return button; updater tests assert the controls do not overlap and their geometry rolls back on failure. All four M4b updater tests passed, and the fresh FoundationScene validator passes.
+
+## 2026-11-01 - Use a built-in JSON single slot for M5
+
+- Decision: Add a small Persistence assembly with a flat `SaveData` DTO (`saveFormatVersion = 1`), Unity's built-in `JsonUtility`, and an atomic temp-file replace of one slot under `Application.persistentDataPath`.
+- Alternatives: Add Newtonsoft JSON through a package, build a generic save framework, or support multiple slots.
+- Reason: Phase 1 state is about ten fields of plain data; `JsonUtility` needs no dependency, and the atomic replace preserves the previous slot on failure. Mission stages are stored instead of merit, so a completed reward cannot be duplicated on load.
+- Scope: No new package, asset, scene, or serializer abstraction. Save/load UI is one compact map-screen control; scene integration follows the existing transactional updater pattern.
+- Status: Implementation and tests are written; Unity compilation, EditMode tests, scene integration, and Play Mode acceptance are still pending.

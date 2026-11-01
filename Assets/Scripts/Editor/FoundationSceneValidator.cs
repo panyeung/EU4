@@ -31,6 +31,7 @@ namespace SengokuChronicle.Editor
             WorldMapController controller = mapRoot != null ? mapRoot.GetComponent<WorldMapController>() : null;
             TownNpcDialoguePanel panel = FindComponent<TownNpcDialoguePanel>(scene);
             SupplyShortageMissionPanel missionPanel = FindComponent<SupplyShortageMissionPanel>(scene);
+            SaveLoadPanel saveLoadPanel = FindComponent<SaveLoadPanel>(scene);
 
             CheckFound(report, ref errors, "Canvas", canvas);
             CheckFound(report, ref errors, "Canvas/M2WorldMapRoot", mapRoot);
@@ -38,6 +39,7 @@ namespace SengokuChronicle.Editor
             CheckFound(report, ref errors, "WorldMapController", controller);
             CheckFound(report, ref errors, "TownNpcDialoguePanel", panel);
             CheckFound(report, ref errors, "SupplyShortageMissionPanel", missionPanel);
+            CheckFound(report, ref errors, "SaveLoadPanel", saveLoadPanel);
             if (!AddM4SupplyShortageMissionPanel.Validate(scene, out string missionError))
                 AddError(report, ref errors, missionError);
             else
@@ -46,6 +48,10 @@ namespace SengokuChronicle.Editor
                 AddError(report, ref errors, m4bError);
             else
                 report.AppendLine("PASS M4b mission board hierarchy, unique controls, bindings, and containment.");
+            if (!AddM5SaveLoadPanel.Validate(scene, out string m5Error))
+                AddError(report, ref errors, m5Error);
+            else
+                report.AppendLine("PASS M5 save/load hierarchy, unique controls, bindings, and map separation.");
 
             if (controller != null)
             {
@@ -75,6 +81,13 @@ namespace SengokuChronicle.Editor
                     "acceptButton", "investigateButton", "negotiateButton", "reportButton",
                     "sealedLetterStageText", "sealedLetterObjectiveText", "sealedLetterFeedbackText", "sealedLetterActionButton",
                     "marketTallyStageText", "marketTallyObjectiveText", "marketTallyFeedbackText", "marketTallyActionButton");
+            }
+
+            if (saveLoadPanel != null)
+            {
+                report.AppendLine("\nSAVE/LOAD PANEL REFERENCES:");
+                CheckReferences(report, ref errors, saveLoadPanel,
+                    "gameSession", "worldMapController", "saveButton", "loadButton", "statusText");
             }
 
             report.AppendLine("\nHIERARCHY AND RECTTRANSFORMS:");

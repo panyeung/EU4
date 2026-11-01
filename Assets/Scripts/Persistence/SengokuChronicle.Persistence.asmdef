@@ -1,0 +1,17 @@
+{
+  "name": "SengokuChronicle.Persistence",
+  "rootNamespace": "SengokuChronicle.Persistence",
+  "references": [
+    "SengokuChronicle.Domain"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "defineConstraints": [],
+  "assemblyReferences": [],
+  "assemblyDefinitionReferences": [],
+  "versionDefines": [],
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "useUnityAssemblies": false,
+  "isTestAssembly": false
+}

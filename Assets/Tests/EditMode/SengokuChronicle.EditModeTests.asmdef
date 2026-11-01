@@ -5,6 +5,7 @@
     "SengokuChronicle.Domain",
     "SengokuChronicle.Application",
     "SengokuChronicle.Presentation",
+    "SengokuChronicle.Persistence",
     "SengokuChronicle.Editor"
   ],
   "includePlatforms": [
@@ -17,6 +18,7 @@
     "SengokuChronicle.Domain",
     "SengokuChronicle.Application",
     "SengokuChronicle.Presentation",
+    "SengokuChronicle.Persistence",
     "SengokuChronicle.Editor"
   ],
   "versionDefines": [],
