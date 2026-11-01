@@ -1,6 +1,6 @@
 # M5 Single-Slot Save — Demo Candidate
 
-**Status: Candidate; Play Mode acceptance pending.**
+**Status: Accepted by user Play Mode run on 2026-11-01.**
 **Branch:** `feature/m5-save-slot`
 **Design:** `docs/superpowers/specs/2026-11-01-m5-single-slot-save-design.md`
 **Plan:** `docs/superpowers/plans/2026-11-01-m5-single-slot-save.md`
@@ -32,8 +32,9 @@
 - **EditMode:** the final integrated run (`m5-final-editmode.xml`) reports `total="381" passed="381" failed="0" inconclusive="0" skipped="0"` (start `2026-11-01 17:47:34Z`, duration 1.49 s); an earlier pre-scene run reported the same totals. This includes the new validator, store, session, panel, and updater tests plus all existing M1–M4b tests.
 - **Scene integration:** `AddM5SaveLoadPanel.RunBatchIntegration` opened `FoundationScene`, ran the transactional updater, validated, and saved. `Assets/Scenes/FoundationScene.unity` gained 536 lines with no deletions; the added objects are `M5SaveLoadRoot`, `M5SaveButton`, `M5LoadButton`, `M5SaveStatusText`, and their labels.
 - **Scene validation:** fresh `Logs/SceneValidationReport.txt` reports `FOUND SaveLoadPanel: M5SaveLoadRoot`, `PASS M5 save/load hierarchy, unique controls, bindings, and map separation.`, and `RESULT: PASS; Errors: 0`.
+- **Play Mode acceptance:** the user ran the acceptance path in the Editor on this worktree and reported `pass` on 2026-11-01. The slot written during that run is `C:\Users\panye\AppData\LocalLow\DefaultCompany\My project\SengokuChronicle\save-slot-1.json` (684 bytes, 2026-11-01 10:54 local / 20:54Z). It contains `saveFormatVersion: 1`, date `1560-04-05`, location `owari.kiyosu`, `supplyShortageStage: 4`, `sealedLetterStage: 0`, `marketTallyStage: 0`, and five relationship entries at `0`. This confirms the save path wrote a valid versioned slot after the date advanced from the `1560-04-01` default and the supply mission reached stage 4; merit is absent by design and derived from the stages.
+- **Evidence gaps:** the location stayed `owari.kiyosu` and all relationships stayed `0`, so location and relationship persistence were not exercised in this run. The agent did not observe the load result, the no-duplicate-reward retry, or Console counters; acceptance rests on the user's Play Mode `pass`.
 - **Console:** not captured. The batchmode log is not the Editor Console, so no Console error/warning counts are claimed here.
-- **Play Mode:** not run in this session. The open Editor remained on the M4b worktree throughout; the batchmode process ran against this worktree only. Date/location/mission/merit/relationship restoration and the no-duplicate-reward check still require Play Mode evidence.
 - **Remote state (verified 2026-11-01):** `origin/main` is `24102fe`; tags `demo-M2`, `demo-M3`, `demo-M4a`, and `demo-M4b` exist on `origin`.
 
 ## Required Play Mode acceptance path
@@ -48,4 +49,4 @@
 8. Overwrite the slot with a corrupt or unsupported-version file and confirm loading shows a clear error while the live session and the slot file remain unchanged.
 9. Report the observed values and Console counters.
 
-User acceptance is required before the final M5 checkpoint, merge to `main`, or a `demo-M5` tag.
+Accepted by the user on 2026-11-01; the final M5 checkpoint, merge to `main`, and `demo-M5` tag followed that acceptance.

@@ -80,11 +80,11 @@
 
 **依赖：** M1、M2、M3、M4a、M4b。
 
-## M5 当前候选状态（2026-11-01）
+## M5 当前状态（2026-11-01）
 
-M5 在 `feature/m5-save-slot` 实现，尚未获得用户接受。新增 `SengokuChronicle.Persistence` 程序集（`SaveData` v1、校验器、原子单槽存储）、三个任务的 `TryRestore` 工厂、`GameSession` 的 `CaptureSave`/`TryApplySave`/`SaveTo`/`LoadFrom`，以及地图界面的 `M5SaveLoadRoot`（存档/读档/状态文本）。merit 不写入存档，而由任务阶段推导，重复载入不会重复领奖。
+M5 在 `feature/m5-save-slot` 实现，并已获得用户 Play Mode 接受（用户报告 `pass`）。新增 `SengokuChronicle.Persistence` 程序集（`SaveData` v1、校验器、原子单槽存储）、三个任务的 `TryRestore` 工厂、`GameSession` 的 `CaptureSave`/`TryApplySave`/`SaveTo`/`LoadFrom`，以及地图界面的 `M5SaveLoadRoot`（存档/读档/状态文本）。merit 不写入存档，而由任务阶段推导，重复载入不会重复领奖。
 
-验证证据（2026-11-01）：Unity 6000.6.6f1 batchmode 编译无 `error CS`；EditMode 381/381 通过（0 failed / 0 skipped）；事务更新器已保存 `FoundationScene`（+536 行、无删除）；`Logs/SceneValidationReport.txt` 为 `RESULT: PASS; Errors: 0`，M5 层级/绑定/与地图控件分离检查通过。Console 计数与 Play Mode 尚未验证，需用户在本工作树打开 Unity 后按 `M5_DEMO.md` 执行。用户接受前不得创建最终 checkpoint、合并 `main` 或打 `demo-M5` 标签。
+验证证据（2026-11-01）：Unity 6000.6.6f1 batchmode 编译无 `error CS`；EditMode 381/381 通过（0 failed / 0 skipped）；事务更新器已保存 `FoundationScene`（+536 行、无删除）；`Logs/SceneValidationReport.txt` 为 `RESULT: PASS; Errors: 0`，M5 层级/绑定/与地图控件分离检查通过。用户在编辑器 Play Mode 中执行验收并报告通过；本次保存文件为 `save-slot-1.json`（684 字节，10:54 本地时间），含 `saveFormatVersion: 1`、日期 `1560-04-05`、地点 `owari.kiyosu`、`supplyShortageStage: 4`、其余任务阶段 `0`、五条关系值均为 `0`。该次运行未改变地点与关系值，Console 计数与读档细节未由代理独立记录。
 
 远端核对（2026-11-01）：`origin/main` 为 `24102fe`，`demo-M2`、`demo-M3`、`demo-M4a`、`demo-M4b` 标签均存在于 `origin`；此前文档中的「没有远端推送」表述已过时。
 
