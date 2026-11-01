@@ -97,7 +97,7 @@ M3 的独立角色/关系规则可在 M2 完成后进入游戏 UI；为避免多
 
 M3 已获接受，M4a 补给短缺任务正在 `feature/m4a-supply-shortage-task` 的单一隔离工作树中实现。用户批准固定任务模型、使用 Atsuta 的黑田伊织作为商人、Kiyosu 报告后一次性增加 10 merit。任务规则保持纯 C#；不新增 package 或通用任务框架。
 
-Unity 6000.6.6f1 EditMode 全套测试于 2026-11-01 16:06:30Z 通过：214/214，0 failed，0 skipped；包含当前城镇入口和一致按钮标签回归、反馈名称迁移和三个 M2 布局测试。Task 2、Task 3 同卡静态审核均通过。经审核的 M4a 更新器已迁移并保存 `FoundationScene`；项目级 Validator 最新报告为 `PASS; Errors: 0`。最终按钮标签修改后 Editor 日志记录成功 Tundra 构建且无 C# 编译诊断。用户报告完整任务流程和后续视觉检查均 pass，并于 2026-11-01 明确接受 M4a demo。最终 checkpoint、`demo-M4a` 标签及本地 `main` 快进整合正在完成；没有远端推送。
+Unity 6000.6.6f1 EditMode 全套测试于 2026-11-01 16:06:30Z 通过：214/214，0 failed，0 skipped；包含当前城镇入口和一致按钮标签回归、反馈名称迁移和三个 M2 布局测试。Task 2、Task 3 同卡静态审核均通过。经审核的 M4a 更新器已迁移并保存 `FoundationScene`；项目级 Validator 最新报告为 `PASS; Errors: 0`。最终按钮标签修改后 Editor 日志记录成功 Tundra 构建且无 C# 编译诊断。用户报告完整任务流程和后续视觉检查均 pass，并于 2026-11-01 明确接受 M4a demo。checkpoint `9c10959e5792777ea433a16c590034f406dccba1` 已建、标记为 `demo-M4a` 并快进合并到本地 `main`；没有远端推送。
 
 ## 跨阶段交付要求
 

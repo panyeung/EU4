@@ -2,7 +2,7 @@
 
 **Status: User accepted the M4a demo.** EditMode, scene validation, and user-reported Play Mode checks are recorded below.
 
-Source implementation commits are based on accepted M3 `a93887c`; relevant fixes are `5fdde00` (enter current town) and `74948b9` (unique mission feedback name and safe scene migration). The integrated scene is now dirty relative to `6cba4ba` because the reviewed updater migrated its feedback object name. No final checkpoint, merge, or tag has been created.
+Source implementation commits are based on accepted M3 `a93887c`; relevant fixes are `5fdde00` (enter current town) and `74948b9` (unique mission feedback name and safe scene migration).
 
 ## Intended playable walkthrough
 
@@ -51,4 +51,4 @@ The current Unity scene change is present in the working tree and remains uncomm
 
 ## Final checkpoint
 
-The accepted candidate is checkpointed on `feature/m4a-supply-shortage-task`, tagged `demo-M4a`, and fast-forwarded to local `main`. No remote push was made.
+The accepted candidate is checkpointed on `feature/m4a-supply-shortage-task` at `9c10959e5792777ea433a16c590034f406dccba1`, tagged `demo-M4a`, and fast-forwarded to local `main`. No remote push was made.
