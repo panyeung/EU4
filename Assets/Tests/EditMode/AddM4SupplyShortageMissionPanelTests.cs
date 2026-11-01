@@ -85,6 +85,8 @@ namespace SengokuChronicle.Tests.EditMode
         public void Updater_BuildsAndBindsMissionPanelUnderTownRoot()
         {
             int count = ObjectCount();
+            Assert.That(new SerializedObject(controller).FindProperty("supplyShortageMissionPanel").objectReferenceEntityIdValue,
+                Is.EqualTo(EntityId.None), "An unassigned mission reference must use the EntityId.None sentinel.");
             Assert.That(AddM4SupplyShortageMissionPanel.Update(scene),
                 Is.EqualTo(AddM4SupplyShortageMissionPanel.UpdateResult.Success));
             Transform root = town.Find(AddM4SupplyShortageMissionPanel.RootName);
@@ -95,6 +97,8 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(ObjectCount(), Is.EqualTo(count + 13));
             Assert.That(root.gameObject.activeSelf, Is.False);
             Assert.That(GetReference(controller, "supplyShortageMissionPanel"), Is.EqualTo(root.GetComponent<SupplyShortageMissionPanel>()));
+            Assert.That(new SerializedObject(controller).FindProperty("supplyShortageMissionPanel").objectReferenceEntityIdValue,
+                Is.Not.EqualTo(EntityId.None), "The bound mission reference must have an entity ID.");
             Assert.That(GetReference(root.GetComponent<SupplyShortageMissionPanel>(), "gameSession"), Is.EqualTo(session));
             Assert.That(AddM4SupplyShortageMissionPanel.Validate(scene, out string error), Is.True, error);
             Assert.That(scene.path, Is.Empty, "The public updater must never save the test scene.");
@@ -113,6 +117,7 @@ namespace SengokuChronicle.Tests.EditMode
         public void Updater_RollsBackOnValidationFailure(string fault)
         {
             int count = ObjectCount();
+            bool wasDirty = scene.isDirty;
             var result = AddM4SupplyShortageMissionPanel.Update(scene, root =>
             {
                 if (fault == "exception") throw new System.InvalidOperationException("Injected construction failure");
@@ -127,6 +132,8 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(GetReference(controller, "supplyShortageMissionPanel"), Is.Null);
             Assert.That(GetReference(controller, "gameSession"), Is.EqualTo(session));
             Assert.That(GetReference(controller, "townMenuRoot"), Is.EqualTo(town.gameObject));
+            TestContext.WriteLine($"Rollback dirty state ({fault}): before={wasDirty}; after={scene.isDirty}");
+            Assert.That(scene.isDirty, Is.EqualTo(wasDirty), "Undo rollback should preserve the fixture's dirty state; record a failure if Unity leaves it changed.");
         }
 
         [TestCase("GameSession")]

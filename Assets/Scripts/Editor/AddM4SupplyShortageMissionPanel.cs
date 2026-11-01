@@ -63,14 +63,13 @@ namespace SengokuChronicle.Editor
                 return UpdateResult.ExistingMissionPanel;
             SerializedProperty existingPanel = new SerializedObject(controller).FindProperty("supplyShortageMissionPanel");
             if (existingPanel == null) return UpdateResult.InvalidHierarchyOrBindings;
-            if (existingPanel.objectReferenceValue != null || existingPanel.objectReferenceInstanceIDValue != 0)
+            if (existingPanel.objectReferenceValue != null || !existingPanel.objectReferenceEntityIdValue.Equals(EntityId.None))
                 return UpdateResult.ExistingMissionPanel;
             // Leave the existing central town controls and NPC navigation untouched.
             RectTransform townRect = town as RectTransform;
             if (townRect.rect.width < 1200f || townRect.rect.height < 260f)
                 return UpdateResult.InsufficientSpace;
 
-            bool wasDirty = scene.isDirty;
             Undo.IncrementCurrentGroup();
             int group = Undo.GetCurrentGroup();
             Undo.SetCurrentGroupName(UndoName);
@@ -127,7 +126,7 @@ namespace SengokuChronicle.Editor
             {
                 Undo.FlushUndoRecordObjects();
                 Undo.RevertAllDownToGroup(group);
-                if (!wasDirty) EditorSceneManager.MarkSceneClean(scene);
+                // Unity exposes no public clean-state setter; retain the dirty state produced by Undo.
                 Debug.LogWarning($"M4a updater rolled back: {exception.Message}");
                 return failure;
             }
