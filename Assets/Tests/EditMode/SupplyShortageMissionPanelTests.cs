@@ -160,14 +160,20 @@ namespace SengokuChronicle.Tests.EditMode
         [Test]
         public void Panel_RemovesListenersWhileDisabledAndRestoresOnEnable()
         {
+            // Drive callbacks explicitly for this non-ExecuteAlways EditMode fixture.
             _panel.enabled = false;
+            _panel.SendMessage("OnDisable", SendMessageOptions.RequireReceiver);
             _accept.onClick.Invoke();
             Assert.That(_session.SupplyShortageStage, Is.EqualTo(SupplyShortageStage.NotAccepted));
             _panel.enabled = true;
+            _panel.SendMessage("OnEnable", SendMessageOptions.RequireReceiver);
             _accept.onClick.Invoke();
             Assert.That(_session.SupplyShortageStage, Is.EqualTo(SupplyShortageStage.Accepted));
             Assert.That(_feedback.text, Does.Contain("已领取补给短缺任务"));
             Travel(LocationId.Atsuta);
+            _panel.SendMessage("OnDestroy", SendMessageOptions.RequireReceiver);
+            _investigate.onClick.Invoke();
+            Assert.That(_session.SupplyShortageStage, Is.EqualTo(SupplyShortageStage.Accepted));
             Object.DestroyImmediate(_panel);
             _investigate.onClick.Invoke();
             Assert.That(_session.SupplyShortageStage, Is.EqualTo(SupplyShortageStage.Accepted));
