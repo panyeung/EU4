@@ -127,7 +127,7 @@ namespace SengokuChronicle.Editor
                 Undo.FlushUndoRecordObjects();
                 Undo.RevertAllDownToGroup(group);
                 // Unity exposes no public clean-state setter; retain the dirty state produced by Undo.
-                Debug.LogWarning($"M4a updater rolled back: {exception.Message}");
+                Debug.LogWarning($"M4a updater rolled back: {exception.Message} Scene may remain dirty; inspect it before saving.");
                 return failure;
             }
         }
