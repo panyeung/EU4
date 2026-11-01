@@ -16,7 +16,7 @@ namespace SengokuChronicle.Editor
         public const string RootName = "M4SupplyShortageMissionRoot";
         private const string MenuPath = "Tools/Sengoku Chronicle/Add M4a Supply Shortage Mission Panel";
         private const string UndoName = "Add M4a Supply Shortage Mission Panel";
-        private static readonly string[] TextNames = { "StageText", "ObjectiveText", "MeritText", "FeedbackText" };
+        private static readonly string[] TextNames = { "StageText", "ObjectiveText", "MeritText", "MissionFeedbackText" };
         private static readonly string[] TextFields = { "stageText", "objectiveText", "meritText", "feedbackText" };
         private static readonly string[] ButtonNames = { "AcceptButton", "InvestigateButton", "NegotiateButton", "ReportButton" };
         private static readonly string[] ButtonFields = { "acceptButton", "investigateButton", "negotiateButton", "reportButton" };
@@ -37,7 +37,7 @@ namespace SengokuChronicle.Editor
             if (result == UpdateResult.Success)
                 result = Execute(scene, true, null);
             if (result == UpdateResult.Success)
-                Debug.Log("M4a mission panel validated and FoundationScene saved.");
+                Debug.Log("M4a mission panel validated; any created or migrated UI was saved to FoundationScene.");
             else
                 Debug.LogError($"M4a mission panel updater refused or rolled back: {result}.");
         }
@@ -60,7 +60,7 @@ namespace SengokuChronicle.Editor
             UpdateResult preflight = Resolve(scene, out Transform town, out WorldMapController controller, out GameSession session);
             if (preflight != UpdateResult.Success) return preflight;
             if (Components<SupplyShortageMissionPanel>(scene).Length != 0 || Named(scene, RootName).Length != 0)
-                return UpdateResult.ExistingMissionPanel;
+                return MigrateExisting(scene, save, beforeValidation);
             SerializedProperty existingPanel = new SerializedObject(controller).FindProperty("supplyShortageMissionPanel");
             if (existingPanel == null) return UpdateResult.InvalidHierarchyOrBindings;
             if (existingPanel.objectReferenceValue != null || !existingPanel.objectReferenceEntityIdValue.Equals(EntityId.None))
@@ -132,7 +132,44 @@ namespace SengokuChronicle.Editor
             }
         }
 
-        public static bool Validate(Scene scene, out string error)
+        private static UpdateResult MigrateExisting(Scene scene, bool save, Action<GameObject> beforeValidation)
+        {
+            // A current valid panel is a no-op; never rebuild or repair unknown existing UI.
+            if (Validate(scene, out _)) return UpdateResult.Success;
+            if (!Validate(scene, out _, "FeedbackText")) return UpdateResult.ExistingMissionPanel;
+            Transform root = Named(scene, RootName)[0];
+            GameObject feedback = root.Find("FeedbackText").gameObject;
+            Undo.IncrementCurrentGroup();
+            int group = Undo.GetCurrentGroup();
+            Undo.SetCurrentGroupName(UndoName);
+            UpdateResult failure = UpdateResult.Failed;
+            try
+            {
+                Undo.RecordObject(feedback, UndoName);
+                feedback.name = TextNames[3];
+                beforeValidation?.Invoke(root.gameObject);
+                failure = UpdateResult.ValidationFailed;
+                if (!Validate(scene, out string error)) throw new InvalidOperationException(error);
+                Undo.FlushUndoRecordObjects();
+                EditorSceneManager.MarkSceneDirty(scene);
+                failure = UpdateResult.SaveFailed;
+                if (save && !EditorSceneManager.SaveScene(scene))
+                    throw new InvalidOperationException("Unity refused to save FoundationScene migration.");
+                Undo.CollapseUndoOperations(group);
+                return UpdateResult.Success;
+            }
+            catch (Exception exception)
+            {
+                Undo.FlushUndoRecordObjects();
+                Undo.RevertAllDownToGroup(group);
+                Debug.LogWarning($"M4a migration rolled back: {exception.Message} Scene may remain dirty; inspect it before saving.");
+                return failure;
+            }
+        }
+
+        public static bool Validate(Scene scene, out string error) => Validate(scene, out error, TextNames[3]);
+
+        private static bool Validate(Scene scene, out string error, string feedbackName)
         {
             error = null;
             UpdateResult result = Resolve(scene, out Transform town, out WorldMapController controller, out GameSession session);
@@ -152,7 +189,8 @@ namespace SengokuChronicle.Editor
                 return Invalid(out error, "Mission root must contain exactly four texts and four buttons.");
             for (int i = 0; i < 4; i++)
             {
-                Transform[] texts = root.GetComponentsInChildren<Transform>(true).Where(t => t.name == TextNames[i]).ToArray();
+                string textName = i == 3 ? feedbackName : TextNames[i];
+                Transform[] texts = root.GetComponentsInChildren<Transform>(true).Where(t => t.name == textName).ToArray();
                 Transform[] buttons = root.GetComponentsInChildren<Transform>(true).Where(t => t.name == ButtonNames[i]).ToArray();
                 if (texts.Length != 1 || buttons.Length != 1 || texts[0].parent != root || buttons[0].parent != root)
                     return Invalid(out error, "Missing, duplicate, or misplaced mission text/button.");

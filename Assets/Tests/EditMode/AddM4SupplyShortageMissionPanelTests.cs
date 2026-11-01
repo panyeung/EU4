@@ -104,7 +104,7 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(scene.path, Is.Empty, "The public updater must never save the test scene.");
             int builtCount = ObjectCount();
             Assert.That(AddM4SupplyShortageMissionPanel.Update(scene),
-                Is.EqualTo(AddM4SupplyShortageMissionPanel.UpdateResult.ExistingMissionPanel));
+                Is.EqualTo(AddM4SupplyShortageMissionPanel.UpdateResult.Success));
             Assert.That(ObjectCount(), Is.EqualTo(builtCount));
             Undo.PerformUndo();
             Assert.That(ObjectCount(), Is.EqualTo(count), "One Undo must remove the entire generated hierarchy.");
@@ -191,6 +191,96 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(AddM4SupplyShortageMissionPanel.Validate(scene, out _), Is.True);
             Create(AddM4SupplyShortageMissionPanel.RootName, town);
             Assert.That(AddM4SupplyShortageMissionPanel.Validate(scene, out _), Is.False);
+        }
+
+        [Test]
+        public void Updater_UsesUniqueMissionFeedbackNameWithoutChangingM2Feedback()
+        {
+            GameObject mapFeedback = Create("FeedbackText", controller.transform, typeof(Text));
+            CreateM2ResolverNames();
+            Assert.That(AddM4SupplyShortageMissionPanel.Update(scene), Is.EqualTo(AddM4SupplyShortageMissionPanel.UpdateResult.Success));
+            Assert.That(WorldMapLayout.ResolveRequiredChildren(controller.transform, out _, out string error), Is.True, error);
+            Assert.That(controller.GetComponentsInChildren<Transform>(true).Count(t => t.name == "FeedbackText"), Is.EqualTo(1));
+            Assert.That(mapFeedback.name, Is.EqualTo("FeedbackText"));
+            Transform root = town.Find(AddM4SupplyShortageMissionPanel.RootName);
+            Assert.That(root.Find("MissionFeedbackText"), Is.Not.Null);
+            Assert.That(GetReference(root.GetComponent<SupplyShortageMissionPanel>(), "feedbackText"),
+                Is.EqualTo(root.Find("MissionFeedbackText").GetComponent<Text>()));
+        }
+
+        [Test]
+        public void Updater_MigratesLegacyFeedbackNameOnceWithUndoAndWithoutSaving()
+        {
+            Text feedback = CreateLegacyPanel();
+            int count = ObjectCount();
+            SupplyShortageMissionPanel panel = feedback.GetComponentInParent<SupplyShortageMissionPanel>(true);
+            Assert.That(AddM4SupplyShortageMissionPanel.Validate(scene, out _), Is.False, "Legacy names require migration.");
+            Assert.That(WorldMapLayout.ResolveRequiredChildren(controller.transform, out _, out _), Is.False, "Legacy feedback duplicates M2's required name.");
+            Assert.That(AddM4SupplyShortageMissionPanel.Update(scene), Is.EqualTo(AddM4SupplyShortageMissionPanel.UpdateResult.Success));
+            Assert.That(feedback.name, Is.EqualTo("MissionFeedbackText"));
+            Assert.That(GetReference(panel, "feedbackText"), Is.EqualTo(feedback));
+            Assert.That(GetReference(controller, "supplyShortageMissionPanel"), Is.EqualTo(panel));
+            Assert.That(ObjectCount(), Is.EqualTo(count));
+            Assert.That(AddM4SupplyShortageMissionPanel.Validate(scene, out string error), Is.True, error);
+            Assert.That(WorldMapLayout.ResolveRequiredChildren(controller.transform, out _, out string layoutError), Is.True, layoutError);
+            Assert.That(controller.GetComponentsInChildren<Transform>(true).Count(t => t.name == "FeedbackText"), Is.EqualTo(1));
+            Assert.That(AddM4SupplyShortageMissionPanel.Update(scene), Is.EqualTo(AddM4SupplyShortageMissionPanel.UpdateResult.Success));
+            Assert.That(ObjectCount(), Is.EqualTo(count), "A repeat update must be a no-op.");
+            Assert.That(scene.path, Is.Empty, "The migration test seam must never save.");
+            Undo.PerformUndo();
+            Assert.That(feedback.name, Is.EqualTo("FeedbackText"), "One Undo must restore the legacy name.");
+            Assert.That(ObjectCount(), Is.EqualTo(count));
+            Assert.That(GetReference(panel, "feedbackText"), Is.EqualTo(feedback));
+        }
+
+        [TestCase(false)]
+        [TestCase(true)]
+        public void Updater_MigrationRollsBackRenameOnFailure(bool throwException)
+        {
+            Text feedback = CreateLegacyPanel();
+            int count = ObjectCount();
+            var result = AddM4SupplyShortageMissionPanel.Update(scene, root =>
+            {
+                if (throwException) throw new System.InvalidOperationException("Injected migration failure");
+                root.transform.Find("MissionFeedbackText").gameObject.name = "InvalidFeedbackName";
+            });
+            Assert.That(result, Is.EqualTo(throwException ? AddM4SupplyShortageMissionPanel.UpdateResult.Failed
+                : AddM4SupplyShortageMissionPanel.UpdateResult.ValidationFailed));
+            Assert.That(feedback.name, Is.EqualTo("FeedbackText"));
+            Assert.That(ObjectCount(), Is.EqualTo(count));
+            Assert.That(GetReference(feedback.GetComponentInParent<SupplyShortageMissionPanel>(true), "feedbackText"), Is.EqualTo(feedback));
+            Assert.That(scene.path, Is.Empty);
+        }
+
+        [TestCase(false)]
+        [TestCase(true)]
+        public void Updater_RefusesInvalidOrAmbiguousLegacyPanel(bool duplicate)
+        {
+            Text feedback = CreateLegacyPanel();
+            SupplyShortageMissionPanel panel = feedback.GetComponentInParent<SupplyShortageMissionPanel>(true);
+            if (duplicate) Create("FeedbackText", panel.transform, typeof(Text));
+            else SetReference(panel, "feedbackText", null);
+            int count = ObjectCount();
+            Assert.That(AddM4SupplyShortageMissionPanel.Update(scene), Is.EqualTo(AddM4SupplyShortageMissionPanel.UpdateResult.ExistingMissionPanel));
+            Assert.That(feedback.name, Is.EqualTo("FeedbackText"));
+            Assert.That(ObjectCount(), Is.EqualTo(count));
+            Assert.That(scene.path, Is.Empty);
+        }
+
+        private Text CreateLegacyPanel()
+        {
+            CreateM2ResolverNames();
+            Assert.That(AddM4SupplyShortageMissionPanel.Update(scene), Is.EqualTo(AddM4SupplyShortageMissionPanel.UpdateResult.Success));
+            Text feedback = town.Find(AddM4SupplyShortageMissionPanel.RootName).Find("MissionFeedbackText").GetComponent<Text>();
+            feedback.gameObject.name = "FeedbackText";
+            return feedback;
+        }
+
+        private void CreateM2ResolverNames()
+        {
+            foreach (string name in WorldMapLayout.RequiredChildNames)
+                if (!controller.GetComponentsInChildren<Transform>(true).Any(t => t.name == name))
+                    Create(name, controller.transform);
         }
 
         private GameObject Create(string name, Transform parent, params System.Type[] components)
