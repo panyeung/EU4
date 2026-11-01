@@ -377,9 +377,23 @@ namespace SengokuChronicle.Presentation
             RefreshLocationButtons();
         }
 
-        private void OnKiyosuClicked()  => SelectDestination(LocationId.Kiyosu);
-        private void OnAtsutaClicked()  => SelectDestination(LocationId.Atsuta);
-        private void OnNagoyaClicked()  => SelectDestination(LocationId.Nagoya);
+        private void OnKiyosuClicked()  => OnLocationClicked(LocationId.Kiyosu);
+        private void OnAtsutaClicked()  => OnLocationClicked(LocationId.Atsuta);
+        private void OnNagoyaClicked()  => OnLocationClicked(LocationId.Nagoya);
+
+        private void OnLocationClicked(LocationId location)
+        {
+            if (gameSession == null || location != gameSession.CurrentLocation)
+            {
+                SelectDestination(location);
+                return;
+            }
+
+            _selectedDestination = null;
+            _preview = null;
+            OpenTownMenu();
+            RefreshAll();
+        }
 
         private void RefreshLocationButtons()
         {
@@ -395,9 +409,9 @@ namespace SengokuChronicle.Presentation
             if (button == null)
                 return;
             bool isCurrent = gameSession != null && location == gameSession.CurrentLocation;
-            button.interactable = !isCurrent;
+            button.interactable = true;
             if (label != null)
-                label.text = $"{LocationId.GetChineseName(location)}{(isCurrent ? " 《当前》" : "")}";
+                label.text = $"{LocationId.GetChineseName(location)}{(isCurrent ? " 《当前，点击进入》" : "")}";
         }
 
         private void RefreshCurrentDate()

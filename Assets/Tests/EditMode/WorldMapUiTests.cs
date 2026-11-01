@@ -103,18 +103,14 @@ namespace SengokuChronicle.Tests.EditMode
         [Test]
         public void CurrentLocationButton_EntersStartingTownWithoutTravel()
         {
-            Button kiyosu = CreateButton("Kiyosu");
-            Button atsuta = CreateButton("Atsuta");
-            Button nagoya = CreateButton("Nagoya");
-            foreach (Button button in new[] { kiyosu, atsuta, nagoya })
-                button.transform.SetParent(_go.transform, false);
-            _controller.BindLocationButtons(kiyosu, null, atsuta, null, nagoya, null);
+            Button kiyosu = BindTestLocationButtons()[0];
             GameDate startingDate = _session.WorldClock.CurrentDate;
             LocationId startingLocation = _session.CurrentLocation;
 
             Assert.That(startingLocation, Is.EqualTo(LocationId.Kiyosu));
             Assert.That(_controller.InTownMenu, Is.False);
             Assert.That(kiyosu.interactable, Is.True, "The starting town must be enterable from the map.");
+            Assert.That(kiyosu.GetComponentInChildren<Text>().text, Does.Contain("进入"));
             kiyosu.onClick.Invoke();
 
             Assert.That(_controller.InTownMenu, Is.True);
@@ -124,6 +120,55 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(_session.CurrentLocation, Is.EqualTo(startingLocation));
             Assert.That(_controller.CurrentPreview, Is.Null);
             Assert.That(_controller.SelectedDestination, Is.Null);
+        }
+
+        [TestCase(1)]
+        [TestCase(2)]
+        public void NoncurrentLocationButton_PreviewsWithoutEnteringTown(int buttonIndex)
+        {
+            Button[] buttons = BindTestLocationButtons();
+            LocationId destination = buttonIndex == 1 ? LocationId.Atsuta : LocationId.Nagoya;
+            GameDate startingDate = _session.WorldClock.CurrentDate;
+
+            Assert.That(buttons[buttonIndex].interactable, Is.True);
+            buttons[buttonIndex].onClick.Invoke();
+
+            Assert.That(_controller.InTownMenu, Is.False);
+            Assert.That(_townRoot.activeSelf, Is.False);
+            Assert.That(_controller.SelectedDestination, Is.EqualTo(destination));
+            Assert.That(_controller.CurrentPreview.HasValue, Is.True);
+            Assert.That(_controller.CurrentPreview.Value.Destination, Is.EqualTo(destination));
+            Assert.That(_confirm.interactable, Is.True);
+            Assert.That(_session.WorldClock.CurrentDate, Is.EqualTo(startingDate));
+            Assert.That(_session.CurrentLocation, Is.EqualTo(LocationId.Kiyosu));
+        }
+
+        [TestCase(1)]
+        [TestCase(2)]
+        public void CurrentLocationButton_AfterTravel_ClearsPreviewAndEntersTown(int buttonIndex)
+        {
+            Button[] buttons = BindTestLocationButtons();
+            LocationId destination = buttonIndex == 1 ? LocationId.Atsuta : LocationId.Nagoya;
+            buttons[buttonIndex].onClick.Invoke();
+            _controller.ConfirmTravel();
+            _controller.ReturnToMap();
+            buttons[0].onClick.Invoke(); // Leave a pending return-travel preview.
+            Assert.That(_controller.CurrentPreview.HasValue, Is.True);
+            GameDate arrivalDate = _session.WorldClock.CurrentDate;
+
+            Assert.That(buttons[buttonIndex].interactable, Is.True);
+            Assert.That(buttons[buttonIndex].GetComponentInChildren<Text>().text, Does.Contain("进入"));
+            Assert.That(buttons[0].GetComponentInChildren<Text>().text, Does.Not.Contain("进入"));
+            buttons[buttonIndex].onClick.Invoke();
+
+            Assert.That(_controller.InTownMenu, Is.True);
+            Assert.That(_townRoot.activeSelf, Is.True);
+            Assert.That(_townTitle.text, Does.Contain(LocationId.GetChineseName(destination)));
+            Assert.That(_controller.CurrentPreview, Is.Null);
+            Assert.That(_controller.SelectedDestination, Is.Null);
+            Assert.That(_session.WorldClock.CurrentDate, Is.EqualTo(arrivalDate));
+            Assert.That(_session.CurrentLocation, Is.EqualTo(destination));
+            Assert.That(_return.interactable, Is.True);
         }
 
         [Test]
@@ -278,6 +323,20 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         // ---- helpers ----
+
+        private Button[] BindTestLocationButtons()
+        {
+            var buttons = new[] { CreateButton("Kiyosu"), CreateButton("Atsuta"), CreateButton("Nagoya") };
+            var labels = new Text[buttons.Length];
+            for (int i = 0; i < buttons.Length; i++)
+            {
+                buttons[i].transform.SetParent(_go.transform, false);
+                labels[i] = CreateText("Label");
+                labels[i].transform.SetParent(buttons[i].transform, false);
+            }
+            _controller.BindLocationButtons(buttons[0], labels[0], buttons[1], labels[1], buttons[2], labels[2]);
+            return buttons;
+        }
 
         private static Text CreateText(string name)
         {
