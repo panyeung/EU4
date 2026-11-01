@@ -36,7 +36,7 @@
 - Create: `Assets/Scripts/Domain/SupplyShortageMission.cs` and `.meta`
 - Modify: `Assets/Scripts/Application/GameSession.cs`
 - Create: `Assets/Tests/EditMode/SupplyShortageMissionTests.cs` and `.meta`
-- Modify: `Assets/Tests/EditMode` only if a shared session fixture is needed; do not change existing test semantics.
+- Create: `Assets/Tests/EditMode/GameSessionMissionTests.cs` and `.meta`
 
 **Interfaces:**
 - `SupplyShortageMission.Stage: SupplyShortageStage`
