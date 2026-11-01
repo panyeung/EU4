@@ -43,3 +43,20 @@ The reviewed updater migrated and saved `Assets/Scenes/FoundationScene.unity`, r
 ## Current status update — 2026-11-01
 
 M2 is accepted per the user's latest milestone confirmation. M3 and M4a are also accepted; M4a checkpoint `9c10959e5792777ea433a16c590034f406dccba1` is tagged `demo-M4a` and present on local `main`. M4b is accepted by the user on 2026-11-01. The existing Editor compiled the latest code; EditMode Run All passed 322/322 with 0 failures or skips; the M4b updater saved `FoundationScene`; and the fresh validator report passed with 0 errors. The user reported the requested M4b playtest passed. Independent technical QA accepted the scoped implementation with no blocking defects. Exact runtime values and Console counters were not supplied. M4b checkpoint `70ac62f0d8a9866488ae194c3cf55c68a8be2e29` is tagged `demo-M4b` and fast-forwarded into local `main`; no remote push was made. Kanban review tools were not available in this session.
+
+## M5 candidate update — 2026-11-01
+
+M1–M4b remain accepted. M5 (versioned single-slot save) is implemented on `feature/m5-save-slot` and is a demo candidate, not accepted.
+
+Implementation: a new `SengokuChronicle.Persistence` assembly holds `SaveData` (`saveFormatVersion = 1`), `SaveDataValidator`, and `SaveSlotStore`; `GameSession` captures and atomically applies date, location, mission stages, and NPC relationships, with merit derived from stages. A compact `SaveLoadPanel` (`M5SaveLoadRoot`) was added to `FoundationScene` through `AddM5SaveLoadPanel`. Design and plan: `docs/superpowers/specs/2026-11-01-m5-single-slot-save-design.md` and `docs/superpowers/plans/2026-11-01-m5-single-slot-save.md`.
+
+Verification evidence (2026-11-01):
+
+- Compilation: Unity 6000.6.6f1 batchmode imported and compiled this worktree with no `error CS` lines in `m5-batchmode.log`.
+- EditMode: `m5-editmode-results.xml` reports 381 total, 381 passed, 0 failed, 0 inconclusive, 0 skipped (start 17:41:08Z).
+- FoundationScene: the updater saved the scene; the diff adds 536 lines and removes none. The fresh `Logs/SceneValidationReport.txt` reports `FOUND SaveLoadPanel: M5SaveLoadRoot`, the M5 hierarchy/binding/separation check passing, and `RESULT: PASS; Errors: 0`.
+- Console: not captured. Batchmode logs are not the Editor Console, so no Console counters are claimed.
+- Play Mode: not run in this session; the open Editor stayed on the M4b worktree. Date/location/mission/merit/relationship restoration and the no-duplicate-reward check still need Play Mode evidence.
+- Remote state (verified 2026-11-01): `origin/main` is `24102fe`; tags `demo-M2`, `demo-M3`, `demo-M4a`, and `demo-M4b` exist on `origin`.
+
+Next step: open this worktree in Unity and run the acceptance path in `M5_DEMO.md`. Do not create the final M5 checkpoint, merge to `main`, or tag `demo-M5` before explicit user Play Mode acceptance.

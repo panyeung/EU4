@@ -63,6 +63,24 @@ namespace SengokuChronicle.Editor
             return dirty ? UpdateResult.SceneDirty : UpdateResult.Success;
         }
 
+        /// <summary>
+        /// Batch entry point: opens FoundationScene, runs the transactional updater,
+        /// saves only after validation, and writes the scene validation report.
+        /// </summary>
+        public static void RunBatchIntegration()
+        {
+            Scene scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+            UpdateResult result = CheckScenePreflight(scene.path, scene.isDirty);
+            if (result == UpdateResult.Success)
+                result = Execute(scene, true, null);
+
+            FoundationSceneValidator.ValidateActiveScene();
+            if (result != UpdateResult.Success)
+                throw new InvalidOperationException($"M5 save/load integration failed: {result}.");
+
+            Debug.Log("M5 save/load integration completed and FoundationScene was saved.");
+        }
+
         /// <summary>Structural test seam. It never saves the supplied scene.</summary>
         public static UpdateResult Update(Scene scene) => Execute(scene, false, null);
 
