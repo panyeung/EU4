@@ -1,6 +1,6 @@
 # Phase 2 Roadmap — Sengoku Chronicle
 
-> 状态：Phase 1（M1–M6）已全部验收并打标签 `demo-M2`…`demo-M6`。本文件跟踪 Phase 2 里程碑。每个里程碑的实施仍须用户单独授权。设计以 `GDD_v0.2.md` 为权威；Phase 2 内容以长期愿景（§5）为来源，逐步立项。
+> 状态：历史路线图。M7 已接受并留档；此路线已由 [GDD_v4.0.md](GDD_v4.0.md) 的 M0–M8 开发计划取代。以下仅保留 Sengoku Chronicle 旧方向的实施与验收证据。
 
 ## M7 — 功名晋升（Merit & Promotion）
 
