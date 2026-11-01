@@ -88,7 +88,8 @@
 - [ ] Implement preflight, one Undo group, UI construction/binding, structural validation, rollback, and save only after validation; never modify existing object GUIDs or unknown objects.
 - [ ] Update `FoundationSceneValidator` to report missing/duplicate mission UI and unbound references as errors.
 - [ ] Run updater and validator from the open M4a Editor; inspect the saved scene and report `SceneValidationReport.txt` result.
-- [ ] After task review passes, commit this task as `feat(m4a): integrate mission panel in foundation scene`.
+- [ ] After static task review passes, commit the Editor updater, validator, and tests as `feat(m4a): add safe mission panel updater`.
+- [ ] The lead alone runs the reviewed updater in the open M4a Editor and saves the resulting scene; commit that generated scene as `feat(m4a): integrate mission panel in foundation scene` after Unity validation passes.
 
 ### Task 4: Demo Evidence, Review, and Handoff
 
