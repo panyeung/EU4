@@ -1,11 +1,23 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using UnityEngine;
 using SengokuChronicle.Domain;
+using SengokuChronicle.Events;
 using SengokuChronicle.Persistence;
 
 namespace SengokuChronicle.Application
 {
+    /// <summary>Why the most recent End Month request was accepted or refused.</summary>
+    public enum MonthTurnOutcome
+    {
+        Succeeded = 0,
+        PendingEvent = 1,
+        ContentUnavailable = 2,
+        DateOutOfRange = 3,
+        SchedulingFailed = 4
+    }
+
     /// <summary>
     /// 游戏会话 MonoBehaviour：持有 WorldClock 与当前位置，并提供
     /// 旅行预览与确认旅行的最小 API。
@@ -14,6 +26,9 @@ namespace SengokuChronicle.Application
     [DisallowMultipleComponent]
     public sealed class GameSession : MonoBehaviour
     {
+        /// <summary>Documented fixed sample seed used by the reproducible FoundationScene demo.</summary>
+        public const ulong DefaultRandomSeed = 0x5343414E4B4F3031UL;
+
         public WorldClock WorldClock { get; private set; }
         public LocationId CurrentLocation { get; private set; }
         public SupplyShortageStage SupplyShortageStage => _supplyShortageMission.Stage;
@@ -37,7 +52,32 @@ namespace SengokuChronicle.Application
         private MarketTallyMission _marketTallyMission = new MarketTallyMission();
         private SupplyShortageMission _supplyShortageMission = new SupplyShortageMission();
         private CharacterRelationships _relationships;
+        private RandomStateManager _randomStateManager;
+        private EventRuntimeState _eventRuntimeState;
+        private EventCatalogData _eventCatalog;
+        private EventTextCatalog _eventTextCatalog;
+        private EventEngine _eventEngine;
         private readonly Dictionary<Guid, DialogueState> _dialogues = new Dictionary<Guid, DialogueState>();
+
+        public event Action SessionStateChanged;
+        public string LastEventMessage { get; private set; } = string.Empty;
+        public MonthTurnOutcome LastMonthTurnOutcome { get; private set; } = MonthTurnOutcome.Succeeded;
+        public string PendingEventId => _eventRuntimeState != null ? _eventRuntimeState.PendingEventId : string.Empty;
+        public bool EventCatalogReady => _eventEngine != null && _eventEngine.IsReady;
+        public EventCatalogData EventCatalog => _eventCatalog;
+        public EventTextCatalog EventText => _eventTextCatalog;
+
+        public RandomStateManager RandomState
+        {
+            get
+            {
+                EnsureRandomState();
+                return _randomStateManager;
+            }
+        }
+
+        public EventRuntimeSaveData EventRuntimeStateForSave =>
+            _eventRuntimeState != null ? _eventRuntimeState.Capture() : new EventRuntimeSaveData();
 
         private sealed class DialogueState
         {
@@ -90,24 +130,42 @@ namespace SengokuChronicle.Application
         /// <summary>以新局状态重置/初始化时钟（1560-04-01）与位置（清洲）。</summary>
         public void InitNewGame()
         {
+            InitNewGame(DefaultRandomSeed);
+        }
+
+        /// <summary>Starts a reproducible new game with a caller-selected stable seed.</summary>
+        public void InitNewGame(ulong initialSeed)
+        {
             WorldClock = new WorldClock();
             CurrentLocation = LocationId.Kiyosu;
             _relationships = new CharacterRelationships();
+            _randomStateManager = RandomStateManager.Create(initialSeed);
+            _eventRuntimeState = new EventRuntimeState();
+            LoadEventContent();
             _supplyShortageMission = new SupplyShortageMission();
             _sealedLetterMission = new SealedLetterMission();
             _marketTallyMission = new MarketTallyMission();
             _dialogues.Clear();
+            LastMonthTurnOutcome = MonthTurnOutcome.Succeeded;
+            SessionStateChanged?.Invoke();
         }
 
         /// <summary>Captures the current runtime state as versioned save data.</summary>
         public SaveData CaptureSave()
         {
             EnsureRelationships();
+            EnsureRandomState();
+            EnsureEventRuntimeState();
             GameDate date = WorldClock != null ? WorldClock.CurrentDate : SengokuChronicle.Domain.WorldClock.NewGameDate;
 
             return new SaveData
             {
-                saveFormatVersion = SaveDataValidator.CurrentVersion,
+                saveFormatVersion = SaveData.CurrentGameSchemaVersion,
+                gameVersion = SaveData.CurrentGameVersion,
+                rulesVersion = SaveData.CurrentRulesVersion,
+                eventContentVersion = _eventCatalog != null
+                    ? _eventCatalog.contentVersion
+                    : SaveData.CurrentEventContentVersion,
                 year = date.Year,
                 month = date.Month,
                 day = date.Day,
@@ -115,7 +173,9 @@ namespace SengokuChronicle.Application
                 supplyShortageStage = (int)_supplyShortageMission.Stage,
                 sealedLetterStage = (int)_sealedLetterMission.Stage,
                 marketTallyStage = (int)_marketTallyMission.Stage,
-                relationships = CaptureRelationships()
+                relationships = CaptureRelationships(),
+                randomState = _randomStateManager.CaptureState(),
+                eventRuntime = _eventRuntimeState.Capture()
             };
         }
 
@@ -129,8 +189,18 @@ namespace SengokuChronicle.Application
             if (!validation.Succeeded)
                 return validation;
 
+            if (!RandomStateManager.TryRestore(data.randomState, out RandomStateManager randomState))
+                return InvalidSave("存档随机流状态无效。");
             if (!GameDate.TryParse(data.year, data.month, data.day, out GameDate date))
                 return InvalidSave("存档日期无效。");
+            if (_eventEngine == null)
+                return InvalidSave(string.IsNullOrEmpty(LastEventMessage) ? "事件目录不可用。" : LastEventMessage);
+            if (_eventCatalog == null || data.eventContentVersion != _eventCatalog.contentVersion)
+                return InvalidSave("存档事件内容版本与当前目录不匹配。");
+            if (!_eventEngine.TryRestoreState(data.eventRuntime, date,
+                    out EventRuntimeState eventRuntime, out string eventError))
+                return InvalidSave(string.IsNullOrEmpty(eventError) ? "存档事件状态无效。" : eventError);
+
             if (!LocationId.TryParse(data.locationId, out LocationId location))
                 return InvalidSave("存档地点无效。");
 
@@ -163,7 +233,12 @@ namespace SengokuChronicle.Application
             _sealedLetterMission = sealedLetter;
             _marketTallyMission = marketTally;
             _relationships = relationships;
+            _randomStateManager = randomState;
+            _eventRuntimeState = eventRuntime;
             _dialogues.Clear();
+            LastEventMessage = string.Empty;
+            LastMonthTurnOutcome = MonthTurnOutcome.Succeeded;
+            SessionStateChanged?.Invoke();
             return SaveOperationResult.Success();
         }
 
@@ -276,6 +351,91 @@ namespace SengokuChronicle.Application
                 _relationships = new CharacterRelationships();
         }
 
+        private void EnsureRandomState()
+        {
+            if (_randomStateManager == null)
+                _randomStateManager = RandomStateManager.Create(DefaultRandomSeed);
+        }
+
+        private void EnsureEventRuntimeState()
+        {
+            if (_eventRuntimeState == null)
+            {
+                _eventRuntimeState = new EventRuntimeState();
+                LoadEventContent();
+            }
+        }
+
+        private void LoadEventContent()
+        {
+            _eventCatalog = null;
+            _eventTextCatalog = null;
+            _eventEngine = null;
+            TextAsset catalogAsset = Resources.Load<TextAsset>("Events/event-catalog-v1");
+            TextAsset textAsset = Resources.Load<TextAsset>("Localization/event-text-zh-v1");
+            if (catalogAsset == null || textAsset == null)
+            {
+                LastEventMessage = "事件目录或本地化文字未加载。";
+                return;
+            }
+            try
+            {
+                _eventCatalog = JsonUtility.FromJson<EventCatalogData>(catalogAsset.text);
+                _eventTextCatalog = JsonUtility.FromJson<EventTextCatalog>(textAsset.text);
+            }
+            catch (Exception exception)
+            {
+                LastEventMessage = "事件 JSON 无法解析：" + exception.Message;
+                _eventCatalog = null;
+                _eventTextCatalog = null;
+                return;
+            }
+
+            _eventEngine = new EventEngine(_eventCatalog, _eventTextCatalog);
+            LastEventMessage = _eventEngine.IsReady ? string.Empty : _eventEngine.ValidationMessage;
+        }
+
+        public bool TryGetEventOptionAvailability(string eventId, string optionId, out bool enabled, out string reason)
+        {
+            EnsureEventRuntimeState();
+            if (_eventEngine == null)
+            {
+                enabled = false;
+                reason = LastEventMessage;
+                return false;
+            }
+            return _eventEngine.TryGetOptionAvailability(eventId, optionId, _relationships, out enabled, out reason);
+        }
+
+        public EventChoiceResult TryChooseEventOption(string eventId, string optionId, string committedResultId)
+        {
+            EnsureEventRuntimeState();
+            if (_eventEngine == null)
+                return new EventChoiceResult(false, eventId, optionId, committedResultId,
+                    LastEventMessage, string.Empty);
+            GameDate currentDate = WorldClock != null
+                ? WorldClock.CurrentDate
+                : SengokuChronicle.Domain.WorldClock.NewGameDate;
+            EventChoiceResult result = _eventEngine.TryChooseEventOption(eventId, optionId, committedResultId,
+                currentDate, _relationships, _eventRuntimeState);
+            if (result.Succeeded)
+            {
+                LastEventMessage = result.Feedback;
+                SessionStateChanged?.Invoke();
+            }
+            return result;
+        }
+
+        /// <summary>Creates an idempotent event-result ID from stable content and current game date.</summary>
+        public string CreateEventResultId(string eventId, string optionId)
+        {
+            if (WorldClock == null || string.IsNullOrWhiteSpace(eventId) || string.IsNullOrWhiteSpace(optionId))
+                return string.Empty;
+            GameDate date = WorldClock.CurrentDate;
+            return eventId + ":" + date.Year.ToString("0000", CultureInfo.InvariantCulture) +
+                   date.Month.ToString("00", CultureInfo.InvariantCulture) + ":" + optionId;
+        }
+
         /// <summary>创建新游戏会话，日期固定为 1560-04-01，位置固定为清洲。</summary>
         public static GameSession NewGame()
         {
@@ -290,6 +450,9 @@ namespace SengokuChronicle.Application
         {
             if (WorldClock == null)
                 InitNewGame();
+            EnsureEventRuntimeState();
+            if (_eventRuntimeState.HasPendingEvents)
+                return false;
             return WorldClock.AdvanceOneDay();
         }
 
@@ -298,7 +461,65 @@ namespace SengokuChronicle.Application
         {
             if (WorldClock == null)
                 InitNewGame();
+            EnsureEventRuntimeState();
+            if (_eventRuntimeState.HasPendingEvents)
+                return false;
             return WorldClock.AdvanceDays(count);
+        }
+
+        /// <summary>
+        /// 结束本月：推进到下月 1 日并排定一个可用月度事件。
+        /// 有待处理事件、内容无效或日期越界时拒绝推进。
+        /// </summary>
+        public bool TryAdvanceToNextMonth()
+        {
+            if (WorldClock == null)
+                InitNewGame();
+            EnsureRandomState();
+            EnsureEventRuntimeState();
+            if (_eventRuntimeState.HasPendingEvents)
+            {
+                LastMonthTurnOutcome = MonthTurnOutcome.PendingEvent;
+                return false;
+            }
+            if (_eventEngine == null || !_eventEngine.IsReady)
+            {
+                LastMonthTurnOutcome = MonthTurnOutcome.ContentUnavailable;
+                LastEventMessage = _eventEngine != null ? _eventEngine.ValidationMessage : LastEventMessage;
+                return false;
+            }
+
+            GameDate previousDate = WorldClock.CurrentDate;
+            int nextYear = previousDate.Month == 12 ? previousDate.Year + 1 : previousDate.Year;
+            int nextMonth = previousDate.Month == 12 ? 1 : previousDate.Month + 1;
+            if (!GameDate.TryParse(nextYear, nextMonth, 1, out GameDate nextDate))
+            {
+                LastMonthTurnOutcome = MonthTurnOutcome.DateOutOfRange;
+                return false;
+            }
+
+            RandomStateSaveData rngBefore = _randomStateManager.CaptureState();
+            EventRuntimeState nextRuntime = _eventRuntimeState.Clone();
+            EventScheduleResult schedule = _eventEngine.ScheduleMonthly(nextDate, _relationships,
+                _randomStateManager.GetStream(RandomStreamKind.Events), nextRuntime);
+            if (!schedule.Succeeded)
+            {
+                RandomStateManager.TryRestore(rngBefore, out _randomStateManager);
+                LastMonthTurnOutcome = MonthTurnOutcome.SchedulingFailed;
+                LastEventMessage = schedule.Message;
+                return false;
+            }
+            if (!WorldClock.TryAdvanceToNextMonth())
+            {
+                RandomStateManager.TryRestore(rngBefore, out _randomStateManager);
+                LastMonthTurnOutcome = MonthTurnOutcome.DateOutOfRange;
+                return false;
+            }
+            _eventRuntimeState = nextRuntime;
+            LastEventMessage = string.Empty;
+            LastMonthTurnOutcome = MonthTurnOutcome.Succeeded;
+            SessionStateChanged?.Invoke();
+            return true;
         }
 
         /// <summary>
@@ -310,6 +531,9 @@ namespace SengokuChronicle.Application
         {
             if (WorldClock == null)
                 InitNewGame();
+            EnsureEventRuntimeState();
+            if (_eventRuntimeState.HasPendingEvents)
+                return null;
 
             if (!destination.IsValid)
                 return null;
@@ -331,6 +555,9 @@ namespace SengokuChronicle.Application
         {
             if (WorldClock == null)
                 InitNewGame();
+            EnsureEventRuntimeState();
+            if (_eventRuntimeState.HasPendingEvents)
+                return false;
 
             if (!preview.Destination.IsValid)
                 return false;

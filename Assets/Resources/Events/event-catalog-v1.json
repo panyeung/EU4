@@ -1,0 +1,50 @@
+{
+  "contentVersion": 1,
+  "chains": [
+    {
+      "chainId": "chain.rainy-arrival",
+      "linkedEventIds": [ "event.rainy-arrival" ]
+    }
+  ],
+  "events": [
+    {
+      "eventId": "event.rainy-arrival",
+      "trigger": "Monthly",
+      "conditions": [ { "type": "Always" } ],
+      "weight": 10,
+      "textId": "event.rainy-arrival",
+      "options": [
+        {
+          "optionId": "option.rainy-arrival.offer-rest",
+          "textId": "option.rainy-arrival.offer-rest",
+          "summaryTextId": "summary.rainy-arrival.offer-rest",
+          "requirements": [ { "type": "Always" } ],
+          "effects": [
+            {
+              "type": "RelationshipDelta",
+              "targetCharacterId": "npc.kuroda.iori",
+              "delta": 5
+            }
+          ]
+        },
+        {
+          "optionId": "option.rainy-arrival.ask-tomorrow",
+          "textId": "option.rainy-arrival.ask-tomorrow",
+          "requirements": [
+            {
+              "type": "RelationshipAtLeast",
+              "targetCharacterId": "npc.kuroda.iori",
+              "minimumValue": 1,
+              "reason": "需要先取得伊织的信任。"
+            }
+          ],
+          "effects": []
+        }
+      ],
+      "cooldownMonths": 3,
+      "onceScope": "PerGame",
+      "chainId": "chain.rainy-arrival",
+      "priority": 10
+    }
+  ]
+}

@@ -4,6 +4,7 @@
   "references": [
     "SengokuChronicle.Domain",
     "SengokuChronicle.Application",
+    "SengokuChronicle.Events",
     "SengokuChronicle.Presentation",
     "SengokuChronicle.Persistence",
     "Unity.InputSystem"

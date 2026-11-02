@@ -4,6 +4,7 @@
   "references": [
     "SengokuChronicle.Domain",
     "SengokuChronicle.Application",
+    "SengokuChronicle.Events",
     "SengokuChronicle.Presentation",
     "SengokuChronicle.Persistence",
     "SengokuChronicle.Editor"
@@ -17,6 +18,7 @@
   "assemblyDefinitionReferences": [
     "SengokuChronicle.Domain",
     "SengokuChronicle.Application",
+    "SengokuChronicle.Events",
     "SengokuChronicle.Presentation",
     "SengokuChronicle.Persistence",
     "SengokuChronicle.Editor"

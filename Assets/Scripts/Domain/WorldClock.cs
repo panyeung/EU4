@@ -66,6 +66,33 @@ namespace SengokuChronicle.Domain
             return true;
         }
 
+        /// <summary>
+        /// 结束本月：推进到下一个日历月的 1 日（SC-004 月度回合）。
+        /// 成功返回 true；下一月超出支持范围（1560-01-01 ~ 2000-12-31）时返回 false 且状态不变。
+        /// 不影响既有的按天推进 API。
+        /// </summary>
+        public bool TryAdvanceToNextMonth()
+        {
+            int year = _current.Year;
+            int month = _current.Month;
+            if (month < 12)
+            {
+                month = month + 1;
+            }
+            else
+            {
+                month = 1;
+                year = year + 1;
+            }
+
+            // 每月 1 日恒存在，TryParse 同时完成 1560~2000 支持范围校验。
+            if (!GameDate.TryParse(year, month, 1, out GameDate candidate))
+                return false;
+
+            _current = candidate;
+            return true;
+        }
+
         public bool EqualsClock(WorldClock other)
         {
             if (other == null)

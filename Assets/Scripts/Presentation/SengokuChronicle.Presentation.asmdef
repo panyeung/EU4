@@ -4,6 +4,7 @@
   "references": [
     "SengokuChronicle.Application",
     "SengokuChronicle.Domain",
+    "SengokuChronicle.Events",
     "SengokuChronicle.Persistence"
   ],
   "includePlatforms": [],

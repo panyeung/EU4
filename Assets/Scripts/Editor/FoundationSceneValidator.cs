@@ -66,6 +66,14 @@ namespace SengokuChronicle.Editor
                 AddError(report, ref errors, m7Error);
             else
                 report.AppendLine("PASS M7 rank panel hierarchy, bindings, containment, and map separation.");
+            if (!AddSC004MonthTurnControl.Validate(scene, out string sc004Error))
+                AddError(report, ref errors, sc004Error);
+            else
+                report.AppendLine("PASS SC-004 month turn control hierarchy, bindings, and day-control preservation.");
+            if (!AddSC005EventChoicePanel.Validate(scene, out string sc005Error))
+                AddError(report, ref errors, sc005Error);
+            else
+                report.AppendLine("PASS SC-009 event-choice panel hierarchy, bindings, layout, and validated content.");
 
             if (controller != null)
             {

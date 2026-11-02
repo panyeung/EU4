@@ -290,6 +290,17 @@ namespace SengokuChronicle.Presentation
                 supplyShortageMissionPanel.Refresh();
         }
 
+        /// <summary>
+        /// SC-004：时钟变化（如「结束月份」）后的窄入口——仅刷新地图当前日期
+        /// 与 M1 面板日期，不触碰目的地/预览/按钮等地图状态。
+        /// </summary>
+        public void RefreshDateDisplays()
+        {
+            RefreshCurrentDate();
+            if (worldClockPanel != null)
+                worldClockPanel.Refresh();
+        }
+
         // ---- 内部 ----
 
         /// <summary>幂等注册/注销按钮监听。</summary>

@@ -3,6 +3,7 @@
   "rootNamespace": "SengokuChronicle.Application",
   "references": [
     "SengokuChronicle.Domain",
+    "SengokuChronicle.Events",
     "SengokuChronicle.Persistence"
   ],
   "includePlatforms": [],

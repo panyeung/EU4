@@ -1,0 +1,19 @@
+{
+  "name": "SengokuChronicle.Events",
+  "rootNamespace": "SengokuChronicle.Events",
+  "references": [
+    "SengokuChronicle.Domain",
+    "SengokuChronicle.Persistence"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "defineConstraints": [],
+  "assemblyReferences": [],
+  "assemblyDefinitionReferences": [],
+  "versionDefines": [],
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "useUnityAssemblies": false,
+  "noEngineReferences": true,
+  "isTestAssembly": false
+}

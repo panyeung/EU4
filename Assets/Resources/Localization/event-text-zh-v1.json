@@ -1,0 +1,25 @@
+{
+  "contentVersion": 1,
+  "entries": [
+    {
+      "textId": "event.rainy-arrival",
+      "title": "雨夜来客",
+      "body": "暮色之后，雨声敲在清洲院门。黑田伊织带来一封未拆的家书，静候家主答复。"
+    },
+    {
+      "textId": "option.rainy-arrival.offer-rest",
+      "title": "请他进屋歇息",
+      "body": "递上干衣与一杯热茶，让伊织慢慢说明来意。"
+    },
+    {
+      "textId": "summary.rainy-arrival.offer-rest",
+      "title": "关系改善",
+      "body": "伊织记下了这份体谅，对家主的信任增加了五点。"
+    },
+    {
+      "textId": "option.rainy-arrival.ask-tomorrow",
+      "title": "请他明晨再来",
+      "body": "先让伊织在门房避雨，待天亮后再听他详谈。"
+    }
+  ]
+}

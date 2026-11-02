@@ -258,6 +258,12 @@ Only the lead or one designated integration worker edits scenes, prefabs, or `Pr
 
 End each milestone with a playable demo. Require successful compilation, zero Console errors, the intended scene, and a playable headline loop; verify save/load when it is in scope. Freeze the demo worktree while the user evaluates it. User Play Mode acceptance is required before marking the demo accepted, merging to `main`, or tagging it.
 
+## Orca and OpenCode workflow
+
+For substantial Unity coding tasks, Mochi coordinates the work through Orca's supervised orchestration. Assign implementation to an OpenCode worker on the current feature worktree, then dispatch a separate OpenCode worker for a read-only review of the completed changes. Keep the review sequential with implementation so only one worker writes the worktree at a time.
+
+The implementation task must state its file ownership, project constraints, and observable acceptance evidence. The reviewer reports findings and verification evidence without editing files; Mochi owns any follow-up routing, final sign-off, and user-facing status. Preserve unrelated user changes and existing branches. Use the already open Unity Editor for project verification; do not start batchmode against its project folder. Keep compilation, EditMode results, Console counts, Play Mode evidence, and user acceptance as separate claims.
+
 ## Unity implementation and QA workflow
 
 For Unity coding tasks, UnityCoder implements the requested changes on the existing task and, when ready, calls `kanban_request_review(reviewer="qatester")` with changed files, tests, and verification evidence. QATester reviews that same task. For correctable defects, QATester records actionable findings and calls `kanban_request_changes`; Kanban returns the task to UnityCoder for correction and same-task re-review. QATester calls `kanban_complete` only after review passes with verified results. Do not create a separate QA card for this same-task review flow, and never mark a feature ready based on implementation completion alone.
