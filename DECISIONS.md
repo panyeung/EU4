@@ -1,4 +1,14 @@
-﻿# Decisions
+# Decisions
+
+Current design authority: [GDD_v4.0.md](GDD_v4.0.md), 《影之一族》. Older Sengoku Chronicle / Phase 1 / Phase 2 decisions below are historical and apply only when compatible with the current GDD. Current implementation status is in [PROJECT_STATE.md](PROJECT_STATE.md).
+
+## 2026-11-02 - SC-011 cross-generation event uses allowlisted conditions, not a new chain runtime
+
+- Decision: Keep the existing `Monthly` trigger and add three allowlisted condition kinds (`EventOptionChosen`, `SuccessionCountEquals`, `SettledSuccessionCountAtLeast`) plus a small `EventRuleContext` built by `GameSession`. Gate the accepted root to raw succession count `0` and represent the single follow-up encounter as two mutually exclusive content variants keyed by the saved root option. Bump catalog/text content version to `2` and accept saved content `1` additively under current `2`; save schema stays `3` with no new field.
+- Alternatives: A new `SuccessionCompleted` trigger and handoff hooks; runtime text templating; a new NPC or a `PersonId`/`CharacterId` bridge; an external dialogue/event package.
+- Reason: The existing engine, save history, and SC-010 succession state already carry the required facts. The chosen slice is the smallest implementation that proves "后代受到先代决定影响" without a new subsystem, scene, prefab, package, or NPC.
+- Constraints: Succession-count conditions are offer-time only so a pending event remains resolvable after a head change; only history conditions are re-checked at commit. The accepted rainy-arrival text, options, requirements, effects, weight, priority, cooldown, once scope, and chain membership are preserved; its only content change is replacing the redundant `Always` condition with `SuccessionCountEquals 0`. GDD 7.5 text templating and GDD 19.4's full three-generation M2 script remain future work.
+- Verification and acceptance (2026-11-02): The user reports compilation passed, EditMode passed (exact counts not supplied), no Console errors (warning count not supplied), and Play Test passed; the user explicitly accepted SC-011. FoundationSceneValidator evidence was not supplied. OpenCode2's independent static reviews returned ACCEPT; they are not Unity runtime evidence. The `demo-SC011` checkpoint is authorized for merge/tag/push.
 
 ## 2026-11-01 - Adopt Shadow Clan plan v4.0 and reuse the existing project
 
@@ -74,3 +84,10 @@
 - Alternatives: Store rank in the save (new field/version), add a XP or event system, or use historical office names with era考据 claims.
 - Reason: Derivation keeps the M5 save format frozen and makes rank impossible to forge or double-claim; the threshold table is testable pure C#; the rank names are explicitly game-abstracted growth labels, honoring the GDD's no-unverified-history rule while Phase 1's max merit (20) lands exactly on the top rank as a clean demo ending.
 - Verification: EditMode 425/425 (0 failed, 0 skipped) pre- and post-integration; `RunBatchIntegration` saved FoundationScene with `RESULT: PASS; Errors: 0` including the M7 checks. Play Mode acceptance pending.
+
+## 2026-11-02 - Accept SC-004–SC-009 checkpoint
+
+- Status: User accepted the Play Test and confirmed Edit Mode passed. Commit `c29d24a` is on `main`; `demo-SC004-SC009` was pushed.
+- Scope: Monthly time, deterministic RNG, versioned saves and migration, event data validation, deterministic event resolution, and the playable event-choice UI.
+- Evidence boundary: `TestResults.xml` reports 548/548 passed; Play Mode acceptance is user-reported. FoundationScene still serializes the legacy feedback-banner position; the scene updater and validator were not run for this final layout. Do not infer scene validation or Console cleanliness.
+- Next GDD task: SC-010, initial house-head retirement and succession. SC-003 family-model WIP was not included in this checkpoint.

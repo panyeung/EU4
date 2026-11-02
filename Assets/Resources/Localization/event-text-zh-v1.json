@@ -1,5 +1,5 @@
 {
-  "contentVersion": 1,
+  "contentVersion": 2,
   "entries": [
     {
       "textId": "event.rainy-arrival",
@@ -20,6 +20,76 @@
       "textId": "option.rainy-arrival.ask-tomorrow",
       "title": "请他明晨再来",
       "body": "先让伊织在门房避雨，待天亮后再听他详谈。"
+    },
+    {
+      "textId": "event.rainy-arrival.legacy-honored",
+      "title": "旧客的雨夜回访",
+      "body": "又是一夜细雨。黑田伊织站在清洲院门外，手里仍是那封未拆的家书。他没有提先代的名字，只问新家主是否还记得当年那盏热茶。"
+    },
+    {
+      "textId": "option.legacy-honored.renew",
+      "title": "重申先代的门诺",
+      "body": "当着伊织的面承认旧约，并请他再次入屋。"
+    },
+    {
+      "textId": "summary.legacy-honored.renew",
+      "title": "旧诺得续",
+      "body": "伊织确认这份旧情没有随先代离去，对家族的信任增加五点。"
+    },
+    {
+      "textId": "option.legacy-honored.terms",
+      "title": "按当下利害重议",
+      "body": "旧情可以续，但条件要按今日的家族处境重写。"
+    },
+    {
+      "textId": "summary.legacy-honored.terms",
+      "title": "往来延续",
+      "body": "伊织接受了新的往来条件，旧约以另一种方式延续。"
+    },
+    {
+      "textId": "option.legacy-honored.close",
+      "title": "止于这一夜",
+      "body": "以家族事务繁忙为由，结束这段旧交。"
+    },
+    {
+      "textId": "summary.legacy-honored.close",
+      "title": "旧情转冷",
+      "body": "伊织收起家书离去，家族与他的旧情转冷五点。"
+    },
+    {
+      "textId": "event.rainy-arrival.legacy-deferred",
+      "title": "门房里的旧雨",
+      "body": "雨声与当年一样。黑田伊织再次来到清洲，却先问起先代为何让他在门房等到天亮。新家主要给这段旧事一个答复。"
+    },
+    {
+      "textId": "option.legacy-deferred.atone",
+      "title": "补上先代欠下的礼数",
+      "body": "正式迎伊织入内，为当年那一夜的怠慢致歉。"
+    },
+    {
+      "textId": "summary.legacy-deferred.atone",
+      "title": "迟来的礼数",
+      "body": "伊织接受了迟来的礼数，对家族的信任增加五点。"
+    },
+    {
+      "textId": "option.legacy-deferred.explain",
+      "title": "说明当日不得已",
+      "body": "把当年的顾虑与今日的处境一并说清，请他自行判断。"
+    },
+    {
+      "textId": "summary.legacy-deferred.explain",
+      "title": "旧怨未消",
+      "body": "伊织听完了解释，旧怨没有加深，也没有完全消散。"
+    },
+    {
+      "textId": "option.legacy-deferred.dismiss",
+      "title": "旧事不必再提",
+      "body": "告诉伊织，先代的做法无须由新家主补偿。"
+    },
+    {
+      "textId": "summary.legacy-deferred.dismiss",
+      "title": "旧交转冷",
+      "body": "伊织记住了这次拒绝，对家族的信任下降五点。"
     }
   ]
 }

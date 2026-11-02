@@ -226,6 +226,21 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
+        public void V1MigrationWithoutContentVersionUsesCurrentContentVersion()
+        {
+            SaveData legacy = ValidData();
+            legacy.saveFormatVersion = 1;
+            legacy.eventContentVersion = 0;
+
+            bool succeeded = SaveDataMigrator.TryMigrate(
+                legacy, out SaveData migrated, out SaveOperationResult result);
+
+            Assert.That(succeeded, Is.True, result.Message);
+            Assert.That(SaveData.CurrentEventContentVersion, Is.EqualTo(2));
+            Assert.That(migrated.eventContentVersion, Is.EqualTo(SaveData.CurrentEventContentVersion));
+        }
+
+        [Test]
         public void PendingEventAlsoMarkedOnce_IsRejected()
         {
             SaveData data = ValidData();

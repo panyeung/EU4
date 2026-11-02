@@ -132,6 +132,37 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
+        public void SchedulingFailureDoesNotMutateRuntimeOrConsumeEventRandom()
+        {
+            EventEngine engine = CreateEngine(CreateEvent("event.one", 10));
+            Assert.That(engine.IsReady, Is.True, engine.ValidationMessage);
+            Assert.That(EventRuntimeState.TryRestore(new EventRuntimeSaveData
+            {
+                phase = (int)StableGamePhase.AwaitingEventChoice,
+                pendingEventIds = new[] { "event.one" }
+            }, out EventRuntimeState busy, out string restoreError), Is.True, restoreError);
+            EventRuntimeSaveData runtimeBefore = busy.Capture();
+            var manager = RandomStateManager.Create(91UL);
+            RandomStateSaveData randomBefore = manager.CaptureState();
+
+            EventScheduleResult scheduled = engine.ScheduleMonthly(new GameDate(1560, 5, 1),
+                new CharacterRelationships(), manager.GetStream(RandomStreamKind.Events), busy);
+
+            Assert.That(scheduled.Succeeded, Is.False);
+            Assert.That(scheduled.Message, Does.Contain("pending"));
+            Assert.That(busy.Capture().pendingEventIds, Is.EqualTo(runtimeBefore.pendingEventIds));
+            Assert.That(busy.Capture().phase, Is.EqualTo(runtimeBefore.phase));
+            Assert.That(busy.Capture().history, Is.Empty);
+            Assert.That(busy.Capture().onceEventIds, Is.Empty);
+            RandomStateSaveData randomAfter = manager.CaptureState();
+            int eventStreamIndex = (int)RandomStreamKind.Events - 1;
+            Assert.That(randomAfter.streams[eventStreamIndex].state0Hex,
+                Is.EqualTo(randomBefore.streams[eventStreamIndex].state0Hex));
+            Assert.That(randomAfter.streams[eventStreamIndex].state1Hex,
+                Is.EqualTo(randomBefore.streams[eventStreamIndex].state1Hex));
+        }
+
+        [Test]
         public void ExpiredConditionsSkipWithoutMutation()
         {
             EventDefinitionData conditional = CreateEvent("event.relationship-gated", 1);
@@ -385,8 +416,207 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(state.PendingEventIds, Is.Empty);
         }
 
-        private static void AssertRandomStreamsEqual(RandomStateSaveData expected, RandomStateSaveData actual)
+        private static EventEngine CreateCrossGenerationEngine()
         {
+            EventDefinitionData root = ChainEvent("event.root", 10, 10, "chain.test",
+                new[] { new EventConditionData { type = "SuccessionCountEquals", threshold = 0 } },
+                "option.root.offer", "option.root.defer");
+            EventDefinitionData honored = ChainEvent("event.honored", 100, 1, "chain.test",
+                new[]
+                {
+                    new EventConditionData
+                    {
+                        type = "EventOptionChosen",
+                        sourceEventId = "event.root",
+                        sourceOptionId = "option.root.offer"
+                    },
+                    new EventConditionData { type = "SettledSuccessionCountAtLeast", threshold = 1 }
+                },
+                "option.honored.renew");
+            EventDefinitionData deferred = ChainEvent("event.deferred", 100, 1, "chain.test",
+                new[]
+                {
+                    new EventConditionData
+                    {
+                        type = "EventOptionChosen",
+                        sourceEventId = "event.root",
+                        sourceOptionId = "option.root.defer"
+                    },
+                    new EventConditionData { type = "SettledSuccessionCountAtLeast", threshold = 1 }
+                },
+                "option.deferred.atone");
+            var texts = new System.Collections.Generic.List<EventTextEntry>();
+            foreach (EventDefinitionData definition in new[] { root, honored, deferred })
+            {
+                texts.Add(new EventTextEntry
+                {
+                    textId = definition.textId,
+                    title = definition.eventId,
+                    body = "Original text."
+                });
+                foreach (EventOptionData option in definition.options)
+                    texts.Add(new EventTextEntry
+                    {
+                        textId = option.textId,
+                        title = option.optionId,
+                        body = "Original option body."
+                    });
+            }
+            var catalog = new EventCatalogData
+            {
+                contentVersion = 2,
+                events = new[] { root, honored, deferred },
+                chains = new[] { new EventChainData { chainId = "chain.test", linkedEventIds = new[] { "event.root", "event.honored", "event.deferred" } } }
+            };
+            return new EventEngine(catalog, new EventTextCatalog { contentVersion = 2, entries = texts.ToArray() });
+        }
+
+        private static EventDefinitionData ChainEvent(string eventId, int priority, int weight, string chainId,
+            EventConditionData[] conditions, params string[] optionIds)
+        {
+            var options = new EventOptionData[optionIds.Length];
+            for (int i = 0; i < optionIds.Length; i++)
+                options[i] = new EventOptionData
+                {
+                    optionId = optionIds[i],
+                    textId = "text." + optionIds[i],
+                    requirements = new[] { new EventRequirementData { type = "Always" } },
+                    effects = new EventEffectData[0]
+                };
+            return new EventDefinitionData
+            {
+                eventId = eventId,
+                trigger = "Monthly",
+                conditions = conditions,
+                weight = weight,
+                textId = "text." + eventId,
+                options = options,
+                cooldownMonths = 0,
+                onceScope = "PerGame",
+                chainId = chainId,
+                priority = priority
+            };
+        }
+
+        private static EventRuntimeState CommitRootBranch(EventEngine engine, string optionId,
+            CharacterRelationships relationships)
+        {
+            var state = new EventRuntimeState();
+            EventScheduleResult scheduled = engine.ScheduleMonthly(new GameDate(1560, 5, 1), relationships,
+                RandomStateManager.Create(11UL).GetStream(RandomStreamKind.Events), state,
+                new EventRuleContext(0, 0));
+            Assert.That(scheduled.Succeeded, Is.True, scheduled.Message);
+            Assert.That(scheduled.SelectedEventId, Is.EqualTo("event.root"));
+            EventChoiceResult committed = engine.TryChooseEventOption("event.root", optionId, "result." + optionId,
+                new GameDate(1560, 5, 1), relationships, state, new EventRuleContext(0, 0));
+            Assert.That(committed.Succeeded, Is.True, committed.Message);
+            return state;
+        }
+
+        [Test]
+        public void SuccessionGatesOfferRootOnlyBeforeFirstHandoff()
+        {
+            EventEngine engine = CreateCrossGenerationEngine();
+            var relationships = new CharacterRelationships();
+            var state = new EventRuntimeState();
+            var date = new GameDate(1560, 5, 1);
+
+            CollectionAssert.AreEqual(new[] { "event.root" },
+                engine.GetEligibleEventIds(date, relationships, state, new EventRuleContext(0, 0)));
+            Assert.That(engine.GetEligibleEventIds(date, relationships, state, new EventRuleContext(1, 0)), Is.Empty);
+            Assert.That(engine.GetEligibleEventIds(date, relationships, state, new EventRuleContext(1, 1)), Is.Empty);
+        }
+
+        [Test]
+        public void FollowUpVariantDependsOnRootOptionAndSettledHandoff()
+        {
+            EventEngine engine = CreateCrossGenerationEngine();
+            var relationships = new CharacterRelationships();
+            var date = new GameDate(1560, 5, 1);
+
+            EventRuntimeState honoredState = CommitRootBranch(engine, "option.root.offer", relationships);
+            CollectionAssert.AreEqual(new[] { "event.honored" },
+                engine.GetEligibleEventIds(date, relationships, honoredState, new EventRuleContext(1, 1)));
+            Assert.That(engine.GetEligibleEventIds(date, relationships, honoredState,
+                new EventRuleContext(1, 0)), Is.Empty, "an active regency must not offer the follow-up");
+
+            EventRuntimeState deferredState = CommitRootBranch(engine, "option.root.defer", new CharacterRelationships());
+            CollectionAssert.AreEqual(new[] { "event.deferred" },
+                engine.GetEligibleEventIds(date, relationships, deferredState, new EventRuleContext(1, 1)));
+        }
+
+        [Test]
+        public void LastHistoryEntryWinsForBranchSelection()
+        {
+            EventEngine engine = CreateCrossGenerationEngine();
+            var date = new GameDate(1560, 5, 1);
+
+            var offerLast = new EventRuntimeSaveData
+            {
+                phase = (int)StableGamePhase.Management,
+                committedResultIds = new[] { "result.defer", "result.offer" },
+                history = new[]
+                {
+                    new EventHistorySaveEntry { eventId = "event.root", optionId = "option.root.defer", resultId = "result.defer", year = 1560, month = 4 },
+                    new EventHistorySaveEntry { eventId = "event.root", optionId = "option.root.offer", resultId = "result.offer", year = 1560, month = 5 }
+                }
+            };
+            Assert.That(engine.TryRestoreState(offerLast, date, out EventRuntimeState offerState, out string error),
+                Is.True, error);
+            CollectionAssert.AreEqual(new[] { "event.honored" },
+                engine.GetEligibleEventIds(date, new CharacterRelationships(), offerState, new EventRuleContext(1, 1)));
+
+            var deferLast = new EventRuntimeSaveData
+            {
+                phase = (int)StableGamePhase.Management,
+                committedResultIds = new[] { "result.defer", "result.offer" },
+                history = new[]
+                {
+                    new EventHistorySaveEntry { eventId = "event.root", optionId = "option.root.offer", resultId = "result.offer", year = 1560, month = 4 },
+                    new EventHistorySaveEntry { eventId = "event.root", optionId = "option.root.defer", resultId = "result.defer", year = 1560, month = 5 }
+                }
+            };
+            Assert.That(engine.TryRestoreState(deferLast, date, out EventRuntimeState deferState, out error),
+                Is.True, error);
+            CollectionAssert.AreEqual(new[] { "event.deferred" },
+                engine.GetEligibleEventIds(date, new CharacterRelationships(), deferState, new EventRuleContext(1, 1)));
+        }
+
+        [Test]
+        public void PendingRootStillCommitsAfterHandoff()
+        {
+            EventEngine engine = CreateCrossGenerationEngine();
+            var relationships = new CharacterRelationships();
+            var state = new EventRuntimeState();
+            EventScheduleResult scheduled = engine.ScheduleMonthly(new GameDate(1560, 5, 1), relationships,
+                RandomStateManager.Create(12UL).GetStream(RandomStreamKind.Events), state,
+                new EventRuleContext(0, 0));
+            Assert.That(scheduled.SelectedEventId, Is.EqualTo("event.root"));
+
+            EventChoiceResult committed = engine.TryChooseEventOption("event.root", "option.root.offer",
+                "result.root.after-handoff", new GameDate(1560, 5, 1), relationships, state,
+                new EventRuleContext(1, 0));
+
+            Assert.That(committed.Succeeded, Is.True, committed.Message);
+            Assert.That(state.History.Count, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void SingleFollowUpCandidateSelectsWithoutAmbiguity()
+        {
+            EventEngine engine = CreateCrossGenerationEngine();
+            var relationships = new CharacterRelationships();
+            EventRuntimeState state = CommitRootBranch(engine, "option.root.offer", relationships);
+            var manager = RandomStateManager.Create(13UL);
+
+            EventScheduleResult scheduled = engine.ScheduleMonthly(new GameDate(1560, 6, 1), relationships,
+                manager.GetStream(RandomStreamKind.Events), state, new EventRuleContext(1, 1));
+
+            Assert.That(scheduled.Succeeded, Is.True, scheduled.Message);
+            Assert.That(scheduled.SelectedEventId, Is.EqualTo("event.honored"));
+        }
+
+        private static void AssertRandomStreamsEqual(RandomStateSaveData expected, RandomStateSaveData actual)        {
             Assert.That(actual.streams, Has.Length.EqualTo(expected.streams.Length));
             for (int i = 0; i < expected.streams.Length; i++)
             {

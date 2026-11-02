@@ -1,97 +1,40 @@
-# Sengoku Chronicle — Architecture v0.1
+# 《影之一族》当前架构
 
-> 规划提案，待用户批准；不是已实现架构。目标是为 Phase 1 提供简单边界，避免过早引入框架。
+> 设计权威：[GDD_v4.0.md](GDD_v4.0.md) 第 11 章。旧 Sengoku Chronicle 的 M1–M7 架构与验收材料从“历史实现记录”起保留，不代表新方向需求。
 
-> 历史说明：本文件后续的 Sengoku Chronicle 结构与 M1–M7 实现记录属于已完成旧方向。新方向的目标架构以 [GDD_v4.0.md](GDD_v4.0.md) 第 11 章为准；现有代码需先做复用审计，不能假设旧游戏架构已满足新需求。
+## 当前实现边界
 
-## 《影之一族》目标架构摘要
+- **Presentation**：Unity/uGUI 输入与显示；当前可玩检查点包含月末推进、事件选择和选择结果反馈。游戏规则不由 UI 执行。
+- **Application**：`GameSession` 编排月份推进、存档/恢复和待处理事件；在事件待选时拒绝推进月份。
+- **Domain**：日期与确定性随机流使用普通 C# 状态和规则；保持稳定 ID，不依赖场景对象。
+- **Events**：独立纯 C# 数据模型、内容验证和允许列表事件引擎；从 `Resources/Events` 加载事件 JSON，从 `Resources/Localization` 加载本地化文本；不执行任意脚本。
+- **Persistence**：Unity 内置 `JsonUtility` 与版本化 DTO；保留 v1→v2 迁移和恢复保护；运行状态、随机流和待处理事件在保存时显式映射，不序列化 Unity 对象。
+- **Editor**：FoundationScene 的控件更新使用事务式菜单工具；`.unity`/`.prefab` YAML 不作为手工编辑入口。
+- **测试**：纯逻辑、存档、内容校验与 UI 行为由 Unity Test Framework 覆盖。每次报告分别写明编译、EditMode、场景验证、Console、Play Mode 和用户验收证据。
 
-- 复用唯一现有 Unity 项目和 Git 仓库；当前 Editor 版本为 `6000.6.6f1`。SC-001 是基线审计与对齐，不创建新项目，也不自动升级 Unity。
-- 以单一权威世界状态驱动家族经营、家主角色扮演、事件和回合制战术界面。
-- 将规则和模拟留在纯 C# 核心；Unity 负责显示、输入和表现；以稳定 ID、固定种子随机数、版本化 JSON 存档和 Unity Test Framework 支持复现与验证。
-- 按新计划的 M0–M8 顺序逐步建立模型；在完成架构/数据迁移评估前，旧 FoundationScene、任务、晋升及 UI 只作为可审计的现有资产，不视作新玩法已实现。
+依赖方向：`Presentation → Application → Domain/Events`；`Application ↔ Persistence` 通过显式 DTO 映射；静态 JSON 内容经验证后由事件系统消费。
 
-## 目标与约束
+## 当前 checkpoint
 
-Windows 单机 RPG，Unity 6000.6.6f1、URP 17.6.0、C#。UI 使用 uGUI；核心模拟/规则尽量用普通 C#；静态定义优先 ScriptableObject，运行时状态与存档 DTO 分离。不得为架构而架构；优先稳定 ID、少量接口和可独立测试的纯逻辑。
+SC-004–SC-009 已随 `demo-SC004-SC009` 推送到 `main`，并获用户 Edit Mode 与 Play Test 验收。SC-010 以提交 `af35633`、标签 `demo-SC010` 获用户验收。SC-011 已于 2026-11-02 获用户验收：用户报告编译通过、EditMode passed、Console 无错误及 Play Test 通过；EditMode 数量、Console 警告数未提供，`FoundationSceneValidator` 结果未报告。上述 SC-011 结果是用户报告，不是本协调过程取得的 Editor 日志。其余项目证据及旧序列化位置见 [PROJECT_STATE.md](PROJECT_STATE.md)。
 
-## 建议目录（待实施时按现有项目结构核实）
+## SC-011 事件规则扩展
 
-```text
-Assets/
-  Scripts/
-    Presentation/       # MonoBehaviour、uGUI 绑定、地图点击与界面呈现
-    Application/        # GameSession、用例编排、系统间流程
-    Domain/             # WorldClock、运行时模型、任务条件/效果及规则（纯 C#）
-    Definitions/        # 静态定义类型、加载/引用约定；资产建议在 Assets/GameData/
-    Persistence/        # 版本化 DTO、JSON 编解码、存档槽读写与迁移
-    Editor/             # 仅用于受支持的 Unity Editor 自动化
-  GameData/             # ScriptableObject 定义资产
-  Scenes/               # 场景；避免自动化直接改 YAML
-  Tests/
-    EditMode/           # 纯 C# 规则与数据验证测试
-    PlayMode/           # 必要时验证 Unity 对象/UI 集成
-```
+- `EventRuleContext` 是只读值类型，携带 SC-010 的原始 `SuccessionCount` 与“已落定”计数（仅在 `SuccessionPhase.None` 时等于原始计数）。
+- `EventEngine` 新增三种允许列表条件：`EventOptionChosen` 读取追加式 `History` 的最后一条同源事件记录；`SuccessionCountEquals` 与 `SettledSuccessionCountAtLeast` 是仅在下月排程时检查的 offer-time gate。提交已排队事件时跳过这两种继承门，确保稳定决策不会因之后换家主而无法结算。
+- `GameSession.BuildEventRuleContext()` 是唯一把 SC-010 继承状态转换为事件规则上下文的位置；事件仍只写入家族级 NPC `CharacterRelationships`，不冒充 `PersonId` 私人关系。
+- 事件目录与文本内容版本升为 `2`；存档 schema 仍为 `3`，只增加内容 `1 → 2` 的单向附加兼容窗口。资源文件名保持不变。
 
-项目目前已有 `Assets/Scripts/Player/PlayerMovement2D.cs`、`Assets/Scenes/SampleScene.unity` 和 Input System 设置。保留移动脚本与 `.meta`/GUID；Phase 1 暂不把角色移动接入可步行场景。上述目录为建议结构，不能在规划阶段预建代码或移动现有文件。
+## 下一项
 
-## 系统职责与数据流
-
-1. **Presentation（Unity/uGUI）**：显示地图、日期、城镇菜单、对话和任务反馈；把点击转为应用层请求；不承载任务奖励/月份等规则。
-2. **Application（流程编排）**：`GameSession` 管理当前运行状态并协调用例；校验输入后调用规则，再通知界面刷新。建议以简单明确的方法/事件连接，只有当需要替换实现或测试隔离时再引入接口。
-3. **Domain（纯 C# 规则）**：`WorldClock` 与月份推进、地点连接/旅行时间推进、关系变化、任务状态/奖励领取规则。避免依赖 `MonoBehaviour`、场景对象或 UI。
-4. **Definitions（静态内容）**：地点、角色、势力、任务等 ScriptableObject 定义；每条定义含稳定 ID。引用优先按 ID/受校验定义引用，加载时检测重复/缺失 ID。
-5. **Runtime state（可变状态）**：日期、当前地点、人物关系、任务进度、已领取奖励等普通 C# 状态；不修改静态定义资产来存进度。
-6. **Persistence（存档）**：把运行状态显式映射到带 `saveFormatVersion` 的 DTO，再序列化到一个槽；加载时校验版本/数据并重建运行状态。存档格式不直接序列化 Unity 对象、`MonoBehaviour` 或 ScriptableObject 引用。
-
-**数据流：** uGUI 输入 → 应用层用例 → 纯 C# 规则修改运行状态 → 应用层返回结果/状态变化 → uGUI 刷新；存档请求由应用层取当前状态生成 DTO 并经 Persistence 写入。
-
-## 关键概念/接口（建议，不表示现有代码）
-
-- `GameSession`：启动新局、持有/提供运行状态、协调时间/移动/对话/任务/存档用例。
-- `WorldClock`：初始日期为 1560-04-01；每次推进一天；使用简化前推公历，正确处理月份与年份切换。M1 以 EditMode 边界测试验证。
-- `LocationDefinition`、`CharacterDefinition`、`FactionDefinition`、`MissionDefinition`：静态定义及稳定 ID。
-- `WorldState`：可变世界状态集合；不向 UI 暴露修改内部状态的任意入口。
-- `MissionState`：单任务运行进度、完成与奖励领取状态；领奖操作必须幂等/重复领取无效。
-- `SaveData`：DTO 根对象，含 `saveFormatVersion` 与所需运行状态。
-
-避免一开始建设通用事件总线或脚本语言。任务条件/效果采用受限、可枚举的数据类型，先覆盖本阶段需要的条件与效果；未知类型应安全失败并有诊断，不执行任意代码。
-
-## 依赖方向
-
-```text
-Presentation → Application → Domain
-Definitions ───────────────→ Application/Domain（只读静态数据）
-Persistence ↔ Application（DTO 映射边界），Persistence 不反向依赖 UI
-```
-
-Unity 类型留在表现/定义/持久化适配边界；规则程序集可在后续需要时通过 asmdef 隔离，但 Phase 1 初期不强制增加程序集复杂度。
-
-## 测试与验证
-
-- EditMode：M1 验证日期递增、月末到下月首日、12 月 31 日到次年 1 月 1 日；后续阶段再验证旅行、关系、任务奖励与存档 DTO。
-- PlayMode/Editor：地图点击触发正确路线与日期变化；城镇菜单/对话可操作；存档后加载恢复重点状态。
-- QA 报告须区分 C# 编译、EditMode、PlayMode 与人工验证；未实际运行的检查不得报通过。
-
-## 存档策略
-
-单槽，格式版本字段必需；Phase 1 只保存恢复当前演示所需的最小状态。M5 实现为独立 `SengokuChronicle.Persistence` 程序集：`SaveData`（`saveFormatVersion = 1`）只含日期、地点、三个任务阶段和 NPC 关系值；任务 merit 不写入存档，而由任务阶段推导，避免重复领奖。序列化使用 Unity 内置 `JsonUtility`，单槽位于 `<Application.persistentDataPath>/SengokuChronicle/save-slot-1.json`。保存先写同目录临时文件，再用 `File.Replace`/`File.Move` 原子替换；任何失败都保留原槽。读取区分未找到、读取失败、JSON 损坏、版本不支持、数据无效，并以结果对象返回错误；加载前先校验，全部替换状态在局部构造完成后再一次性赋给 `GameSession`，失败不改变运行状态。稳定 ID 用于跨运行时引用；迁移策略仍留待未来版本，不预先增加依赖。
-
-## 重要技术决策
-
-- 使用 uGUI；城镇先用菜单；世界地图地点点击旅行。
-- 规则与可变状态用普通 C#；静态内容用 ScriptableObject；存档使用独立版本化 DTO。
-- 保留 `PlayerMovement2D.cs` 原样，不将其接入 Phase 1。
-- 优先 Unity Editor 脚本和受支持 API 创建场景/Prefab；避免直接编辑 `.unity`/`.prefab` YAML，保持 `.meta`/GUID。
-- 不安装新包、不加框架，除非有经评估且批准的明确需求。
-
-## M4a 实现：补给短缺任务
+SC-011 跨代事件链已获用户验收并进入 `demo-SC011` checkpoint。下一项为 SC-012 家族编年史。SC-003 家族模型的工作区改动未纳入本 checkpoint；开始新工作前须检查并保留。
+## 历史实现记录：M4a 补给短缺任务（旧方向）
 
 M4a 采用固定任务模型，不引入通用任务图、事件总线或任务编辑器。`SupplyShortageMission` 在 Domain 层用普通 C# 管理阶段与 merit；`GameSession` 根据当前地点协调显式用例；uGUI 任务面板只显示进度并转发操作。流程为 `NotAccepted → Accepted → Investigated → Negotiated → RewardClaimed`：清洲接受任务、热田调查并与黑田伊织交涉、返回清洲报告；有效报告恰好增加 10 merit，后续报告不会重复奖励。任务操作不推进日期或地点，新局会重置任务和 merit。
 
 该阶段复用现有 Atsuta NPC 黑田伊织，不增加角色定义。任务状态当前属于运行时状态；存档与恢复仍留待 M5。FoundationScene 的 UI 更新由经过预检与验证的 Unity Editor 更新器完成，不直接编辑场景 YAML。M4a 不增加包、资产或第三方运行时代码。
 
-## M1 架构概览（已落地）
+## 历史实现记录：M1 架构概览（旧方向）
 
 > 实现日期：2026-10-20；Kanban 卡片 t_6ec3a019。分层 + asmdef 隔离：Presentation → Application → Domain；EditMode 测试程序集引用 Domain + Application。
 
@@ -134,13 +77,13 @@ M4a 采用固定任务模型，不引入通用任务图、事件总线或任务�
 6. 点击 Play 按钮，观察日期显示为 `1560-04-01`，点击「推进一天」按钮后日期递增。
 7. 如行为符合预期，批准本卡并建立 checkpoint commit。
 
-## M4b 实现：两项固定 Phase 1 任务
+## 历史实现记录：M4b 两项固定 Phase 1 任务（旧方向）
 
 M4b 在 M4a 的固定 C# 模式上增加 `SealedLetterMission` 与 `MarketTallyMission`。各自持有明确阶段并在最终有效动作时一次性增加 5 merit；`GameSession.Merit` 汇总三项固定任务的已领取奖励。新局重置两个新模型。uGUI 保留 M4a 默认页，并通过页签切换到两项 M4b 任务行；固定根对象维持 280×240，不遮挡城镇标题、NPC 或返回按钮。Unity Editor 更新器在一个 Undo 组中增量添加控件并调整 M4a 按钮，验证引用、布局和相邻控件间距后才保存。任务动作不推进日期或地点；旅行仍由 `ConfirmTravel` 独立校验和推进。没有新增通用任务框架、外部 package、NPC 或存档逻辑；持久化仍属于 M5。
 
-## M5/M6 实现：存档槽与标题封装
+## 历史实现记录：M5/M6 存档槽与标题封装（旧方向）
 
 M5 增加 `SengokuChronicle.Persistence`（`SaveData` v1、校验器、原子单槽存储）与 `GameSession.CaptureSave/TryApplySave/SaveTo/LoadFrom`，地图界面加入 `M5SaveLoadRoot`；merit 由任务阶段推导、不入档，读档不可能重复领奖。M6 在同一分支上增加标题封装：`TitleScreenController`（Presentation）以 `Canvas/M6TitleRoot` 全屏不透明、raycast-blocking 覆盖层门控 Play Mode 启动，「新游戏」调用 `InitNewGame`，「继续」走与 M5 相同的原子 `LoadFrom` 路径，失败仅提示不改状态；`GameSession.IsDemoComplete` 为纯域规则，`DemoSummaryPanel` 只做展示轮询。两个根（标题根与地图内 `M6DemoSummaryText`）在保存的场景中均为 inactive，由运行时激活；标题根必须是 Canvas 中地图根之后的最后一个兄弟以保证覆盖渲染次序。场景集成沿用同一事务式更新器模式（`AddM6TitleScreen`），Validator 报告唯一层级、绑定、包含与分离检查。
-## M7 实现：功名晋升（Phase 2 起点）
+## 历史实现记录：M7 功名晋升（旧方向 Phase 2）
 
 M7 引入 `Domain/PromotionRules`：以升序不可变阈值表把 `GameSession.Merit` 映射到四个游戏化军阶（足轻0、番头5、组头10、武士头20；为简化成长标签，不代表史实官职）。军阶是纯派生值：`GameSession.Rank/RankName` 不新增状态、不写入存档，读档无法伪造或重复晋升。`Presentation/RankPanel` 与 `DemoSummaryPanel` 同模式（幂等 `Refresh()` + Update 轮询，规则本体留在 Domain）。场景集成沿用事务式更新器模式（`AddM7RankPanel`）：`M7RankText` 插在 `TownMenuRoot` 之前，验证包含性与对既有地图/M5/M6 控件的分离后才保存。Phase 1 满功绩 20 恰达最高阶，作为演示完美收尾；Phase 2 后续内容（更多 merit 来源或更高层阶）须另行立项。

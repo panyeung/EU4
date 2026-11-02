@@ -45,6 +45,8 @@ namespace SengokuChronicle.Events
 
             var eventById = new Dictionary<string, EventDefinitionData>(StringComparer.Ordinal);
             var optionIds = new HashSet<string>(StringComparer.Ordinal);
+            var branchPairOwners = new Dictionary<string, string>(StringComparer.Ordinal);
+            var sourceReferences = new List<SourceBranchReference>();
             for (int i = 0; i < catalog.events.Length; i++)
             {
                 EventDefinitionData definition = catalog.events[i];
@@ -74,8 +76,33 @@ namespace SengokuChronicle.Events
 
                 if (definition.conditions != null)
                 {
+                    int historyConditionCount = 0;
                     for (int conditionIndex = 0; conditionIndex < definition.conditions.Length; conditionIndex++)
-                        ValidateCondition(definition.conditions[conditionIndex], definition.eventId, conditionIndex, errors);
+                    {
+                        EventConditionData condition = definition.conditions[conditionIndex];
+                        ValidateCondition(condition, definition, conditionIndex, errors);
+                        if (condition == null ||
+                            !TryEnum(condition.type, out EventConditionKind kind) ||
+                            kind != EventConditionKind.EventOptionChosen)
+                            continue;
+
+                        historyConditionCount++;
+                        if (historyConditionCount > 1)
+                            errors.Add($"Event {definition.eventId} has more than one EventOptionChosen condition.");
+                        if (string.IsNullOrWhiteSpace(condition.sourceEventId) ||
+                            string.IsNullOrWhiteSpace(condition.sourceOptionId))
+                            continue;
+
+                        string pairKey = condition.sourceEventId + "\u001f" + condition.sourceOptionId;
+                        if (branchPairOwners.TryGetValue(pairKey, out string owner))
+                            errors.Add($"Events {owner} and {definition.eventId} both claim root branch " +
+                                       $"{condition.sourceEventId}/{condition.sourceOptionId}.");
+                        else
+                            branchPairOwners.Add(pairKey, definition.eventId);
+
+                        sourceReferences.Add(new SourceBranchReference(definition.eventId, definition.chainId,
+                            condition.sourceEventId, condition.sourceOptionId, conditionIndex));
+                    }
                 }
 
                 if (definition.options == null || definition.options.Length == 0)
@@ -130,8 +157,42 @@ namespace SengokuChronicle.Events
                     !ContainsChainEvent(catalog.chains, definition.chainId, definition.eventId))
                     errors.Add($"Event {definition.eventId} references an unknown chain or is not linked by {definition.chainId}.");
             }
+            ValidateSourceBranches(sourceReferences, eventById, errors);
 
             return new EventCatalogValidationResult(errors);
+        }
+
+        /// <summary>
+        /// Source-reference checks run only after every event is registered, so a
+        /// condition may point at an event defined later in the array.
+        /// </summary>
+        private static void ValidateSourceBranches(List<SourceBranchReference> references,
+            Dictionary<string, EventDefinitionData> eventById, List<string> errors)
+        {
+            foreach (SourceBranchReference reference in references)
+            {
+                if (!eventById.TryGetValue(reference.SourceEventId, out EventDefinitionData source))
+                {
+                    errors.Add($"Event {reference.EventId} condition {reference.Index} references an unknown source event " +
+                               $"{reference.SourceEventId}.");
+                    continue;
+                }
+                if (string.Equals(reference.EventId, reference.SourceEventId, StringComparison.Ordinal))
+                {
+                    errors.Add($"Event {reference.EventId} condition {reference.Index} cannot reference itself.");
+                    continue;
+                }
+                if (!ContainsOption(source, reference.SourceOptionId))
+                {
+                    errors.Add($"Event {reference.EventId} condition {reference.Index} references an unknown source option " +
+                               $"{reference.SourceOptionId}.");
+                    continue;
+                }
+                if (string.IsNullOrWhiteSpace(reference.ChainId) ||
+                    !string.Equals(reference.ChainId, source.chainId, StringComparison.Ordinal))
+                    errors.Add($"Event {reference.EventId} condition {reference.Index} must share the source event's chain " +
+                               $"{source.chainId ?? "(null)"}.");
+            }
         }
 
         private static Dictionary<string, EventTextEntry> ValidateText(EventTextCatalog text, List<string> errors)
@@ -159,8 +220,10 @@ namespace SengokuChronicle.Events
             return entries;
         }
 
-        private static void ValidateCondition(EventConditionData condition, string eventId, int index, List<string> errors)
+        private static void ValidateCondition(EventConditionData condition, EventDefinitionData definition,
+            int index, List<string> errors)
         {
+            string eventId = definition.eventId;
             if (condition == null || !TryEnum(condition.type, out EventConditionKind kind))
             {
                 errors.Add($"Event {eventId} condition {index} has an unsupported type.");
@@ -173,6 +236,25 @@ namespace SengokuChronicle.Events
                 if (condition.threshold < CharacterRelationships.MinimumValue ||
                     condition.threshold > CharacterRelationships.MaximumValue)
                     errors.Add($"Event {eventId} condition {index} has an out-of-range threshold.");
+                return;
+            }
+            if (kind == EventConditionKind.EventOptionChosen)
+            {
+                if (string.IsNullOrWhiteSpace(condition.sourceEventId))
+                    errors.Add($"Event {eventId} condition {index} has an empty sourceEventId.");
+                if (string.IsNullOrWhiteSpace(condition.sourceOptionId))
+                    errors.Add($"Event {eventId} condition {index} has an empty sourceOptionId.");
+                if (!string.Equals(definition.onceScope, nameof(EventOnceScope.PerGame), StringComparison.Ordinal))
+                    errors.Add($"Event {eventId} condition {index} requires onceScope PerGame.");
+                return;
+            }
+            if (kind == EventConditionKind.SuccessionCountEquals ||
+                kind == EventConditionKind.SettledSuccessionCountAtLeast)
+            {
+                if (condition.threshold < 0 || condition.threshold > 1000)
+                    errors.Add($"Event {eventId} condition {index} has an out-of-range succession threshold.");
+                if (!string.Equals(definition.trigger, nameof(EventTriggerKind.Monthly), StringComparison.Ordinal))
+                    errors.Add($"Event {eventId} condition {index} is only allowed on Monthly events.");
             }
         }
 
@@ -259,6 +341,15 @@ namespace SengokuChronicle.Events
             return false;
         }
 
+        private static bool ContainsOption(EventDefinitionData definition, string optionId)
+        {
+            if (definition == null || definition.options == null) return false;
+            foreach (EventOptionData option in definition.options)
+                if (option != null && string.Equals(option.optionId, optionId, StringComparison.Ordinal))
+                    return true;
+            return false;
+        }
+
         private static void RequireText(Dictionary<string, EventTextEntry> text, string textId,
             string owner, List<string> errors)
         {
@@ -280,6 +371,25 @@ namespace SengokuChronicle.Events
                 return true;
             parsed = default;
             return false;
+        }
+
+        private readonly struct SourceBranchReference
+        {
+            public SourceBranchReference(string eventId, string chainId, string sourceEventId,
+                string sourceOptionId, int index)
+            {
+                EventId = eventId;
+                ChainId = chainId;
+                SourceEventId = sourceEventId;
+                SourceOptionId = sourceOptionId;
+                Index = index;
+            }
+
+            public string EventId { get; }
+            public string ChainId { get; }
+            public string SourceEventId { get; }
+            public string SourceOptionId { get; }
+            public int Index { get; }
         }
     }
 }

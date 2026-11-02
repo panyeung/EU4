@@ -362,7 +362,9 @@ namespace SengokuChronicle.Application
                 return InvalidSave("存档日期无效。");
             if (_eventEngine == null)
                 return InvalidSave(string.IsNullOrEmpty(LastEventMessage) ? "事件目录不可用。" : LastEventMessage);
-            if (_eventCatalog == null || data.eventContentVersion != _eventCatalog.contentVersion)
+            if (_eventCatalog == null ||
+                (data.eventContentVersion != _eventCatalog.contentVersion &&
+                 !(data.eventContentVersion == 1 && _eventCatalog.contentVersion == 2)))
                 return InvalidSave("存档事件内容版本与当前目录不匹配。");
             if (!_eventEngine.TryRestoreState(data.eventRuntime, date,
                     out EventRuntimeState eventRuntime, out string eventError))
@@ -590,13 +592,24 @@ namespace SengokuChronicle.Application
                 ? WorldClock.CurrentDate
                 : SengokuChronicle.Domain.WorldClock.NewGameDate;
             EventChoiceResult result = _eventEngine.TryChooseEventOption(eventId, optionId, committedResultId,
-                currentDate, _relationships, _eventRuntimeState);
+                currentDate, _relationships, _eventRuntimeState, BuildEventRuleContext());
             if (result.Succeeded)
             {
                 LastEventMessage = result.Feedback;
                 SessionStateChanged?.Invoke();
             }
             return result;
+        }
+
+        /// <summary>
+        /// Snapshot the SC-010 succession facts used by event offer gates. Settled count is
+        /// the raw count only while no succession decision, regency, or extinction owns play.
+        /// </summary>
+        private EventRuleContext BuildEventRuleContext()
+        {
+            SuccessionState succession = Succession;
+            int settled = succession.Phase == SuccessionPhase.None ? succession.SuccessionCount : 0;
+            return new EventRuleContext(succession.SuccessionCount, settled);
         }
 
         /// <summary>Creates an idempotent event-result ID from stable content and current game date.</summary>
@@ -726,7 +739,7 @@ namespace SengokuChronicle.Application
             RandomStateSaveData rngBefore = _randomStateManager.CaptureState();
             EventRuntimeState nextRuntime = _eventRuntimeState.Clone();
             EventScheduleResult schedule = _eventEngine.ScheduleMonthly(nextDate, _relationships,
-                _randomStateManager.GetStream(RandomStreamKind.Events), nextRuntime);
+                _randomStateManager.GetStream(RandomStreamKind.Events), nextRuntime, BuildEventRuleContext());
             if (!schedule.Succeeded)
             {
                 RandomStateManager.TryRestore(rngBefore, out _randomStateManager);

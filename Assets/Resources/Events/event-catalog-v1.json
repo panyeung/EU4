@@ -1,16 +1,22 @@
 {
-  "contentVersion": 1,
+  "contentVersion": 2,
   "chains": [
     {
       "chainId": "chain.rainy-arrival",
-      "linkedEventIds": [ "event.rainy-arrival" ]
+      "linkedEventIds": [
+        "event.rainy-arrival",
+        "event.rainy-arrival.legacy-honored",
+        "event.rainy-arrival.legacy-deferred"
+      ]
     }
   ],
   "events": [
     {
       "eventId": "event.rainy-arrival",
       "trigger": "Monthly",
-      "conditions": [ { "type": "Always" } ],
+      "conditions": [
+        { "type": "SuccessionCountEquals", "threshold": 0 }
+      ],
       "weight": 10,
       "textId": "event.rainy-arrival",
       "options": [
@@ -45,6 +51,112 @@
       "onceScope": "PerGame",
       "chainId": "chain.rainy-arrival",
       "priority": 10
+    },
+    {
+      "eventId": "event.rainy-arrival.legacy-honored",
+      "trigger": "Monthly",
+      "conditions": [
+        {
+          "type": "EventOptionChosen",
+          "sourceEventId": "event.rainy-arrival",
+          "sourceOptionId": "option.rainy-arrival.offer-rest"
+        },
+        { "type": "SettledSuccessionCountAtLeast", "threshold": 1 }
+      ],
+      "weight": 1,
+      "textId": "event.rainy-arrival.legacy-honored",
+      "options": [
+        {
+          "optionId": "option.legacy-honored.renew",
+          "textId": "option.legacy-honored.renew",
+          "summaryTextId": "summary.legacy-honored.renew",
+          "requirements": [ { "type": "Always" } ],
+          "effects": [
+            {
+              "type": "RelationshipDelta",
+              "targetCharacterId": "npc.kuroda.iori",
+              "delta": 5
+            }
+          ]
+        },
+        {
+          "optionId": "option.legacy-honored.terms",
+          "textId": "option.legacy-honored.terms",
+          "summaryTextId": "summary.legacy-honored.terms",
+          "requirements": [ { "type": "Always" } ],
+          "effects": []
+        },
+        {
+          "optionId": "option.legacy-honored.close",
+          "textId": "option.legacy-honored.close",
+          "summaryTextId": "summary.legacy-honored.close",
+          "requirements": [ { "type": "Always" } ],
+          "effects": [
+            {
+              "type": "RelationshipDelta",
+              "targetCharacterId": "npc.kuroda.iori",
+              "delta": -5
+            }
+          ]
+        }
+      ],
+      "cooldownMonths": 0,
+      "onceScope": "PerGame",
+      "chainId": "chain.rainy-arrival",
+      "priority": 100
+    },
+    {
+      "eventId": "event.rainy-arrival.legacy-deferred",
+      "trigger": "Monthly",
+      "conditions": [
+        {
+          "type": "EventOptionChosen",
+          "sourceEventId": "event.rainy-arrival",
+          "sourceOptionId": "option.rainy-arrival.ask-tomorrow"
+        },
+        { "type": "SettledSuccessionCountAtLeast", "threshold": 1 }
+      ],
+      "weight": 1,
+      "textId": "event.rainy-arrival.legacy-deferred",
+      "options": [
+        {
+          "optionId": "option.legacy-deferred.atone",
+          "textId": "option.legacy-deferred.atone",
+          "summaryTextId": "summary.legacy-deferred.atone",
+          "requirements": [ { "type": "Always" } ],
+          "effects": [
+            {
+              "type": "RelationshipDelta",
+              "targetCharacterId": "npc.kuroda.iori",
+              "delta": 5
+            }
+          ]
+        },
+        {
+          "optionId": "option.legacy-deferred.explain",
+          "textId": "option.legacy-deferred.explain",
+          "summaryTextId": "summary.legacy-deferred.explain",
+          "requirements": [ { "type": "Always" } ],
+          "effects": []
+        },
+        {
+          "optionId": "option.legacy-deferred.dismiss",
+          "textId": "option.legacy-deferred.dismiss",
+          "summaryTextId": "summary.legacy-deferred.dismiss",
+          "requirements": [ { "type": "Always" } ],
+          "effects": [
+            {
+              "type": "RelationshipDelta",
+              "targetCharacterId": "npc.kuroda.iori",
+              "delta": -5
+            }
+          ]
+        }
+      ],
+      "cooldownMonths": 0,
+      "onceScope": "PerGame",
+      "chainId": "chain.rainy-arrival",
+      "priority": 100
     }
   ]
 }

@@ -99,14 +99,14 @@ namespace SengokuChronicle.Events
 
         /// <summary>Returns the eligible IDs in priority-descending, ordinal-ID order.</summary>
         public IReadOnlyList<string> GetEligibleEventIds(GameDate date, CharacterRelationships relationships,
-            EventRuntimeState state)
+            EventRuntimeState state, EventRuleContext context = default)
         {
-            List<EventDefinitionData> candidates = GetEligibleEvents(date, relationships, state);
+            List<EventDefinitionData> candidates = GetEligibleEvents(date, relationships, state, context);
             return candidates.Select(candidate => candidate.eventId).ToArray();
         }
 
         public EventScheduleResult ScheduleMonthly(GameDate date, CharacterRelationships relationships,
-            DeterministicRandomStream eventRandom, EventRuntimeState state)
+            DeterministicRandomStream eventRandom, EventRuntimeState state, EventRuleContext context = default)
         {
             if (!IsReady)
                 return ScheduleFailure(ValidationMessage);
@@ -115,7 +115,7 @@ namespace SengokuChronicle.Events
             if (state.HasPendingEvents || state.Phase != StableGamePhase.Management)
                 return ScheduleFailure("A pending event must be resolved before another month is processed.");
 
-            List<EventDefinitionData> candidates = GetEligibleEvents(date, relationships, state);
+            List<EventDefinitionData> candidates = GetEligibleEvents(date, relationships, state, context);
             if (candidates.Count == 0)
                 return new EventScheduleResult(true, string.Empty, string.Empty);
 
@@ -161,7 +161,8 @@ namespace SengokuChronicle.Events
         }
 
         public EventChoiceResult TryChooseEventOption(string eventId, string optionId, string committedResultId,
-            GameDate currentDate, CharacterRelationships relationships, EventRuntimeState state)
+            GameDate currentDate, CharacterRelationships relationships, EventRuntimeState state,
+            EventRuleContext context = default)
         {
             if (!IsReady)
                 return ChoiceFailure(eventId, optionId, committedResultId, ValidationMessage);
@@ -172,7 +173,7 @@ namespace SengokuChronicle.Events
                 return ChoiceFailure(eventId, optionId, committedResultId, "事件结果 ID 为空或已经提交。");
             if (!TryFindOption(eventId, optionId, out EventDefinitionData definition, out EventOptionData option))
                 return ChoiceFailure(eventId, optionId, committedResultId, "事件或选项 ID 无效。");
-            if (!AreConditionsMet(definition, relationships))
+            if (!AreConditionsMet(definition, relationships, state, context, false))
                 return ChoiceFailure(eventId, optionId, committedResultId, "事件条件已经失效，状态保持不变。");
             if (!AreRequirementsMet(option, relationships, out string requirementReason))
                 return ChoiceFailure(eventId, optionId, committedResultId,
@@ -270,7 +271,7 @@ namespace SengokuChronicle.Events
         }
 
         private List<EventDefinitionData> GetEligibleEvents(GameDate date, CharacterRelationships relationships,
-            EventRuntimeState state)
+            EventRuntimeState state, EventRuleContext context)
         {
             var candidates = new List<EventDefinitionData>();
             if (!IsReady || !date.IsValid || relationships == null || state == null || state.HasPendingEvents ||
@@ -283,7 +284,7 @@ namespace SengokuChronicle.Events
                 if (!string.Equals(definition.trigger, nameof(EventTriggerKind.Monthly), StringComparison.Ordinal) ||
                     state.IsOnCooldown(definition.eventId, monthIndex) ||
                     (ParseOnceScope(definition.onceScope) == EventOnceScope.PerGame && state.HasOccurredOnce(definition.eventId)) ||
-                    !AreConditionsMet(definition, relationships))
+                    !AreConditionsMet(definition, relationships, state, context, true))
                     continue;
                 candidates.Add(definition);
             }
@@ -295,7 +296,14 @@ namespace SengokuChronicle.Events
             return candidates;
         }
 
-        private bool AreConditionsMet(EventDefinitionData definition, CharacterRelationships relationships)
+        /// <summary>
+        /// Evaluates allowlisted event conditions. History conditions are re-checked at
+        /// commit because committed history never changes. Succession-count conditions are
+        /// offer-time gates only (<paramref name="evaluateSuccessionGates"/> false at
+        /// commit), so a stable pending event stays resolvable after a later head change.
+        /// </summary>
+        private bool AreConditionsMet(EventDefinitionData definition, CharacterRelationships relationships,
+            EventRuntimeState state, EventRuleContext context, bool evaluateSuccessionGates)
         {
             if (definition.conditions == null) return true;
             foreach (EventConditionData condition in definition.conditions)
@@ -308,10 +316,42 @@ namespace SengokuChronicle.Events
                     RelationshipResult relationship = relationships.TryGet(id);
                     if (!relationship.Succeeded || relationship.CurrentValue < condition.threshold) return false;
                 }
+                else if (string.Equals(condition.type, nameof(EventConditionKind.EventOptionChosen), StringComparison.Ordinal))
+                {
+                    if (!HasLastChosenOption(state, condition.sourceEventId, condition.sourceOptionId)) return false;
+                }
+                else if (string.Equals(condition.type, nameof(EventConditionKind.SuccessionCountEquals), StringComparison.Ordinal))
+                {
+                    if (evaluateSuccessionGates && context.SuccessionCount != condition.threshold) return false;
+                }
+                else if (string.Equals(condition.type, nameof(EventConditionKind.SettledSuccessionCountAtLeast), StringComparison.Ordinal))
+                {
+                    if (evaluateSuccessionGates && context.SettledSuccessionCount < condition.threshold) return false;
+                }
                 else
                     return false;
             }
             return true;
+        }
+
+        /// <summary>
+        /// True only when the last committed history entry for the source event used the
+        /// requested option. History is append-only, so "last" is deterministic.
+        /// </summary>
+        private static bool HasLastChosenOption(EventRuntimeState state, string sourceEventId, string sourceOptionId)
+        {
+            if (state == null || string.IsNullOrWhiteSpace(sourceEventId) ||
+                string.IsNullOrWhiteSpace(sourceOptionId))
+                return false;
+            IReadOnlyList<EventHistorySaveEntry> history = state.History;
+            for (int i = history.Count - 1; i >= 0; i--)
+            {
+                EventHistorySaveEntry entry = history[i];
+                if (entry == null || !string.Equals(entry.eventId, sourceEventId, StringComparison.Ordinal))
+                    continue;
+                return string.Equals(entry.optionId, sourceOptionId, StringComparison.Ordinal);
+            }
+            return false;
         }
 
         private static bool AreRequirementsMet(EventOptionData option, CharacterRelationships relationships,

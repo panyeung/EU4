@@ -31,6 +31,8 @@ namespace SengokuChronicle.Events
         public string type;
         public string targetCharacterId;
         public int threshold;
+        public string sourceEventId;
+        public string sourceOptionId;
     }
 
     [Serializable]
@@ -90,7 +92,13 @@ namespace SengokuChronicle.Events
     public enum EventConditionKind
     {
         Always = 1,
-        RelationshipAtLeast = 2
+        RelationshipAtLeast = 2,
+        /// <summary>The last committed history entry for <c>sourceEventId</c> used <c>sourceOptionId</c>.</summary>
+        EventOptionChosen = 3,
+        /// <summary>The raw succession count equals <c>threshold</c>; offer-time only.</summary>
+        SuccessionCountEquals = 4,
+        /// <summary>The settled succession count is at least <c>threshold</c>; offer-time only.</summary>
+        SettledSuccessionCountAtLeast = 5
     }
 
     public enum EventRequirementKind
@@ -121,5 +129,20 @@ namespace SengokuChronicle.Events
         public const string OfferRestTextId = "option.rainy-arrival.offer-rest";
         public const string AskTomorrowTextId = "option.rainy-arrival.ask-tomorrow";
         public const string OfferRestSummaryTextId = "summary.rainy-arrival.offer-rest";
+    }
+
+    /// <summary>Stable IDs for the SC-011 cross-generation follow-up encounter variants.</summary>
+    public static class SC011EventIds
+    {
+        public const string LegacyHonoredEventId = "event.rainy-arrival.legacy-honored";
+        public const string LegacyDeferredEventId = "event.rainy-arrival.legacy-deferred";
+
+        public const string LegacyHonoredRenewOptionId = "option.legacy-honored.renew";
+        public const string LegacyHonoredTermsOptionId = "option.legacy-honored.terms";
+        public const string LegacyHonoredCloseOptionId = "option.legacy-honored.close";
+
+        public const string LegacyDeferredAtoneOptionId = "option.legacy-deferred.atone";
+        public const string LegacyDeferredExplainOptionId = "option.legacy-deferred.explain";
+        public const string LegacyDeferredDismissOptionId = "option.legacy-deferred.dismiss";
     }
 }

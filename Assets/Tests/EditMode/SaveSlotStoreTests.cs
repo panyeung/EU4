@@ -247,6 +247,8 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(loaded.Data.relationships[0].value, Is.EqualTo(10));
             Assert.That(RandomStateManager.TryRestore(loaded.Data.randomState, out _), Is.True);
             Assert.That(loaded.Data.eventRuntime.pendingEventIds, Is.Empty);
+            Assert.That(loaded.Data.eventContentVersion, Is.EqualTo(SaveData.CurrentEventContentVersion),
+                "a v1 payload without content metadata migrates to the current content version");
             Assert.That(File.ReadAllText(_store.FilePath), Is.EqualTo(legacyJson));
         }
 
@@ -329,6 +331,35 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
+        public void Load_V2MissingEventContentVersion_IsRejected()
+        {
+            Directory.CreateDirectory(_directory);
+            File.WriteAllText(_store.FilePath, V2Json(includeEventContentVersion: false));
+
+            SaveLoadResult loaded = _store.Load();
+
+            Assert.That(loaded.Succeeded, Is.False);
+            Assert.That(loaded.Error, Is.EqualTo(SaveErrorCode.InvalidData));
+            Assert.That(loaded.Message, Does.Contain("版本元数据"));
+        }
+
+        [Test]
+        public void Load_V2ContentVersionOneMigratesWithoutRewritingSource()
+        {
+            Directory.CreateDirectory(_directory);
+            string legacyJson = V2Json();
+            File.WriteAllText(_store.FilePath, legacyJson);
+
+            SaveLoadResult loaded = _store.Load();
+
+            Assert.That(loaded.Succeeded, Is.True, loaded.Message);
+            Assert.That(loaded.Data.saveFormatVersion, Is.EqualTo(SaveDataValidator.CurrentVersion));
+            Assert.That(loaded.Data.eventContentVersion, Is.EqualTo(1),
+                "the v2 content version is preserved for the explicit 1 -> 2 additive load window");
+            Assert.That(File.ReadAllText(_store.FilePath), Is.EqualTo(legacyJson));
+        }
+
+        [Test]
         public void Save_SerializedTempMissingRuntimeStateIsRejected()
         {
             var missingStateStore = new SaveSlotStore(_directory,
@@ -377,13 +408,13 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         private static string V2Json(bool includeSchemaVersion = true, bool includeGameVersion = true,
-            bool includeRandomState = true, bool includeEventRuntime = true)
+            bool includeEventContentVersion = true, bool includeRandomState = true, bool includeEventRuntime = true)
         {
             var parts = new List<string>();
             if (includeSchemaVersion) parts.Add("\"saveFormatVersion\":2");
             if (includeGameVersion) parts.Add("\"gameVersion\":\"0.1.0\"");
             parts.Add("\"rulesVersion\":1");
-            parts.Add("\"eventContentVersion\":1");
+            if (includeEventContentVersion) parts.Add("\"eventContentVersion\":1");
             parts.Add("\"year\":1560");
             parts.Add("\"month\":4");
             parts.Add("\"day\":2");

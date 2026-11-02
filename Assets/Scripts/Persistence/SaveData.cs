@@ -21,7 +21,7 @@ namespace SengokuChronicle.Persistence
         /// Fallback event-content version used only when no catalog is loaded. The
         /// active catalog's <c>contentVersion</c> is authoritative for capture/load.
         /// </summary>
-        public const int CurrentEventContentVersion = 1;
+        public const int CurrentEventContentVersion = 2;
 
         /// <summary>Displayed game build version. Older values are not rejected on load.</summary>
         public const string CurrentGameVersion = "0.1.0";
