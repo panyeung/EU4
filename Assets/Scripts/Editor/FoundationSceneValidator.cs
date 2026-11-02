@@ -35,6 +35,7 @@ namespace SengokuChronicle.Editor
             TitleScreenController titleController = FindComponent<TitleScreenController>(scene);
             DemoSummaryPanel demoPanel = FindComponent<DemoSummaryPanel>(scene);
             RankPanel rankPanel = FindComponent<RankPanel>(scene);
+            SuccessionPanel successionPanel = FindComponent<SuccessionPanel>(scene);
 
             CheckFound(report, ref errors, "Canvas", canvas);
             CheckFound(report, ref errors, "Canvas/M2WorldMapRoot", mapRoot);
@@ -46,6 +47,7 @@ namespace SengokuChronicle.Editor
             CheckFound(report, ref errors, "TitleScreenController", titleController);
             CheckFound(report, ref errors, "DemoSummaryPanel", demoPanel);
             CheckFound(report, ref errors, "RankPanel", rankPanel);
+            CheckFound(report, ref errors, "SuccessionPanel", successionPanel);
             if (!AddM4SupplyShortageMissionPanel.Validate(scene, out string missionError))
                 AddError(report, ref errors, missionError);
             else
@@ -74,6 +76,10 @@ namespace SengokuChronicle.Editor
                 AddError(report, ref errors, sc005Error);
             else
                 report.AppendLine("PASS SC-009 event-choice panel hierarchy, bindings, layout, and validated content.");
+            if (!AddSC010SuccessionPanel.Validate(scene, out string sc010Error))
+                AddError(report, ref errors, sc010Error);
+            else
+                report.AppendLine("PASS SC-010 succession panel hierarchy, bindings, ordering, raycast, and layout.");
 
             if (controller != null)
             {
@@ -131,6 +137,16 @@ namespace SengokuChronicle.Editor
                 report.AppendLine("\nRANK PANEL REFERENCES:");
                 CheckReferences(report, ref errors, rankPanel,
                     "gameSession", "rankText");
+            }
+
+            if (successionPanel != null)
+            {
+                report.AppendLine("\nSUCCESSION PANEL REFERENCES:");
+                CheckReferences(report, ref errors, successionPanel,
+                    "gameSession", "modalRoot", "headText", "statusText", "retireButton",
+                    "crisisDemoButton", "feedbackText", "modalStatusText", "candidateContent",
+                    "candidateButtonPrefab", "regentContent", "regentButtonPrefab", "confirmButton",
+                    "acceptCrisisButton", "declineCrisisButton");
             }
 
             report.AppendLine("\nHIERARCHY AND RECTTRANSFORMS:");

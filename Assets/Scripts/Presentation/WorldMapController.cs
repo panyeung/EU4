@@ -123,6 +123,7 @@ namespace SengokuChronicle.Presentation
         private LocationId? _selectedDestination;
         private TravelPreview? _preview;
         private bool _inTownMenu;
+        private bool _sessionSubscribed;
         private string _feedback = "请选择目的地。";
 
         private void Awake()
@@ -142,6 +143,7 @@ namespace SengokuChronicle.Presentation
             if (townNpcDialoguePanel != null)
                 townNpcDialoguePanel.BindWorldMapController(this);
             BindSupplyShortageMissionPanel(supplyShortageMissionPanel);
+            SubscribeSession();
             RefreshAll();
         }
 
@@ -149,12 +151,14 @@ namespace SengokuChronicle.Presentation
         {
             BindButtonListeners(true);
             BindTownNpcButton(true);
+            SubscribeSession();
         }
 
         private void OnDisable()
         {
             BindButtonListeners(false);
             BindTownNpcButton(false);
+            UnsubscribeSession();
         }
 
         // ---- 公开 API（Editor 生成器与测试注入）----
@@ -171,6 +175,7 @@ namespace SengokuChronicle.Presentation
             Button confirm, Button back, Button returnToMap,
             GameObject townRoot, Text townTitle, Text[] facilities)
         {
+            UnsubscribeSession();
             gameSession = session;
             worldClockPanel = clock;
             locationMarkerText = locationMarker;
@@ -188,11 +193,24 @@ namespace SengokuChronicle.Presentation
             facility2Text = facilities != null && facilities.Length > 1 ? facilities[1] : null;
             facility3Text = facilities != null && facilities.Length > 2 ? facilities[2] : null;
             facilityTexts = facilities;
+            SubscribeSession();
         }
 
         /// <summary>选择目的地并刷新预览；不修改日期/位置。</summary>
         public void SelectDestination(LocationId destination)
         {
+            if (gameSession != null && gameSession.IsFamilyExtinct)
+            {
+                _selectedDestination = null;
+                _preview = null;
+                SetFeedback("家族已经灭亡：无法再旅行。请读取较早的存档。");
+                RefreshDestinationPanel();
+                RefreshFeedback();
+                RefreshLocationButtons();
+                RefreshButtons();
+                return;
+            }
+
             _selectedDestination = destination;
             _preview = gameSession != null ? gameSession.PreviewTravel(destination) : (TravelPreview?)null;
             RefreshDestinationPanel();
@@ -203,6 +221,10 @@ namespace SengokuChronicle.Presentation
                 SetFeedback("未知地点，无法旅行。");
             else if (destination == gameSession.CurrentLocation)
                 SetFeedback($"当前位置：{LocationId.GetChineseName(gameSession.CurrentLocation)}，无法向自身旅行。");
+            else if (gameSession.IsTravelBlockedBySuccession)
+                SetFeedback(string.IsNullOrWhiteSpace(gameSession.LastEventMessage)
+                    ? "尚有继承决策待处理：请先完成当前继承选择，再旅行。"
+                    : gameSession.LastEventMessage);
             else if (_preview == null)
                 SetFeedback("无直达路线（热田 ↔ 那古野 不可直达）。");
             else
@@ -219,6 +241,16 @@ namespace SengokuChronicle.Presentation
             if (gameSession == null)
             {
                 SetFeedback("会话为空，无法旅行。");
+                return;
+            }
+
+            if (gameSession.IsFamilyExtinct)
+            {
+                _preview = null;
+                _selectedDestination = null;
+                SetFeedback("家族已经灭亡：无法再旅行。请读取较早的存档。");
+                RefreshDestinationPanel();
+                RefreshButtons();
                 return;
             }
 
@@ -243,7 +275,10 @@ namespace SengokuChronicle.Presentation
             {
                 _preview = null;
                 _selectedDestination = null;
-                SetFeedback("旅行失败：路线或日期无效，日期与位置保持不变。");
+                SetFeedback(gameSession.IsTravelBlockedBySuccession &&
+                            !string.IsNullOrWhiteSpace(gameSession.LastEventMessage)
+                    ? gameSession.LastEventMessage
+                    : "旅行失败：路线或日期无效，日期与位置保持不变。");
                 RefreshDestinationPanel();
                 RefreshButtons();
             }
@@ -278,6 +313,11 @@ namespace SengokuChronicle.Presentation
         /// <summary>全量刷新 UI（当前日期、位置标记、反馈、按钮），并同步刷新 M1 面板。</summary>
         public void RefreshAll()
         {
+            if (gameSession != null && gameSession.IsFamilyExtinct)
+            {
+                _preview = null;
+                _selectedDestination = null;
+            }
             RefreshCurrentDate();
             RefreshLocationMarker();
             RefreshLocationButtons();
@@ -302,6 +342,30 @@ namespace SengokuChronicle.Presentation
         }
 
         // ---- 内部 ----
+
+        private void OnSessionStateChanged()
+        {
+            RefreshAll();
+        }
+
+        private void SubscribeSession()
+        {
+            if (_sessionSubscribed || gameSession == null)
+                return;
+            gameSession.SessionStateChanged += OnSessionStateChanged;
+            _sessionSubscribed = true;
+        }
+
+        private void UnsubscribeSession()
+        {
+            if (!_sessionSubscribed || gameSession == null)
+            {
+                _sessionSubscribed = false;
+                return;
+            }
+            gameSession.SessionStateChanged -= OnSessionStateChanged;
+            _sessionSubscribed = false;
+        }
 
         /// <summary>幂等注册/注销按钮监听。</summary>
         private void BindButtonListeners(bool add)
@@ -419,7 +483,7 @@ namespace SengokuChronicle.Presentation
         {
             if (button == null)
                 return;
-            button.interactable = true;
+            button.interactable = gameSession == null || !gameSession.IsFamilyExtinct;
             if (label != null)
                 label.text = LocationId.GetChineseName(location);
         }
@@ -462,10 +526,11 @@ namespace SengokuChronicle.Presentation
 
         private void RefreshButtons()
         {
+            bool extinct = gameSession != null && gameSession.IsFamilyExtinct;
             if (confirmButton != null)
-                confirmButton.interactable = _preview.HasValue && !_inTownMenu;
+                confirmButton.interactable = !extinct && _preview.HasValue && !_inTownMenu;
             if (cancelButton != null)
-                cancelButton.interactable = _preview.HasValue && !_inTownMenu;
+                cancelButton.interactable = !extinct && _preview.HasValue && !_inTownMenu;
             if (returnToMapButton != null)
                 returnToMapButton.interactable = _inTownMenu;
         }

@@ -2,13 +2,23 @@ using SengokuChronicle.Domain;
 
 namespace SengokuChronicle.Persistence
 {
-    /// <summary>Explicit v1-to-v2 save migration. The source object and file are never mutated.</summary>
+    /// <summary>Explicit v1/v2-to-v3 save migration. The source object and file are never mutated.</summary>
     public static class SaveDataMigrator
     {
         // Fixed deterministic seed for legacy v1 sessions that did not store RNG state.
         public const ulong V1DefaultSeed = 0x53434C414E563031UL;
 
-        public static bool TryMigrate(SaveData legacy, out SaveData current, out SaveOperationResult result)
+        public static bool TryMigrate(SaveData legacy, out SaveData current, out SaveOperationResult result) =>
+            TryMigrate(legacy, null, out current, out result);
+
+        /// <summary>
+        /// Migrates legacy data while using the raw JSON root-property check for v2.
+        /// JsonUtility materializes nested classes even when their property is absent,
+        /// so the raw payload is the only reliable way to tell whether v2 carried a
+        /// succession block that must be rejected instead of silently replaced.
+        /// </summary>
+        public static bool TryMigrate(SaveData legacy, string rawJson, out SaveData current,
+            out SaveOperationResult result)
         {
             current = null;
             if (legacy == null)
@@ -26,11 +36,56 @@ namespace SengokuChronicle.Persistence
                 return result.Succeeded;
             }
 
+            if (legacy.saveFormatVersion == 2)
+            {
+                bool containsSuccessionBlock = string.IsNullOrEmpty(rawJson)
+                    ? legacy.succession != null
+                    : SaveDataValidator.HasRootProperty(rawJson, "succession");
+                if (containsSuccessionBlock)
+                {
+                    result = SaveOperationResult.Failure(SaveErrorCode.InvalidData,
+                        "v2 存档包含继承状态（succession）；迁移不会静默替换该数据。");
+                    return false;
+                }
+
+                result = SaveDataValidator.ValidateLegacyV2Fields(legacy);
+                if (!result.Succeeded)
+                    return false;
+
+                current = new SaveData
+                {
+                    saveFormatVersion = SaveDataValidator.CurrentVersion,
+                    gameVersion = string.IsNullOrWhiteSpace(legacy.gameVersion)
+                        ? SaveData.CurrentGameVersion
+                        : legacy.gameVersion,
+                    rulesVersion = legacy.rulesVersion > 0 ? legacy.rulesVersion : SaveData.CurrentRulesVersion,
+                    eventContentVersion = legacy.eventContentVersion > 0
+                        ? legacy.eventContentVersion
+                        : SaveData.CurrentEventContentVersion,
+                    year = legacy.year,
+                    month = legacy.month,
+                    day = legacy.day,
+                    locationId = legacy.locationId,
+                    supplyShortageStage = legacy.supplyShortageStage,
+                    sealedLetterStage = legacy.sealedLetterStage,
+                    marketTallyStage = legacy.marketTallyStage,
+                    relationships = CloneRelationships(legacy.relationships),
+                    randomState = CloneRandomState(legacy.randomState),
+                    eventRuntime = CloneEventRuntime(legacy.eventRuntime),
+                    succession = SuccessionSaveData.CreateDefault()
+                };
+
+                result = SaveDataValidator.Validate(current);
+                if (!result.Succeeded)
+                    current = null;
+                return result.Succeeded;
+            }
+
             if (legacy.saveFormatVersion != 1)
             {
                 result = SaveOperationResult.Failure(
                     SaveErrorCode.UnsupportedVersion,
-                    $"不支持的存档版本：{legacy.saveFormatVersion}（仅支持 v1 迁移到 v{SaveDataValidator.CurrentVersion}）。");
+                    $"不支持的存档版本：{legacy.saveFormatVersion}（仅支持 v1/v2 迁移到 v{SaveDataValidator.CurrentVersion}）。");
                 return false;
             }
 
@@ -50,7 +105,8 @@ namespace SengokuChronicle.Persistence
                 marketTallyStage = legacy.marketTallyStage,
                 relationships = CloneRelationships(legacy.relationships),
                 randomState = RandomStateManager.Create(V1DefaultSeed).CaptureState(),
-                eventRuntime = new EventRuntimeSaveData()
+                eventRuntime = new EventRuntimeSaveData(),
+                succession = SuccessionSaveData.CreateDefault()
             };
 
             result = SaveDataValidator.Validate(current);
@@ -76,7 +132,10 @@ namespace SengokuChronicle.Persistence
                 marketTallyStage = source.marketTallyStage,
                 relationships = CloneRelationships(source.relationships),
                 randomState = CloneRandomState(source.randomState),
-                eventRuntime = CloneEventRuntime(source.eventRuntime)
+                eventRuntime = CloneEventRuntime(source.eventRuntime),
+                succession = source.succession != null
+                    ? source.succession.Clone()
+                    : SuccessionSaveData.CreateDefault()
             };
             return clone;
         }

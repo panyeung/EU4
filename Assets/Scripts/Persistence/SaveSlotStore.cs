@@ -193,7 +193,8 @@ namespace SengokuChronicle.Persistence
             if (!presence.Succeeded)
                 return new SaveLoadResult(null, presence.Error, presence.Message);
 
-            if (!SaveDataMigrator.TryMigrate(data, out SaveData migrated, out SaveOperationResult migration))
+            if (!SaveDataMigrator.TryMigrate(data, json, out SaveData migrated,
+                    out SaveOperationResult migration))
                 return new SaveLoadResult(null, migration.Error, migration.Message);
 
             return new SaveLoadResult(migrated, SaveErrorCode.None, string.Empty);

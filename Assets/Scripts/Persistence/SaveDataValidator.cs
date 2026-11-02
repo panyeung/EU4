@@ -10,7 +10,7 @@ namespace SengokuChronicle.Persistence
     /// </summary>
     public static class SaveDataValidator
     {
-        public const int CurrentVersion = 2;
+        public const int CurrentVersion = 3;
 
         public static SaveOperationResult Validate(SaveData data)
         {
@@ -45,6 +45,13 @@ namespace SengokuChronicle.Persistence
             if (!relationships.Succeeded)
                 return relationships;
 
+            if (data.succession == null)
+                return Invalid("存档缺少继承状态（succession）。");
+            SaveOperationResult succession = data.succession.ValidateForSave(
+                new GameDate(data.year, data.month, data.day));
+            if (!succession.Succeeded)
+                return succession;
+
             if (!RandomStateManager.TryRestore(data.randomState, out _))
                 return Invalid("存档随机流状态无效。");
 
@@ -53,10 +60,10 @@ namespace SengokuChronicle.Persistence
         }
 
         /// <summary>
-        /// Rejects v2 JSON that omitted a required field instead of accepting the
+        /// Rejects v3 JSON that omitted a required field instead of accepting the
         /// defaults that <see cref="SaveData"/>'s constructor would otherwise supply.
-        /// Legacy v1 payloads intentionally lack the v2 runtime fields; the migrator
-        /// owns their documented defaults.
+        /// Legacy v1/v2 payloads intentionally lack the v3 succession block; the
+        /// migrator owns their documented defaults.
         /// </summary>
         /// <param name="probe">
         /// Parsed scalar fields plus defensive null checks. Unity's JsonUtility still
@@ -72,10 +79,13 @@ namespace SengokuChronicle.Persistence
             if (probe.saveFormatVersion == 1)
                 return SaveOperationResult.Success();
 
-            if (probe.saveFormatVersion != CurrentVersion)
+            if (probe.saveFormatVersion != 2 && probe.saveFormatVersion != CurrentVersion)
                 return SaveOperationResult.Failure(
                     SaveErrorCode.UnsupportedVersion,
                     $"不支持的存档版本：{probe.saveFormatVersion}（当前版本 {CurrentVersion}）。");
+
+            if (probe.saveFormatVersion == 2 && HasRootProperty(json, "succession"))
+                return Invalid("v2 存档包含继承状态（succession）；迁移不会静默替换该数据。");
 
             if (string.IsNullOrWhiteSpace(probe.gameVersion) || probe.rulesVersion <= 0 ||
                 probe.eventContentVersion <= 0)
@@ -84,6 +94,9 @@ namespace SengokuChronicle.Persistence
                 return Invalid("存档缺少随机流状态（randomState）。");
             if (probe.eventRuntime == null || !HasRootProperty(json, "eventRuntime"))
                 return Invalid("存档缺少事件运行状态（eventRuntime）。");
+            if (probe.saveFormatVersion == CurrentVersion &&
+                (probe.succession == null || !HasRootProperty(json, "succession")))
+                return Invalid("存档缺少继承状态（succession）。");
 
             return SaveOperationResult.Success();
         }
@@ -93,7 +106,7 @@ namespace SengokuChronicle.Persistence
         /// the root JSON object. Values nested inside child objects or arrays do not
         /// count, and strings are skipped so text content cannot masquerade as a key.
         /// </summary>
-        private static bool HasRootProperty(string json, string propertyName)
+        internal static bool HasRootProperty(string json, string propertyName)
         {
             if (string.IsNullOrEmpty(json) || string.IsNullOrEmpty(propertyName))
                 return false;
@@ -168,6 +181,21 @@ namespace SengokuChronicle.Persistence
                 !Enum.IsDefined(typeof(MarketTallyStage), data.marketTallyStage))
                 return Invalid("存档任务阶段无效。");
             return ValidateRelationships(data.relationships);
+        }
+
+        /// <summary>
+        /// v2 already owns RNG and event runtime state but has no succession block;
+        /// the migrator supplies the deterministic default roster.
+        /// </summary>
+        internal static SaveOperationResult ValidateLegacyV2Fields(SaveData data)
+        {
+            SaveOperationResult legacy = ValidateLegacyV1Fields(data);
+            if (!legacy.Succeeded)
+                return legacy;
+            if (!RandomStateManager.TryRestore(data.randomState, out _))
+                return Invalid("存档随机流状态无效。");
+            return ValidateEventRuntimeSnapshot(data.eventRuntime,
+                new GameDate(data.year, data.month, data.day));
         }
 
         private static SaveOperationResult ValidateRelationships(RelationshipSaveEntry[] entries)

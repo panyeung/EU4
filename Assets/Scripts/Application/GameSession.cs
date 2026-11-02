@@ -8,14 +8,15 @@ using SengokuChronicle.Persistence;
 
 namespace SengokuChronicle.Application
 {
-    /// <summary>Why the most recent End Month request was accepted or refused.</summary>
+    /// <summary>Why the most recent time-advance (day, multi-day, or month) request was accepted or refused.</summary>
     public enum MonthTurnOutcome
     {
         Succeeded = 0,
         PendingEvent = 1,
         ContentUnavailable = 2,
         DateOutOfRange = 3,
-        SchedulingFailed = 4
+        SchedulingFailed = 4,
+        PendingSuccession = 5
     }
 
     /// <summary>
@@ -57,6 +58,7 @@ namespace SengokuChronicle.Application
         private EventCatalogData _eventCatalog;
         private EventTextCatalog _eventTextCatalog;
         private EventEngine _eventEngine;
+        private SuccessionState _succession;
         private readonly Dictionary<Guid, DialogueState> _dialogues = new Dictionary<Guid, DialogueState>();
 
         public event Action SessionStateChanged;
@@ -66,6 +68,50 @@ namespace SengokuChronicle.Application
         public bool EventCatalogReady => _eventEngine != null && _eventEngine.IsReady;
         public EventCatalogData EventCatalog => _eventCatalog;
         public EventTextCatalog EventText => _eventTextCatalog;
+
+        /// <summary>SC-010 succession state (head, pending decision, roster and kinship).</summary>
+        public SuccessionState Succession
+        {
+            get
+            {
+                EnsureSuccession();
+                return _succession;
+            }
+        }
+
+        /// <summary>Last succession command feedback for the panel and diagnostics.</summary>
+        public string LastSuccessionMessage { get; private set; } = string.Empty;
+
+        /// <summary>
+        /// True once the family has no lawful continuation and the player declined the
+        /// crisis decision. This is a terminal gameplay state: time and travel stop and
+        /// only loading an earlier save can resume play.
+        /// </summary>
+        public bool IsFamilyExtinct => Succession.Phase == SuccessionPhase.Extinct;
+
+        /// <summary>
+        /// True when an active succession decision, a due adult handoff or extinction
+        /// currently owns the world clock and therefore also blocks travel.
+        /// </summary>
+        public bool IsTravelBlockedBySuccession => SuccessionBlocksTimeAdvance;
+
+        /// <summary>
+        /// True only while the session still holds the pristine pre-succession standard
+        /// roster; the fixed crisis demo must never replace completed family history.
+        /// </summary>
+        public bool CanStartCrisisDemo => IsPristineStandardSuccession(Succession);
+
+        public string SuccessionHeadName =>
+            Succession.TryGetHead(out PersonState head) ? head.DisplayName : string.Empty;
+
+        public IReadOnlyList<SuccessionCandidate> SuccessionCandidates =>
+            SuccessionService.GetCandidates(Succession, CurrentGameDate);
+
+        public IReadOnlyList<SuccessionCandidate> SuccessionRegentCandidates =>
+            SuccessionService.GetRegentCandidates(Succession, CurrentGameDate);
+
+        private GameDate CurrentGameDate =>
+            WorldClock != null ? WorldClock.CurrentDate : SengokuChronicle.Domain.WorldClock.NewGameDate;
 
         public RandomStateManager RandomState
         {
@@ -145,9 +191,129 @@ namespace SengokuChronicle.Application
             _supplyShortageMission = new SupplyShortageMission();
             _sealedLetterMission = new SealedLetterMission();
             _marketTallyMission = new MarketTallyMission();
+            _succession = SuccessionSample.CreateStandard();
+            LastSuccessionMessage = string.Empty;
             _dialogues.Clear();
             LastMonthTurnOutcome = MonthTurnOutcome.Succeeded;
             SessionStateChanged?.Invoke();
+        }
+
+        /// <summary>
+        /// Starts the fixed SC-010 crisis roster only from the pristine pre-succession
+        /// standard state. A completed succession, crisis adoption or regency must not
+        /// be silently erased by replacing the permanent family snapshot.
+        /// </summary>
+        public bool StartCrisisDemo()
+        {
+            EnsureSuccession();
+            if (!CanStartCrisisDemo)
+                return false;
+            _succession = SuccessionSample.CreateCrisis();
+            LastSuccessionMessage = "已进入固定示范：无合法继承人危机。";
+            SessionStateChanged?.Invoke();
+            return true;
+        }
+
+        private static bool IsPristineStandardSuccession(SuccessionState state)
+        {
+            return state != null &&
+                   state.Phase == SuccessionPhase.None &&
+                   state.SuccessionCount == 0 &&
+                   string.IsNullOrEmpty(state.CompletedResultId) &&
+                   !state.CrisisAdoptionUsed &&
+                   !state.RegencyCompleted &&
+                   state.HeadPersonId == SuccessionSample.StandardHeadId &&
+                   state.World.Family.Id == SuccessionSample.StandardFamilyId;
+        }
+
+        public SuccessionResult BeginSuccessionRetirement() =>
+            ApplySuccessionResult(SuccessionService.BeginRetirement(Succession, CurrentGameDate));
+
+        public SuccessionResult SelectSuccessionSuccessor(PersonId personId) =>
+            ApplySuccessionResult(SuccessionService.SelectSuccessor(Succession, personId, CurrentGameDate));
+
+        public SuccessionResult SelectSuccessionRegent(PersonId personId) =>
+            ApplySuccessionResult(SuccessionService.SelectRegent(Succession, personId, CurrentGameDate));
+
+        public SuccessionResult ConfirmSuccession() =>
+            ApplySuccessionResult(SuccessionService.ConfirmSuccession(Succession, CurrentGameDate));
+
+        public SuccessionResult AcceptCrisisAdoption() =>
+            ApplySuccessionResult(SuccessionService.AcceptCrisisAdoption(Succession, CurrentGameDate));
+
+        public SuccessionResult DeclineCrisis() =>
+            ApplySuccessionResult(SuccessionService.DeclineCrisis(Succession));
+
+        /// <summary>Completes a due regency after time advances; never advances time itself.</summary>
+        public SuccessionResult TryCompleteSuccessionRegency() =>
+            ApplySuccessionResult(SuccessionService.TryCompleteRegency(Succession, CurrentGameDate));
+
+        private SuccessionResult ApplySuccessionResult(SuccessionResult result)
+        {
+            if (!result.Succeeded)
+                return result;
+            LastSuccessionMessage = result.Message;
+            SessionStateChanged?.Invoke();
+            return result;
+        }
+
+        private bool NoticeRegencyHandoffIfDue()
+        {
+            EnsureSuccession();
+            if (!_succession.IsRegencyHandoffDue(CurrentGameDate))
+                return false;
+            const string message = "幼主已成年：时间推进已暂停，请点击「完成成年交权」。";
+            bool changed = !string.Equals(LastSuccessionMessage, message, StringComparison.Ordinal);
+            LastSuccessionMessage = message;
+            return changed;
+        }
+
+        private bool SuccessionBlocksTimeAdvance =>
+            _succession != null &&
+            (_succession.Phase == SuccessionPhase.Extinct ||
+             _succession.IsPending ||
+             _succession.IsRegencyHandoffDue(CurrentGameDate));
+
+        /// <summary>
+        /// Publishes the reason a time advance is refused while succession owns the pause.
+        /// It reuses the existing month-turn outcome and event-message surfaces so the HUD
+        /// can show the same reason for day and month advances.
+        /// </summary>
+        private void ReportSuccessionTimePause()
+        {
+            LastMonthTurnOutcome = MonthTurnOutcome.PendingSuccession;
+            if (_succession != null && _succession.Phase == SuccessionPhase.Extinct)
+            {
+                LastEventMessage = "家族已经灭亡：无法再推进时间或旅行。请读取较早的存档以回到灭亡前。";
+                return;
+            }
+            LastEventMessage = Succession.IsRegencyHandoffDue(CurrentGameDate)
+                ? "幼主已成年：时间推进已暂停，请点击「完成成年交权」。"
+                : "尚有继承决策待处理：请先完成当前继承选择，再推进时间。";
+        }
+
+        /// <summary>
+        /// Publishes the succession reason for a refused travel preview or confirmation.
+        /// Travel reuses the same outcome/message surfaces as time advancement so the HUD
+        /// can replace its generic route/date error with the actual pending decision.
+        /// </summary>
+        private void ReportSuccessionTravelPause()
+        {
+            LastMonthTurnOutcome = MonthTurnOutcome.PendingSuccession;
+            if (_succession != null && _succession.Phase == SuccessionPhase.Extinct)
+            {
+                LastEventMessage = "家族已经灭亡：无法再旅行。请读取较早的存档以回到灭亡前。";
+                return;
+            }
+            LastEventMessage = Succession.IsRegencyHandoffDue(CurrentGameDate)
+                ? "幼主已成年：旅行已暂停，请点击「完成成年交权」后再旅行。"
+                : "尚有继承决策待处理：请先完成当前继承选择，再旅行。";
+        }
+
+        private void EnsureSuccession()
+        {
+            if (_succession == null)
+                _succession = SuccessionSample.CreateStandard();
         }
 
         /// <summary>Captures the current runtime state as versioned save data.</summary>
@@ -175,7 +341,8 @@ namespace SengokuChronicle.Application
                 marketTallyStage = (int)_marketTallyMission.Stage,
                 relationships = CaptureRelationships(),
                 randomState = _randomStateManager.CaptureState(),
-                eventRuntime = _eventRuntimeState.Capture()
+                eventRuntime = _eventRuntimeState.Capture(),
+                succession = SuccessionSaveData.Capture(Succession)
             };
         }
 
@@ -200,6 +367,9 @@ namespace SengokuChronicle.Application
             if (!_eventEngine.TryRestoreState(data.eventRuntime, date,
                     out EventRuntimeState eventRuntime, out string eventError))
                 return InvalidSave(string.IsNullOrEmpty(eventError) ? "存档事件状态无效。" : eventError);
+            if (!SuccessionSaveData.TryRestore(data.succession, date,
+                    out SuccessionState succession, out string successionError))
+                return InvalidSave(string.IsNullOrEmpty(successionError) ? "存档继承状态无效。" : successionError);
 
             if (!LocationId.TryParse(data.locationId, out LocationId location))
                 return InvalidSave("存档地点无效。");
@@ -235,6 +405,9 @@ namespace SengokuChronicle.Application
             _relationships = relationships;
             _randomStateManager = randomState;
             _eventRuntimeState = eventRuntime;
+            _succession = succession;
+            LastSuccessionMessage = string.Empty;
+            NoticeRegencyHandoffIfDue();
             _dialogues.Clear();
             LastEventMessage = string.Empty;
             LastMonthTurnOutcome = MonthTurnOutcome.Succeeded;
@@ -445,26 +618,68 @@ namespace SengokuChronicle.Application
             return session;
         }
 
-        /// <summary>推进一天。成功返回 true；失败返回 false 且状态不变。</summary>
+        /// <summary>推进一天。成功返回 true；失败返回 false 且状态不变，并通过既有结果/消息通道说明原因。</summary>
         public bool AdvanceOneDay()
         {
             if (WorldClock == null)
                 InitNewGame();
+            if (IsFamilyExtinct)
+            {
+                ReportSuccessionTimePause();
+                return false;
+            }
             EnsureEventRuntimeState();
             if (_eventRuntimeState.HasPendingEvents)
+            {
+                LastMonthTurnOutcome = MonthTurnOutcome.PendingEvent;
                 return false;
-            return WorldClock.AdvanceOneDay();
+            }
+            if (SuccessionBlocksTimeAdvance)
+            {
+                ReportSuccessionTimePause();
+                return false;
+            }
+            if (!WorldClock.AdvanceOneDay())
+            {
+                LastMonthTurnOutcome = MonthTurnOutcome.DateOutOfRange;
+                return false;
+            }
+            LastMonthTurnOutcome = MonthTurnOutcome.Succeeded;
+            if (NoticeRegencyHandoffIfDue())
+                SessionStateChanged?.Invoke();
+            return true;
         }
 
-        /// <summary>推进多天。count 必须为正整数；失败返回 false 且状态不变。</summary>
+        /// <summary>推进多天。count 必须为正整数；失败返回 false 且状态不变，并说明原因。</summary>
         public bool AdvanceDays(int count)
         {
             if (WorldClock == null)
                 InitNewGame();
+            if (IsFamilyExtinct)
+            {
+                ReportSuccessionTimePause();
+                return false;
+            }
             EnsureEventRuntimeState();
             if (_eventRuntimeState.HasPendingEvents)
+            {
+                LastMonthTurnOutcome = MonthTurnOutcome.PendingEvent;
                 return false;
-            return WorldClock.AdvanceDays(count);
+            }
+            if (SuccessionBlocksTimeAdvance)
+            {
+                ReportSuccessionTimePause();
+                return false;
+            }
+            if (!WorldClock.AdvanceDays(count))
+            {
+                LastMonthTurnOutcome = MonthTurnOutcome.DateOutOfRange;
+                return false;
+            }
+            LastMonthTurnOutcome = MonthTurnOutcome.Succeeded;
+            if (NoticeRegencyHandoffIfDue())
+                SessionStateChanged?.Invoke();
+            return true;
         }
 
         /// <summary>
@@ -475,11 +690,21 @@ namespace SengokuChronicle.Application
         {
             if (WorldClock == null)
                 InitNewGame();
+            if (IsFamilyExtinct)
+            {
+                ReportSuccessionTimePause();
+                return false;
+            }
             EnsureRandomState();
             EnsureEventRuntimeState();
             if (_eventRuntimeState.HasPendingEvents)
             {
                 LastMonthTurnOutcome = MonthTurnOutcome.PendingEvent;
+                return false;
+            }
+            if (SuccessionBlocksTimeAdvance)
+            {
+                ReportSuccessionTimePause();
                 return false;
             }
             if (_eventEngine == null || !_eventEngine.IsReady)
@@ -516,6 +741,7 @@ namespace SengokuChronicle.Application
                 return false;
             }
             _eventRuntimeState = nextRuntime;
+            NoticeRegencyHandoffIfDue();
             LastEventMessage = string.Empty;
             LastMonthTurnOutcome = MonthTurnOutcome.Succeeded;
             SessionStateChanged?.Invoke();
@@ -531,9 +757,19 @@ namespace SengokuChronicle.Application
         {
             if (WorldClock == null)
                 InitNewGame();
+            if (IsFamilyExtinct)
+            {
+                ReportSuccessionTravelPause();
+                return null;
+            }
             EnsureEventRuntimeState();
             if (_eventRuntimeState.HasPendingEvents)
                 return null;
+            if (SuccessionBlocksTimeAdvance)
+            {
+                ReportSuccessionTravelPause();
+                return null;
+            }
 
             if (!destination.IsValid)
                 return null;
@@ -555,9 +791,19 @@ namespace SengokuChronicle.Application
         {
             if (WorldClock == null)
                 InitNewGame();
+            if (IsFamilyExtinct)
+            {
+                ReportSuccessionTravelPause();
+                return false;
+            }
             EnsureEventRuntimeState();
             if (_eventRuntimeState.HasPendingEvents)
                 return false;
+            if (SuccessionBlocksTimeAdvance)
+            {
+                ReportSuccessionTravelPause();
+                return false;
+            }
 
             if (!preview.Destination.IsValid)
                 return false;
@@ -575,6 +821,8 @@ namespace SengokuChronicle.Application
             if (!WorldClock.AdvanceDays(days))
                 return false;
             CurrentLocation = preview.Destination;
+            if (NoticeRegencyHandoffIfDue())
+                SessionStateChanged?.Invoke();
             return true;
         }
     }

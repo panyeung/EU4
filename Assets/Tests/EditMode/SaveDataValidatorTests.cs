@@ -45,7 +45,7 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [TestCase(0)]
-        [TestCase(3)]
+        [TestCase(4)]
         [TestCase(-1)]
         public void WrongVersion_IsUnsupported(int version)
         {

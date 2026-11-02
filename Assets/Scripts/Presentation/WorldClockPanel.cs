@@ -8,6 +8,7 @@ namespace SengokuChronicle.Presentation
     /// 最小 uGUI 面板：显示当前日期，并提供「推进一天」与「结束月份」两个按钮。
     /// 推进一天保持 M1/M2 既有语义；结束月份为 SC-004 月度回合入口，
     /// 成功时同步刷新本面板与地图侧的两处日期显示。
+    /// SC-010：家族灭亡（Extinct）时两个时间按钮都禁用，加载较早存档后恢复。
     /// 范围：仅负责呈现与输入绑定，不承载日期规则。
     /// </summary>
     public sealed class WorldClockPanel : MonoBehaviour
@@ -34,12 +35,23 @@ namespace SengokuChronicle.Presentation
         /// <summary>最近一次「结束月份」的结果说明；成功时为空。</summary>
         public string LastMonthTurnMessage { get; private set; } = string.Empty;
 
+        /// <summary>
+        /// 最近一次「推进一天」被拒绝的原因（继承暂停、事件待选或日期上限）；
+        /// 成功时为空。SC-010：继承暂停时不得再误报为日期上限。
+        /// </summary>
+        public string LastAdvanceMessage { get; private set; } = string.Empty;
+
+        private bool _sessionSubscribed;
+
         /// <summary>Editor 脚本注入依赖（M1：仅 Editor 场景创建器使用）。</summary>
         public void SetDependencies(GameSession session, Button button, Text text)
         {
+            UnsubscribeSession();
             gameSession = session;
             advanceButton = button;
             dateText = text;
+            SubscribeSession();
+            Refresh();
         }
 
         /// <summary>
@@ -71,6 +83,7 @@ namespace SengokuChronicle.Presentation
         {
             if (gameSession == null)
                 gameSession = GetComponentInParent<GameSession>() ?? FindAnyObjectByType<GameSession>();
+            SubscribeSession();
             Refresh();
         }
 
@@ -81,17 +94,49 @@ namespace SengokuChronicle.Presentation
 
         private void OnAdvanceClicked()
         {
+            TryAdvanceOneDay();
+        }
+
+        /// <summary>
+        /// 推进一天。被拒绝时把真实原因写入 <see cref="LastAdvanceMessage"/> 并记录到
+        /// Console；继承暂停时显示继承原因，而不是「日期已达支持上限」。
+        /// </summary>
+        public bool TryAdvanceOneDay()
+        {
             if (gameSession == null)
             {
+                LastAdvanceMessage = "会话未就绪，无法推进。";
                 Debug.LogWarning($"{nameof(WorldClockPanel)}: gameSession 为空，无法推进。");
-                return;
+                return false;
             }
 
-            bool ok = gameSession.AdvanceOneDay();
-            if (ok)
+            if (gameSession.AdvanceOneDay())
+            {
+                LastAdvanceMessage = string.Empty;
                 Refresh();
-            else
-                Debug.Log($"{nameof(WorldClockPanel)}: 日期已达支持上限，无法再推进。");
+                return true;
+            }
+
+            LastAdvanceMessage = DescribeAdvanceRefusal();
+            Debug.Log($"{nameof(WorldClockPanel)}: {LastAdvanceMessage}");
+            return false;
+        }
+
+        private string DescribeAdvanceRefusal()
+        {
+            switch (gameSession.LastMonthTurnOutcome)
+            {
+                case MonthTurnOutcome.PendingEvent:
+                    return "尚有事件等待选择，请先处理事件后再推进时间。";
+                case MonthTurnOutcome.PendingSuccession:
+                    return string.IsNullOrWhiteSpace(gameSession.LastEventMessage)
+                        ? "尚有继承决策待处理，请先完成继承或成年交权后再推进时间。"
+                        : gameSession.LastEventMessage;
+                case MonthTurnOutcome.DateOutOfRange:
+                    return "日期已达支持上限，无法再推进。";
+                default:
+                    return "无法推进时间，日期保持不变。";
+            }
         }
 
         private void OnEndMonthClicked()
@@ -114,6 +159,9 @@ namespace SengokuChronicle.Presentation
             {
                 case MonthTurnOutcome.PendingEvent:
                     LastMonthTurnMessage = "尚有事件等待选择，请先处理事件后再结束月份。";
+                    break;
+                case MonthTurnOutcome.PendingSuccession:
+                    LastMonthTurnMessage = "尚有继承决策待处理，请先完成继承（或成年交权）后再结束月份。";
                     break;
                 case MonthTurnOutcome.DateOutOfRange:
                     LastMonthTurnMessage = "下一月超出支持范围，日期保持不变。";
@@ -138,7 +186,16 @@ namespace SengokuChronicle.Presentation
 
         public void Refresh()
         {
-            if (dateText == null || gameSession == null || gameSession.WorldClock == null)
+            if (gameSession == null)
+                return;
+
+            bool extinct = gameSession.IsFamilyExtinct;
+            if (advanceButton != null)
+                advanceButton.interactable = !extinct;
+            if (endMonthButton != null)
+                endMonthButton.interactable = !extinct;
+
+            if (dateText == null || gameSession.WorldClock == null)
                 return;
 
             dateText.text = gameSession.WorldClock.CurrentDate.ToString();
@@ -162,6 +219,7 @@ namespace SengokuChronicle.Presentation
                 endMonthButton.onClick.RemoveListener(OnEndMonthClicked);
                 endMonthButton.onClick.AddListener(OnEndMonthClicked);
             }
+            SubscribeSession();
         }
 
         private void OnDisable()
@@ -170,6 +228,26 @@ namespace SengokuChronicle.Presentation
                 advanceButton.onClick.RemoveListener(OnAdvanceClicked);
             if (endMonthButton != null)
                 endMonthButton.onClick.RemoveListener(OnEndMonthClicked);
+            UnsubscribeSession();
+        }
+
+        private void SubscribeSession()
+        {
+            if (_sessionSubscribed || gameSession == null)
+                return;
+            gameSession.SessionStateChanged += Refresh;
+            _sessionSubscribed = true;
+        }
+
+        private void UnsubscribeSession()
+        {
+            if (!_sessionSubscribed || gameSession == null)
+            {
+                _sessionSubscribed = false;
+                return;
+            }
+            gameSession.SessionStateChanged -= Refresh;
+            _sessionSubscribed = false;
         }
     }
 }
