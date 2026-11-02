@@ -1,6 +1,6 @@
 # Sengoku Chronicle（战国立志传）— GDD v0.2
 
-> 状态：已批准的 Phase 1 设计基线（GDD v0.2）；各里程碑的实施仍须单独授权。
+> 状态：已被《影之一族》设计与 Unity 开发总计划 v4.0 取代，保留作已完成 Sengoku Chronicle 里程碑的历史设计记录。当前设计基线见 [GDD_v4.0.md](GDD_v4.0.md)。
 
 ## 1. 项目概览
 

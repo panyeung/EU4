@@ -1,5 +1,11 @@
 ﻿# Decisions
 
+## 2026-11-01 - Adopt Shadow Clan plan v4.0 and reuse the existing project
+
+- Decision: Replace the Sengoku Chronicle / Taikō-inspired game direction with `GDD_v4.0.md` and its M0–M8 milestone sequence. Keep completed M1–M7 artifacts as historical checkpoints.
+- Constraint: Use only the existing Unity project and Git repository at `C:\Users\panye\My project`; SC-001 audits and aligns that baseline instead of creating a second project. Keep the current Unity version `6000.6.6f1` until any proposed upgrade is evaluated on a branch.
+- Reason: The user designated the supplied v4.0 plan as the new project direction and previously instructed us to use one Unity project.
+
 ## 2026-10-29 - Use the existing M2 branch for the demo candidate
 
 - Decision: Keep M2 on `feature/m2-world-map` and keep M3 separate until M2 is accepted.

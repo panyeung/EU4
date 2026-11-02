@@ -10,6 +10,6 @@
   "versionDefines": [],
   "precompiledReferences": [],
   "autoReferenced": true,
-  "useUnityAssemblies": false,
+  "noEngineReferences": true,
   "isTestAssembly": false
 }

@@ -82,3 +82,13 @@ M1–M6 remain accepted; `demo-M6` is merged and pushed. M7 (功名晋升 / meri
 Implementation: pure-C# `PromotionRules` maps total merit to four game-abstracted ranks (足轻0/番头5/组头10/武士头20 — simplified growth labels, not historical offices); `GameSession.Rank/RankName` are derived (no save-format change); `RankPanel` adds a permanent map-screen line with next-rank threshold; the M6 demo summary now names the final rank; `AddM7RankPanel` is the transactional scene updater and the project validator checks M7. Design/plan: `docs/superpowers/specs/2026-11-01-m7-merit-promotion-design.md`, `docs/superpowers/plans/2026-11-01-m7-merit-promotion.md`; roadmap in `PHASE2_ROADMAP.md`.
 
 Verification evidence (2026-11-01): batchmode compile without `error CS`; EditMode 425/425 passed (0 failed, 0 skipped) pre-integration (22:19:48Z) and post-integration (22:36:35Z); `RunBatchIntegration` saved FoundationScene (+96/−1; the single removal is Unity re-normalizing the inert `m_MaxSize` on `M6TitleLabel`, `m_BestFit: 0`); `Logs/SceneValidationReport.txt` reports the M7 PASS line and `RESULT: PASS; Errors: 0`. The user ran the Play Mode acceptance path and reported `pass` on 2026-11-01; exact rank values and Console counters were not independently captured.
+
+## 当前方向更新 — 2026-11-01
+
+用户已将项目方向改为 [《影之一族》总计划 v4.0](GDD_v4.0.md)。M1–M7 是旧方向的历史检查点，不代表新方向的实现进度。用户要求只使用 `C:\Users\panye\My project` 一个 Unity 项目；继续沿用 Unity `6000.6.6f1`，不得另建项目。
+
+SC-001 基线审计已完成并记录于 `docs/SC001_BASELINE_AUDIT.md`。SC-002 静态检查确认复用现有 Domain、不新增平行 Core；Domain 12 个源码文件未发现 Unity API 使用，程序集依赖无环且方向向内。独立 QA 发现旧 asmdef 使用无效字段 `useUnityAssemblies: false`，Unity 生成的 Domain 项目仍包含 UnityEngine 引用。OpenCode 已将其替换为 `noEngineReferences: true`；修改后的 Editor 编译和 EditMode 复验仍待完成。
+
+Unity 证据：确认唯一现有 Editor PID `56392` 的 `-projectpath` 指向指定项目，窗口标题为 `FoundationScene`。用户在该 Editor 的 Test Runner 中运行 EditMode Run All；`TestResults.xml`（2026-11-01 14:44:33）报告 425/425 通过，0 失败、0 跳过、0 不确定。相同时间的 `Logs/Editor.log` 未发现 C# 编译错误标记，但含 Unity Licensing 404 与 AI ModelSelector `NoSubscription` 错误信息。通过 Orca 无截图可访问性状态检查未读到 Console 控件，窗口报告位于屏幕外；因此 Console 红色错误计数仍未核实，不得报告为零。
+
+SC-002 OpenCode 独立只读 QA（Run `run_8f5c03efe244`、Task `task_f1da208a9c75`）发现 1 项中等 asmdef 边界缺陷；实现任务 `task_b3c0e82c7a58` 完成最小修正，独立复核任务 `task_d39b0acf9744` 接受该单行变更。修正后的 Domain 生成 `.csproj` 已不含 UnityEngine/UnityEditor 引用；新 Editor.log 中 C# 编译错误为 0。用户在同一 Editor 重跑 EditMode，TestResults.xml 于本地 2026-11-01 15:10:44 更新，425/425 通过。用户报告本次 Unity Console 红色错误数为 0；Editor.log 同时含 Licensing 404 和 AI `NoSubscription` 服务日志，两类证据分别记录。SC-002 不包含可玩演示；本次检查点仅提交并推送功能分支，不合并到 main 或打标签。Kanban/QATester 正式接口不可用，独立 OpenCode 技术复核已接受，不冒充 Kanban 状态。场景验证和 Play Mode 不属于 SC-002；本状态不表示 M0 已完成或新方向已有可玩内容。下一项设计顺序为 GDD 列表中的 SC-003。
