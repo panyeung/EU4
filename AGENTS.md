@@ -13,6 +13,8 @@
 \- Platform: Windows
 
 \- Project Path: C:\\Users\\panye\\My project
+\- Game Direction: 《影之一族》按 GDD_v4.0.md 执行；旧 Sengoku Chronicle M1–M7 文档仅作历史档案。
+
 
 
 
@@ -34,7 +36,7 @@ coordinates the following specialists.
 
 \### UnityCoder
 
-\- Write and maintain C# scripts
+\- Implement code changes through OpenCode2 on the current task worktree
 
 \- Implement 2D movement, physics, and gameplay
 
@@ -260,7 +262,7 @@ End each milestone with a playable demo. Require successful compilation, zero Co
 
 ## Orca and OpenCode workflow
 
-For substantial Unity coding tasks, Mochi coordinates the work through Orca's supervised orchestration. Assign implementation to an OpenCode worker on the current feature worktree, then dispatch a separate OpenCode worker for a read-only review of the completed changes. Keep the review sequential with implementation so only one worker writes the worktree at a time.
+For substantial Unity coding tasks, Mochi coordinates the work through Orca's supervised orchestration. Assign implementation to OpenCode2 on the current feature worktree, then dispatch a separate OpenCode worker for a read-only review of the completed changes. Keep the review sequential with implementation so only one worker writes the worktree at a time.
 
 The implementation task must state its file ownership, project constraints, and observable acceptance evidence. The reviewer reports findings and verification evidence without editing files; Mochi owns any follow-up routing, final sign-off, and user-facing status. Preserve unrelated user changes and existing branches. Use the already open Unity Editor for project verification; do not start batchmode against its project folder. Keep compilation, EditMode results, Console counts, Play Mode evidence, and user acceptance as separate claims.
 
@@ -271,6 +273,12 @@ For Unity coding tasks, UnityCoder implements the requested changes on the exist
 Count review attempts on the same task. After ten unsuccessful QA reviews, do not request another automatic correction cycle: block the task for human attention and list remaining defects. This is agent-enforced; do not claim the Kanban system itself imposes this ten-review cap unless verified.
 
 For each substantial feature, Mochi creates one dependent final sign-off task linked to the implementation task. It becomes eligible only when the reviewed implementation task is done after QA approval. Mochi inspects the review verdict and evidence, reports changed files, unresolved issues, and actual test results, and distinguishes compilation from Play Mode verification. Never claim runtime behavior without runtime evidence. QA approval does not replace required manual Play Mode acceptance; do not mark that behavior accepted or create the final checkpoint commit until the user explicitly accepts it. Report genuine blockers to the user rather than spawning endless follow-up tasks. Send the final sign-off outcome to the user via WhatsApp when a configured messaging route and recipient are available; if not, state that clearly and use the Kanban handoff instead.
+
+## User collaboration boundaries
+
+- OpenCode2 implements all code changes for this project; Mochi coordinates scope, review, and integration.
+- The user performs Play Tests and reports the results. Do not operate Unity to perform Play Tests on the user's behalf.
+- While the user is awake, do not use screenshots or Computer Use to interact with Unity.
 
 
 
