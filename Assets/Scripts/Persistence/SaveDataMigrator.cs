@@ -2,7 +2,7 @@ using SengokuChronicle.Domain;
 
 namespace SengokuChronicle.Persistence
 {
-    /// <summary>Explicit v1/v2-to-v3 save migration. The source object and file are never mutated.</summary>
+    /// <summary>Explicit v1/v2/v3-to-v4 save migration. The source object and file are never mutated.</summary>
     public static class SaveDataMigrator
     {
         // Fixed deterministic seed for legacy v1 sessions that did not store RNG state.
@@ -36,6 +36,54 @@ namespace SengokuChronicle.Persistence
                 return result.Succeeded;
             }
 
+            if (legacy.saveFormatVersion == 3)
+            {
+                bool containsChronicleBlock = string.IsNullOrEmpty(rawJson)
+                    ? legacy.chronicle != null && legacy.chronicle.Length > 0
+                    : SaveDataValidator.HasRootProperty(rawJson, "chronicle");
+                if (containsChronicleBlock)
+                {
+                    result = SaveOperationResult.Failure(SaveErrorCode.InvalidData,
+                        "v3 存档包含编年史（chronicle）；迁移不会静默替换该数据。");
+                    return false;
+                }
+
+                result = SaveDataValidator.ValidateLegacyV3Fields(legacy);
+                if (!result.Succeeded)
+                    return false;
+
+                current = new SaveData
+                {
+                    saveFormatVersion = SaveDataValidator.CurrentVersion,
+                    gameVersion = string.IsNullOrWhiteSpace(legacy.gameVersion)
+                        ? SaveData.CurrentGameVersion
+                        : legacy.gameVersion,
+                    rulesVersion = legacy.rulesVersion > 0 ? legacy.rulesVersion : SaveData.CurrentRulesVersion,
+                    eventContentVersion = legacy.eventContentVersion > 0
+                        ? legacy.eventContentVersion
+                        : SaveData.CurrentEventContentVersion,
+                    year = legacy.year,
+                    month = legacy.month,
+                    day = legacy.day,
+                    locationId = legacy.locationId,
+                    supplyShortageStage = legacy.supplyShortageStage,
+                    sealedLetterStage = legacy.sealedLetterStage,
+                    marketTallyStage = legacy.marketTallyStage,
+                    relationships = CloneRelationships(legacy.relationships),
+                    randomState = CloneRandomState(legacy.randomState),
+                    eventRuntime = CloneEventRuntime(legacy.eventRuntime),
+                    succession = legacy.succession != null
+                        ? legacy.succession.Clone()
+                        : SuccessionSaveData.CreateDefault(),
+                    chronicle = MigrateEventHistory(legacy.eventRuntime)
+                };
+
+                result = SaveDataValidator.Validate(current);
+                if (!result.Succeeded)
+                    current = null;
+                return result.Succeeded;
+            }
+
             if (legacy.saveFormatVersion == 2)
             {
                 bool containsSuccessionBlock = string.IsNullOrEmpty(rawJson)
@@ -45,6 +93,21 @@ namespace SengokuChronicle.Persistence
                 {
                     result = SaveOperationResult.Failure(SaveErrorCode.InvalidData,
                         "v2 存档包含继承状态（succession）；迁移不会静默替换该数据。");
+                    return false;
+                }
+
+                // A programmatic v2 object can carry a chronicle array even though the
+                // file format predates it. Reject it instead of silently replacing the
+                // caller's data with the empty migration default. The object path must
+                // test null because SaveData's constructor creates an empty array; the
+                // raw-JSON path uses the root-property check instead.
+                bool containsChronicleBlock = string.IsNullOrEmpty(rawJson)
+                    ? legacy.chronicle != null
+                    : SaveDataValidator.HasRootProperty(rawJson, "chronicle");
+                if (containsChronicleBlock)
+                {
+                    result = SaveOperationResult.Failure(SaveErrorCode.InvalidData,
+                        "v2 存档包含编年史（chronicle）；迁移不会静默替换该数据。");
                     return false;
                 }
 
@@ -72,7 +135,8 @@ namespace SengokuChronicle.Persistence
                     relationships = CloneRelationships(legacy.relationships),
                     randomState = CloneRandomState(legacy.randomState),
                     eventRuntime = CloneEventRuntime(legacy.eventRuntime),
-                    succession = SuccessionSaveData.CreateDefault()
+                    succession = SuccessionSaveData.CreateDefault(),
+                    chronicle = new ChronicleSaveEntry[0]
                 };
 
                 result = SaveDataValidator.Validate(current);
@@ -85,7 +149,7 @@ namespace SengokuChronicle.Persistence
             {
                 result = SaveOperationResult.Failure(
                     SaveErrorCode.UnsupportedVersion,
-                    $"不支持的存档版本：{legacy.saveFormatVersion}（仅支持 v1/v2 迁移到 v{SaveDataValidator.CurrentVersion}）。");
+                    $"不支持的存档版本：{legacy.saveFormatVersion}（仅支持 v1/v2/v3 迁移到 v{SaveDataValidator.CurrentVersion}）。");
                 return false;
             }
 
@@ -106,7 +170,8 @@ namespace SengokuChronicle.Persistence
                 relationships = CloneRelationships(legacy.relationships),
                 randomState = RandomStateManager.Create(V1DefaultSeed).CaptureState(),
                 eventRuntime = new EventRuntimeSaveData(),
-                succession = SuccessionSaveData.CreateDefault()
+                succession = SuccessionSaveData.CreateDefault(),
+                chronicle = new ChronicleSaveEntry[0]
             };
 
             result = SaveDataValidator.Validate(current);
@@ -135,9 +200,41 @@ namespace SengokuChronicle.Persistence
                 eventRuntime = CloneEventRuntime(source.eventRuntime),
                 succession = source.succession != null
                     ? source.succession.Clone()
-                    : SuccessionSaveData.CreateDefault()
+                    : SuccessionSaveData.CreateDefault(),
+                chronicle = ChronicleSaveCodec.Clone(source.chronicle)
             };
             return clone;
+        }
+
+        /// <summary>
+        /// Copies v3 event history into the v4 chronicle in its original order. Only the
+        /// saved year/month/summary and stable IDs are reused; the missing day is never
+        /// invented, and no mission, relationship or succession history is fabricated.
+        /// </summary>
+        private static ChronicleSaveEntry[] MigrateEventHistory(EventRuntimeSaveData runtime)
+        {
+            if (runtime == null || runtime.history == null || runtime.history.Length == 0)
+                return new ChronicleSaveEntry[0];
+
+            var entries = new ChronicleSaveEntry[runtime.history.Length];
+            for (int i = 0; i < runtime.history.Length; i++)
+            {
+                EventHistorySaveEntry history = runtime.history[i];
+                int sequence = i + 1;
+                entries[i] = new ChronicleSaveEntry
+                {
+                    entryId = FamilyChronicleEntry.BuildEntryId(sequence),
+                    sequence = sequence,
+                    year = history.year,
+                    month = history.month,
+                    category = (int)ChronicleCategory.Event,
+                    subjectId = history.eventId,
+                    sourceId = history.optionId,
+                    title = "既往事件",
+                    summary = history.summary ?? string.Empty
+                };
+            }
+            return entries;
         }
 
         internal static EventRuntimeSaveData CloneEventRuntime(EventRuntimeSaveData source)

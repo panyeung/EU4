@@ -4,12 +4,12 @@
 
 ## 当前实现边界
 
-- **Presentation**：Unity/uGUI 输入与显示；当前可玩检查点包含月末推进、事件选择和选择结果反馈。游戏规则不由 UI 执行。
-- **Application**：`GameSession` 编排月份推进、存档/恢复和待处理事件；在事件待选时拒绝推进月份。
-- **Domain**：日期与确定性随机流使用普通 C# 状态和规则；保持稳定 ID，不依赖场景对象。
-- **Events**：独立纯 C# 数据模型、内容验证和允许列表事件引擎；从 `Resources/Events` 加载事件 JSON，从 `Resources/Localization` 加载本地化文本；不执行任意脚本。
-- **Persistence**：Unity 内置 `JsonUtility` 与版本化 DTO；保留 v1→v2 迁移和恢复保护；运行状态、随机流和待处理事件在保存时显式映射，不序列化 Unity 对象。
-- **Editor**：FoundationScene 的控件更新使用事务式菜单工具；`.unity`/`.prefab` YAML 不作为手工编辑入口。
+- **Presentation**：Unity/uGUI 输入与显示；当前可玩检查点包含月末推进、事件选择、继承操作及 SC-012 只读编年史面板。游戏规则不由 UI 执行。
+- **Application**：`GameSession` 编排月份推进、存档/恢复和待处理事件；在成功提交边界记录事件、实际关系变化、任务阶段和继承阶段；读档恢复不追加记录。
+- **Domain**：日期、确定性随机流和追加式 `HistoryLedger` 使用普通 C# 状态与规则；保持稳定 ID，不依赖场景对象或 Persistence。
+- **Events**：独立纯 C# 数据模型、内容验证和允许列表事件引擎；从 `Resources/Events` 加载事件 JSON，从 `Resources/Localization` 加载本地化文本；不执行任意脚本。SC-012 事件关系效果仅在事件提交后进入编年史。
+- **Persistence**：Unity 内置 `JsonUtility` 与版本化 DTO；当前存档 schema 为 v4，保留 v1/v2/v3→v4 迁移和恢复保护；v3 事件历史迁移时保留年/月，不推造旧任务、关系或继承记录。
+- **Editor**：FoundationScene 的控件更新使用事务式菜单工具；SC-012 updater 与 validator 已实现，待在现有 Editor 执行并保存/验证；`.unity`/`.prefab` YAML 不作为手工编辑入口。
 - **测试**：纯逻辑、存档、内容校验与 UI 行为由 Unity Test Framework 覆盖。每次报告分别写明编译、EditMode、场景验证、Console、Play Mode 和用户验收证据。
 
 依赖方向：`Presentation → Application → Domain/Events`；`Application ↔ Persistence` 通过显式 DTO 映射；静态 JSON 内容经验证后由事件系统消费。
@@ -18,6 +18,8 @@
 
 SC-004–SC-009 已随 `demo-SC004-SC009` 推送到 `main`，并获用户 Edit Mode 与 Play Test 验收。SC-010 以提交 `af35633`、标签 `demo-SC010` 获用户验收。SC-011 已于 2026-11-02 获用户验收：用户报告编译通过、EditMode passed、Console 无错误及 Play Test 通过；EditMode 数量、Console 警告数未提供，`FoundationSceneValidator` 结果未报告。上述 SC-011 结果是用户报告，不是本协调过程取得的 Editor 日志。其余项目证据及旧序列化位置见 [PROJECT_STATE.md](PROJECT_STATE.md)。
 
+SC-012 代码/测试源已通过第三轮 OpenCode2 静态只读复审（ACCEPT）。用户随后报告 EditMode 通过、Play Test 通过并明确验收。具体 EditMode 数量、Console error/warning 计数及 `FoundationSceneValidator` 结果未单独提供。早期 Roslyn/harness 数值先于最后一次代码修复；最新修复仅报告 brace/whitespace 静态检查，不能把这些结果当作 Unity 运行证据。复审还记录 append 失败路径缺少应用层测试以及 v1 异常 chronicle 字段兼容边界，见 `PROJECT_STATE.md` 与 `SC012_DEMO.md`。
+
 ## SC-011 事件规则扩展
 
 - `EventRuleContext` 是只读值类型，携带 SC-010 的原始 `SuccessionCount` 与“已落定”计数（仅在 `SuccessionPhase.None` 时等于原始计数）。
@@ -25,9 +27,9 @@ SC-004–SC-009 已随 `demo-SC004-SC009` 推送到 `main`，并获用户 Edit M
 - `GameSession.BuildEventRuleContext()` 是唯一把 SC-010 继承状态转换为事件规则上下文的位置；事件仍只写入家族级 NPC `CharacterRelationships`，不冒充 `PersonId` 私人关系。
 - 事件目录与文本内容版本升为 `2`；存档 schema 仍为 `3`，只增加内容 `1 → 2` 的单向附加兼容窗口。资源文件名保持不变。
 
-## 下一项
+## 当前 Play Test 准备
 
-SC-011 跨代事件链已获用户验收并进入 `demo-SC011` checkpoint。下一项为 SC-012 家族编年史。SC-003 家族模型的工作区改动未纳入本 checkpoint；开始新工作前须检查并保留。
+SC-012 家族编年史已获用户 Play Test 验收。下一候选按 GDD v4.0 为 M2 三代速通原型；先完成现有实现差距盘点、中文设计稿与计划，再由 OpenCode2 实现并安排下一轮用户 Play Test。
 ## 历史实现记录：M4a 补给短缺任务（旧方向）
 
 M4a 采用固定任务模型，不引入通用任务图、事件总线或任务编辑器。`SupplyShortageMission` 在 Domain 层用普通 C# 管理阶段与 merit；`GameSession` 根据当前地点协调显式用例；uGUI 任务面板只显示进度并转发操作。流程为 `NotAccepted → Accepted → Investigated → Negotiated → RewardClaimed`：清洲接受任务、热田调查并与黑田伊织交涉、返回清洲报告；有效报告恰好增加 10 merit，后续报告不会重复奖励。任务操作不推进日期或地点，新局会重置任务和 merit。

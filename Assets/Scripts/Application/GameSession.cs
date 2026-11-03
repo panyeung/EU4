@@ -59,6 +59,7 @@ namespace SengokuChronicle.Application
         private EventTextCatalog _eventTextCatalog;
         private EventEngine _eventEngine;
         private SuccessionState _succession;
+        private HistoryLedger _historyLedger = HistoryLedger.CreateEmpty();
         private readonly Dictionary<Guid, DialogueState> _dialogues = new Dictionary<Guid, DialogueState>();
 
         public event Action SessionStateChanged;
@@ -68,6 +69,10 @@ namespace SengokuChronicle.Application
         public bool EventCatalogReady => _eventEngine != null && _eventEngine.IsReady;
         public EventCatalogData EventCatalog => _eventCatalog;
         public EventTextCatalog EventText => _eventTextCatalog;
+
+        /// <summary>Read-only SC-012 record view in append order.</summary>
+        public IReadOnlyList<FamilyChronicleEntry> ChronicleEntries =>
+            EnsureHistoryLedger().Entries;
 
         /// <summary>SC-010 succession state (head, pending decision, roster and kinship).</summary>
         public SuccessionState Succession
@@ -163,7 +168,12 @@ namespace SengokuChronicle.Application
             }
             state.CurrentNodeId = target.Id;
             state.Ended = target.Options.Count == 0;
-            if (hasEffect) relationship = _relationships.TryChange(selected.EffectTarget, selected.RelationshipDelta);
+            if (hasEffect)
+            {
+                relationship = _relationships.TryChange(selected.EffectTarget, selected.RelationshipDelta);
+                if (RecordRelationshipChange(relationship, "dialogue"))
+                    SessionStateChanged?.Invoke();
+            }
             return new DialogueSelectionResult(state.CurrentNodeId, state.Ended, true, string.Empty, hasEffect && relationship.Succeeded, relationship);
         }
 
@@ -192,6 +202,7 @@ namespace SengokuChronicle.Application
             _sealedLetterMission = new SealedLetterMission();
             _marketTallyMission = new MarketTallyMission();
             _succession = SuccessionSample.CreateStandard();
+            _historyLedger = HistoryLedger.CreateEmpty();
             LastSuccessionMessage = string.Empty;
             _dialogues.Clear();
             LastMonthTurnOutcome = MonthTurnOutcome.Succeeded;
@@ -226,35 +237,101 @@ namespace SengokuChronicle.Application
                    state.World.Family.Id == SuccessionSample.StandardFamilyId;
         }
 
-        public SuccessionResult BeginSuccessionRetirement() =>
-            ApplySuccessionResult(SuccessionService.BeginRetirement(Succession, CurrentGameDate));
+        public SuccessionResult BeginSuccessionRetirement()
+        {
+            EnsureSuccession();
+            SuccessionSnapshot before = SuccessionSnapshot.Capture(_succession);
+            return ApplySuccessionResult(before, SuccessionService.BeginRetirement(_succession, CurrentGameDate));
+        }
 
-        public SuccessionResult SelectSuccessionSuccessor(PersonId personId) =>
-            ApplySuccessionResult(SuccessionService.SelectSuccessor(Succession, personId, CurrentGameDate));
+        public SuccessionResult SelectSuccessionSuccessor(PersonId personId)
+        {
+            EnsureSuccession();
+            SuccessionSnapshot before = SuccessionSnapshot.Capture(_succession);
+            return ApplySuccessionResult(before,
+                SuccessionService.SelectSuccessor(_succession, personId, CurrentGameDate));
+        }
 
-        public SuccessionResult SelectSuccessionRegent(PersonId personId) =>
-            ApplySuccessionResult(SuccessionService.SelectRegent(Succession, personId, CurrentGameDate));
+        public SuccessionResult SelectSuccessionRegent(PersonId personId)
+        {
+            EnsureSuccession();
+            SuccessionSnapshot before = SuccessionSnapshot.Capture(_succession);
+            return ApplySuccessionResult(before,
+                SuccessionService.SelectRegent(_succession, personId, CurrentGameDate));
+        }
 
-        public SuccessionResult ConfirmSuccession() =>
-            ApplySuccessionResult(SuccessionService.ConfirmSuccession(Succession, CurrentGameDate));
+        public SuccessionResult ConfirmSuccession()
+        {
+            EnsureSuccession();
+            SuccessionSnapshot before = SuccessionSnapshot.Capture(_succession);
+            return ApplySuccessionResult(before,
+                SuccessionService.ConfirmSuccession(_succession, CurrentGameDate));
+        }
 
-        public SuccessionResult AcceptCrisisAdoption() =>
-            ApplySuccessionResult(SuccessionService.AcceptCrisisAdoption(Succession, CurrentGameDate));
+        public SuccessionResult AcceptCrisisAdoption()
+        {
+            EnsureSuccession();
+            SuccessionSnapshot before = SuccessionSnapshot.Capture(_succession);
+            return ApplySuccessionResult(before,
+                SuccessionService.AcceptCrisisAdoption(_succession, CurrentGameDate));
+        }
 
-        public SuccessionResult DeclineCrisis() =>
-            ApplySuccessionResult(SuccessionService.DeclineCrisis(Succession));
+        public SuccessionResult DeclineCrisis()
+        {
+            EnsureSuccession();
+            SuccessionSnapshot before = SuccessionSnapshot.Capture(_succession);
+            return ApplySuccessionResult(before, SuccessionService.DeclineCrisis(_succession));
+        }
 
         /// <summary>Completes a due regency after time advances; never advances time itself.</summary>
-        public SuccessionResult TryCompleteSuccessionRegency() =>
-            ApplySuccessionResult(SuccessionService.TryCompleteRegency(Succession, CurrentGameDate));
+        public SuccessionResult TryCompleteSuccessionRegency()
+        {
+            EnsureSuccession();
+            SuccessionSnapshot before = SuccessionSnapshot.Capture(_succession);
+            return ApplySuccessionResult(before,
+                SuccessionService.TryCompleteRegency(_succession, CurrentGameDate));
+        }
 
-        private SuccessionResult ApplySuccessionResult(SuccessionResult result)
+        /// <summary>
+        /// Single post-command boundary for every succession wrapper. The command has
+        /// already mutated the state, so the pre-snapshot decides whether a record is
+        /// warranted: only a real phase, head or completed-result change is recorded.
+        /// Failed commands and successful no-ops (for example a repeated retirement
+        /// request) append nothing but still refresh listeners exactly once.
+        /// </summary>
+        private SuccessionResult ApplySuccessionResult(in SuccessionSnapshot before, SuccessionResult result)
         {
             if (!result.Succeeded)
                 return result;
             LastSuccessionMessage = result.Message;
+            if (before.DiffersFrom(_succession))
+                RecordSuccession(before, result);
             SessionStateChanged?.Invoke();
             return result;
+        }
+
+        private readonly struct SuccessionSnapshot
+        {
+            private SuccessionSnapshot(SuccessionPhase phase, PersonId headId, string completedResultId)
+            {
+                Phase = phase;
+                HeadId = headId;
+                CompletedResultId = completedResultId ?? string.Empty;
+            }
+
+            public SuccessionPhase Phase { get; }
+            public PersonId HeadId { get; }
+            public string CompletedResultId { get; }
+
+            public static SuccessionSnapshot Capture(SuccessionState state) =>
+                new SuccessionSnapshot(state.Phase, state.HeadPersonId, state.CompletedResultId);
+
+            public bool DiffersFrom(SuccessionState state) =>
+                state != null &&
+                (Phase != state.Phase ||
+                 HeadId != state.HeadPersonId ||
+                 !string.Equals(CompletedResultId, state.CompletedResultId ?? string.Empty,
+                     StringComparison.Ordinal));
         }
 
         private bool NoticeRegencyHandoffIfDue()
@@ -342,7 +419,8 @@ namespace SengokuChronicle.Application
                 relationships = CaptureRelationships(),
                 randomState = _randomStateManager.CaptureState(),
                 eventRuntime = _eventRuntimeState.Capture(),
-                succession = SuccessionSaveData.Capture(Succession)
+                succession = SuccessionSaveData.Capture(Succession),
+                chronicle = ChronicleSaveCodec.Capture(EnsureHistoryLedger())
             };
         }
 
@@ -372,6 +450,9 @@ namespace SengokuChronicle.Application
             if (!SuccessionSaveData.TryRestore(data.succession, date,
                     out SuccessionState succession, out string successionError))
                 return InvalidSave(string.IsNullOrEmpty(successionError) ? "存档继承状态无效。" : successionError);
+            if (!ChronicleSaveCodec.TryRestore(data.chronicle,
+                    out HistoryLedger historyLedger, out string chronicleError))
+                return InvalidSave(string.IsNullOrEmpty(chronicleError) ? "存档编年史无效。" : chronicleError);
 
             if (!LocationId.TryParse(data.locationId, out LocationId location))
                 return InvalidSave("存档地点无效。");
@@ -408,6 +489,7 @@ namespace SengokuChronicle.Application
             _randomStateManager = randomState;
             _eventRuntimeState = eventRuntime;
             _succession = succession;
+            _historyLedger = historyLedger;
             LastSuccessionMessage = string.Empty;
             NoticeRegencyHandoffIfDue();
             _dialogues.Clear();
@@ -463,47 +545,84 @@ namespace SengokuChronicle.Application
 
         public SealedLetterActionResult TryAcceptSealedLetterMission()
         {
-            return _sealedLetterMission.TryAccept(CurrentLocation);
+            SealedLetterStage before = _sealedLetterMission.Stage;
+            SealedLetterActionResult result = _sealedLetterMission.TryAccept(CurrentLocation);
+            RecordMission(FamilyChronicleEntry.SealedLetterMissionId, "accept", "密信", (int)before, (int)result.Stage,
+                result.Succeeded, result.Feedback);
+            return result;
         }
 
         public SealedLetterActionResult TryDeliverSealedLetter()
         {
-            return _sealedLetterMission.TryDeliver(CurrentLocation);
+            SealedLetterStage before = _sealedLetterMission.Stage;
+            SealedLetterActionResult result = _sealedLetterMission.TryDeliver(CurrentLocation);
+            RecordMission(FamilyChronicleEntry.SealedLetterMissionId, "deliver", "密信", (int)before, (int)result.Stage,
+                result.Succeeded, result.Feedback);
+            return result;
         }
 
         public MarketTallyActionResult TryAcceptMarketTallyMission()
         {
-            return _marketTallyMission.TryAccept(CurrentLocation);
+            MarketTallyStage before = _marketTallyMission.Stage;
+            MarketTallyActionResult result = _marketTallyMission.TryAccept(CurrentLocation);
+            RecordMission(FamilyChronicleEntry.MarketTallyMissionId, "accept", "市集账目", (int)before, (int)result.Stage,
+                result.Succeeded, result.Feedback);
+            return result;
         }
 
         public MarketTallyActionResult TryInvestigateMarketTally()
         {
-            return _marketTallyMission.TryInvestigate(CurrentLocation);
+            MarketTallyStage before = _marketTallyMission.Stage;
+            MarketTallyActionResult result = _marketTallyMission.TryInvestigate(CurrentLocation);
+            RecordMission(FamilyChronicleEntry.MarketTallyMissionId, "investigate", "市集账目", (int)before,
+                (int)result.Stage, result.Succeeded, result.Feedback);
+            return result;
         }
 
         public MarketTallyActionResult TryReportMarketTally()
         {
-            return _marketTallyMission.TryReport(CurrentLocation);
+            MarketTallyStage before = _marketTallyMission.Stage;
+            MarketTallyActionResult result = _marketTallyMission.TryReport(CurrentLocation);
+            RecordMission(FamilyChronicleEntry.MarketTallyMissionId, "report", "市集账目", (int)before, (int)result.Stage,
+                result.Succeeded, result.Feedback);
+            return result;
         }
 
         public SupplyShortageActionResult TryAcceptSupplyShortageMission()
         {
-            return _supplyShortageMission.TryAccept(CurrentLocation);
+            SupplyShortageStage before = _supplyShortageMission.Stage;
+            SupplyShortageActionResult result = _supplyShortageMission.TryAccept(CurrentLocation);
+            RecordMission(FamilyChronicleEntry.SupplyShortageMissionId, "accept", "补给短缺", (int)before,
+                (int)result.Stage, result.Succeeded, result.Feedback);
+            return result;
         }
 
         public SupplyShortageActionResult TryInvestigateSupplyShortage()
         {
-            return _supplyShortageMission.TryInvestigate(CurrentLocation);
+            SupplyShortageStage before = _supplyShortageMission.Stage;
+            SupplyShortageActionResult result = _supplyShortageMission.TryInvestigate(CurrentLocation);
+            RecordMission(FamilyChronicleEntry.SupplyShortageMissionId, "investigate", "补给短缺", (int)before,
+                (int)result.Stage, result.Succeeded, result.Feedback);
+            return result;
         }
 
         public SupplyShortageActionResult TryNegotiateSupplyShortage(CharacterId merchantId)
         {
-            return _supplyShortageMission.TryNegotiate(CurrentLocation, merchantId);
+            SupplyShortageStage before = _supplyShortageMission.Stage;
+            SupplyShortageActionResult result =
+                _supplyShortageMission.TryNegotiate(CurrentLocation, merchantId);
+            RecordMission(FamilyChronicleEntry.SupplyShortageMissionId, "negotiate", "补给短缺", (int)before,
+                (int)result.Stage, result.Succeeded, result.Feedback);
+            return result;
         }
 
         public SupplyShortageActionResult TryReportSupplyShortage()
         {
-            return _supplyShortageMission.TryReport(CurrentLocation);
+            SupplyShortageStage before = _supplyShortageMission.Stage;
+            SupplyShortageActionResult result = _supplyShortageMission.TryReport(CurrentLocation);
+            RecordMission(FamilyChronicleEntry.SupplyShortageMissionId, "report", "补给短缺", (int)before,
+                (int)result.Stage, result.Succeeded, result.Feedback);
+            return result;
         }
 
         /// <summary>Reads the player's relationship with a known NPC.</summary>
@@ -517,7 +636,119 @@ namespace SengokuChronicle.Application
         public RelationshipResult TryChangeRelationship(CharacterId npcId, int delta)
         {
             EnsureRelationships();
-            return _relationships.TryChange(npcId, delta);
+            RelationshipResult result = _relationships.TryChange(npcId, delta);
+            if (RecordRelationshipChange(result, "direct"))
+                SessionStateChanged?.Invoke();
+            return result;
+        }
+
+        /// <summary>
+        /// Appends one relationship record only when the change really happened.
+        /// Callers pass the applied <see cref="RelationshipResult"/> so the record shows
+        /// the exact clamped previous/current pair. Returns true for every real value
+        /// change, even if the separate bookkeeping append itself failed.
+        /// </summary>
+        private bool RecordRelationshipChange(RelationshipResult result, string channel)
+        {
+            if (!result.Succeeded || result.PreviousValue == result.CurrentValue)
+                return false;
+
+            GameDate date = CurrentGameDate;
+            string name = CharacterCatalog.TryGet(result.NpcId, out CharacterDefinition definition)
+                ? definition.DisplayName
+                : result.NpcId.Value;
+            if (!EnsureHistoryLedger().TryAppendRelationship(date.Year, date.Month,
+                    result.NpcId.Value, channel,
+                    result.PreviousValue, result.CurrentValue, name,
+                    "与" + name + "的关系 " + result.PreviousValue.ToString(CultureInfo.InvariantCulture) +
+                    " → " + result.CurrentValue.ToString(CultureInfo.InvariantCulture) +
+                    "（" + RelationshipChannelName(channel) + "）。",
+                    out _, out string error))
+                ReportChronicleAppendFailure("关系", error);
+
+            // The relationship value already changed, so callers must still refresh
+            // observers even when the separate chronicle bookkeeping append failed.
+            return true;
+        }
+
+        /// <summary>
+        /// Appends one mission record only when the action succeeded and actually moved
+        /// the stage. Rejected actions and repeats stay silent; a real change refreshes
+        /// the session once so an open chronicle panel updates.
+        /// </summary>
+        private void RecordMission(string missionId, string actionId, string missionName,
+            int beforeStage, int afterStage, bool succeeded, string feedback)
+        {
+            if (!succeeded || beforeStage == afterStage)
+                return;
+
+            GameDate date = CurrentGameDate;
+            if (!EnsureHistoryLedger().TryAppendMission(date.Year, date.Month, missionId, actionId,
+                    beforeStage, afterStage, missionName, feedback, out _, out string error))
+                ReportChronicleAppendFailure("任务", error);
+            SessionStateChanged?.Invoke();
+        }
+
+        private void RecordEventChoice(EventChoiceResult result)
+        {
+            GameDate date = CurrentGameDate;
+            string title = _eventEngine != null &&
+                           _eventEngine.TryGetEventText(result.EventId, out EventTextEntry text)
+                ? text.title
+                : result.EventId;
+            if (!EnsureHistoryLedger().TryAppendEvent(date.Year, date.Month, result.EventId,
+                    result.OptionId, title, result.Feedback, out _, out string error))
+                ReportChronicleAppendFailure("事件", error);
+        }
+
+        /// <summary>
+        /// Chronicle appends are bookkeeping outside the gameplay transaction, so a
+        /// rejected append must not throw and break play. It must still be observable
+        /// in every build instead of being swallowed by a discarded false result.
+        /// </summary>
+        private static void ReportChronicleAppendFailure(string category, string error)
+        {
+            Debug.LogError("家族编年史记录写入失败（" + category + "）：" +
+                           (string.IsNullOrEmpty(error) ? "未知原因" : error));
+        }
+
+        private void RecordSuccession(in SuccessionSnapshot before, SuccessionResult result)
+        {
+            GameDate date = CurrentGameDate;
+            PersonId subject = result.Subject.IsEmpty ? _succession.HeadPersonId : result.Subject;
+            string subjectId = subject.Value;
+            // The completed result ID only belongs to this record when this command
+            // actually produced a new one. Reusing a stale value from an earlier
+            // succession would misattribute a later retirement.
+            string sourceId = !string.Equals(before.CompletedResultId,
+                _succession.CompletedResultId ?? string.Empty, StringComparison.Ordinal)
+                ? _succession.CompletedResultId
+                : result.Outcome.ToString();
+            string subjectName = _succession.World.TryGetPerson(subject, out PersonState person)
+                ? person.DisplayName
+                : subjectId;
+            if (!EnsureHistoryLedger().TryAppendSuccession(date.Year, date.Month, subjectId, sourceId,
+                    (int)before.Phase, (int)_succession.Phase, subjectName, result.Message,
+                    before.HeadId.Value, _succession.HeadPersonId.Value,
+                    out _, out string error))
+                ReportChronicleAppendFailure("继承", error);
+        }
+
+        private static string RelationshipChannelName(string channel)
+        {
+            switch (channel)
+            {
+                case "dialogue": return "对话";
+                case "event": return "事件";
+                default: return "直接行动";
+            }
+        }
+
+        private HistoryLedger EnsureHistoryLedger()
+        {
+            if (_historyLedger == null)
+                _historyLedger = HistoryLedger.CreateEmpty();
+            return _historyLedger;
         }
 
         private void EnsureRelationships()
@@ -595,6 +826,9 @@ namespace SengokuChronicle.Application
                 currentDate, _relationships, _eventRuntimeState, BuildEventRuleContext());
             if (result.Succeeded)
             {
+                RecordEventChoice(result);
+                foreach (RelationshipResult relationship in result.AppliedRelationships)
+                    RecordRelationshipChange(relationship, "event");
                 LastEventMessage = result.Feedback;
                 SessionStateChanged?.Invoke();
             }

@@ -10,7 +10,7 @@ namespace SengokuChronicle.Persistence
     /// </summary>
     public static class SaveDataValidator
     {
-        public const int CurrentVersion = 3;
+        public const int CurrentVersion = 4;
 
         public static SaveOperationResult Validate(SaveData data)
         {
@@ -52,6 +52,10 @@ namespace SengokuChronicle.Persistence
             if (!succession.Succeeded)
                 return succession;
 
+            SaveOperationResult chronicle = ValidateChronicle(data.chronicle);
+            if (!chronicle.Succeeded)
+                return chronicle;
+
             if (!RandomStateManager.TryRestore(data.randomState, out _))
                 return Invalid("存档随机流状态无效。");
 
@@ -60,10 +64,11 @@ namespace SengokuChronicle.Persistence
         }
 
         /// <summary>
-        /// Rejects v3 JSON that omitted a required field instead of accepting the
-        /// defaults that <see cref="SaveData"/>'s constructor would otherwise supply.
-        /// Legacy v1/v2 payloads intentionally lack the v3 succession block; the
-        /// migrator owns their documented defaults.
+        /// Rejects current-version JSON that omitted a required field instead of
+        /// accepting the defaults that <see cref="SaveData"/>'s constructor would
+        /// otherwise supply. Legacy v1/v2 payloads lack the v3 succession block and
+        /// v1-v3 payloads lack the v4 chronicle; the migrator owns their documented
+        /// defaults.
         /// </summary>
         /// <param name="probe">
         /// Parsed scalar fields plus defensive null checks. Unity's JsonUtility still
@@ -79,13 +84,18 @@ namespace SengokuChronicle.Persistence
             if (probe.saveFormatVersion == 1)
                 return SaveOperationResult.Success();
 
-            if (probe.saveFormatVersion != 2 && probe.saveFormatVersion != CurrentVersion)
+            if (probe.saveFormatVersion != 2 && probe.saveFormatVersion != 3 &&
+                probe.saveFormatVersion != CurrentVersion)
                 return SaveOperationResult.Failure(
                     SaveErrorCode.UnsupportedVersion,
                     $"不支持的存档版本：{probe.saveFormatVersion}（当前版本 {CurrentVersion}）。");
 
             if (probe.saveFormatVersion == 2 && HasRootProperty(json, "succession"))
                 return Invalid("v2 存档包含继承状态（succession）；迁移不会静默替换该数据。");
+            if (probe.saveFormatVersion == 2 && HasRootProperty(json, "chronicle"))
+                return Invalid("v2 存档包含编年史（chronicle）；迁移不会静默替换该数据。");
+            if (probe.saveFormatVersion == 3 && HasRootProperty(json, "chronicle"))
+                return Invalid("v3 存档包含编年史（chronicle）；迁移不会静默替换该数据。");
 
             if (string.IsNullOrWhiteSpace(probe.gameVersion) || probe.rulesVersion <= 0 ||
                 probe.eventContentVersion <= 0)
@@ -94,9 +104,12 @@ namespace SengokuChronicle.Persistence
                 return Invalid("存档缺少随机流状态（randomState）。");
             if (probe.eventRuntime == null || !HasRootProperty(json, "eventRuntime"))
                 return Invalid("存档缺少事件运行状态（eventRuntime）。");
-            if (probe.saveFormatVersion == CurrentVersion &&
+            if (probe.saveFormatVersion >= 3 &&
                 (probe.succession == null || !HasRootProperty(json, "succession")))
                 return Invalid("存档缺少继承状态（succession）。");
+            if (probe.saveFormatVersion == CurrentVersion &&
+                (probe.chronicle == null || !HasRootProperty(json, "chronicle")))
+                return Invalid("存档缺少编年史（chronicle）。");
 
             return SaveOperationResult.Success();
         }
@@ -196,6 +209,34 @@ namespace SengokuChronicle.Persistence
                 return Invalid("存档随机流状态无效。");
             return ValidateEventRuntimeSnapshot(data.eventRuntime,
                 new GameDate(data.year, data.month, data.day));
+        }
+
+        /// <summary>
+        /// v3 already owns the succession block but predates the chronicle. The
+        /// migrator copies the saved event history into the v4 chronicle and must not
+        /// invent any mission, relationship or succession history.
+        /// </summary>
+        internal static SaveOperationResult ValidateLegacyV3Fields(SaveData data)
+        {
+            SaveOperationResult legacy = ValidateLegacyV2Fields(data);
+            if (!legacy.Succeeded)
+                return legacy;
+            if (data.succession == null)
+                return Invalid("存档缺少继承状态（succession）。");
+            return data.succession.ValidateForSave(new GameDate(data.year, data.month, data.day));
+        }
+
+        /// <summary>
+        /// Validates the complete v4 chronicle through the same domain rules used for
+        /// capture, so an accepted save is always restorable without a second check.
+        /// </summary>
+        internal static SaveOperationResult ValidateChronicle(ChronicleSaveEntry[] entries)
+        {
+            if (entries == null)
+                return Invalid("存档缺少编年史（chronicle）。");
+            return ChronicleSaveCodec.TryRestore(entries, out _, out string error)
+                ? SaveOperationResult.Success()
+                : Invalid(string.IsNullOrEmpty(error) ? "存档编年史记录无效。" : error);
         }
 
         private static SaveOperationResult ValidateRelationships(RelationshipSaveEntry[] entries)

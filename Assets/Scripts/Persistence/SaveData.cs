@@ -41,6 +41,7 @@ namespace SengokuChronicle.Persistence
         public RandomStateSaveData randomState;
         public EventRuntimeSaveData eventRuntime;
         public SuccessionSaveData succession;
+        public ChronicleSaveEntry[] chronicle;
 
         public SaveData()
         {
@@ -51,6 +52,7 @@ namespace SengokuChronicle.Persistence
             randomState = RandomStateManager.Create(0UL).CaptureState();
             eventRuntime = new EventRuntimeSaveData();
             succession = SuccessionSaveData.CreateDefault();
+            chronicle = new ChronicleSaveEntry[0];
         }
     }
 
@@ -73,6 +75,7 @@ namespace SengokuChronicle.Persistence
         public RandomStateSaveData randomState;
         public EventRuntimeSaveData eventRuntime;
         public SuccessionSaveData succession;
+        public ChronicleSaveEntry[] chronicle;
     }
 
     /// <summary>One player-to-NPC relationship value, keyed by stable character ID.</summary>
@@ -625,5 +628,139 @@ namespace SengokuChronicle.Persistence
         public string from;
         public string to;
         public int type;
+    }
+
+    /// <summary>
+    /// Plain-data v4 chronicle record. Field names and values are the single save
+    /// format; the runtime <see cref="HistoryLedger"/> rebuild is owned by
+    /// <see cref="ChronicleSaveCodec"/>.
+    /// </summary>
+    [Serializable]
+    public sealed class ChronicleSaveEntry
+    {
+        public string entryId;
+        public int sequence;
+        public int year;
+        public int month;
+        public int category;
+        public string subjectId;
+        public string sourceId;
+        public string title;
+        public string summary;
+        public int fromValue;
+        public int toValue;
+        public int fromStage;
+        public int toStage;
+        public int fromPhase;
+        public int toPhase;
+        public string fromHeadId;
+        public string toHeadId;
+
+        public static ChronicleSaveEntry FromEntry(FamilyChronicleEntry entry)
+        {
+            if (entry == null)
+                return null;
+
+            return new ChronicleSaveEntry
+            {
+                entryId = entry.EntryId,
+                sequence = entry.Sequence,
+                year = entry.Year,
+                month = entry.Month,
+                category = (int)entry.Category,
+                subjectId = entry.SubjectId,
+                sourceId = entry.SourceId,
+                title = entry.Title,
+                summary = entry.Summary,
+                fromValue = entry.FromValue,
+                toValue = entry.ToValue,
+                fromStage = entry.FromStage,
+                toStage = entry.ToStage,
+                fromPhase = entry.FromPhase,
+                toPhase = entry.ToPhase,
+                fromHeadId = entry.FromHeadId,
+                toHeadId = entry.ToHeadId
+            };
+        }
+    }
+
+    /// <summary>
+    /// Maps the chronicle persistence DTO to and from the immutable domain ledger.
+    /// Restore is atomic: a malformed or duplicate record yields no ledger at all.
+    /// </summary>
+    public static class ChronicleSaveCodec
+    {
+        public static ChronicleSaveEntry[] Capture(HistoryLedger ledger)
+        {
+            if (ledger == null || ledger.Count == 0)
+                return new ChronicleSaveEntry[0];
+
+            var captured = new ChronicleSaveEntry[ledger.Count];
+            for (int i = 0; i < ledger.Count; i++)
+                captured[i] = ChronicleSaveEntry.FromEntry(ledger.Entries[i]);
+            return captured;
+        }
+
+        public static bool TryRestore(ChronicleSaveEntry[] saved, out HistoryLedger ledger,
+            out string error)
+        {
+            ledger = null;
+            error = string.Empty;
+            if (saved == null || saved.Length == 0)
+            {
+                ledger = HistoryLedger.CreateEmpty();
+                return true;
+            }
+
+            var entries = new FamilyChronicleEntry[saved.Length];
+            for (int i = 0; i < saved.Length; i++)
+            {
+                ChronicleSaveEntry dto = saved[i];
+                if (dto == null)
+                {
+                    error = "存档编年史记录为空。";
+                    return false;
+                }
+                if (!FamilyChronicleEntry.TryCreate(dto.sequence, dto.entryId, dto.year, dto.month,
+                        (ChronicleCategory)dto.category, dto.subjectId, dto.sourceId, dto.title,
+                        dto.summary, dto.fromValue, dto.toValue, dto.fromStage, dto.toStage,
+                        dto.fromPhase, dto.toPhase, dto.fromHeadId, dto.toHeadId,
+                        out entries[i], out error))
+                    return false;
+            }
+
+            return HistoryLedger.TryRestore(entries, out ledger, out error);
+        }
+
+        public static ChronicleSaveEntry[] Clone(ChronicleSaveEntry[] source)
+        {
+            if (source == null) return null;
+            var clone = new ChronicleSaveEntry[source.Length];
+            for (int i = 0; i < source.Length; i++)
+            {
+                ChronicleSaveEntry entry = source[i];
+                clone[i] = entry == null ? null : new ChronicleSaveEntry
+                {
+                    entryId = entry.entryId,
+                    sequence = entry.sequence,
+                    year = entry.year,
+                    month = entry.month,
+                    category = entry.category,
+                    subjectId = entry.subjectId,
+                    sourceId = entry.sourceId,
+                    title = entry.title,
+                    summary = entry.summary,
+                    fromValue = entry.fromValue,
+                    toValue = entry.toValue,
+                    fromStage = entry.fromStage,
+                    toStage = entry.toStage,
+                    fromPhase = entry.fromPhase,
+                    toPhase = entry.toPhase,
+                    fromHeadId = entry.fromHeadId,
+                    toHeadId = entry.toHeadId
+                };
+            }
+            return clone;
+        }
     }
 }

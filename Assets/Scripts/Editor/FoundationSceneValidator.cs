@@ -36,6 +36,7 @@ namespace SengokuChronicle.Editor
             DemoSummaryPanel demoPanel = FindComponent<DemoSummaryPanel>(scene);
             RankPanel rankPanel = FindComponent<RankPanel>(scene);
             SuccessionPanel successionPanel = FindComponent<SuccessionPanel>(scene);
+            FamilyChroniclePanel chroniclePanel = FindComponent<FamilyChroniclePanel>(scene);
 
             CheckFound(report, ref errors, "Canvas", canvas);
             CheckFound(report, ref errors, "Canvas/M2WorldMapRoot", mapRoot);
@@ -48,6 +49,7 @@ namespace SengokuChronicle.Editor
             CheckFound(report, ref errors, "DemoSummaryPanel", demoPanel);
             CheckFound(report, ref errors, "RankPanel", rankPanel);
             CheckFound(report, ref errors, "SuccessionPanel", successionPanel);
+            CheckFound(report, ref errors, "FamilyChroniclePanel", chroniclePanel);
             if (!AddM4SupplyShortageMissionPanel.Validate(scene, out string missionError))
                 AddError(report, ref errors, missionError);
             else
@@ -80,6 +82,10 @@ namespace SengokuChronicle.Editor
                 AddError(report, ref errors, sc010Error);
             else
                 report.AppendLine("PASS SC-010 succession panel hierarchy, bindings, ordering, raycast, and layout.");
+            if (!AddSC012FamilyChroniclePanel.Validate(scene, out string sc012Error))
+                AddError(report, ref errors, sc012Error);
+            else
+                report.AppendLine("PASS SC-012 family chronicle panel hierarchy, bindings, scroll content, ordering, and layout.");
 
             if (controller != null)
             {
@@ -147,6 +153,14 @@ namespace SengokuChronicle.Editor
                     "crisisDemoButton", "feedbackText", "modalStatusText", "candidateContent",
                     "candidateButtonPrefab", "regentContent", "regentButtonPrefab", "confirmButton",
                     "acceptCrisisButton", "declineCrisisButton");
+            }
+
+            if (chroniclePanel != null)
+            {
+                report.AppendLine("\nFAMILY CHRONICLE PANEL REFERENCES:");
+                CheckReferences(report, ref errors, chroniclePanel,
+                    "gameSession", "panelRoot", "openButton", "closeButton", "scrollRect", "content",
+                    "rowTemplate", "emptyText", "titleText");
             }
 
             report.AppendLine("\nHIERARCHY AND RECTTRANSFORMS:");

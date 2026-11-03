@@ -27,12 +27,12 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
-        public void CaptureSave_UsesSchemaVersionThree()
+        public void CaptureSave_UsesCurrentSchemaVersion()
         {
             SaveData data = _session.CaptureSave();
 
-            Assert.That(data.saveFormatVersion, Is.EqualTo(3));
-            Assert.That(SaveData.CurrentGameSchemaVersion, Is.EqualTo(3));
+            Assert.That(data.saveFormatVersion, Is.EqualTo(SaveDataValidator.CurrentVersion));
+            Assert.That(SaveData.CurrentGameSchemaVersion, Is.EqualTo(SaveDataValidator.CurrentVersion));
             Assert.That(data.succession, Is.Not.Null);
             Assert.That(data.succession.headPersonId,
                 Is.EqualTo(SuccessionSample.StandardHeadId.Value));
@@ -285,17 +285,18 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
-        public void V2Save_MigratesToV3WithPlayableSuccessionRoster()
+        public void V2Save_MigratesToCurrentVersionWithPlayableSuccessionRoster()
         {
             SaveData legacy = _session.CaptureSave();
             legacy.saveFormatVersion = 2;
             legacy.succession = null;
+            legacy.chronicle = null;
 
             bool succeeded = SaveDataMigrator.TryMigrate(legacy,
                 out SaveData migrated, out SaveOperationResult result);
 
             Assert.That(succeeded, Is.True, result.Message);
-            Assert.That(migrated.saveFormatVersion, Is.EqualTo(3));
+            Assert.That(migrated.saveFormatVersion, Is.EqualTo(SaveDataValidator.CurrentVersion));
             Assert.That(migrated.succession, Is.Not.Null);
             Assert.That(migrated.succession.headPersonId,
                 Is.EqualTo(SuccessionSample.StandardHeadId.Value));
@@ -379,7 +380,7 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
-        public void V3Presence_CompleteSave_Passes()
+        public void V4Presence_CompleteSave_Passes()
         {
             SaveData data = _session.CaptureSave();
             string json = JsonUtility.ToJson(data);

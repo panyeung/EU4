@@ -24,6 +24,12 @@ namespace SengokuChronicle.Events
     {
         public EventChoiceResult(bool succeeded, string eventId, string optionId, string resultId,
             string message, string feedback)
+            : this(succeeded, eventId, optionId, resultId, message, feedback, null)
+        {
+        }
+
+        public EventChoiceResult(bool succeeded, string eventId, string optionId, string resultId,
+            string message, string feedback, IReadOnlyList<RelationshipResult> appliedRelationships)
         {
             Succeeded = succeeded;
             EventId = eventId ?? string.Empty;
@@ -31,6 +37,17 @@ namespace SengokuChronicle.Events
             ResultId = resultId ?? string.Empty;
             Message = message ?? string.Empty;
             Feedback = feedback ?? string.Empty;
+            if (appliedRelationships == null || appliedRelationships.Count == 0)
+            {
+                AppliedRelationships = Array.Empty<RelationshipResult>();
+            }
+            else
+            {
+                var copy = new RelationshipResult[appliedRelationships.Count];
+                for (int i = 0; i < appliedRelationships.Count; i++)
+                    copy[i] = appliedRelationships[i];
+                AppliedRelationships = Array.AsReadOnly(copy);
+            }
         }
 
         public bool Succeeded { get; }
@@ -39,6 +56,12 @@ namespace SengokuChronicle.Events
         public string ResultId { get; }
         public string Message { get; }
         public string Feedback { get; }
+        /// <summary>
+        /// Relationship values actually applied and committed. Empty on every failure
+        /// and whenever a delta produced no real change, so callers can never record a
+        /// rolled-back or no-op effect.
+        /// </summary>
+        public IReadOnlyList<RelationshipResult> AppliedRelationships { get; }
     }
 
     /// <summary>
@@ -183,6 +206,7 @@ namespace SengokuChronicle.Events
                 return ChoiceFailure(eventId, optionId, committedResultId, effectError);
 
             var applied = new List<RelationshipCommit>();
+            var appliedRelationships = new List<RelationshipResult>();
             foreach (RelationshipCommit effect in effects)
             {
                 RelationshipResult change = relationships.TryChange(effect.CharacterId, effect.Delta);
@@ -197,6 +221,8 @@ namespace SengokuChronicle.Events
                         "关系效果提交失败，已恢复此前效果。");
                 }
                 applied.Add(effect);
+                if (change.PreviousValue != change.CurrentValue)
+                    appliedRelationships.Add(change);
             }
 
             EventOnceScope onceScope = ParseOnceScope(definition.onceScope);
@@ -212,7 +238,8 @@ namespace SengokuChronicle.Events
                 return ChoiceFailure(eventId, optionId, committedResultId, "事件队列已变化，结果未提交。");
             }
 
-            return new EventChoiceResult(true, eventId, optionId, committedResultId, string.Empty, feedback);
+            return new EventChoiceResult(true, eventId, optionId, committedResultId, string.Empty,
+                feedback, appliedRelationships);
         }
 
         /// <summary>Validates saved IDs against the active catalog before accepting a load.</summary>
