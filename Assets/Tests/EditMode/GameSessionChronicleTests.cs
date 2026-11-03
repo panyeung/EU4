@@ -21,7 +21,7 @@ namespace SengokuChronicle.Tests.EditMode
         public void SetUp()
         {
             _session = GameSession.NewGame();
-            _session.InitNewGame(1234UL);
+            _session.InitStandardDemo(1234UL);
         }
 
         [TearDown]
@@ -49,7 +49,7 @@ namespace SengokuChronicle.Tests.EditMode
             _session.TryChangeRelationship(CharacterId.KurodaIori, 5);
             Assert.That(_session.ChronicleEntries, Is.Not.Empty);
 
-            _session.InitNewGame(1234UL);
+            _session.InitStandardDemo(1234UL);
 
             Assert.That(_session.ChronicleEntries, Is.Empty,
                 "starting a new game must not carry over or recreate records");
@@ -387,7 +387,7 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(_session.ChronicleEntries[1].ToPhase,
                 Is.EqualTo((int)SuccessionPhase.Extinct));
 
-            _session.InitNewGame(1234UL);
+            _session.InitStandardDemo(1234UL);
             Assert.That(_session.StartCrisisDemo(), Is.True);
             Assert.That(_session.BeginSuccessionRetirement().Succeeded, Is.True);
             Assert.That(_session.AcceptCrisisAdoption().Succeeded, Is.True);

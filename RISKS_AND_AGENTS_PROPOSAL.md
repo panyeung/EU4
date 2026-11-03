@@ -1,6 +1,6 @@
 # 项目风险与 AGENTS.md 增补提案
 
-> 对现有 AGENTS.md 仅作提案；没有修改原文件。待用户批准后再用最小 diff 增补。
+> 本文件是旧方向下的历史提案草稿；其中关于《太阁立志传5》、Sengoku Chronicle 与 Phase 1 的范围控制均已过时。当前设计红线与里程碑以 [GDD_v4.0.md](GDD_v4.0.md) 为准，协作流程以现行 [AGENTS.md](AGENTS.md) 为准。
 
 > 历史提案：其中关于《太阁立志传5》体验参考和 Sengoku Chronicle 的范围控制已被 [GDD_v4.0.md](GDD_v4.0.md) 取代。新方向的设计红线、范围和里程碑以该计划为准。
 

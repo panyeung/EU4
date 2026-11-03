@@ -131,8 +131,14 @@ namespace SengokuChronicle.Editor
                 return Invalid(out error, "M6 title root must be a direct child of Canvas.");
             if (root.GetSiblingIndex() <= map.GetSiblingIndex())
                 return Invalid(out error, "M6 title root must render above the map (last sibling after it).");
-            if (root.childCount != 4)
-                return Invalid(out error, "M6 title root must have exactly four controls.");
+            bool hasStandardSample = root.Find("SC013StandardSampleButton") != null;
+            bool hasCrisisDemo = root.Find("SC013CrisisDemoButton") != null;
+            if (hasStandardSample != hasCrisisDemo)
+                return Invalid(out error, "SC-013 title scenario buttons must be added as a pair.");
+            if (root.childCount != 4 && root.childCount != 6)
+                return Invalid(out error, "M6 title root must have the four base controls or six with SC-013 entries.");
+            if (root.childCount == 6 && (!hasStandardSample || !hasCrisisDemo))
+                return Invalid(out error, "M6 title root with six controls must include both SC-013 entries.");
             if (root.gameObject.activeSelf)
                 return Invalid(out error, "M6 title root must be saved inactive; Play Mode shows it.");
 

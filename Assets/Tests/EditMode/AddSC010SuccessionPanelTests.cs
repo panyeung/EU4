@@ -3,6 +3,7 @@ using NUnit.Framework;
 using SengokuChronicle.Application;
 using SengokuChronicle.Domain;
 using SengokuChronicle.Editor;
+using SengokuChronicle.Events;
 using SengokuChronicle.Presentation;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -31,7 +32,7 @@ namespace SengokuChronicle.Tests.EditMode
             canvas.GetComponent<RectTransform>().sizeDelta = new Vector2(1280f, 720f);
             _canvas = canvas.transform;
             _session = Create("GameSession", null, typeof(GameSession)).GetComponent<GameSession>();
-            _session.InitNewGame(33UL);
+            _session.InitStandardDemo(33UL);
         }
 
         [TearDown]
@@ -78,7 +79,7 @@ namespace SengokuChronicle.Tests.EditMode
             GameObject canvas = CreateIn(rollbackScene, "Canvas", null, typeof(Canvas));
             GameObject sessionObject = CreateIn(rollbackScene, "GameSession", null, typeof(GameSession));
             GameSession session = sessionObject.GetComponent<GameSession>();
-            session.InitNewGame(33UL);
+            session.InitStandardDemo(33UL);
             int rollbackCount = ObjectCount(rollbackScene);
             try
             {
@@ -352,7 +353,7 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(panel.CrisisDemoInteractable, Is.False,
                 "The crisis demo button must be disabled after a completed succession.");
 
-            _session.InitNewGame(33UL);
+            _session.InitStandardDemo(33UL);
             panel.Refresh();
             Assert.That(_session.CanStartCrisisDemo, Is.True,
                 "A fresh session must allow the crisis demo again.");
@@ -414,6 +415,57 @@ namespace SengokuChronicle.Tests.EditMode
             root.SetAsFirstSibling();
             Assert.That(AddSC010SuccessionPanel.Validate(_scene, out string overlapError), Is.False);
             Assert.That(overlapError, Does.Contain("above the map"));
+        }
+
+        [Test]
+        public void M2PanelBlocksEarlyRetirementAndShowsFixedHeir()
+        {
+            _session.InitNewGame(33UL);
+            Assert.That(AddSC010SuccessionPanel.Update(_scene),
+                Is.EqualTo(AddSC010SuccessionPanel.UpdateResult.Success));
+            SuccessionPanel panel = Find(AddSC010SuccessionPanel.RootName).GetComponent<SuccessionPanel>();
+
+            panel.Refresh();
+
+            Assert.That(panel.RetireInteractable, Is.False,
+                "M2 retirement stays unavailable until the required first-generation choices exist");
+            Assert.That(panel.StatusMessage, Does.Contain("固定继承人：明智 正綱"));
+            Assert.That(panel.StatusMessage, Does.Contain("继承前的家议"));
+            panel.BeginRetirement();
+            Assert.That(_session.Succession.Phase, Is.EqualTo(SuccessionPhase.None));
+            Assert.That(_session.SuccessionHeadName, Is.EqualTo("明智 晴信"));
+            Assert.That(panel.FeedbackMessage, Does.Contain("继承前的家议"));
+        }
+
+        [Test]
+        public void M2PanelEnablesRetirementAfterRequiredChoicesAndTransfersTheFixedHeir()
+        {
+            _session.InitNewGame(33UL);
+            Assert.That(AddSC010SuccessionPanel.Update(_scene),
+                Is.EqualTo(AddSC010SuccessionPanel.UpdateResult.Success));
+            SuccessionPanel panel = Find(AddSC010SuccessionPanel.RootName).GetComponent<SuccessionPanel>();
+
+            Assert.That(_session.TryAdvanceToNextMonth(), Is.True, _session.LastEventMessage);
+            ChooseM2(M2FixedScenario.PledgeEventId, M2FixedScenario.KeepPromiseOptionId);
+            Assert.That(_session.TryAdvanceToNextMonth(), Is.True, _session.LastEventMessage);
+            ChooseM2(SampleEventIds.EventId, SampleEventIds.OfferRestOptionId);
+
+            panel.Refresh();
+            Assert.That(panel.RetireInteractable, Is.True);
+            Assert.That(panel.StatusMessage, Does.Contain("主线条件已满足"));
+            Assert.That(panel.StatusMessage, Does.Contain("固定继承人：明智 正綱"));
+
+            Find(AddSC010SuccessionPanel.RetireName).GetComponent<Button>().onClick.Invoke();
+
+            Assert.That(_session.SuccessionHeadName, Is.EqualTo("明智 正綱"));
+            Assert.That(_session.Succession.SuccessionCount, Is.EqualTo(1));
+            Assert.That(panel.StatusMessage, Does.Contain("固定继承人：明智 信正"));
+        }
+
+        private void ChooseM2(string eventId, string optionId)
+        {
+            Assert.That(_session.TryChooseEventOption(eventId, optionId,
+                _session.CreateEventResultId(eventId, optionId)).Succeeded, Is.True);
         }
 
         private static void BindPanelFromSerialized(SuccessionPanel panel)

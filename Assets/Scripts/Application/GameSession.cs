@@ -106,14 +106,107 @@ namespace SengokuChronicle.Application
         /// </summary>
         public bool CanStartCrisisDemo => IsPristineStandardSuccession(Succession);
 
+        /// <summary>True while the session owns the approved SC-013 fixed three-generation roster.</summary>
+        public bool IsM2ScenarioActive => M2FixedScenario.IsActive(Succession);
+
+        /// <summary>True after the third-generation finale choice has been committed.</summary>
+        public bool IsM2FinaleCommitted =>
+            M2FixedScenario.IsActive(Succession) && M2FixedScenario.IsFinaleCommitted(EnsureEventRuntimeState());
+
+        /// <summary>True when the M2-specific retirement gate allows the current handoff.</summary>
+        public bool CanBeginSuccessionRetirement
+        {
+            get
+            {
+                EnsureSuccession();
+                if (IsFamilyExtinct || _succession.Phase != SuccessionPhase.None)
+                    return false;
+                if (!M2FixedScenario.IsActive(_succession))
+                    return true;
+                return M2FixedScenario.CanBeginRetirement(_succession, EnsureEventRuntimeState(),
+                    CurrentGameDate, out _);
+            }
+        }
+
+        /// <summary>Visible reason when <see cref="CanBeginSuccessionRetirement"/> is false.</summary>
+        public string SuccessionRetirementBlockReason
+        {
+            get
+            {
+                EnsureSuccession();
+                if (IsFamilyExtinct)
+                    return "家族已经灭亡，无法继续交接。";
+                if (_succession.Phase != SuccessionPhase.None)
+                    return "尚有继承决策待处理，请先完成当前选择。";
+                if (!M2FixedScenario.IsActive(_succession))
+                    return "当前可按通常继承规则安排交接。";
+                M2FixedScenario.CanBeginRetirement(_succession, EnsureEventRuntimeState(),
+                    CurrentGameDate, out string reason);
+                return reason;
+            }
+        }
+
         public string SuccessionHeadName =>
             Succession.TryGetHead(out PersonState head) ? head.DisplayName : string.Empty;
 
-        public IReadOnlyList<SuccessionCandidate> SuccessionCandidates =>
-            SuccessionService.GetCandidates(Succession, CurrentGameDate);
+        /// <summary>Visible fixed-heir line for the M2 succession HUD; empty in SC-010 modes.</summary>
+        public string FixedHeirSummary
+        {
+            get
+            {
+                if (!M2FixedScenario.IsActive(Succession))
+                    return string.Empty;
+                PersonId heir = M2FixedScenario.ExpectedHeir(Succession);
+                if (heir.IsEmpty)
+                    return IsM2FinaleCommitted
+                        ? "固定继承人：无（第三代终局已完成）"
+                        : "固定继承人：无（当前已是最后一代）";
+                string name = Succession.World.TryGetPerson(heir, out PersonState person)
+                    ? person.DisplayName
+                    : heir.Value;
+                bool hasLife = Succession.World.TryGetLife(heir, out SuccessionPersonLife life);
+                int age = hasLife ? life.AgeAt(CurrentGameDate) : 0;
+                string validity = hasLife && life.Alive && !life.Retired ? string.Empty : "（已失效）";
+                return "固定继承人：" + name + "（" + age + "岁）" + validity;
+            }
+        }
+
+        /// <summary>Derived third-generation ending; no separate terminal save field.</summary>
+        public M2EndingView M2Ending
+        {
+            get
+            {
+                EnsureEventRuntimeState();
+                int iori = TryGetRelationship(CharacterId.KurodaIori).CurrentValue;
+                M2FixedScenario.TryBuildEnding(Succession, _eventRuntimeState, iori, out M2EndingView ending);
+                return ending;
+            }
+        }
+
+        public IReadOnlyList<SuccessionCandidate> SuccessionCandidates
+        {
+            get
+            {
+                IReadOnlyList<SuccessionCandidate> candidates =
+                    SuccessionService.GetCandidates(Succession, CurrentGameDate);
+                if (!M2FixedScenario.IsActive(Succession) || IsM2FinaleCommitted)
+                    return candidates;
+
+                PersonId heir = M2FixedScenario.ExpectedHeir(Succession);
+                var filtered = new List<SuccessionCandidate>(1);
+                foreach (SuccessionCandidate candidate in candidates)
+                    if (candidate.PersonId == heir)
+                        filtered.Add(candidate);
+                return filtered.AsReadOnly();
+            }
+        }
 
         public IReadOnlyList<SuccessionCandidate> SuccessionRegentCandidates =>
             SuccessionService.GetRegentCandidates(Succession, CurrentGameDate);
+
+        /// <summary>Read-only family roster rows for the SC-013 family panel.</summary>
+        public IReadOnlyList<M2RosterRow> FamilyRoster =>
+            M2FixedScenario.BuildRoster(Succession, CurrentGameDate, Succession.DesignatedHeirId);
 
         private GameDate CurrentGameDate =>
             WorldClock != null ? WorldClock.CurrentDate : SengokuChronicle.Domain.WorldClock.NewGameDate;
@@ -189,8 +282,18 @@ namespace SengokuChronicle.Application
             InitNewGame(DefaultRandomSeed);
         }
 
-        /// <summary>Starts a reproducible new game with a caller-selected stable seed.</summary>
-        public void InitNewGame(ulong initialSeed)
+        /// <summary>Starts the default SC-013 fixed three-generation scenario.</summary>
+        public void InitNewGame(ulong initialSeed) =>
+            InitSession(initialSeed, M2FixedScenario.CreateSuccession());
+
+        /// <summary>Starts the separate SC-010 standard sample used by regression demos.</summary>
+        public void InitStandardDemo() => InitStandardDemo(DefaultRandomSeed);
+
+        /// <summary>Starts the separate SC-010 standard sample with a caller-selected seed.</summary>
+        public void InitStandardDemo(ulong initialSeed) =>
+            InitSession(initialSeed, SuccessionSample.CreateStandard());
+
+        private void InitSession(ulong initialSeed, SuccessionState succession)
         {
             WorldClock = new WorldClock();
             CurrentLocation = LocationId.Kiyosu;
@@ -201,7 +304,8 @@ namespace SengokuChronicle.Application
             _supplyShortageMission = new SupplyShortageMission();
             _sealedLetterMission = new SealedLetterMission();
             _marketTallyMission = new MarketTallyMission();
-            _succession = SuccessionSample.CreateStandard();
+            _succession = succession ?? throw new ArgumentNullException(nameof(succession));
+            M2FixedScenario.SyncDesignation(_succession);
             _historyLedger = HistoryLedger.CreateEmpty();
             LastSuccessionMessage = string.Empty;
             _dialogues.Clear();
@@ -225,6 +329,16 @@ namespace SengokuChronicle.Application
             return true;
         }
 
+        /// <summary>
+        /// Explicit title-screen crisis entry: initialize the SC-010 standard state,
+        /// then hand it to the existing pristine-only crisis transition.
+        /// </summary>
+        public bool StartCrisisDemoScenario()
+        {
+            InitStandardDemo();
+            return StartCrisisDemo();
+        }
+
         private static bool IsPristineStandardSuccession(SuccessionState state)
         {
             return state != null &&
@@ -240,6 +354,19 @@ namespace SengokuChronicle.Application
         public SuccessionResult BeginSuccessionRetirement()
         {
             EnsureSuccession();
+            EnsureEventRuntimeState();
+            if (M2FixedScenario.IsActive(_succession) &&
+                _succession.Phase == SuccessionPhase.None &&
+                !M2FixedScenario.CanBeginRetirement(_succession, _eventRuntimeState,
+                    CurrentGameDate, out string gateReason))
+            {
+                LastSuccessionMessage = gateReason;
+                LastEventMessage = gateReason;
+                SessionStateChanged?.Invoke();
+                return new SuccessionResult(SuccessionOutcome.NotDue, false, gateReason,
+                    _succession.Phase, _succession.HeadPersonId);
+            }
+
             SuccessionSnapshot before = SuccessionSnapshot.Capture(_succession);
             return ApplySuccessionResult(before, SuccessionService.BeginRetirement(_succession, CurrentGameDate));
         }
@@ -247,6 +374,22 @@ namespace SengokuChronicle.Application
         public SuccessionResult SelectSuccessionSuccessor(PersonId personId)
         {
             EnsureSuccession();
+            EnsureEventRuntimeState();
+            if (M2FixedScenario.IsActive(_succession) &&
+                _succession.Phase != SuccessionPhase.None &&
+                !IsM2FinaleCommitted)
+            {
+                PersonId expected = M2FixedScenario.ExpectedHeir(_succession);
+                if (personId != expected)
+                {
+                    const string message = "SC-013 固定剧本只允许选择当前固定继承人。";
+                    LastSuccessionMessage = message;
+                    SessionStateChanged?.Invoke();
+                    return new SuccessionResult(SuccessionOutcome.CandidateNotEligible, false,
+                        message, _succession.Phase, personId);
+                }
+            }
+
             SuccessionSnapshot before = SuccessionSnapshot.Capture(_succession);
             return ApplySuccessionResult(before,
                 SuccessionService.SelectSuccessor(_succession, personId, CurrentGameDate));
@@ -304,6 +447,8 @@ namespace SengokuChronicle.Application
             if (!result.Succeeded)
                 return result;
             LastSuccessionMessage = result.Message;
+            if (M2FixedScenario.IsActive(_succession))
+                M2FixedScenario.SyncDesignation(_succession);
             if (before.DiffersFrom(_succession))
                 RecordSuccession(before, result);
             SessionStateChanged?.Invoke();
@@ -390,7 +535,10 @@ namespace SengokuChronicle.Application
         private void EnsureSuccession()
         {
             if (_succession == null)
-                _succession = SuccessionSample.CreateStandard();
+            {
+                _succession = M2FixedScenario.CreateSuccession();
+                M2FixedScenario.SyncDesignation(_succession);
+            }
         }
 
         /// <summary>Captures the current runtime state as versioned save data.</summary>
@@ -444,12 +592,12 @@ namespace SengokuChronicle.Application
                 (data.eventContentVersion != _eventCatalog.contentVersion &&
                  !(data.eventContentVersion == 1 && _eventCatalog.contentVersion == 2)))
                 return InvalidSave("存档事件内容版本与当前目录不匹配。");
-            if (!_eventEngine.TryRestoreState(data.eventRuntime, date,
-                    out EventRuntimeState eventRuntime, out string eventError))
-                return InvalidSave(string.IsNullOrEmpty(eventError) ? "存档事件状态无效。" : eventError);
             if (!SuccessionSaveData.TryRestore(data.succession, date,
                     out SuccessionState succession, out string successionError))
                 return InvalidSave(string.IsNullOrEmpty(successionError) ? "存档继承状态无效。" : successionError);
+            if (!_eventEngine.TryRestoreState(data.eventRuntime, date, BuildEventRuleContext(succession),
+                    out EventRuntimeState eventRuntime, out string eventError))
+                return InvalidSave(string.IsNullOrEmpty(eventError) ? "存档事件状态无效。" : eventError);
             if (!ChronicleSaveCodec.TryRestore(data.chronicle,
                     out HistoryLedger historyLedger, out string chronicleError))
                 return InvalidSave(string.IsNullOrEmpty(chronicleError) ? "存档编年史无效。" : chronicleError);
@@ -489,6 +637,7 @@ namespace SengokuChronicle.Application
             _randomStateManager = randomState;
             _eventRuntimeState = eventRuntime;
             _succession = succession;
+            M2FixedScenario.SyncDesignation(_succession);
             _historyLedger = historyLedger;
             LastSuccessionMessage = string.Empty;
             NoticeRegencyHandoffIfDue();
@@ -763,13 +912,14 @@ namespace SengokuChronicle.Application
                 _randomStateManager = RandomStateManager.Create(DefaultRandomSeed);
         }
 
-        private void EnsureEventRuntimeState()
+        private EventRuntimeState EnsureEventRuntimeState()
         {
             if (_eventRuntimeState == null)
             {
                 _eventRuntimeState = new EventRuntimeState();
                 LoadEventContent();
             }
+            return _eventRuntimeState;
         }
 
         private void LoadEventContent()
@@ -839,11 +989,19 @@ namespace SengokuChronicle.Application
         /// Snapshot the SC-010 succession facts used by event offer gates. Settled count is
         /// the raw count only while no succession decision, regency, or extinction owns play.
         /// </summary>
-        private EventRuleContext BuildEventRuleContext()
+        private EventRuleContext BuildEventRuleContext() => BuildEventRuleContext(Succession);
+
+        /// <summary>
+        /// Builds the same scenario/succession snapshot for live play and for an
+        /// already-validated load candidate.
+        /// </summary>
+        private static EventRuleContext BuildEventRuleContext(SuccessionState succession)
         {
-            SuccessionState succession = Succession;
+            if (succession == null)
+                return EventRuleContext.Default;
             int settled = succession.Phase == SuccessionPhase.None ? succession.SuccessionCount : 0;
-            return new EventRuleContext(succession.SuccessionCount, settled);
+            string scenario = M2FixedScenario.IsActive(succession) ? EventScenarioIds.Sc013 : string.Empty;
+            return new EventRuleContext(succession.SuccessionCount, settled, scenario);
         }
 
         /// <summary>Creates an idempotent event-result ID from stable content and current game date.</summary>

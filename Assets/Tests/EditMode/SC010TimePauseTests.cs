@@ -25,6 +25,7 @@ namespace SengokuChronicle.Tests.EditMode
         public void SetUp()
         {
             _session = GameSession.NewGame();
+            _session.InitStandardDemo();
             _panelObject = new GameObject("WorldClockPanel_SC010Test");
             _panel = _panelObject.AddComponent<WorldClockPanel>();
             _panel.SetDependencies(_session, null, null);

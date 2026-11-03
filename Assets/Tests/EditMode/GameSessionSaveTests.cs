@@ -293,7 +293,7 @@ namespace SengokuChronicle.Tests.EditMode
             GameSession reloaded = null;
             try
             {
-                _session.InitNewGame(0xABCDEF0123456789UL);
+                _session.InitStandardDemo(0xABCDEF0123456789UL);
                 Assert.That(_session.TryAdvanceToNextMonth(), Is.True, _session.LastEventMessage);
                 SaveData pendingSnapshot = _session.CaptureSave();
                 Assert.That(pendingSnapshot.eventRuntime.pendingEventIds, Is.Not.Empty);

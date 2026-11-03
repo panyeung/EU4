@@ -108,11 +108,35 @@ namespace SengokuChronicle.Tests.EditMode
         {
             EventCatalogData catalog = LoadCatalog();
 
-            Assert.That(catalog.chains, Has.Length.EqualTo(1));
-            Assert.That(catalog.chains[0].chainId, Is.EqualTo(SampleEventIds.ChainId));
+            EventChainData rainy = FindChain(catalog, SampleEventIds.ChainId);
             CollectionAssert.AreEquivalent(
                 new[] { SampleEventIds.EventId, SC011EventIds.LegacyHonoredEventId, SC011EventIds.LegacyDeferredEventId },
-                catalog.chains[0].linkedEventIds);
+                rainy.linkedEventIds);
+        }
+
+        [Test]
+        public void Sc013EventsAreScenarioTaggedAndLeaveSc011RowsUntouched()
+        {
+            EventCatalogData catalog = LoadCatalog();
+            EventDefinitionData pledge = Find(catalog, SC013EventIds.PledgeEventId);
+            EventDefinitionData finale = Find(catalog, SC013EventIds.FinaleEventId);
+
+            Assert.That(pledge.scenario, Is.EqualTo(EventScenarioIds.Sc013));
+            Assert.That(finale.scenario, Is.EqualTo(EventScenarioIds.Sc013));
+            Assert.That(pledge.chainId, Is.EqualTo(SC013EventIds.ChainId));
+            Assert.That(finale.chainId, Is.EqualTo(SC013EventIds.ChainId));
+            Assert.That(Find(catalog, SampleEventIds.EventId).scenario, Is.Null.Or.Empty);
+            Assert.That(Find(catalog, SC011EventIds.LegacyHonoredEventId).scenario, Is.Null.Or.Empty);
+            Assert.That(Find(catalog, SC011EventIds.LegacyDeferredEventId).scenario, Is.Null.Or.Empty);
+        }
+
+        private static EventChainData FindChain(EventCatalogData catalog, string chainId)
+        {
+            foreach (EventChainData chain in catalog.chains)
+                if (string.Equals(chain.chainId, chainId, StringComparison.Ordinal))
+                    return chain;
+            Assert.Fail("Missing chain " + chainId);
+            return null;
         }
 
         [Test]

@@ -30,6 +30,13 @@ namespace SengokuChronicle.Presentation
         [SerializeField]
         private Button continueButton;
 
+        [Header("SC-013 scenario entries")]
+        [SerializeField]
+        private Button standardSampleButton;
+
+        [SerializeField]
+        private Button crisisDemoButton;
+
         [SerializeField]
         private Text statusText;
 
@@ -48,6 +55,9 @@ namespace SengokuChronicle.Presentation
         /// <summary>The slot store in use; exposed for tests and diagnostics.</summary>
         public SaveSlotStore Store => _store;
 
+        /// <summary>True when both separate SC-010 title entries are wired.</summary>
+        public bool ScenarioEntriesBound => standardSampleButton != null && crisisDemoButton != null;
+
         public void Bind(
             GameSession session,
             SaveSlotStore store,
@@ -65,6 +75,14 @@ namespace SengokuChronicle.Presentation
             newGameButton = newGame;
             continueButton = cont;
             statusText = status;
+            BindButtons(isActiveAndEnabled);
+        }
+
+        /// <summary>Binds the separate SC-010 standard and crisis title entries.</summary>
+        public void BindScenarioButtons(Button standardSample, Button crisisDemo)
+        {
+            standardSampleButton = standardSample;
+            crisisDemoButton = crisisDemo;
             BindButtons(isActiveAndEnabled);
         }
 
@@ -119,6 +137,20 @@ namespace SengokuChronicle.Presentation
                 if (add)
                     continueButton.onClick.AddListener(OnContinueButton);
             }
+
+            if (standardSampleButton != null)
+            {
+                standardSampleButton.onClick.RemoveListener(OnStandardSampleButton);
+                if (add)
+                    standardSampleButton.onClick.AddListener(OnStandardSampleButton);
+            }
+
+            if (crisisDemoButton != null)
+            {
+                crisisDemoButton.onClick.RemoveListener(OnCrisisDemoButton);
+                if (add)
+                    crisisDemoButton.onClick.AddListener(OnCrisisDemoButton);
+            }
         }
 
         private void OnNewGameButton()
@@ -129,6 +161,16 @@ namespace SengokuChronicle.Presentation
         private void OnContinueButton()
         {
             TryContinue();
+        }
+
+        private void OnStandardSampleButton()
+        {
+            StartStandardSample();
+        }
+
+        private void OnCrisisDemoButton()
+        {
+            StartCrisisDemo();
         }
 
         /// <summary>显示标题覆盖层。</summary>
@@ -190,7 +232,52 @@ namespace SengokuChronicle.Presentation
                 worldMapController.ReturnToMap();
             HideTitle();
             LastOperationSucceeded = true;
-            SetStatus("已开始新游戏。");
+            SetStatus("已开始 SC-013 固定三代剧本。");
+            return true;
+        }
+
+        /// <summary>Starts the separate SC-010 standard sample.</summary>
+        public bool StartStandardSample()
+        {
+            if (gameSession == null)
+            {
+                LastOperationSucceeded = false;
+                SetStatus("缺少 GameSession，无法开始标准样例。");
+                return false;
+            }
+
+            gameSession.InitStandardDemo();
+            if (worldMapController != null)
+                worldMapController.ReturnToMap();
+            HideTitle();
+            LastOperationSucceeded = true;
+            SetStatus("已开始 SC-010 标准样例。");
+            return true;
+        }
+
+        /// <summary>Starts the separate SC-010 crisis demo from a fresh standard state.</summary>
+        public bool StartCrisisDemo()
+        {
+            if (gameSession == null)
+            {
+                LastOperationSucceeded = false;
+                SetStatus("缺少 GameSession，无法进入危机示范。");
+                return false;
+            }
+
+            bool started = gameSession.StartCrisisDemoScenario();
+            if (!started)
+            {
+                LastOperationSucceeded = false;
+                SetStatus("危机示范无法开始。");
+                return false;
+            }
+
+            if (worldMapController != null)
+                worldMapController.ReturnToMap();
+            HideTitle();
+            LastOperationSucceeded = true;
+            SetStatus("已进入 SC-010 危机示范。");
             return true;
         }
 

@@ -19,6 +19,8 @@ namespace SengokuChronicle.Tests.EditMode
         private GameObject _titleRoot;
         private Button _newGameButton;
         private Button _continueButton;
+        private Button _standardButton;
+        private Button _crisisButton;
         private Text _statusText;
         private string _directory;
         private SaveSlotStore _store;
@@ -37,9 +39,12 @@ namespace SengokuChronicle.Tests.EditMode
             _titleRoot = new GameObject("M6TitleRoot", typeof(RectTransform));
             _newGameButton = new GameObject("NewGameButton", typeof(RectTransform)).AddComponent<Button>();
             _continueButton = new GameObject("ContinueButton", typeof(RectTransform)).AddComponent<Button>();
+            _standardButton = new GameObject("StandardButton", typeof(RectTransform)).AddComponent<Button>();
+            _crisisButton = new GameObject("CrisisButton", typeof(RectTransform)).AddComponent<Button>();
             _statusText = new GameObject("Status", typeof(RectTransform)).AddComponent<Text>();
 
             _controller.Bind(_session, _store, null, _titleRoot, _newGameButton, _continueButton, _statusText);
+            _controller.BindScenarioButtons(_standardButton, _crisisButton);
         }
 
         [TearDown]
@@ -53,6 +58,10 @@ namespace SengokuChronicle.Tests.EditMode
                 Object.DestroyImmediate(_newGameButton.gameObject);
             if (_continueButton != null)
                 Object.DestroyImmediate(_continueButton.gameObject);
+            if (_standardButton != null)
+                Object.DestroyImmediate(_standardButton.gameObject);
+            if (_crisisButton != null)
+                Object.DestroyImmediate(_crisisButton.gameObject);
             if (_statusText != null)
                 Object.DestroyImmediate(_statusText.gameObject);
             if (_session != null)
@@ -175,7 +184,35 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(_session.WorldClock.CurrentDate.Day, Is.EqualTo(1));
             Assert.That(_session.CurrentLocation, Is.EqualTo(LocationId.Kiyosu));
             Assert.That(_session.Merit, Is.EqualTo(0));
-            Assert.That(_controller.Status, Does.Contain("已开始新游戏"));
+            Assert.That(_controller.Status, Does.Contain("SC-013"));
+        }
+
+        [Test]
+        public void StartsM2StandardAndCrisisEntriesIndependently()
+        {
+            Assert.That(_controller.ScenarioEntriesBound, Is.True);
+
+            Assert.That(_controller.StartNewGame(), Is.True);
+            Assert.That(_session.IsM2ScenarioActive, Is.True);
+            Assert.That(_session.Succession.World.Family.Id,
+                Is.EqualTo(new FamilyId("family.akechi.sc013")));
+            Assert.That(_session.SuccessionHeadName, Is.EqualTo("明智 晴信"));
+            Assert.That(_session.Succession.World.PersonCount, Is.EqualTo(6));
+
+            Assert.That(_controller.StartStandardSample(), Is.True);
+            Assert.That(_session.IsM2ScenarioActive, Is.False);
+            Assert.That(_session.Succession.World.Family.Id,
+                Is.EqualTo(SuccessionSample.StandardFamilyId));
+            Assert.That(_session.Succession.HeadPersonId, Is.EqualTo(SuccessionSample.StandardHeadId));
+
+            Assert.That(_controller.StartCrisisDemo(), Is.True);
+            Assert.That(_session.IsM2ScenarioActive, Is.False);
+            Assert.That(_session.Succession.World.Family.Id,
+                Is.EqualTo(SuccessionSample.StandardFamilyId));
+            Assert.That(_session.Succession.World.PersonCount, Is.EqualTo(4));
+            Assert.That(_session.Succession.World.TryGetPerson(
+                new PersonId("person.sc013.harunobu"), out _), Is.False,
+                "the crisis entry must not retain any M2 roster data");
         }
 
         [Test]

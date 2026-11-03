@@ -13,6 +13,22 @@ namespace SengokuChronicle.Tests.EditMode
         public void SetUp()
         {
             _session = GameSession.NewGame();
+            // The default new game is now SC-013; this suite is the SC-010
+            // succession regression and therefore selects the explicit sample.
+            _session.InitStandardDemo();
+        }
+
+        [Test]
+        public void NewGame_DefaultsToM2FixedScenario()
+        {
+            _session.InitNewGame();
+            Assert.That(_session.IsM2ScenarioActive, Is.True);
+            Assert.That(_session.Succession.World.Family.Id,
+                Is.EqualTo(new FamilyId("family.akechi.sc013")));
+            Assert.That(_session.Succession.HeadPersonId,
+                Is.EqualTo(new PersonId("person.sc013.harunobu")));
+            Assert.That(_session.Succession.DesignatedHeirId,
+                Is.EqualTo(new PersonId("person.sc013.masatsuna")));
         }
 
         [TearDown]

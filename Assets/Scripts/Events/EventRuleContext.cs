@@ -13,13 +13,25 @@ namespace SengokuChronicle.Events
     public readonly struct EventRuleContext
     {
         public EventRuleContext(int successionCount, int settledSuccessionCount)
+            : this(successionCount, settledSuccessionCount, string.Empty)
+        {
+        }
+
+        public EventRuleContext(int successionCount, int settledSuccessionCount, string scenarioId)
         {
             SuccessionCount = successionCount;
             SettledSuccessionCount = settledSuccessionCount;
+            ScenarioId = scenarioId ?? string.Empty;
         }
 
         /// <summary>Raw SC-010 count; increments on every handoff, including a regency start.</summary>
         public int SuccessionCount { get; }
+
+        /// <summary>
+        /// Active scenario ID. Scenario-tagged catalog rows are eligible only when this
+        /// matches their <c>scenario</c> field; empty keeps every scenario-neutral row.
+        /// </summary>
+        public string ScenarioId { get; }
 
         /// <summary>
         /// The raw count only while <c>SuccessionPhase.None</c>; zero during a pending

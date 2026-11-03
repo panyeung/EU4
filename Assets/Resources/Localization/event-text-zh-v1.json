@@ -90,6 +90,436 @@
       "textId": "summary.legacy-deferred.dismiss",
       "title": "旧交转冷",
       "body": "伊织记住了这次拒绝，对家族的信任下降五点。"
+    },
+    {
+      "textId": "event.sc013.inheritance-pledge",
+      "title": "继承前的家议",
+      "body": "晴信已七十。继承前夜，千恵与正綱在灯下提起一桩旧事：多年前晴信曾答应黑田伊织，若明智家渡过难关，便以家名替他作保。如今要交出家督，这承诺该由谁承担？"
+    },
+    {
+      "textId": "option.sc013.inheritance-pledge.keep-promise",
+      "title": "守住对伊织的承诺",
+      "body": "在家议中承认旧诺仍然有效，并让正綱记住这份责任。"
+    },
+    {
+      "textId": "summary.sc013.inheritance-pledge.keep-promise",
+      "title": "旧诺仍有效",
+      "body": "伊织听说明智家仍认旧诺，对家族的信任增加五点。"
+    },
+    {
+      "textId": "option.sc013.inheritance-pledge.break-promise",
+      "title": "收回承诺，先保家族",
+      "body": "以家族当下的处境为由收回旧诺，把这个难处留给下一代。"
+    },
+    {
+      "textId": "summary.sc013.inheritance-pledge.break-promise",
+      "title": "承诺被收回",
+      "body": "伊织得知旧诺被收回，对家族的信任下降五点。这一次代价被记入编年史。"
+    },
+    {
+      "textId": "event.sc013.finale",
+      "title": "第三代的家门",
+      "body": "信正继位后的第一个月，黑田伊织再次站在清洲门外。两代人的旧诺、旧怨与旧交都压在这一次会面上。信正必须决定，明智家今后是继续依靠这段旧交，还是独自走完剩下的路。"
+    },
+    {
+      "textId": "option.sc013.finale.seek-aid",
+      "title": "请伊织再度援手",
+      "body": "以两代人的信义请伊织出面，为家族争取喘息之机。"
+    },
+    {
+      "textId": "summary.sc013.finale.seek-aid",
+      "title": "旧交来援",
+      "body": "伊织应邀而来。第三代在家臣与旧友的见证下稳住了家业。"
+    },
+    {
+      "textId": "option.sc013.finale.stand-alone",
+      "title": "不欠旧交，独自承担",
+      "body": "谢绝伊织的好意，把家族的未来交回明智家自己手中。"
+    },
+    {
+      "textId": "summary.sc013.finale.stand-alone",
+      "title": "独自承担",
+      "body": "信正独自承担了旧事的重量。明智家不再依赖旧交，继续以自己的方式前行。"
+    },
+    {
+      "textId": "event.sc013.refugee-arrival",
+      "title": "门前的流亡少年",
+      "body": "黑田伊织带着一名受伤的少年站在清洲门外。少年是他家系的远亲，因战乱流亡到此。伊织没有多言，只请家主看在两家多年的情分上，给这个孩子一条活路。"
+    },
+    {
+      "textId": "option.sc013.refugee-arrival.shelter",
+      "title": "收留少年",
+      "body": "让少年住进清洲，由伊织家系照看；明智家认下这份人情。"
+    },
+    {
+      "textId": "summary.sc013.refugee-arrival.shelter",
+      "title": "少年留下",
+      "body": "伊织家系与明智家的信任增加五点。这份收留之恩会由下一代继续偿还。"
+    },
+    {
+      "textId": "option.sc013.refugee-arrival.refuse",
+      "title": "拒绝收留",
+      "body": "不许少年留在清洲，只让他在门房避过这一夜。"
+    },
+    {
+      "textId": "summary.sc013.refugee-arrival.refuse",
+      "title": "门没有为他开",
+      "body": "伊织家系与明智家的信任下降五点。少年天亮后离开，这条旧事到此为止。"
+    },
+    {
+      "textId": "option.sc013.refugee-arrival.betray",
+      "title": "交给追兵",
+      "body": "收下追兵的条件，把少年从门房里交出去，换取明智家一时的安稳。"
+    },
+    {
+      "textId": "summary.sc013.refugee-arrival.betray",
+      "title": "旧怨入史",
+      "body": "伊织家系与明智家的信任下降十点。少年被带走，这段旧怨被写进家史，不会再续。"
+    },
+    {
+      "textId": "event.sc013.refugee-loyalty",
+      "title": "旧臣的忠诚",
+      "body": "正綱继位后，黑田伊织已经年老，当年收留的少年如今已是伊织家系的家臣。正綱推行新政，要削去旧臣的世袭特权；伊织本人仍念着先代的收留之恩，伊织家系也坚持当年的旧约。家臣们在廊下等着新家主表态。"
+    },
+    {
+      "textId": "option.sc013.refugee-loyalty.honor-old-oath",
+      "title": "尊重旧臣的旧约",
+      "body": "承认先代与伊织家系的旧约仍然有效，不在新政中削去他们的位置。"
+    },
+    {
+      "textId": "summary.sc013.refugee-loyalty.honor-old-oath",
+      "title": "旧约仍有效",
+      "body": "伊织家系与明智家的信任增加五点。旧臣记住了新家主的体面。"
+    },
+    {
+      "textId": "option.sc013.refugee-loyalty.enforce-new-policy",
+      "title": "以新政策压下旧约",
+      "body": "以家族新政为重，收回伊织家系的世袭特权，要求他们与其他人一样重新立功。"
+    },
+    {
+      "textId": "summary.sc013.refugee-loyalty.enforce-new-policy",
+      "title": "新政压过旧约",
+      "body": "伊织家系与明智家的信任下降五点。旧约被新政压了下去，怨望留到了下一代。"
+    },
+    {
+      "textId": "event.sc013.refugee-aid",
+      "title": "流亡家系的援助",
+      "body": "信正继位后，明智家遭遇危机。黑田伊织的后人带着旧部来到清洲，其中也有当年那名流亡少年的后代。他们表示愿意相助，但要先确认两家是否仍有足够的信任。"
+    },
+    {
+      "textId": "option.sc013.refugee-aid.request-aid",
+      "title": "请伊织家系出手",
+      "body": "以两代人的旧交请伊织家系援手，为明智家争取喘息之机。"
+    },
+    {
+      "textId": "summary.sc013.refugee-aid.request-aid",
+      "title": "旧交来援",
+      "body": "伊织家系应邀而来。第三代在家臣与旧友的见证下稳住了家业。"
+    },
+    {
+      "textId": "option.sc013.refugee-aid.stand-alone",
+      "title": "谢绝旧交，独自承担",
+      "body": "谢绝伊织家系的好意，把家族的未来交回明智家自己手中。"
+    },
+    {
+      "textId": "summary.sc013.refugee-aid.stand-alone",
+      "title": "独自承担",
+      "body": "信正独自承担了这场危机。明智家没有动用旧交，继续以自己的方式前行。"
+    },
+    {
+      "textId": "event.sc013.refugee-rival",
+      "title": "流亡家系的竞争",
+      "body": "信正继位后，黑田伊织的家系已经自立门户，并在新政中与明智家争夺同一份利益。旧日收留少年的恩义，如今成了两家之间最难说清的一笔账。"
+    },
+    {
+      "textId": "option.sc013.refugee-rival.mend-grievance",
+      "title": "修补两家的旧怨",
+      "body": "主动让步，承认伊织家系这些年的功劳，请他们重新回到明智家的席上。"
+    },
+    {
+      "textId": "summary.sc013.refugee-rival.mend-grievance",
+      "title": "旧怨稍解",
+      "body": "伊织家系接受了修补。两家的旧怨没有完全消失，但伊织家系与明智家的信任增加了五点。"
+    },
+    {
+      "textId": "option.sc013.refugee-rival.keep-distance",
+      "title": "维持距离，各走各路",
+      "body": "不再提旧恩，也不作让步，让两家在竞争中各自承担后果。"
+    },
+    {
+      "textId": "summary.sc013.refugee-rival.keep-distance",
+      "title": "两家分途",
+      "body": "伊织家系与明智家的信任下降五点。两家的路从此分开，旧怨被记入家史。"
+    },
+    {
+      "textId": "event.sc013.family-letters.first",
+      "title": "千恵的家书",
+      "body": "晴信已七十，正綱尚未接任家督。灯下，千恵把多年记下的家族旧事整理成一册家书，交给晴信过目。她没有替丈夫决定这册家书该不该让后人看到，只问：这些名字和过错，要原样留给正綱，还是先封起来？晴信必须在家督交出去之前作出选择。"
+    },
+    {
+      "textId": "option.sc013.family-letters.first.reveal",
+      "title": "完整公开家书",
+      "body": "答应千恵，把家书连同其中的人名与过错一并留给正綱，不删改任何一页。"
+    },
+    {
+      "textId": "summary.sc013.family-letters.first.reveal",
+      "title": "家书留在案上",
+      "body": "晴信决定完整公开家书。千恵把原稿留在案上，等正綱继位后自行阅读。"
+    },
+    {
+      "textId": "option.sc013.family-letters.first.seal",
+      "title": "暂封家书",
+      "body": "请千恵把家书收入木匣，等正綱继位后再决定是否拆封。"
+    },
+    {
+      "textId": "summary.sc013.family-letters.first.seal",
+      "title": "木匣上了封",
+      "body": "晴信决定暂封家书。千恵把木匣交给正綱，匣中的内容仍无人读过。"
+    },
+    {
+      "textId": "event.sc013.family-letters.second-open",
+      "title": "已公开的家书",
+      "body": "正綱继位后，在书房读到千恵留下的家书。原稿记着晴信那一代的承诺、失误与家中旧人的名字。正綱可以照着原样保存，也可以把其中的人名与细节理成一册简要家史，再交给信正。"
+    },
+    {
+      "textId": "option.sc013.family-letters.second-open.preserve",
+      "title": "保留原始人名与细节",
+      "body": "不改动千恵的原稿，把每一个名字、每一桩旧事都留在纸上，等信正长大后自己读。"
+    },
+    {
+      "textId": "summary.sc013.family-letters.second-open.preserve",
+      "title": "原稿完整留存",
+      "body": "正綱决定保留家书原貌。千恵写下的名字与细节没有被删去，将随家书传到信正手中。"
+    },
+    {
+      "textId": "option.sc013.family-letters.second-open.summarize",
+      "title": "整理为简要家史",
+      "body": "把家书中的旧事按世代整理成简明家史，略去部分人名与枝节，只留下家族走过的路。"
+    },
+    {
+      "textId": "summary.sc013.family-letters.second-open.summarize",
+      "title": "家史变得简明",
+      "body": "正綱把家书整理成简要家史。后人仍能读到家族的来路，但不再看到每一个名字。"
+    },
+    {
+      "textId": "event.sc013.family-letters.second-sealed",
+      "title": "尚未拆封的家书",
+      "body": "正綱继位后，千恵把那只木匣交到他手上。封蜡仍是晴信当家时的样子，匣中记着什么，正綱并不知道。他可以在自己这一代拆阅并留下完整记录，也可以继续封存，把决定交给信正。"
+    },
+    {
+      "textId": "option.sc013.family-letters.second-sealed.open",
+      "title": "由正綱拆阅并记录",
+      "body": "拆开木匣，读完千恵的家书，并把匣中的人名与旧事完整抄录下来，留给下一代。"
+    },
+    {
+      "textId": "summary.sc013.family-letters.second-sealed.open",
+      "title": "封蜡在正綱手中打开",
+      "body": "正綱拆阅了家书，并把内容完整记录下来。木匣虽已打开，千恵写下的旧事得以原样传到信正手中。"
+    },
+    {
+      "textId": "option.sc013.family-letters.second-sealed.keep",
+      "title": "继续封存交给后代",
+      "body": "不拆木匣，重新封好封蜡，等信正继位后再由他决定是否阅读。"
+    },
+    {
+      "textId": "summary.sc013.family-letters.second-sealed.keep",
+      "title": "木匣仍封着",
+      "body": "正綱没有拆阅家书，把木匣原样交给信正。匣中的内容至今无人读过。"
+    },
+    {
+      "textId": "event.sc013.family-letters.third-full-public",
+      "title": "完整记名的家书",
+      "body": "信正继位后，在书房收到千恵的家书原稿。晴信当年选择完整公开，正綱又保留了每一个人名与细节。如今这册家书交到第三代手中，纸上的承诺、过失与亲情都还清晰可辨。"
+    },
+    {
+      "textId": "option.sc013.family-letters.third-full-public.receive",
+      "title": "收下这份完整家史",
+      "body": "把家书放在案头，承认先代留下的每一个名字，也承认他们没有说出口的难处。"
+    },
+    {
+      "textId": "summary.sc013.family-letters.third-full-public.receive",
+      "title": "三代人名都在纸上",
+      "body": "信正收下了完整家书。晴信与千恵的决定、正綱的保存，使这份记名的家史传到第三代手中。"
+    },
+    {
+      "textId": "event.sc013.family-letters.third-short-history",
+      "title": "简要传述的家史",
+      "body": "信正继位后，读到的是正綱整理过的简要家史。千恵原稿中的许多人名与细节已经被略去，只留下家族三代走过的轮廓。信正仍能从中看见先代的选择，但有些名字已经不在纸上。"
+    },
+    {
+      "textId": "option.sc013.family-letters.third-short-history.receive",
+      "title": "接过这册简史",
+      "body": "把简史收入书房，按先代留下的轮廓继续记下自己这一代的事。"
+    },
+    {
+      "textId": "summary.sc013.family-letters.third-short-history.receive",
+      "title": "家史以简略的形式传下",
+      "body": "信正接过了简要家史。晴信公开家书的决定仍在，但千恵原稿中的部分名字已不再出现。"
+    },
+    {
+      "textId": "event.sc013.family-letters.third-opened-by-heir",
+      "title": "正綱拆阅后的家书",
+      "body": "信正继位后，收到的是正綱拆阅并抄录过的家书。封蜡早已打开，匣中的旧事被正綱完整记下。信正读到的是千恵的原意，也是正綱愿意让后代看见这些旧事的决定。"
+    },
+    {
+      "textId": "option.sc013.family-letters.third-opened-by-heir.receive",
+      "title": "读完后合上家书",
+      "body": "读完正綱留下的抄录，把家书与抄本一并收好，承认两代人共同保存下来的家史。"
+    },
+    {
+      "textId": "summary.sc013.family-letters.third-opened-by-heir.receive",
+      "title": "封存的家书在第二代打开",
+      "body": "信正读到了正綱拆阅后留下的完整记录。家书虽曾封存，其中的名字与旧事仍传到了第三代。"
+    },
+    {
+      "textId": "event.sc013.family-letters.third-sealed",
+      "title": "仍在封存的家书",
+      "body": "信正继位后，千恵的木匣被原样交到他手中。晴信当年选择封存，正綱也没有拆阅。封蜡下的家书至今无人读过，匣中记着什么，只有千恵知道。如今这只匣子交到信正手中，仍没有人打开过它。"
+    },
+    {
+      "textId": "option.sc013.family-letters.third-sealed.receive",
+      "title": "让木匣继续封着",
+      "body": "不拆封蜡，把木匣放回家中的旧柜，让这份家书继续等下去。"
+    },
+    {
+      "textId": "summary.sc013.family-letters.third-sealed.receive",
+      "title": "家书仍未被读",
+      "body": "信正没有打开木匣。三代人保存了这只匣子，匣中的家书仍未被读过。"
+    },
+    {
+      "textId": "event.sc013.commission-legacy.first",
+      "title": "账册托付",
+      "body": "晴信已七十。一个雨夜，酒井次郎兵卫带着一册商路账册来到清洲，请明智家替他把账册送到北方的旧商号。夜路不太平，接下这趟委托便要押上家族的名声；若拒绝，两家的往来也会就此转冷。晴信必须在交接前作出答复。"
+    },
+    {
+      "textId": "option.sc013.commission-legacy.first.accept",
+      "title": "接下夜路递送",
+      "body": "收下账册，答应在交接前派人走完这条夜路，并把酒井的托付记入家议。"
+    },
+    {
+      "textId": "summary.sc013.commission-legacy.first.accept",
+      "title": "受托夜行",
+      "body": "酒井次郎兵卫记住了明智家的担当，对家族的信任增加五点。"
+    },
+    {
+      "textId": "option.sc013.commission-legacy.first.refuse",
+      "title": "婉拒这趟委托",
+      "body": "以家族交接在即为由，请酒井另寻可靠的人手。"
+    },
+    {
+      "textId": "summary.sc013.commission-legacy.first.refuse",
+      "title": "委托被退回",
+      "body": "酒井次郎兵卫收回了账册，对家族的信任下降五点。"
+    },
+    {
+      "textId": "event.sc013.commission-legacy.second-kept",
+      "title": "接过的夜路",
+      "body": "正綱继位后，酒井次郎兵卫再次来到清洲。先代接下的账册已经送到，但商路的秘密也随之一路传开。酒井问新家主，是继续守住这条夜路的秘密，还是把路线公之于众。"
+    },
+    {
+      "textId": "option.sc013.commission-legacy.second-kept.keep-secret",
+      "title": "继续守密",
+      "body": "承认先代接下的委托仍然有效，答应不向外人提起这条商路的走法。"
+    },
+    {
+      "textId": "summary.sc013.commission-legacy.second-kept.keep-secret",
+      "title": "夜路仍被守住",
+      "body": "酒井次郎兵卫确认委托关系仍在，对家族的信任增加五点。"
+    },
+    {
+      "textId": "option.sc013.commission-legacy.second-kept.reveal",
+      "title": "公开路线真相",
+      "body": "把账册与夜路的真相交给众人评说，不再替酒井隐瞒。"
+    },
+    {
+      "textId": "summary.sc013.commission-legacy.second-kept.reveal",
+      "title": "夜路见了天日",
+      "body": "酒井次郎兵卫没有料到秘密被公开，对家族的信任下降五点。"
+    },
+    {
+      "textId": "event.sc013.commission-legacy.second-broken",
+      "title": "未完的交代",
+      "body": "正綱继位后，酒井次郎兵卫旧事重提：先代当年拒绝了那册账册的委托，夜路因此改由外人接手，途中出了差错。酒井没有直接责怪新家主，只问明智家是否愿意补上这份交代。"
+    },
+    {
+      "textId": "option.sc013.commission-legacy.second-broken.compensate",
+      "title": "主动补偿",
+      "body": "承认先代拒绝委托给酒井带来的损失，愿意以家族的名义补偿并重新接下这趟活。"
+    },
+    {
+      "textId": "summary.sc013.commission-legacy.second-broken.compensate",
+      "title": "旧账有了交代",
+      "body": "酒井次郎兵卫接受了补偿，对家族的信任增加五点。"
+    },
+    {
+      "textId": "option.sc013.commission-legacy.second-broken.distance",
+      "title": "拒绝再被牵连",
+      "body": "说明那趟委托已与明智家无关，请酒井不要再把旧事带到清洲。"
+    },
+    {
+      "textId": "summary.sc013.commission-legacy.second-broken.distance",
+      "title": "两家渐行渐远",
+      "body": "酒井次郎兵卫收起了账册，对家族的信任下降五点。"
+    },
+    {
+      "textId": "event.sc013.commission-legacy.third-safe",
+      "title": "夜路仍然安全",
+      "body": "信正继位后，酒井次郎兵卫的后人带着一册旧账来到清洲。两代人守住的夜路如今仍可通行，账册上的名字也没有被外人看到。对方请信正确认，这段委托关系是否继续留在两家之间。"
+    },
+    {
+      "textId": "option.sc013.commission-legacy.third-safe.receive",
+      "title": "确认委托继续",
+      "body": "在旧账上留下明智家的印记，承认这段夜路仍由两家共同守护。"
+    },
+    {
+      "textId": "summary.sc013.commission-legacy.third-safe.receive",
+      "title": "委托关系得以延续",
+      "body": "酒井家系记下了明智家的守密。委托关系传到第三代，仍在两家之间延续。"
+    },
+    {
+      "textId": "event.sc013.commission-legacy.third-public",
+      "title": "账册见了天日",
+      "body": "信正继位后，酒井家的后人带着那册已经公开的账册来到清洲。夜路的秘密早已传遍商旅，账册上的名字也不再是秘密。对方请信正为这段公开的旧事留下一个结尾。"
+    },
+    {
+      "textId": "option.sc013.commission-legacy.third-public.receive",
+      "title": "为公开的旧事作结",
+      "body": "承认当年公开路线的决定，把账册收入家中，作为两家往来的见证。"
+    },
+    {
+      "textId": "summary.sc013.commission-legacy.third-public.receive",
+      "title": "家族以公开真相了结委托",
+      "body": "酒井家系接受了这个结尾。明智家以公开真相了结了这段委托，账册不再只是酒井一家的秘密。"
+    },
+    {
+      "textId": "event.sc013.commission-legacy.third-cleared",
+      "title": "旧账已清",
+      "body": "信正继位后，酒井家的后人来清洲核对旧账。先代曾拒绝委托，正綱又主动补偿，如今账册上的亏欠已经补齐。对方请信正确认，这段旧账是否可以就此了结。"
+    },
+    {
+      "textId": "option.sc013.commission-legacy.third-cleared.receive",
+      "title": "确认旧账已清",
+      "body": "在账册末页写下明智家的名字，承认这份补偿已经完成。"
+    },
+    {
+      "textId": "summary.sc013.commission-legacy.third-cleared.receive",
+      "title": "家族修复早年的拒绝",
+      "body": "酒井家系确认旧账已清。明智家用两代人的补偿，修复了早年那次拒绝留下的裂痕。"
+    },
+    {
+      "textId": "event.sc013.commission-legacy.third-severed",
+      "title": "商路不再相通",
+      "body": "信正继位后，酒井家的后人最后一次来到清洲。先代拒绝委托，正綱又拒绝再被牵连，两家的商路已经多年不相通。对方此行只为把旧账封存，不再寻求新的往来。"
+    },
+    {
+      "textId": "option.sc013.commission-legacy.third-severed.receive",
+      "title": "接受商路断绝",
+      "body": "不再挽留，请对方把旧账带走，两家此后各走各路。"
+    },
+    {
+      "textId": "summary.sc013.commission-legacy.third-severed.receive",
+      "title": "酒井家系不再信任明智家",
+      "body": "酒井家系封存了旧账。商路不再相通，酒井家系也不再信任明智家。"
     }
   ]
 }

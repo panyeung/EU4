@@ -366,7 +366,7 @@ namespace SengokuChronicle.Tests.EditMode
             GameSession session = GameSession.NewGame();
             try
             {
-                session.InitNewGame(2026UL);
+                session.InitStandardDemo(2026UL);
                 Assert.That(session.TryAdvanceToNextMonth(), Is.True, session.LastEventMessage);
                 Assert.That(session.CaptureSave().eventRuntime.pendingEventIds, Has.Length.EqualTo(1));
                 Assert.That(session.TryAdvanceToNextMonth(), Is.False);

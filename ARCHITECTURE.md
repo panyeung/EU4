@@ -20,6 +20,34 @@ SC-004–SC-009 已随 `demo-SC004-SC009` 推送到 `main`，并获用户 Edit M
 
 SC-012 代码/测试源已通过第三轮 OpenCode2 静态只读复审（ACCEPT）。用户随后报告 EditMode 通过、Play Test 通过并明确验收。具体 EditMode 数量、Console error/warning 计数及 `FoundationSceneValidator` 结果未单独提供。早期 Roslyn/harness 数值先于最后一次代码修复；最新修复仅报告 brace/whitespace 静态检查，不能把这些结果当作 Unity 运行证据。复审还记录 append 失败路径缺少应用层测试以及 v1 异常 chronicle 字段兼容边界，见 `PROJECT_STATE.md` 与 `SC012_DEMO.md`。
 
+## SC-013 固定三代剧本扩展
+
+- `SengokuChronicle.Application/M2FixedScenario` 持有固定家族 `family.akechi.sc013`、六名 `person.sc013.*`、直系继承顺序（晴信 → 正綱 → 信正）、固定继承人查询、M2 退休门禁、名册只读视图和终局派生视图。它不写存档、不新增家谱编辑器。
+- `GameSession.InitNewGame()` 默认创建 M2；`InitStandardDemo()` 创建 SC-010 标准样例；`StartCrisisDemoScenario()` 先初始化标准状态再进入既有危机示范。`ApplySuccessionResult` 在每次成功交接后把 M2 固定继承人同步到下一世代；终局提交后不再指定固定继承人，恢复通常继承规则。
+- 事件目录 DTO 增加可选 `scenario` 字段；`EventRuleContext` 增加 `ScenarioId`。`EventEngine` 在排程与提交时都检查 scenario，因此 SC-013 事件不会泄漏到 SC-010 标准/危机流程，SC-011 行保持 scenario-neutral。
+- `FamilyRosterPanel` 只读 `GameSession.FamilyRoster`（由 `M2FixedScenario.BuildRoster` 派生）；`M2EndingPanel` 只读 `GameSession.M2Ending`（由两次已落定继承 + 终局历史 + 当前伊织关系派生）。两者都不新增存档字段。
+- `AddSC013FamilyRosterPanel` 与 `AddSC013TitleScenarioButtons` 沿用事务式 updater 模式：单一固定根、一个 Undo 组、先验证后保存、异常回滚不重载场景。`FoundationSceneValidator` 增加两条 SC-013 PASS 检查；实际运行需在现有 Editor 执行。
+
+## SC-014 流亡少年跨代事件链
+
+- 事件目录新增独立链 `chain.sc013.refugee-legacy`，四个节点沿用 `scenario: "sc013"` 与 `event.sc013.refugee-*` ID；第一代入口、第二代忠诚选择、第三代盟友/竞争分支均以既有 `EventOptionChosen`、`SuccessionCountEquals`、`SettledSuccessionCountAtLeast`、`RelationshipAtLeast` 与 `RelationshipDelta` 表达，不新增规则类型。
+- 节点优先级依次为 `5`、`50`、`500`，低于同阶段既有的 SC-013 承诺/终局与 SC-011 回访行，保留既有确定性排程和测试顺序；M2 退休门禁仍由 `M2FixedScenario` 派生，未因本链改变。
+- 资源侧只追加事件目录与中文文本；`contentVersion` 保持 `2`，未新增人物、存档字段、场景、预制体或 package。
+
+## SC-015 三代家书事件链
+
+- 事件目录新增独立链 `chain.sc013.family-letters`，七个节点均使用 `scenario: "sc013"` 与 `event.sc013.family-letters.*` ID；第一代公开/封存选择、第二代公开后的保留/简化或封存后的拆阅/续封、第三代四个互斥结尾全部由既有 `EventOptionChosen`、`SuccessionCountEquals` 与 `SettledSuccessionCountAtLeast` 表达，不新增规则类型。
+- 所有新选项只使用 `Always` 要求，`effects` 为空；本链不改变关系值、任务阶段、家族数值或存档 schema，选择后果完全由追加式事件历史承载。
+- `EventEngine` 按 priority 降序排程（数值越大越早）。本链优先级为 `6`、`60`、`600`，分别高于同世代 SC-014 的 `5`、`50`、`500`，低于 SC-013 必须事件的 `1000`，并低于第一/二代 SC-011 行的 `10`、`100`，以保留既有确定性顺序。
+- 资源侧只追加事件目录与中文文本；`contentVersion` 保持 `2`，未新增人物、场景、预制体、package 或测试。M2 退休门禁未改变，完整链需要每次交接前额外结束月份。
+
+## SC-016 委托旧约事件链
+
+- 事件目录新增独立链 `chain.sc013.commission-legacy`，七个节点均使用 `scenario: "sc013"` 与 `event.sc013.commission-legacy.*` ID；第一代接受/拒绝委托、第二代守约后的继续守密/公开真相或失约后的主动补偿/拒绝再牵连、第三代四个互斥结尾全部由既有 `EventOptionChosen`、`SuccessionCountEquals` 与 `SettledSuccessionCountAtLeast` 表达，不新增规则类型。
+- 三个决策事件共六个选项使用 `RelationshipDelta`，目标为既有 NPC `npc.sakai.jirobei`，按设计应用 `+5` 或 `-5`；第三代四个单选项结尾 `effects` 为空，只记录故事结果。实际关系前后值继续由 SC-012 编年史按提交边界记录，不新增存档字段。
+- `EventEngine` 按 priority 降序排程（数值越大越早）。本链优先级为 `8`、`80`、`800`，低于 SC-013 必须事件的 `1000` 与 SC-011 的 `10`、`100`，高于同世代 SC-015 的 `6`、`60`、`600` 和 SC-014 的 `5`、`50`、`500`，以保留既有确定性顺序。
+- 资源侧只追加事件目录与中文文本；`contentVersion` 保持 `2`，未新增人物、场景、预制体、package、代码、测试或存档 schema 字段。M2 退休门禁未改变，完整链需要每次交接前额外结束月份。
+
 ## SC-011 事件规则扩展
 
 - `EventRuleContext` 是只读值类型，携带 SC-010 的原始 `SuccessionCount` 与“已落定”计数（仅在 `SuccessionPhase.None` 时等于原始计数）。

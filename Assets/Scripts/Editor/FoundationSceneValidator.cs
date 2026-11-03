@@ -37,6 +37,8 @@ namespace SengokuChronicle.Editor
             RankPanel rankPanel = FindComponent<RankPanel>(scene);
             SuccessionPanel successionPanel = FindComponent<SuccessionPanel>(scene);
             FamilyChroniclePanel chroniclePanel = FindComponent<FamilyChroniclePanel>(scene);
+            FamilyRosterPanel rosterPanel = FindComponent<FamilyRosterPanel>(scene);
+            M2EndingPanel endingPanel = FindComponent<M2EndingPanel>(scene);
 
             CheckFound(report, ref errors, "Canvas", canvas);
             CheckFound(report, ref errors, "Canvas/M2WorldMapRoot", mapRoot);
@@ -50,6 +52,8 @@ namespace SengokuChronicle.Editor
             CheckFound(report, ref errors, "RankPanel", rankPanel);
             CheckFound(report, ref errors, "SuccessionPanel", successionPanel);
             CheckFound(report, ref errors, "FamilyChroniclePanel", chroniclePanel);
+            CheckFound(report, ref errors, "FamilyRosterPanel", rosterPanel);
+            CheckFound(report, ref errors, "M2EndingPanel", endingPanel);
             if (!AddM4SupplyShortageMissionPanel.Validate(scene, out string missionError))
                 AddError(report, ref errors, missionError);
             else
@@ -86,6 +90,14 @@ namespace SengokuChronicle.Editor
                 AddError(report, ref errors, sc012Error);
             else
                 report.AppendLine("PASS SC-012 family chronicle panel hierarchy, bindings, scroll content, ordering, and layout.");
+            if (!AddSC013FamilyRosterPanel.Validate(scene, out string sc013Error))
+                AddError(report, ref errors, sc013Error);
+            else
+                report.AppendLine("PASS SC-013 family roster and ending panel hierarchy, bindings, ordering, and layout.");
+            if (!AddSC013TitleScenarioButtons.Validate(scene, out string sc013TitleError))
+                AddError(report, ref errors, sc013TitleError);
+            else
+                report.AppendLine("PASS SC-013 title scenario entries, bindings, and layout.");
 
             if (controller != null)
             {
@@ -128,7 +140,8 @@ namespace SengokuChronicle.Editor
             {
                 report.AppendLine("\nTITLE SCREEN CONTROLLER REFERENCES:");
                 CheckReferences(report, ref errors, titleController,
-                    "gameSession", "worldMapController", "titleRoot", "newGameButton", "continueButton", "statusText");
+                    "gameSession", "worldMapController", "titleRoot", "newGameButton", "continueButton",
+                    "standardSampleButton", "crisisDemoButton", "statusText");
             }
 
             if (demoPanel != null)
@@ -161,6 +174,22 @@ namespace SengokuChronicle.Editor
                 CheckReferences(report, ref errors, chroniclePanel,
                     "gameSession", "panelRoot", "openButton", "closeButton", "scrollRect", "content",
                     "rowTemplate", "emptyText", "titleText");
+            }
+
+            if (rosterPanel != null)
+            {
+                report.AppendLine("\nFAMILY GRAPH PANEL REFERENCES:");
+                CheckReferences(report, ref errors, rosterPanel,
+                    "gameSession", "panelRoot", "openButton", "closeButton", "titleText", "legendText",
+                    "scrollRect", "content", "edgeLayer", "nodeLayer", "nodeTemplate", "edgeTemplate",
+                    "sectionTemplate", "heirText");
+            }
+
+            if (endingPanel != null)
+            {
+                report.AppendLine("\nM2 ENDING PANEL REFERENCES:");
+                CheckReferences(report, ref errors, endingPanel,
+                    "gameSession", "panelRoot", "titleText", "bodyText", "closeButton");
             }
 
             report.AppendLine("\nHIERARCHY AND RECTTRANSFORMS:");

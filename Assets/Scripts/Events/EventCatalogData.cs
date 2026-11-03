@@ -14,6 +14,8 @@ namespace SengokuChronicle.Events
     public sealed class EventDefinitionData
     {
         public string eventId;
+        /// <summary>Optional scenario gate; empty means the event is scenario-neutral.</summary>
+        public string scenario;
         public string trigger;
         public EventConditionData[] conditions;
         public int weight;
@@ -131,6 +133,12 @@ namespace SengokuChronicle.Events
         public const string OfferRestSummaryTextId = "summary.rainy-arrival.offer-rest";
     }
 
+    /// <summary>Known scenario identifiers used by the optional event scenario gate.</summary>
+    public static class EventScenarioIds
+    {
+        public const string Sc013 = "sc013";
+    }
+
     /// <summary>Stable IDs for the SC-011 cross-generation follow-up encounter variants.</summary>
     public static class SC011EventIds
     {
@@ -144,5 +152,31 @@ namespace SengokuChronicle.Events
         public const string LegacyDeferredAtoneOptionId = "option.legacy-deferred.atone";
         public const string LegacyDeferredExplainOptionId = "option.legacy-deferred.explain";
         public const string LegacyDeferredDismissOptionId = "option.legacy-deferred.dismiss";
+    }
+
+    /// <summary>Stable IDs for the SC-013 fixed three-generation scenario events.</summary>
+    public static class SC013EventIds
+    {
+        public const string ChainId = "chain.sc013.main";
+
+        public const string PledgeEventId = "event.sc013.inheritance-pledge";
+        public const string KeepPromiseOptionId = "option.sc013.inheritance-pledge.keep-promise";
+        public const string BreakPromiseOptionId = "option.sc013.inheritance-pledge.break-promise";
+
+        public const string FinaleEventId = "event.sc013.finale";
+        public const string SeekAidOptionId = "option.sc013.finale.seek-aid";
+        public const string StandAloneOptionId = "option.sc013.finale.stand-alone";
+
+        public const string PledgeEventTextId = "event.sc013.inheritance-pledge";
+        public const string KeepPromiseTextId = "option.sc013.inheritance-pledge.keep-promise";
+        public const string KeepPromiseSummaryTextId = "summary.sc013.inheritance-pledge.keep-promise";
+        public const string BreakPromiseTextId = "option.sc013.inheritance-pledge.break-promise";
+        public const string BreakPromiseSummaryTextId = "summary.sc013.inheritance-pledge.break-promise";
+
+        public const string FinaleEventTextId = "event.sc013.finale";
+        public const string SeekAidTextId = "option.sc013.finale.seek-aid";
+        public const string SeekAidSummaryTextId = "summary.sc013.finale.seek-aid";
+        public const string StandAloneTextId = "option.sc013.finale.stand-alone";
+        public const string StandAloneSummaryTextId = "summary.sc013.finale.stand-alone";
     }
 }

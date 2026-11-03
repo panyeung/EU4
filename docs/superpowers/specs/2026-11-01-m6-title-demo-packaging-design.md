@@ -1,4 +1,6 @@
 # M6 设计：标题界面与 Phase 1 演示封装（Title Screen & Demo Packaging）
+> 历史档案说明：本文件属于旧 Sengoku Chronicle 方向，保留其当时的计划或验收记录。当前设计与开发路线以 [GDD_v4.0.md](GDD_v4.0.md) 为准；不要把旧 M1–M7 代号、Phase 1/2 状态或功能范围当作《影之一族》当前规格。
+
 
 日期：2026-11-01
 状态：已批准（用户选择方向 1，继续使用 `feature/m5-save-slot` 分支与本工作树）

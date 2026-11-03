@@ -72,6 +72,9 @@ namespace SengokuChronicle.Events
                     errors.Add($"Event {definition.eventId} cooldown exceeds the supported date range.");
                 if (!TryEnum(definition.onceScope, out EventOnceScope _))
                     errors.Add($"Event {definition.eventId} has an unsupported onceScope.");
+                if (!string.IsNullOrWhiteSpace(definition.scenario) &&
+                    !string.Equals(definition.scenario, EventScenarioIds.Sc013, StringComparison.Ordinal))
+                    errors.Add($"Event {definition.eventId} has an unsupported scenario gate.");
                 RequireText(textById, definition.textId, $"event {definition.eventId}", errors);
 
                 if (definition.conditions != null)

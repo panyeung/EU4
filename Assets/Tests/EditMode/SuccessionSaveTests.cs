@@ -17,6 +17,7 @@ namespace SengokuChronicle.Tests.EditMode
         public void SetUp()
         {
             _session = GameSession.NewGame();
+            _session.InitStandardDemo();
         }
 
         [TearDown]

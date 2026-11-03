@@ -65,3 +65,7 @@ OpenCode 后续按 `GDD_v4.0.md` 中批准的 M0 顺序推进；SC-002 的 Domai
 - 修正后 EditMode `TestResults.xml`（本地 15:10:44）报告 425/425 通过，0 失败、0 跳过、0 不确定。
 - 用户报告此次 Unity Console 红色错误数为 0。日志仍有 Licensing 404 与 AI `NoSubscription` 服务消息；日志事件与用户读取的 Console 计数分别记录。
 - SC-002 不是可玩演示；本次只建立并推送功能分支检查点，不合并 main、不打标签。Kanban/QATester 接口不可用；独立 OpenCode 技术复核接受修正。
+
+## 新方向当前状态更新（2026-11-02）
+
+本文是 SC-001 基线快照；文中旧的“下一项 SC-003”仅反映当时状态，现已被后续检查点取代。SC-004–SC-009 已合并并推送至 `main`，用户已确认 Edit Mode 与 Play Test 验收；当前下一项为 GDD v4.0 的 SC-010。SC-003 家族模型相关工作区文件未并入该 checkpoint。当前权威状态见 `PROJECT_STATE.md`。

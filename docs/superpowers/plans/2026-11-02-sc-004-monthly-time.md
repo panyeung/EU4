@@ -1,5 +1,7 @@
 # SC-004 Monthly Time Implementation Plan
 
+> 最终状态（2026-11-02）：SC-004 与 SC-005–SC-009 已集成；用户确认 Edit Mode 全部通过并接受 Play Test，最新 `TestResults.xml` 为 548/548 passed，OpenCode2 只读审查 ACCEPT。`c29d24a` 已推送到 `main`，`demo-SC004-SC009` 已推送。下面的未勾选项来自原始计划快照，不表示实现未完成。仍待取得的证据：FoundationScene 反馈条仍序列化为旧位置，本次未执行场景更新器或 `FoundationSceneValidator`，编译与 Console 计数也未单独核实。当前状态以 `PROJECT_STATE.md` 为准。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add a bounded month-end clock action and a directly testable FoundationScene control.

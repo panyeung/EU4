@@ -19,6 +19,10 @@ namespace SengokuChronicle.Tests.EditMode
         public void SetUp()
         {
             _session = GameSession.NewGame();
+            // SC-011 is the accepted SC-010 standard-slice behavior. Keep this
+            // regression suite on the explicit standard roster instead of the
+            // default SC-013 fixed scenario.
+            _session.InitStandardDemo();
         }
 
         [TearDown]

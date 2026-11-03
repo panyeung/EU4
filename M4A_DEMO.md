@@ -1,4 +1,6 @@
-# M4a Supply Shortage — Demo Candidate
+# M4a Supply Shortage — Accepted Historical Demo
+> 历史档案说明：本文件属于旧 Sengoku Chronicle 方向，保留其当时的计划或验收记录。当前设计与开发路线以 [GDD_v4.0.md](GDD_v4.0.md) 为准；不要把旧 M1–M7 代号、Phase 1/2 状态或功能范围当作《影之一族》当前规格。
+
 
 **Status: User accepted the M4a demo.** EditMode, scene validation, and user-reported Play Mode checks are recorded below.
 

@@ -8,6 +8,46 @@
         "event.rainy-arrival.legacy-honored",
         "event.rainy-arrival.legacy-deferred"
       ]
+    },
+    {
+      "chainId": "chain.sc013.main",
+      "linkedEventIds": [
+        "event.sc013.inheritance-pledge",
+        "event.sc013.finale"
+      ]
+    },
+    {
+      "chainId": "chain.sc013.refugee-legacy",
+      "linkedEventIds": [
+        "event.sc013.refugee-arrival",
+        "event.sc013.refugee-loyalty",
+        "event.sc013.refugee-aid",
+        "event.sc013.refugee-rival"
+      ]
+    },
+    {
+      "chainId": "chain.sc013.family-letters",
+      "linkedEventIds": [
+        "event.sc013.family-letters.first",
+        "event.sc013.family-letters.second-open",
+        "event.sc013.family-letters.second-sealed",
+        "event.sc013.family-letters.third-full-public",
+        "event.sc013.family-letters.third-short-history",
+        "event.sc013.family-letters.third-opened-by-heir",
+        "event.sc013.family-letters.third-sealed"
+      ]
+    },
+    {
+      "chainId": "chain.sc013.commission-legacy",
+      "linkedEventIds": [
+        "event.sc013.commission-legacy.first",
+        "event.sc013.commission-legacy.second-kept",
+        "event.sc013.commission-legacy.second-broken",
+        "event.sc013.commission-legacy.third-safe",
+        "event.sc013.commission-legacy.third-public",
+        "event.sc013.commission-legacy.third-cleared",
+        "event.sc013.commission-legacy.third-severed"
+      ]
     }
   ],
   "events": [
@@ -157,6 +197,736 @@
       "onceScope": "PerGame",
       "chainId": "chain.rainy-arrival",
       "priority": 100
+    },
+    {
+      "eventId": "event.sc013.inheritance-pledge",
+      "scenario": "sc013",
+      "trigger": "Monthly",
+      "conditions": [
+        { "type": "SuccessionCountEquals", "threshold": 0 }
+      ],
+      "weight": 1,
+      "textId": "event.sc013.inheritance-pledge",
+      "options": [
+        {
+          "optionId": "option.sc013.inheritance-pledge.keep-promise",
+          "textId": "option.sc013.inheritance-pledge.keep-promise",
+          "summaryTextId": "summary.sc013.inheritance-pledge.keep-promise",
+          "requirements": [ { "type": "Always" } ],
+          "effects": [
+            {
+              "type": "RelationshipDelta",
+              "targetCharacterId": "npc.kuroda.iori",
+              "delta": 5
+            }
+          ]
+        },
+        {
+          "optionId": "option.sc013.inheritance-pledge.break-promise",
+          "textId": "option.sc013.inheritance-pledge.break-promise",
+          "summaryTextId": "summary.sc013.inheritance-pledge.break-promise",
+          "requirements": [ { "type": "Always" } ],
+          "effects": [
+            {
+              "type": "RelationshipDelta",
+              "targetCharacterId": "npc.kuroda.iori",
+              "delta": -5
+            }
+          ]
+        }
+      ],
+      "cooldownMonths": 0,
+      "onceScope": "PerGame",
+      "chainId": "chain.sc013.main",
+      "priority": 1000
+    },
+    {
+      "eventId": "event.sc013.finale",
+      "scenario": "sc013",
+      "trigger": "Monthly",
+      "conditions": [
+        { "type": "SettledSuccessionCountAtLeast", "threshold": 2 }
+      ],
+      "weight": 1,
+      "textId": "event.sc013.finale",
+      "options": [
+        {
+          "optionId": "option.sc013.finale.seek-aid",
+          "textId": "option.sc013.finale.seek-aid",
+          "summaryTextId": "summary.sc013.finale.seek-aid",
+          "requirements": [
+            {
+              "type": "RelationshipAtLeast",
+              "targetCharacterId": "npc.kuroda.iori",
+              "minimumValue": 5,
+              "reason": "需要黑田伊织的信任至少为 5。"
+            }
+          ],
+          "effects": []
+        },
+        {
+          "optionId": "option.sc013.finale.stand-alone",
+          "textId": "option.sc013.finale.stand-alone",
+          "summaryTextId": "summary.sc013.finale.stand-alone",
+          "requirements": [ { "type": "Always" } ],
+          "effects": []
+        }
+      ],
+      "cooldownMonths": 0,
+      "onceScope": "PerGame",
+      "chainId": "chain.sc013.main",
+      "priority": 1000
+    },
+    {
+      "eventId": "event.sc013.refugee-arrival",
+      "scenario": "sc013",
+      "trigger": "Monthly",
+      "conditions": [
+        { "type": "SuccessionCountEquals", "threshold": 0 }
+      ],
+      "weight": 1,
+      "textId": "event.sc013.refugee-arrival",
+      "options": [
+        {
+          "optionId": "option.sc013.refugee-arrival.shelter",
+          "textId": "option.sc013.refugee-arrival.shelter",
+          "summaryTextId": "summary.sc013.refugee-arrival.shelter",
+          "requirements": [ { "type": "Always" } ],
+          "effects": [
+            {
+              "type": "RelationshipDelta",
+              "targetCharacterId": "npc.kuroda.iori",
+              "delta": 5
+            }
+          ]
+        },
+        {
+          "optionId": "option.sc013.refugee-arrival.refuse",
+          "textId": "option.sc013.refugee-arrival.refuse",
+          "summaryTextId": "summary.sc013.refugee-arrival.refuse",
+          "requirements": [ { "type": "Always" } ],
+          "effects": [
+            {
+              "type": "RelationshipDelta",
+              "targetCharacterId": "npc.kuroda.iori",
+              "delta": -5
+            }
+          ]
+        },
+        {
+          "optionId": "option.sc013.refugee-arrival.betray",
+          "textId": "option.sc013.refugee-arrival.betray",
+          "summaryTextId": "summary.sc013.refugee-arrival.betray",
+          "requirements": [ { "type": "Always" } ],
+          "effects": [
+            {
+              "type": "RelationshipDelta",
+              "targetCharacterId": "npc.kuroda.iori",
+              "delta": -10
+            }
+          ]
+        }
+      ],
+      "cooldownMonths": 0,
+      "onceScope": "PerGame",
+      "chainId": "chain.sc013.refugee-legacy",
+      "priority": 5
+    },
+    {
+      "eventId": "event.sc013.refugee-loyalty",
+      "scenario": "sc013",
+      "trigger": "Monthly",
+      "conditions": [
+        {
+          "type": "EventOptionChosen",
+          "sourceEventId": "event.sc013.refugee-arrival",
+          "sourceOptionId": "option.sc013.refugee-arrival.shelter"
+        },
+        { "type": "SettledSuccessionCountAtLeast", "threshold": 1 }
+      ],
+      "weight": 1,
+      "textId": "event.sc013.refugee-loyalty",
+      "options": [
+        {
+          "optionId": "option.sc013.refugee-loyalty.honor-old-oath",
+          "textId": "option.sc013.refugee-loyalty.honor-old-oath",
+          "summaryTextId": "summary.sc013.refugee-loyalty.honor-old-oath",
+          "requirements": [ { "type": "Always" } ],
+          "effects": [
+            {
+              "type": "RelationshipDelta",
+              "targetCharacterId": "npc.kuroda.iori",
+              "delta": 5
+            }
+          ]
+        },
+        {
+          "optionId": "option.sc013.refugee-loyalty.enforce-new-policy",
+          "textId": "option.sc013.refugee-loyalty.enforce-new-policy",
+          "summaryTextId": "summary.sc013.refugee-loyalty.enforce-new-policy",
+          "requirements": [ { "type": "Always" } ],
+          "effects": [
+            {
+              "type": "RelationshipDelta",
+              "targetCharacterId": "npc.kuroda.iori",
+              "delta": -5
+            }
+          ]
+        }
+      ],
+      "cooldownMonths": 0,
+      "onceScope": "PerGame",
+      "chainId": "chain.sc013.refugee-legacy",
+      "priority": 50
+    },
+    {
+      "eventId": "event.sc013.refugee-aid",
+      "scenario": "sc013",
+      "trigger": "Monthly",
+      "conditions": [
+        {
+          "type": "EventOptionChosen",
+          "sourceEventId": "event.sc013.refugee-loyalty",
+          "sourceOptionId": "option.sc013.refugee-loyalty.honor-old-oath"
+        },
+        { "type": "SettledSuccessionCountAtLeast", "threshold": 2 }
+      ],
+      "weight": 1,
+      "textId": "event.sc013.refugee-aid",
+      "options": [
+        {
+          "optionId": "option.sc013.refugee-aid.request-aid",
+          "textId": "option.sc013.refugee-aid.request-aid",
+          "summaryTextId": "summary.sc013.refugee-aid.request-aid",
+          "requirements": [
+            {
+              "type": "RelationshipAtLeast",
+              "targetCharacterId": "npc.kuroda.iori",
+              "minimumValue": 5,
+              "reason": "需要伊织家系与明智家的信任至少为 5。"
+            }
+          ],
+          "effects": []
+        },
+        {
+          "optionId": "option.sc013.refugee-aid.stand-alone",
+          "textId": "option.sc013.refugee-aid.stand-alone",
+          "summaryTextId": "summary.sc013.refugee-aid.stand-alone",
+          "requirements": [ { "type": "Always" } ],
+          "effects": []
+        }
+      ],
+      "cooldownMonths": 0,
+      "onceScope": "PerGame",
+      "chainId": "chain.sc013.refugee-legacy",
+      "priority": 500
+    },
+    {
+      "eventId": "event.sc013.refugee-rival",
+      "scenario": "sc013",
+      "trigger": "Monthly",
+      "conditions": [
+        {
+          "type": "EventOptionChosen",
+          "sourceEventId": "event.sc013.refugee-loyalty",
+          "sourceOptionId": "option.sc013.refugee-loyalty.enforce-new-policy"
+        },
+        { "type": "SettledSuccessionCountAtLeast", "threshold": 2 }
+      ],
+      "weight": 1,
+      "textId": "event.sc013.refugee-rival",
+      "options": [
+        {
+          "optionId": "option.sc013.refugee-rival.mend-grievance",
+          "textId": "option.sc013.refugee-rival.mend-grievance",
+          "summaryTextId": "summary.sc013.refugee-rival.mend-grievance",
+          "requirements": [ { "type": "Always" } ],
+          "effects": [
+            {
+              "type": "RelationshipDelta",
+              "targetCharacterId": "npc.kuroda.iori",
+              "delta": 5
+            }
+          ]
+        },
+        {
+          "optionId": "option.sc013.refugee-rival.keep-distance",
+          "textId": "option.sc013.refugee-rival.keep-distance",
+          "summaryTextId": "summary.sc013.refugee-rival.keep-distance",
+          "requirements": [ { "type": "Always" } ],
+          "effects": [
+            {
+              "type": "RelationshipDelta",
+              "targetCharacterId": "npc.kuroda.iori",
+              "delta": -5
+            }
+          ]
+        }
+      ],
+      "cooldownMonths": 0,
+      "onceScope": "PerGame",
+      "chainId": "chain.sc013.refugee-legacy",
+      "priority": 500
+    },
+    {
+      "eventId": "event.sc013.family-letters.first",
+      "scenario": "sc013",
+      "trigger": "Monthly",
+      "conditions": [
+        { "type": "SuccessionCountEquals", "threshold": 0 }
+      ],
+      "weight": 1,
+      "textId": "event.sc013.family-letters.first",
+      "options": [
+        {
+          "optionId": "option.sc013.family-letters.first.reveal",
+          "textId": "option.sc013.family-letters.first.reveal",
+          "summaryTextId": "summary.sc013.family-letters.first.reveal",
+          "requirements": [ { "type": "Always" } ],
+          "effects": []
+        },
+        {
+          "optionId": "option.sc013.family-letters.first.seal",
+          "textId": "option.sc013.family-letters.first.seal",
+          "summaryTextId": "summary.sc013.family-letters.first.seal",
+          "requirements": [ { "type": "Always" } ],
+          "effects": []
+        }
+      ],
+      "cooldownMonths": 0,
+      "onceScope": "PerGame",
+      "chainId": "chain.sc013.family-letters",
+      "priority": 6
+    },
+    {
+      "eventId": "event.sc013.family-letters.second-open",
+      "scenario": "sc013",
+      "trigger": "Monthly",
+      "conditions": [
+        {
+          "type": "EventOptionChosen",
+          "sourceEventId": "event.sc013.family-letters.first",
+          "sourceOptionId": "option.sc013.family-letters.first.reveal"
+        },
+        { "type": "SettledSuccessionCountAtLeast", "threshold": 1 }
+      ],
+      "weight": 1,
+      "textId": "event.sc013.family-letters.second-open",
+      "options": [
+        {
+          "optionId": "option.sc013.family-letters.second-open.preserve",
+          "textId": "option.sc013.family-letters.second-open.preserve",
+          "summaryTextId": "summary.sc013.family-letters.second-open.preserve",
+          "requirements": [ { "type": "Always" } ],
+          "effects": []
+        },
+        {
+          "optionId": "option.sc013.family-letters.second-open.summarize",
+          "textId": "option.sc013.family-letters.second-open.summarize",
+          "summaryTextId": "summary.sc013.family-letters.second-open.summarize",
+          "requirements": [ { "type": "Always" } ],
+          "effects": []
+        }
+      ],
+      "cooldownMonths": 0,
+      "onceScope": "PerGame",
+      "chainId": "chain.sc013.family-letters",
+      "priority": 60
+    },
+    {
+      "eventId": "event.sc013.family-letters.second-sealed",
+      "scenario": "sc013",
+      "trigger": "Monthly",
+      "conditions": [
+        {
+          "type": "EventOptionChosen",
+          "sourceEventId": "event.sc013.family-letters.first",
+          "sourceOptionId": "option.sc013.family-letters.first.seal"
+        },
+        { "type": "SettledSuccessionCountAtLeast", "threshold": 1 }
+      ],
+      "weight": 1,
+      "textId": "event.sc013.family-letters.second-sealed",
+      "options": [
+        {
+          "optionId": "option.sc013.family-letters.second-sealed.open",
+          "textId": "option.sc013.family-letters.second-sealed.open",
+          "summaryTextId": "summary.sc013.family-letters.second-sealed.open",
+          "requirements": [ { "type": "Always" } ],
+          "effects": []
+        },
+        {
+          "optionId": "option.sc013.family-letters.second-sealed.keep",
+          "textId": "option.sc013.family-letters.second-sealed.keep",
+          "summaryTextId": "summary.sc013.family-letters.second-sealed.keep",
+          "requirements": [ { "type": "Always" } ],
+          "effects": []
+        }
+      ],
+      "cooldownMonths": 0,
+      "onceScope": "PerGame",
+      "chainId": "chain.sc013.family-letters",
+      "priority": 60
+    },
+    {
+      "eventId": "event.sc013.family-letters.third-full-public",
+      "scenario": "sc013",
+      "trigger": "Monthly",
+      "conditions": [
+        {
+          "type": "EventOptionChosen",
+          "sourceEventId": "event.sc013.family-letters.second-open",
+          "sourceOptionId": "option.sc013.family-letters.second-open.preserve"
+        },
+        { "type": "SettledSuccessionCountAtLeast", "threshold": 2 }
+      ],
+      "weight": 1,
+      "textId": "event.sc013.family-letters.third-full-public",
+      "options": [
+        {
+          "optionId": "option.sc013.family-letters.third-full-public.receive",
+          "textId": "option.sc013.family-letters.third-full-public.receive",
+          "summaryTextId": "summary.sc013.family-letters.third-full-public.receive",
+          "requirements": [ { "type": "Always" } ],
+          "effects": []
+        }
+      ],
+      "cooldownMonths": 0,
+      "onceScope": "PerGame",
+      "chainId": "chain.sc013.family-letters",
+      "priority": 600
+    },
+    {
+      "eventId": "event.sc013.family-letters.third-short-history",
+      "scenario": "sc013",
+      "trigger": "Monthly",
+      "conditions": [
+        {
+          "type": "EventOptionChosen",
+          "sourceEventId": "event.sc013.family-letters.second-open",
+          "sourceOptionId": "option.sc013.family-letters.second-open.summarize"
+        },
+        { "type": "SettledSuccessionCountAtLeast", "threshold": 2 }
+      ],
+      "weight": 1,
+      "textId": "event.sc013.family-letters.third-short-history",
+      "options": [
+        {
+          "optionId": "option.sc013.family-letters.third-short-history.receive",
+          "textId": "option.sc013.family-letters.third-short-history.receive",
+          "summaryTextId": "summary.sc013.family-letters.third-short-history.receive",
+          "requirements": [ { "type": "Always" } ],
+          "effects": []
+        }
+      ],
+      "cooldownMonths": 0,
+      "onceScope": "PerGame",
+      "chainId": "chain.sc013.family-letters",
+      "priority": 600
+    },
+    {
+      "eventId": "event.sc013.family-letters.third-opened-by-heir",
+      "scenario": "sc013",
+      "trigger": "Monthly",
+      "conditions": [
+        {
+          "type": "EventOptionChosen",
+          "sourceEventId": "event.sc013.family-letters.second-sealed",
+          "sourceOptionId": "option.sc013.family-letters.second-sealed.open"
+        },
+        { "type": "SettledSuccessionCountAtLeast", "threshold": 2 }
+      ],
+      "weight": 1,
+      "textId": "event.sc013.family-letters.third-opened-by-heir",
+      "options": [
+        {
+          "optionId": "option.sc013.family-letters.third-opened-by-heir.receive",
+          "textId": "option.sc013.family-letters.third-opened-by-heir.receive",
+          "summaryTextId": "summary.sc013.family-letters.third-opened-by-heir.receive",
+          "requirements": [ { "type": "Always" } ],
+          "effects": []
+        }
+      ],
+      "cooldownMonths": 0,
+      "onceScope": "PerGame",
+      "chainId": "chain.sc013.family-letters",
+      "priority": 600
+    },
+    {
+      "eventId": "event.sc013.family-letters.third-sealed",
+      "scenario": "sc013",
+      "trigger": "Monthly",
+      "conditions": [
+        {
+          "type": "EventOptionChosen",
+          "sourceEventId": "event.sc013.family-letters.second-sealed",
+          "sourceOptionId": "option.sc013.family-letters.second-sealed.keep"
+        },
+        { "type": "SettledSuccessionCountAtLeast", "threshold": 2 }
+      ],
+      "weight": 1,
+      "textId": "event.sc013.family-letters.third-sealed",
+      "options": [
+        {
+          "optionId": "option.sc013.family-letters.third-sealed.receive",
+          "textId": "option.sc013.family-letters.third-sealed.receive",
+          "summaryTextId": "summary.sc013.family-letters.third-sealed.receive",
+          "requirements": [ { "type": "Always" } ],
+          "effects": []
+        }
+      ],
+      "cooldownMonths": 0,
+      "onceScope": "PerGame",
+      "chainId": "chain.sc013.family-letters",
+      "priority": 600
+    },
+    {
+      "eventId": "event.sc013.commission-legacy.first",
+      "scenario": "sc013",
+      "trigger": "Monthly",
+      "conditions": [
+        { "type": "SuccessionCountEquals", "threshold": 0 }
+      ],
+      "weight": 1,
+      "textId": "event.sc013.commission-legacy.first",
+      "options": [
+        {
+          "optionId": "option.sc013.commission-legacy.first.accept",
+          "textId": "option.sc013.commission-legacy.first.accept",
+          "summaryTextId": "summary.sc013.commission-legacy.first.accept",
+          "requirements": [ { "type": "Always" } ],
+          "effects": [
+            {
+              "type": "RelationshipDelta",
+              "targetCharacterId": "npc.sakai.jirobei",
+              "delta": 5
+            }
+          ]
+        },
+        {
+          "optionId": "option.sc013.commission-legacy.first.refuse",
+          "textId": "option.sc013.commission-legacy.first.refuse",
+          "summaryTextId": "summary.sc013.commission-legacy.first.refuse",
+          "requirements": [ { "type": "Always" } ],
+          "effects": [
+            {
+              "type": "RelationshipDelta",
+              "targetCharacterId": "npc.sakai.jirobei",
+              "delta": -5
+            }
+          ]
+        }
+      ],
+      "cooldownMonths": 0,
+      "onceScope": "PerGame",
+      "chainId": "chain.sc013.commission-legacy",
+      "priority": 8
+    },
+    {
+      "eventId": "event.sc013.commission-legacy.second-kept",
+      "scenario": "sc013",
+      "trigger": "Monthly",
+      "conditions": [
+        {
+          "type": "EventOptionChosen",
+          "sourceEventId": "event.sc013.commission-legacy.first",
+          "sourceOptionId": "option.sc013.commission-legacy.first.accept"
+        },
+        { "type": "SettledSuccessionCountAtLeast", "threshold": 1 }
+      ],
+      "weight": 1,
+      "textId": "event.sc013.commission-legacy.second-kept",
+      "options": [
+        {
+          "optionId": "option.sc013.commission-legacy.second-kept.keep-secret",
+          "textId": "option.sc013.commission-legacy.second-kept.keep-secret",
+          "summaryTextId": "summary.sc013.commission-legacy.second-kept.keep-secret",
+          "requirements": [ { "type": "Always" } ],
+          "effects": [
+            {
+              "type": "RelationshipDelta",
+              "targetCharacterId": "npc.sakai.jirobei",
+              "delta": 5
+            }
+          ]
+        },
+        {
+          "optionId": "option.sc013.commission-legacy.second-kept.reveal",
+          "textId": "option.sc013.commission-legacy.second-kept.reveal",
+          "summaryTextId": "summary.sc013.commission-legacy.second-kept.reveal",
+          "requirements": [ { "type": "Always" } ],
+          "effects": [
+            {
+              "type": "RelationshipDelta",
+              "targetCharacterId": "npc.sakai.jirobei",
+              "delta": -5
+            }
+          ]
+        }
+      ],
+      "cooldownMonths": 0,
+      "onceScope": "PerGame",
+      "chainId": "chain.sc013.commission-legacy",
+      "priority": 80
+    },
+    {
+      "eventId": "event.sc013.commission-legacy.second-broken",
+      "scenario": "sc013",
+      "trigger": "Monthly",
+      "conditions": [
+        {
+          "type": "EventOptionChosen",
+          "sourceEventId": "event.sc013.commission-legacy.first",
+          "sourceOptionId": "option.sc013.commission-legacy.first.refuse"
+        },
+        { "type": "SettledSuccessionCountAtLeast", "threshold": 1 }
+      ],
+      "weight": 1,
+      "textId": "event.sc013.commission-legacy.second-broken",
+      "options": [
+        {
+          "optionId": "option.sc013.commission-legacy.second-broken.compensate",
+          "textId": "option.sc013.commission-legacy.second-broken.compensate",
+          "summaryTextId": "summary.sc013.commission-legacy.second-broken.compensate",
+          "requirements": [ { "type": "Always" } ],
+          "effects": [
+            {
+              "type": "RelationshipDelta",
+              "targetCharacterId": "npc.sakai.jirobei",
+              "delta": 5
+            }
+          ]
+        },
+        {
+          "optionId": "option.sc013.commission-legacy.second-broken.distance",
+          "textId": "option.sc013.commission-legacy.second-broken.distance",
+          "summaryTextId": "summary.sc013.commission-legacy.second-broken.distance",
+          "requirements": [ { "type": "Always" } ],
+          "effects": [
+            {
+              "type": "RelationshipDelta",
+              "targetCharacterId": "npc.sakai.jirobei",
+              "delta": -5
+            }
+          ]
+        }
+      ],
+      "cooldownMonths": 0,
+      "onceScope": "PerGame",
+      "chainId": "chain.sc013.commission-legacy",
+      "priority": 80
+    },
+    {
+      "eventId": "event.sc013.commission-legacy.third-safe",
+      "scenario": "sc013",
+      "trigger": "Monthly",
+      "conditions": [
+        {
+          "type": "EventOptionChosen",
+          "sourceEventId": "event.sc013.commission-legacy.second-kept",
+          "sourceOptionId": "option.sc013.commission-legacy.second-kept.keep-secret"
+        },
+        { "type": "SettledSuccessionCountAtLeast", "threshold": 2 }
+      ],
+      "weight": 1,
+      "textId": "event.sc013.commission-legacy.third-safe",
+      "options": [
+        {
+          "optionId": "option.sc013.commission-legacy.third-safe.receive",
+          "textId": "option.sc013.commission-legacy.third-safe.receive",
+          "summaryTextId": "summary.sc013.commission-legacy.third-safe.receive",
+          "requirements": [ { "type": "Always" } ],
+          "effects": []
+        }
+      ],
+      "cooldownMonths": 0,
+      "onceScope": "PerGame",
+      "chainId": "chain.sc013.commission-legacy",
+      "priority": 800
+    },
+    {
+      "eventId": "event.sc013.commission-legacy.third-public",
+      "scenario": "sc013",
+      "trigger": "Monthly",
+      "conditions": [
+        {
+          "type": "EventOptionChosen",
+          "sourceEventId": "event.sc013.commission-legacy.second-kept",
+          "sourceOptionId": "option.sc013.commission-legacy.second-kept.reveal"
+        },
+        { "type": "SettledSuccessionCountAtLeast", "threshold": 2 }
+      ],
+      "weight": 1,
+      "textId": "event.sc013.commission-legacy.third-public",
+      "options": [
+        {
+          "optionId": "option.sc013.commission-legacy.third-public.receive",
+          "textId": "option.sc013.commission-legacy.third-public.receive",
+          "summaryTextId": "summary.sc013.commission-legacy.third-public.receive",
+          "requirements": [ { "type": "Always" } ],
+          "effects": []
+        }
+      ],
+      "cooldownMonths": 0,
+      "onceScope": "PerGame",
+      "chainId": "chain.sc013.commission-legacy",
+      "priority": 800
+    },
+    {
+      "eventId": "event.sc013.commission-legacy.third-cleared",
+      "scenario": "sc013",
+      "trigger": "Monthly",
+      "conditions": [
+        {
+          "type": "EventOptionChosen",
+          "sourceEventId": "event.sc013.commission-legacy.second-broken",
+          "sourceOptionId": "option.sc013.commission-legacy.second-broken.compensate"
+        },
+        { "type": "SettledSuccessionCountAtLeast", "threshold": 2 }
+      ],
+      "weight": 1,
+      "textId": "event.sc013.commission-legacy.third-cleared",
+      "options": [
+        {
+          "optionId": "option.sc013.commission-legacy.third-cleared.receive",
+          "textId": "option.sc013.commission-legacy.third-cleared.receive",
+          "summaryTextId": "summary.sc013.commission-legacy.third-cleared.receive",
+          "requirements": [ { "type": "Always" } ],
+          "effects": []
+        }
+      ],
+      "cooldownMonths": 0,
+      "onceScope": "PerGame",
+      "chainId": "chain.sc013.commission-legacy",
+      "priority": 800
+    },
+    {
+      "eventId": "event.sc013.commission-legacy.third-severed",
+      "scenario": "sc013",
+      "trigger": "Monthly",
+      "conditions": [
+        {
+          "type": "EventOptionChosen",
+          "sourceEventId": "event.sc013.commission-legacy.second-broken",
+          "sourceOptionId": "option.sc013.commission-legacy.second-broken.distance"
+        },
+        { "type": "SettledSuccessionCountAtLeast", "threshold": 2 }
+      ],
+      "weight": 1,
+      "textId": "event.sc013.commission-legacy.third-severed",
+      "options": [
+        {
+          "optionId": "option.sc013.commission-legacy.third-severed.receive",
+          "textId": "option.sc013.commission-legacy.third-severed.receive",
+          "summaryTextId": "summary.sc013.commission-legacy.third-severed.receive",
+          "requirements": [ { "type": "Always" } ],
+          "effects": []
+        }
+      ],
+      "cooldownMonths": 0,
+      "onceScope": "PerGame",
+      "chainId": "chain.sc013.commission-legacy",
+      "priority": 800
     }
   ]
 }

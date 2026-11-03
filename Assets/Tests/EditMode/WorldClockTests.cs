@@ -402,7 +402,11 @@ namespace SengokuChronicle.Tests.EditMode
         [Test]
         public void GameSession_PendingEventBlocksTravelAndAdvancementUntilResolved()
         {
+            // This is the legacy SC-010 time/event contract; the M2 default starts
+            // with the SC-013 pledge and still has the SC-011 rainy-arrival pending
+            // after the second month, so it is not the schedule this test asserts.
             var session = SengokuChronicle.Application.GameSession.NewGame();
+            session.InitStandardDemo();
             Assert.That(session.TryAdvanceToNextMonth(), Is.True, session.LastEventMessage);
             GameDate pendingDate = session.WorldClock.CurrentDate;
             LocationId pendingLocation = session.CurrentLocation;

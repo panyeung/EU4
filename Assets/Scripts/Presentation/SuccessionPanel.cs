@@ -144,7 +144,7 @@ namespace SengokuChronicle.Presentation
                             state.HeadAge(date) + "岁）";
             feedbackText.text = gameSession.LastSuccessionMessage ?? string.Empty;
 
-            retireButton.interactable = state.Phase == SuccessionPhase.None;
+            retireButton.interactable = gameSession.CanBeginSuccessionRetirement;
             crisisDemoButton.interactable = gameSession.CanStartCrisisDemo;
 
             bool regencyDue = state.IsRegencyHandoffDue(date);
@@ -262,6 +262,15 @@ namespace SengokuChronicle.Presentation
                 case SuccessionPhase.Extinct:
                     return "家族灭亡：" + (state.CompletedResultId ?? string.Empty);
                 default:
+                    if (gameSession.IsM2ScenarioActive)
+                    {
+                        string heir = gameSession.FixedHeirSummary;
+                        if (gameSession.IsM2FinaleCommitted)
+                            return heir + "\n第三代终局已完成；可继续经营，或按通常规则安排交接。";
+                        if (gameSession.CanBeginSuccessionRetirement)
+                            return heir + "\n主线条件已满足；点击「退休并安排继承」执行本次固定交接。";
+                        return heir + "\n" + gameSession.SuccessionRetirementBlockReason;
+                    }
                     return state.SuccessionCount > 0
                         ? "家主在位。上次继承记录：" + (state.CompletedResultId ?? string.Empty)
                         : "家主在位。可退休并安排继承。";
@@ -274,6 +283,8 @@ namespace SengokuChronicle.Presentation
             {
                 case SuccessionPhase.AwaitingSuccessionChoice:
                     string text = "合法候选人只包括存活、未退休的直系/旁系亲族及养子养女。";
+                    if (gameSession.IsM2ScenarioActive)
+                        text = gameSession.FixedHeirSummary + "\n" + text;
                     if (!state.DesignatedHeirId.IsEmpty &&
                         !SuccessionService.IsEligibleSuccessor(state, state.DesignatedHeirId, date))
                         text += "\n原指定继承人已死亡、离族或失去资格，必须重新选择。";

@@ -255,6 +255,16 @@ namespace SengokuChronicle.Events
         public bool TryRestoreState(EventRuntimeSaveData save, GameDate? currentDate,
             out EventRuntimeState state, out string error)
         {
+            return TryRestoreState(save, currentDate, EventRuleContext.Default, out state, out error);
+        }
+
+        /// <summary>
+        /// Restores a snapshot and rejects events that belong to a different scenario,
+        /// so an SC-013 save cannot be loaded into an SC-010 run (or the reverse).
+        /// </summary>
+        public bool TryRestoreState(EventRuntimeSaveData save, GameDate? currentDate,
+            EventRuleContext context, out EventRuntimeState state, out string error)
+        {
             state = null;
             if (!IsReady)
             {
@@ -265,29 +275,33 @@ namespace SengokuChronicle.Events
                 return false;
 
             foreach (string pendingId in restored.PendingEventIds)
-                if (!_events.ContainsKey(pendingId))
+                if (!_events.TryGetValue(pendingId, out EventDefinitionData pending) ||
+                    !ScenarioMatches(pending, context))
                 {
-                    error = "Saved pending event is not present in the active catalog: " + pendingId;
+                    error = "Saved pending event is not present in the active scenario: " + pendingId;
                     return false;
                 }
             foreach (EventCooldownSaveEntry cooldown in save.cooldowns)
-                if (!_events.ContainsKey(cooldown.eventId))
+                if (!_events.TryGetValue(cooldown.eventId, out EventDefinitionData cooled) ||
+                    !ScenarioMatches(cooled, context))
                 {
-                    error = "Saved cooldown event is not present in the active catalog: " + cooldown.eventId;
+                    error = "Saved cooldown event is not present in the active scenario: " + cooldown.eventId;
                     return false;
                 }
             foreach (string onceEventId in save.onceEventIds)
-                if (!_events.ContainsKey(onceEventId))
+                if (!_events.TryGetValue(onceEventId, out EventDefinitionData once) ||
+                    !ScenarioMatches(once, context))
                 {
-                    error = "Saved once-only event is not present in the active catalog: " + onceEventId;
+                    error = "Saved once-only event is not present in the active scenario: " + onceEventId;
                     return false;
                 }
             foreach (EventHistorySaveEntry history in save.history)
             {
                 if (!_events.TryGetValue(history.eventId, out EventDefinitionData definition) ||
-                    !ContainsOption(definition, history.optionId))
+                    !ContainsOption(definition, history.optionId) ||
+                    !ScenarioMatches(definition, context))
                 {
-                    error = "Saved event history refers to an unknown event or option.";
+                    error = "Saved event history refers to an unknown event, option, or scenario.";
                     return false;
                 }
             }
@@ -332,6 +346,7 @@ namespace SengokuChronicle.Events
         private bool AreConditionsMet(EventDefinitionData definition, CharacterRelationships relationships,
             EventRuntimeState state, EventRuleContext context, bool evaluateSuccessionGates)
         {
+            if (!ScenarioMatches(definition, context)) return false;
             if (definition.conditions == null) return true;
             foreach (EventConditionData condition in definition.conditions)
             {
@@ -481,6 +496,17 @@ namespace SengokuChronicle.Events
             if (!string.IsNullOrWhiteSpace(option.summaryTextId) && _texts.TryGetValue(option.summaryTextId, out EventTextEntry summary))
                 return string.IsNullOrWhiteSpace(summary.body) ? summary.title : summary.body;
             return _texts.TryGetValue(option.textId, out EventTextEntry text) ? text.body : string.Empty;
+        }
+
+        /// <summary>
+        /// Scenario-neutral rows are always eligible. A tagged row is eligible only in
+        /// exactly that scenario, so SC-013 events never leak into the SC-010 samples.
+        /// </summary>
+        private static bool ScenarioMatches(EventDefinitionData definition, EventRuleContext context)
+        {
+            if (string.IsNullOrWhiteSpace(definition.scenario))
+                return true;
+            return string.Equals(definition.scenario, context.ScenarioId, StringComparison.Ordinal);
         }
 
         private static bool TryNpc(string characterId, out CharacterId id)

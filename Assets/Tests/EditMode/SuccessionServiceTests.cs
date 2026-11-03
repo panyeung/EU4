@@ -9,6 +9,25 @@ namespace SengokuChronicle.Tests.EditMode
         private static readonly GameDate Start = new GameDate(1560, 4, 1);
 
         [Test]
+        public void Sc010Rosters_RemainUnchangedAfterTheM2FactoryIsAdded()
+        {
+            SuccessionState standard = SuccessionSample.CreateStandard();
+            Assert.That(standard.World.Family.Id.Value, Is.EqualTo("family.akechi"));
+            Assert.That(standard.World.PersonCount, Is.EqualTo(7));
+            Assert.That(standard.HeadPersonId, Is.EqualTo(SuccessionSample.StandardHeadId));
+            Assert.That(standard.DesignatedHeirId, Is.EqualTo(SuccessionSample.StandardDesignatedHeirId));
+            Assert.That(SuccessionService.GetCandidates(standard, Start).Count, Is.EqualTo(3));
+
+            SuccessionState crisis = SuccessionSample.CreateCrisis();
+            Assert.That(crisis.World.Family.Id.Value, Is.EqualTo("family.akechi"));
+            Assert.That(crisis.World.PersonCount, Is.EqualTo(4));
+            Assert.That(crisis.HeadPersonId, Is.EqualTo(SuccessionSample.StandardHeadId));
+            Assert.That(crisis.DesignatedHeirId, Is.EqualTo(SuccessionSample.StandardDesignatedHeirId));
+            Assert.That(SuccessionService.GetCandidates(crisis, Start).Count, Is.Zero);
+            Assert.That(SuccessionService.CanOfferCrisis(crisis, Start), Is.True);
+        }
+
+        [Test]
         public void StandardRoster_ListsOnlyLivingQualifiedCandidatesAndFlagsDeadDesignation()
         {
             SuccessionState state = SuccessionSample.CreateStandard();

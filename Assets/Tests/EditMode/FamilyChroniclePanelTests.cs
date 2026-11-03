@@ -35,7 +35,7 @@ namespace SengokuChronicle.Tests.EditMode
             GameObject canvas = Create("Canvas", null, typeof(Canvas));
             canvas.GetComponent<RectTransform>().sizeDelta = new Vector2(1280f, 720f);
             _session = Create("GameSession", null, typeof(GameSession)).GetComponent<GameSession>();
-            _session.InitNewGame(99UL);
+            _session.InitStandardDemo(99UL);
 
             Assert.That(AddSC012FamilyChroniclePanel.Update(_scene),
                 Is.EqualTo(AddSC012FamilyChroniclePanel.UpdateResult.Success));

@@ -113,7 +113,7 @@ Unity 6000.6.6f1 EditMode 全套测试于 2026-11-01 16:06:30Z 通过：214/214�
 
 ## Status update — 2026-11-01
 
-M2 is accepted. M3 and M4a are accepted as recorded in `PROJECT_STATE.md` and `M4A_DEMO.md`; M4a is checkpointed as `demo-M4a`. M4b is the next planned milestone on `feature/m4b-simple-missions`. Its design and implementation plan are saved under `docs/superpowers/`. The two mission models, session actions, panel extension, updater, validator, and tests are in progress. The scene has not yet been integrated or accepted.
+Historical status snapshot (2026-11-01): this paragraph tracked the old Sengoku Chronicle M4b candidate and is superseded. Under the current GDD v4.0 direction, SC-004–SC-009 are accepted; SC-010 is next. See `PROJECT_STATE.md` for current verification and remaining scene-validation evidence.
 
 ## M4b verification update — 2026-11-01
 
@@ -128,3 +128,7 @@ M5（版本化单槽存档 + 地图存档/读档控件）已获用户 Play Mode 
 M6（标题界面与 Phase 1 演示封装）在 `feature/m5-save-slot` 实现（用户指定沿用同一分支与工作树），并已获得用户 Play Mode 接受（用户报告 `pass`）。Play Mode 启动进入全屏标题覆盖层 `M6TitleRoot`（新游戏/继续/状态行）；「继续」直接读取 M5 单槽，缺档/坏档/不支持版本均清晰提示且不会改动会话或槽文件；`GameSession.IsDemoComplete`（纯 C# 规则）驱动地图上的「Phase 1 演示完成。总功绩：20。」收尾行。场景集成沿用事务式更新器 `AddM6TitleScreen`（一个 Undo 组、验证后保存、失败回滚），Validator 已加入 M6 层级/绑定检查。
 
 验证证据（2026-11-01）：batchmode 编译无 `error CS`；EditMode 401/401 通过（集成前 21:27:53Z 与集成后 21:45:01Z 各一轮，0 failed / 0 skipped）；`RunBatchIntegration` 保存 `FoundationScene`（+764/−12，删除行均为 Unity 重序列化既有块）；`Logs/SceneValidationReport.txt` 报告 M6 PASS 且 `RESULT: PASS; Errors: 0`。用户在同一工作树的编辑器中执行 Play Mode 验收并报告 `pass`（2026-11-01）；具体运行时数值与 Console 计数未另行记录，验收以用户报告为准。
+
+## 新方向状态（2026-11-02）
+
+此路线仅为旧 Sengoku Chronicle 方向档案；GDD v4.0 已取代其 Phase 1 顺序。新方向 SC-004–SC-009 已获用户试玩验收并随 `demo-SC004-SC009` 推送。当前下一项按 GDD 首批任务为 SC-010。详细状态及尚待场景验证的边界见 `PROJECT_STATE.md`。

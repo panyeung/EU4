@@ -25,7 +25,7 @@ namespace SengokuChronicle.Tests.EditMode
         public void SetUp()
         {
             _session = GameSession.NewGame();
-            _session.InitNewGame(1234UL);
+            _session.InitStandardDemo(1234UL);
         }
 
         [TearDown]
@@ -73,7 +73,7 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(_session.TryAdvanceToNextMonth(), Is.True, _session.LastEventMessage);
             var pendingSave = _session.CaptureSave();
 
-            _session.InitNewGame(1234UL);
+            _session.InitStandardDemo(1234UL);
             Assert.That(_modalRoot.activeSelf, Is.False);
             Assert.That(_session.TryApplySave(pendingSave).Succeeded, Is.True);
 
