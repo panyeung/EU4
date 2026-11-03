@@ -145,6 +145,7 @@
 - [x] 文档列明失败/无变化操作的测试证据边界，不要求用户通过隐藏调试入口触发失败操作。
 - [x] Lead 已完成三轮顺序执行的 OpenCode2 独立只读复审；最后一轮 ACCEPT 当前源码/测试源，确认成人指定继承人阶段不变但家主变化可记录。仍有 append 失败路径缺少应用层测试与 v1 多余 chronicle 字段被忽略的边界说明。FoundationScene 未应用 updater；Unity 编译、EditMode、场景验证、Console 与 Play Mode 证据尚待取得。
 - [x] 已向用户提供文档化的逐步试玩流程和纯文本结果清单；Play Test 验收前不提交 checkpoint、merge、tag 或 push。
+- [x] 用户于 2026-11-03 报告 EditMode 与 Play Test 通过并明确验收；checkpoint `4443ccc` 已推送到 `main`，标签 `demo-SC012` 已推送。
 
 **可观察结果：** 用户可以按 `SC012_DEMO.md` 单独复现整套流程，并逐步填写结果；所有验证类别保持分开记录。
 

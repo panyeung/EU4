@@ -19,6 +19,7 @@
 - 用户报告：EditMode 通过；Play Test 通过；明确接受 SC-012。
 - 未提供：EditMode Passed/Failed/Skipped 数量、Console error/warning 数、FoundationSceneValidator 报告内容。
 - 只读复审：OpenCode2 第三轮静态复审 ACCEPT 源码/测试源；没有运行 Unity 或测试。
+- 集成：checkpoint `4443ccc` 已快进至 `main` 并推送到 `origin/main`；标签 `demo-SC012` 已推送。feature refs 在 ancestry 核对后删除。
 
 ## 开始试玩前：在现有 Unity Editor 完成验证
 

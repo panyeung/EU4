@@ -20,7 +20,7 @@
 | SC-005–SC-009 随机、版本化存档、事件数据校验、事件引擎与选择 UI | 已实现并随本 checkpoint 获用户试玩验收 | `demo-SC004-SC009`；用户确认 Edit Mode 全部通过及试玩验收。 |
 | SC-010 初代家主退休与继承 | 已获用户验收 | 提交 `af35633`，标签 `demo-SC010`；用户试玩验收由协调方记录。 |
 | SC-011 跨代事件链 | 用户已验收 | 验收日期 2026-11-02；用户报告编译通过、EditMode passed、Console 无错误、Play Test 通过。EditMode 数量与 Console 警告数未提供；FoundationSceneValidator 结果未报告。试玩脚本与验收记录见 `SC011_DEMO.md`。 |
-| SC-012 家族编年史 | 用户已验收（2026-11-03） | 用户报告 EditMode 通过、Play Test 通过；EditMode 数量、Console 计数与 FoundationSceneValidator 结果未单独提供。checkpoint 与推送状态见本文件后续更新。详见 `SC012_DEMO.md`。 |
+| SC-012 家族编年史 | 用户已验收并推送（2026-11-03） | checkpoint `4443ccc`，标签 `demo-SC012`；`main` 与 `origin/main` 已同步，已删除合并后的 feature refs。用户报告 EditMode 通过、Play Test 通过；数量和 Console/Validator 计数未单独提供。详见 `SC012_DEMO.md`。 |
 
 ## SC-011 当前实现状态（2026-11-02）
 
@@ -40,7 +40,8 @@
 - 独立复审：第三轮 OpenCode2 只读复审 ACCEPT 当前代码/测试源；指出 FoundationScene 尚未接入会阻止面板显示和 Validator 通过，需先运行 updater、保存并验证。另有 append 失败日志/关系刷新缺少应用层测试，以及 v1 异常 chronicle 字段被忽略的低风险兼容边界。
 - 用户验证报告：EditMode 通过；Play Test 通过并明确验收。具体 Passed/Failed/Skipped 数量未提供。
 - 未单独报告：Console error/warning 数及 FoundationSceneValidator 报告；不据此声称错误为零或 Validator 通过。第三轮静态复审仍仅作为代码审查证据。
-- 当前状态：SC-012 已获用户验收，可创建 milestone checkpoint、合并 `main`、打 `demo-SC012` 标签并推送；下一候选按 GDD v4.0 为 M2 三代速通原型。
+- 集成：checkpoint `4443ccc` (`feat(sc-012): add family chronicle`)；`main` 快进并推送至 `origin/main`，标签 `demo-SC012` 已推送。`feature/sc012-family-chronicle` 在确认完全并入 `main` 后从本地与远端删除。
+- 当前状态：SC-012 已获用户验收并完成集成；下一候选按 GDD v4.0 为 M2 三代速通原型。
 
 ## SC-004–SC-009 已接受 checkpoint
 
