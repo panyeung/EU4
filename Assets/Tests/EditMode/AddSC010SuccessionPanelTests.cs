@@ -291,6 +291,26 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
+        public void PanelExtinctionStatusUsesReadableTextWithoutTheRawResultId()
+        {
+            Assert.That(AddSC010SuccessionPanel.Update(_scene),
+                Is.EqualTo(AddSC010SuccessionPanel.UpdateResult.Success));
+            SuccessionPanel panel = Find(AddSC010SuccessionPanel.RootName).GetComponent<SuccessionPanel>();
+            panel.StartCrisisDemo();
+            panel.BeginRetirement();
+            panel.DeclineCrisis();
+
+            Assert.That(_session.Succession.Phase, Is.EqualTo(SuccessionPhase.Extinct));
+            Assert.That(panel.StatusMessage, Does.Contain("家族灭亡"));
+            Assert.That(panel.StatusMessage, Does.Not.Contain("extinction."),
+                "the player-facing status must not render the raw completed-result id");
+            Assert.That(panel.StatusMessage, Does.Not.Contain(_session.Succession.CompletedResultId),
+                "the save-stable result id must stay internal");
+            Assert.That(_session.Succession.CompletedResultId, Does.StartWith("extinction."),
+                "presentation must not alter the save-stable extinction result");
+        }
+
+        [Test]
         public void StaticPanelButtonsAreWiredExactlyOnceAcrossRebinds()
         {
             Assert.That(AddSC010SuccessionPanel.Update(_scene),

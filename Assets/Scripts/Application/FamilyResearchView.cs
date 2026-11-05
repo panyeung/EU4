@@ -66,6 +66,8 @@ namespace SengokuChronicle.Application
         public string TechniqueName { get; private set; } = string.Empty;
         public int Progress { get; private set; }
         public int RequiredProgress { get; private set; }
+        /// <summary>Authored progress per settled month, shown once with the progress result.</summary>
+        public int MonthlyProgress { get; private set; }
         public PersonId ResearcherId { get; private set; }
         public string ResearcherName { get; private set; } = string.Empty;
         public bool IsKnown { get; private set; }
@@ -107,8 +109,10 @@ namespace SengokuChronicle.Application
             {
                 if (!HasPlan)
                     return IsKnown ? "当前项目已完成。" : "尚未安排研究计划。";
-                string line = "研究者：" + ResearcherName + "（" + Progress + "/" +
-                              RequiredProgress + "）";
+                // Progress is reported by ProgressLine only: repeating "P/N" here made the
+                // active month show two near-duplicate progress summaries. Status keeps the
+                // researcher and any pause reason, which are genuinely different facts.
+                string line = "研究者：" + ResearcherName;
                 // A loaded plan can become paused without a new settlement. Surface that
                 // immediately so the player sees why the next month will not advance it.
                 if (IsPaused)
@@ -125,8 +129,12 @@ namespace SengokuChronicle.Application
                     return "已完成：" + TechniqueName + " 已记录为家族知识。";
                 if (!HasPlan)
                     return "进度：0/" + (RequiredProgress > 0 ? RequiredProgress : 0);
-                return "进度：" + Progress.ToString(CultureInfo.InvariantCulture) + "/" +
-                       RequiredProgress.ToString(CultureInfo.InvariantCulture);
+                string line = "进度：" + Progress.ToString(CultureInfo.InvariantCulture) + "/" +
+                              RequiredProgress.ToString(CultureInfo.InvariantCulture);
+                if (MonthlyProgress > 0)
+                    line += "（每次月结推进 " + MonthlyProgress.ToString(CultureInfo.InvariantCulture) +
+                            " 点）";
+                return line;
             }
         }
 
@@ -134,7 +142,7 @@ namespace SengokuChronicle.Application
             IsKnown
                 ? "该技艺已记录为家族知识，无需再次研究，也不会再产生研究月度费用。"
                 : RequiredProgress > 0
-                    ? "每月消耗 1 资金、1 物资，推进 1 点进度；完成后写入家族知识，不授予个人掌握。"
+                    ? "每月消耗 1 资金、1 物资；完成后写入家族知识，不授予个人掌握。"
                     : "学习一项家族技艺需要持续的月度投入。";
 
         public string KnownLine
@@ -199,6 +207,7 @@ namespace SengokuChronicle.Application
                 view.TechniqueName = definition.TechniqueDisplayName;
                 view.Progress = state.Progress;
                 view.RequiredProgress = definition.RequiredProgress;
+                view.MonthlyProgress = definition.MonthlyProgress;
                 view.ResearcherId = state.ResearcherId;
                 view.ResearcherName = succession != null && succession.World != null
                     ? IndustryService.PersonName(succession, state.ResearcherId)
@@ -222,6 +231,7 @@ namespace SengokuChronicle.Application
                 view.TechniqueId = smokeMixing.TechniqueId;
                 view.TechniqueName = smokeMixing.TechniqueDisplayName;
                 view.RequiredProgress = smokeMixing.RequiredProgress;
+                view.MonthlyProgress = smokeMixing.MonthlyProgress;
                 view.IsKnown = state.IsKnownTechnique(smokeMixing.TechniqueId);
             }
 

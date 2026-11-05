@@ -260,7 +260,9 @@ namespace SengokuChronicle.Presentation
                 case SuccessionPhase.CrisisDecision:
                     return "无合法继承人：可进行一次危机收养/重建，或放弃并结束家族。";
                 case SuccessionPhase.Extinct:
-                    return "家族灭亡：" + (state.CompletedResultId ?? string.Empty);
+                    // CompletedResultId is an internal save-stable key such as
+                    // "extinction.family.sc010"; never render it in player text.
+                    return "家族灭亡：家族血脉已经断绝，无人能够在世继承家业。";
                 default:
                     if (gameSession.IsM2ScenarioActive)
                     {

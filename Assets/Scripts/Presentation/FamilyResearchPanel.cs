@@ -140,11 +140,11 @@ namespace SengokuChronicle.Presentation
             blockReasonText.gameObject.SetActive(showBlock);
 
             bool showMessage = !string.IsNullOrWhiteSpace(view.LastMessage);
-            // The monthly settlement reuses its report summary as the last message, so
-            // the completed state would otherwise print the same completion result in
-            // both the message and report lines. Keep the report line and its context,
-            // and suppress only that duplicate completion message.
-            if (showMessage && view.IsKnown && !view.HasPlan &&
+            // The monthly settlement reuses its report summary as the last message, so the
+            // same result would otherwise print in both the message and report lines. Keep
+            // the dedicated report line and suppress only the verbatim duplicate; pause and
+            // error messages that add information still show.
+            if (showMessage &&
                 string.Equals(view.LastMessage, view.ReportLine, StringComparison.Ordinal))
                 showMessage = false;
             messageText.text = view.LastMessage;

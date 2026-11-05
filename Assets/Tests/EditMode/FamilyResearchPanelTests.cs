@@ -161,6 +161,40 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
+        public void Panel_ActiveMonthShowsOneProgressResult()
+        {
+            FamilyResearchPanel panel = Panel();
+            panel.Open();
+            panel.ClickResearcher(0);
+
+            // The plan confirmation must not restate the researcher, monthly rate and cost
+            // that the status/progress/cost lines already show.
+            Assert.That(panel.StatusLine, Does.Contain(SC021FamilyResearchScenario.HeadName));
+            Assert.That(panel.StatusLine, Does.Not.Contain("0/2"));
+            Assert.That(panel.ProgressLine, Does.Contain("0/2"));
+            Assert.That(panel.ProgressLine, Does.Contain("每次月结推进 1 点"));
+            Assert.That(panel.CostLine, Does.Contain("1 资金").And.Contain("1 物资"));
+            Assert.That(panel.MessageLine, Does.Not.Contain(SC021FamilyResearchScenario.HeadName));
+            Assert.That(panel.MessageLine, Does.Not.Contain("资金"));
+            Assert.That(panel.MessageLine, Does.Not.Contain("推进"));
+
+            Assert.That(_session.TryAdvanceToNextMonth(), Is.True, _session.LastEventMessage);
+            ResolvePending(_session);
+            panel.Refresh();
+
+            // One settled month must yield exactly one progress summary: the status line
+            // keeps the researcher, the progress line owns "1/2", and the monthly report
+            // owns the settlement result instead of being echoed by the message line.
+            Assert.That(_session.ResearchState.Progress, Is.EqualTo(1));
+            Assert.That(panel.StatusLine, Does.Contain(SC021FamilyResearchScenario.HeadName));
+            Assert.That(panel.StatusLine, Does.Not.Contain("1/2"));
+            Assert.That(panel.ProgressLine, Does.Contain("1/2"));
+            Assert.That(panel.ReportLine, Does.Contain("0 → 1"));
+            Assert.That(panel.MessageVisible, Is.False,
+                "the settlement result must not be printed in both the report and message lines");
+        }
+
+        [Test]
         public void Panel_ShowsShortagePauseFromTheMonthlyReport()
         {
             Assert.That(_session.TrySetResearchPlan(FamilyResearchCatalog.SmokeMixingResearchId,

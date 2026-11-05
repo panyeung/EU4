@@ -1064,11 +1064,7 @@ namespace SengokuChronicle.Application
             }
 
             _researchState = next;
-            LastResearchMessage = "已安排「" + definition.ProjectDisplayName + "」：研究者" +
-                                  IndustryService.PersonName(Succession, researcherId) +
-                                  "。每月推进 " + definition.MonthlyProgress + " 点进度，消耗 " +
-                                  definition.MonthlyFundsCost + " 资金、" +
-                                  definition.MonthlySuppliesCost + " 物资。";
+            LastResearchMessage = "已安排「" + definition.ProjectDisplayName + "」。";
             SessionStateChanged?.Invoke();
             return new FamilyResearchPlanCommandResult(true, FamilyResearchPlanOutcome.Succeeded,
                 LastResearchMessage, researchId, researcherId);
