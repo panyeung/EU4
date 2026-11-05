@@ -35,6 +35,8 @@ namespace SengokuChronicle.Events
         public int threshold;
         public string sourceEventId;
         public string sourceOptionId;
+        /// <summary>Stable family-creed ID used by <see cref="EventConditionKind.FamilyCreedIs"/>.</summary>
+        public string familyCreedId;
     }
 
     [Serializable]
@@ -65,6 +67,8 @@ namespace SengokuChronicle.Events
         /// <summary>Family member target used by <see cref="EventEffectKind.FamilyRelationshipDelta"/>.</summary>
         public string targetPersonId;
         public int delta;
+        /// <summary>Stable family-creed ID used by <see cref="EventEffectKind.SetFamilyCreed"/>.</summary>
+        public string familyCreedId;
     }
 
     [Serializable]
@@ -103,7 +107,9 @@ namespace SengokuChronicle.Events
         /// <summary>The raw succession count equals <c>threshold</c>; offer-time only.</summary>
         SuccessionCountEquals = 4,
         /// <summary>The settled succession count is at least <c>threshold</c>; offer-time only.</summary>
-        SettledSuccessionCountAtLeast = 5
+        SettledSuccessionCountAtLeast = 5,
+        /// <summary>The active family creed equals <c>familyCreedId</c>; SC-024 only.</summary>
+        FamilyCreedIs = 6
     }
 
     public enum EventRequirementKind
@@ -116,7 +122,9 @@ namespace SengokuChronicle.Events
     {
         RelationshipDelta = 1,
         /// <summary>Changes one (current head, non-head family member) pair value.</summary>
-        FamilyRelationshipDelta = 2
+        FamilyRelationshipDelta = 2,
+        /// <summary>Changes the persistent family creed; SC-024 only.</summary>
+        SetFamilyCreed = 3
     }
 
     public enum EventOnceScope
@@ -142,6 +150,40 @@ namespace SengokuChronicle.Events
     public static class EventScenarioIds
     {
         public const string Sc013 = "sc013";
+        public const string Sc024 = "sc024";
+    }
+
+    /// <summary>Stable IDs for the SC-024 family-creed council event set.</summary>
+    public static class SC024EventIds
+    {
+        public const string ScenarioId = EventScenarioIds.Sc024;
+
+        public const string SecrecyCouncilEventId = "event.sc024.creed-council.secrecy";
+        public const string RighteousnessCouncilEventId = "event.sc024.creed-council.righteousness";
+        public const string MeritCouncilEventId = "event.sc024.creed-council.merit";
+
+        public const string SecrecyKeepOptionId = "option.sc024.creed-council.secrecy.keep";
+        public const string SecrecyReformRighteousnessOptionId =
+            "option.sc024.creed-council.secrecy.reform-righteousness";
+        public const string SecrecyReformMeritOptionId =
+            "option.sc024.creed-council.secrecy.reform-merit";
+
+        public const string RighteousnessKeepOptionId =
+            "option.sc024.creed-council.righteousness.keep";
+        public const string RighteousnessReformSecrecyOptionId =
+            "option.sc024.creed-council.righteousness.reform-secrecy";
+        public const string RighteousnessReformMeritOptionId =
+            "option.sc024.creed-council.righteousness.reform-merit";
+
+        public const string MeritKeepOptionId = "option.sc024.creed-council.merit.keep";
+        public const string MeritReformSecrecyOptionId =
+            "option.sc024.creed-council.merit.reform-secrecy";
+        public const string MeritReformRighteousnessOptionId =
+            "option.sc024.creed-council.merit.reform-righteousness";
+
+        public const string SecrecyCreedId = nameof(Domain.FamilyCreedKind.SecrecyFirst);
+        public const string RighteousnessCreedId = nameof(Domain.FamilyCreedKind.RighteousnessFirst);
+        public const string MeritCreedId = nameof(Domain.FamilyCreedKind.MeritFirst);
     }
 
     /// <summary>Stable IDs for the SC-011 cross-generation follow-up encounter variants.</summary>

@@ -1291,6 +1291,147 @@
       "cooldownMonths": 0,
       "onceScope": "PerGame",
       "priority": 1
+    },
+    {
+      "eventId": "event.sc024.creed-council.secrecy",
+      "scenario": "sc024",
+      "trigger": "Monthly",
+      "conditions": [
+        { "type": "FamilyCreedIs", "familyCreedId": "SecrecyFirst" }
+      ],
+      "weight": 1,
+      "textId": "event.sc024.creed-council.secrecy",
+      "options": [
+        {
+          "optionId": "option.sc024.creed-council.secrecy.keep",
+          "textId": "option.sc024.creed-council.secrecy.keep",
+          "summaryTextId": "summary.sc024.creed-council.secrecy.keep",
+          "requirements": [ { "type": "Always" } ],
+          "effects": [
+            { "type": "FamilyRelationshipDelta", "targetPersonId": "person.sc013.masatsuna", "delta": 5 },
+            { "type": "FamilyRelationshipDelta", "targetPersonId": "person.sc013.nobumasa", "delta": -5 }
+          ]
+        },
+        {
+          "optionId": "option.sc024.creed-council.secrecy.reform-righteousness",
+          "textId": "option.sc024.creed-council.secrecy.reform-righteousness",
+          "summaryTextId": "summary.sc024.creed-council.secrecy.reform-righteousness",
+          "requirements": [ { "type": "Always" } ],
+          "effects": [
+            { "type": "FamilyRelationshipDelta", "targetPersonId": "person.sc013.masatsuna", "delta": -5 },
+            { "type": "FamilyRelationshipDelta", "targetPersonId": "person.sc013.nobumasa", "delta": -5 },
+            { "type": "SetFamilyCreed", "familyCreedId": "RighteousnessFirst" }
+          ]
+        },
+        {
+          "optionId": "option.sc024.creed-council.secrecy.reform-merit",
+          "textId": "option.sc024.creed-council.secrecy.reform-merit",
+          "summaryTextId": "summary.sc024.creed-council.secrecy.reform-merit",
+          "requirements": [ { "type": "Always" } ],
+          "effects": [
+            { "type": "FamilyRelationshipDelta", "targetPersonId": "person.sc013.masatsuna", "delta": -5 },
+            { "type": "FamilyRelationshipDelta", "targetPersonId": "person.sc013.nobumasa", "delta": -5 },
+            { "type": "SetFamilyCreed", "familyCreedId": "MeritFirst" }
+          ]
+        }
+      ],
+      "cooldownMonths": 0,
+      "onceScope": "PerGame",
+      "priority": 1000
+    },
+    {
+      "eventId": "event.sc024.creed-council.righteousness",
+      "scenario": "sc024",
+      "trigger": "Monthly",
+      "conditions": [
+        { "type": "FamilyCreedIs", "familyCreedId": "RighteousnessFirst" }
+      ],
+      "weight": 1,
+      "textId": "event.sc024.creed-council.righteousness",
+      "options": [
+        {
+          "optionId": "option.sc024.creed-council.righteousness.keep",
+          "textId": "option.sc024.creed-council.righteousness.keep",
+          "summaryTextId": "summary.sc024.creed-council.righteousness.keep",
+          "requirements": [ { "type": "Always" } ],
+          "effects": [
+            { "type": "FamilyRelationshipDelta", "targetPersonId": "person.sc013.masatsuna", "delta": 5 },
+            { "type": "FamilyRelationshipDelta", "targetPersonId": "person.sc013.nobumasa", "delta": 5 }
+          ]
+        },
+        {
+          "optionId": "option.sc024.creed-council.righteousness.reform-secrecy",
+          "textId": "option.sc024.creed-council.righteousness.reform-secrecy",
+          "summaryTextId": "summary.sc024.creed-council.righteousness.reform-secrecy",
+          "requirements": [ { "type": "Always" } ],
+          "effects": [
+            { "type": "FamilyRelationshipDelta", "targetPersonId": "person.sc013.masatsuna", "delta": -5 },
+            { "type": "FamilyRelationshipDelta", "targetPersonId": "person.sc013.nobumasa", "delta": -5 },
+            { "type": "SetFamilyCreed", "familyCreedId": "SecrecyFirst" }
+          ]
+        },
+        {
+          "optionId": "option.sc024.creed-council.righteousness.reform-merit",
+          "textId": "option.sc024.creed-council.righteousness.reform-merit",
+          "summaryTextId": "summary.sc024.creed-council.righteousness.reform-merit",
+          "requirements": [ { "type": "Always" } ],
+          "effects": [
+            { "type": "FamilyRelationshipDelta", "targetPersonId": "person.sc013.masatsuna", "delta": -5 },
+            { "type": "FamilyRelationshipDelta", "targetPersonId": "person.sc013.nobumasa", "delta": -5 },
+            { "type": "SetFamilyCreed", "familyCreedId": "MeritFirst" }
+          ]
+        }
+      ],
+      "cooldownMonths": 0,
+      "onceScope": "PerGame",
+      "priority": 1000
+    },
+    {
+      "eventId": "event.sc024.creed-council.merit",
+      "scenario": "sc024",
+      "trigger": "Monthly",
+      "conditions": [
+        { "type": "FamilyCreedIs", "familyCreedId": "MeritFirst" }
+      ],
+      "weight": 1,
+      "textId": "event.sc024.creed-council.merit",
+      "options": [
+        {
+          "optionId": "option.sc024.creed-council.merit.keep",
+          "textId": "option.sc024.creed-council.merit.keep",
+          "summaryTextId": "summary.sc024.creed-council.merit.keep",
+          "requirements": [ { "type": "Always" } ],
+          "effects": [
+            { "type": "FamilyRelationshipDelta", "targetPersonId": "person.sc013.masatsuna", "delta": -5 },
+            { "type": "FamilyRelationshipDelta", "targetPersonId": "person.sc013.nobumasa", "delta": 5 }
+          ]
+        },
+        {
+          "optionId": "option.sc024.creed-council.merit.reform-secrecy",
+          "textId": "option.sc024.creed-council.merit.reform-secrecy",
+          "summaryTextId": "summary.sc024.creed-council.merit.reform-secrecy",
+          "requirements": [ { "type": "Always" } ],
+          "effects": [
+            { "type": "FamilyRelationshipDelta", "targetPersonId": "person.sc013.masatsuna", "delta": -5 },
+            { "type": "FamilyRelationshipDelta", "targetPersonId": "person.sc013.nobumasa", "delta": -5 },
+            { "type": "SetFamilyCreed", "familyCreedId": "SecrecyFirst" }
+          ]
+        },
+        {
+          "optionId": "option.sc024.creed-council.merit.reform-righteousness",
+          "textId": "option.sc024.creed-council.merit.reform-righteousness",
+          "summaryTextId": "summary.sc024.creed-council.merit.reform-righteousness",
+          "requirements": [ { "type": "Always" } ],
+          "effects": [
+            { "type": "FamilyRelationshipDelta", "targetPersonId": "person.sc013.masatsuna", "delta": -5 },
+            { "type": "FamilyRelationshipDelta", "targetPersonId": "person.sc013.nobumasa", "delta": -5 },
+            { "type": "SetFamilyCreed", "familyCreedId": "RighteousnessFirst" }
+          ]
+        }
+      ],
+      "cooldownMonths": 0,
+      "onceScope": "PerGame",
+      "priority": 1000
     }
   ]
 }

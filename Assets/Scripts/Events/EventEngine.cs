@@ -145,14 +145,17 @@ namespace SengokuChronicle.Events
 
         /// <summary>Returns the eligible IDs in priority-descending, ordinal-ID order.</summary>
         public IReadOnlyList<string> GetEligibleEventIds(GameDate date, CharacterRelationships relationships,
-            EventRuntimeState state, EventRuleContext context = default)
+            EventRuntimeState state, EventRuleContext context = default,
+            FamilyCreedKind? currentCreed = null)
         {
-            List<EventDefinitionData> candidates = GetEligibleEvents(date, relationships, state, context);
+            List<EventDefinitionData> candidates = GetEligibleEvents(date, relationships, state, context,
+                currentCreed);
             return candidates.Select(candidate => candidate.eventId).ToArray();
         }
 
         public EventScheduleResult ScheduleMonthly(GameDate date, CharacterRelationships relationships,
-            DeterministicRandomStream eventRandom, EventRuntimeState state, EventRuleContext context = default)
+            DeterministicRandomStream eventRandom, EventRuntimeState state,
+            EventRuleContext context = default, FamilyCreedKind? currentCreed = null)
         {
             if (!IsReady)
                 return ScheduleFailure(ValidationMessage);
@@ -161,7 +164,8 @@ namespace SengokuChronicle.Events
             if (state.HasPendingEvents || state.Phase != StableGamePhase.Management)
                 return ScheduleFailure("A pending event must be resolved before another month is processed.");
 
-            List<EventDefinitionData> candidates = GetEligibleEvents(date, relationships, state, context);
+            List<EventDefinitionData> candidates = GetEligibleEvents(date, relationships, state, context,
+                currentCreed);
             if (candidates.Count == 0)
                 return new EventScheduleResult(true, string.Empty, string.Empty);
 
@@ -208,7 +212,8 @@ namespace SengokuChronicle.Events
 
         public EventChoiceResult TryChooseEventOption(string eventId, string optionId, string committedResultId,
             GameDate currentDate, CharacterRelationships relationships, EventRuntimeState state,
-            EventRuleContext context = default, FamilyRelationships familyRelationships = null)
+            EventRuleContext context = default, FamilyRelationships familyRelationships = null,
+            FamilyCreedKind? currentCreed = null, FamilyDoctrineState familyDoctrine = null)
         {
             if (!IsReady)
                 return ChoiceFailure(eventId, optionId, committedResultId, ValidationMessage);
@@ -219,29 +224,47 @@ namespace SengokuChronicle.Events
                 return ChoiceFailure(eventId, optionId, committedResultId, "事件结果 ID 为空或已经提交。");
             if (!TryFindOption(eventId, optionId, out EventDefinitionData definition, out EventOptionData option))
                 return ChoiceFailure(eventId, optionId, committedResultId, "事件或选项 ID 无效。");
-            if (!AreConditionsMet(definition, relationships, state, context, false))
+            if (!AreConditionsMet(definition, relationships, state, context, false, currentCreed))
                 return ChoiceFailure(eventId, optionId, committedResultId, "事件条件已经失效，状态保持不变。");
             if (!AreRequirementsMet(option, relationships, out string requirementReason))
                 return ChoiceFailure(eventId, optionId, committedResultId,
                     string.IsNullOrWhiteSpace(requirementReason) ? "当前不满足此选项条件。" : requirementReason);
 
-            if (!TryPreflightEffects(option, relationships, familyRelationships, context,
-                    out List<EventEffectCommit> effects, out string effectError))
+            if (!TryPreflightEffects(option, relationships, familyRelationships, context, familyDoctrine,
+                    out List<EventEffectCommit> effects, out FamilyCreedKind? creedToSet,
+                    out string effectError))
                 return ChoiceFailure(eventId, optionId, committedResultId, effectError);
 
+            FamilyCreedKind? previousCreed = familyDoctrine?.Creed;
+            bool appliedCreed = false;
             var appliedNpc = new List<RelationshipCommit>();
             var appliedFamily = new List<FamilyRelationshipCommit>();
             var appliedRelationships = new List<RelationshipResult>();
             var appliedFamilyRelationships = new List<FamilyRelationshipResult>();
             foreach (EventEffectCommit effect in effects)
             {
+                if (effect.IsCreed)
+                {
+                    string creedError = string.Empty;
+                    if (familyDoctrine == null || !familyDoctrine.TrySetCreed(effect.Creed, out creedError))
+                    {
+                        RollbackEffects(relationships, familyRelationships, appliedNpc, appliedFamily,
+                            familyDoctrine, previousCreed, appliedCreed);
+                        return ChoiceFailure(eventId, optionId, committedResultId,
+                            string.IsNullOrWhiteSpace(creedError) ? "家训效果提交失败。" : creedError);
+                    }
+                    appliedCreed = true;
+                    continue;
+                }
+
                 if (effect.IsFamily)
                 {
                     FamilyRelationshipResult change = familyRelationships.TryChange(
                         effect.HeadId, effect.MemberId, effect.Delta);
                     if (!change.Succeeded)
                     {
-                        RollbackEffects(relationships, familyRelationships, appliedNpc, appliedFamily);
+                        RollbackEffects(relationships, familyRelationships, appliedNpc, appliedFamily,
+                            familyDoctrine, previousCreed, appliedCreed);
                         return ChoiceFailure(eventId, optionId, committedResultId,
                             "家庭关系效果提交失败，已恢复此前效果。");
                     }
@@ -255,7 +278,8 @@ namespace SengokuChronicle.Events
                     RelationshipResult change = relationships.TryChange(effect.CharacterId, effect.Delta);
                     if (!change.Succeeded)
                     {
-                        RollbackEffects(relationships, familyRelationships, appliedNpc, appliedFamily);
+                        RollbackEffects(relationships, familyRelationships, appliedNpc, appliedFamily,
+                            familyDoctrine, previousCreed, appliedCreed);
                         return ChoiceFailure(eventId, optionId, committedResultId,
                             "关系效果提交失败，已恢复此前效果。");
                     }
@@ -273,7 +297,8 @@ namespace SengokuChronicle.Events
             {
                 // The queue and result were preflighted above; this is defensive for a
                 // stale caller, and rolls back every applied effect before returning.
-                RollbackEffects(relationships, familyRelationships, appliedNpc, appliedFamily);
+                RollbackEffects(relationships, familyRelationships, appliedNpc, appliedFamily,
+                    familyDoctrine, previousCreed, appliedCreed);
                 return ChoiceFailure(eventId, optionId, committedResultId, "事件队列已变化，结果未提交。");
             }
 
@@ -351,7 +376,7 @@ namespace SengokuChronicle.Events
         }
 
         private List<EventDefinitionData> GetEligibleEvents(GameDate date, CharacterRelationships relationships,
-            EventRuntimeState state, EventRuleContext context)
+            EventRuntimeState state, EventRuleContext context, FamilyCreedKind? currentCreed)
         {
             var candidates = new List<EventDefinitionData>();
             if (!IsReady || !date.IsValid || relationships == null || state == null || state.HasPendingEvents ||
@@ -364,7 +389,7 @@ namespace SengokuChronicle.Events
                 if (!string.Equals(definition.trigger, nameof(EventTriggerKind.Monthly), StringComparison.Ordinal) ||
                     state.IsOnCooldown(definition.eventId, monthIndex) ||
                     (ParseOnceScope(definition.onceScope) == EventOnceScope.PerGame && state.HasOccurredOnce(definition.eventId)) ||
-                    !AreConditionsMet(definition, relationships, state, context, true))
+                    !AreConditionsMet(definition, relationships, state, context, true, currentCreed))
                     continue;
                 candidates.Add(definition);
             }
@@ -383,7 +408,8 @@ namespace SengokuChronicle.Events
         /// commit), so a stable pending event stays resolvable after a later head change.
         /// </summary>
         private bool AreConditionsMet(EventDefinitionData definition, CharacterRelationships relationships,
-            EventRuntimeState state, EventRuleContext context, bool evaluateSuccessionGates)
+            EventRuntimeState state, EventRuleContext context, bool evaluateSuccessionGates,
+            FamilyCreedKind? currentCreed)
         {
             if (!ScenarioMatches(definition, context)) return false;
             if (definition.conditions == null) return true;
@@ -408,6 +434,13 @@ namespace SengokuChronicle.Events
                 else if (string.Equals(condition.type, nameof(EventConditionKind.SettledSuccessionCountAtLeast), StringComparison.Ordinal))
                 {
                     if (evaluateSuccessionGates && context.SettledSuccessionCount < condition.threshold) return false;
+                }
+                else if (string.Equals(condition.type, nameof(EventConditionKind.FamilyCreedIs), StringComparison.Ordinal))
+                {
+                    if (!currentCreed.HasValue) return false;
+                    if (!TryCreed(condition.familyCreedId, out FamilyCreedKind expected) ||
+                        currentCreed.Value != expected)
+                        return false;
                 }
                 else
                     return false;
@@ -469,15 +502,39 @@ namespace SengokuChronicle.Events
 
         private static bool TryPreflightEffects(EventOptionData option, CharacterRelationships relationships,
             FamilyRelationships familyRelationships, EventRuleContext context,
-            out List<EventEffectCommit> commits, out string error)
+            FamilyDoctrineState familyDoctrine, out List<EventEffectCommit> commits,
+            out FamilyCreedKind? creedToSet, out string error)
         {
             commits = new List<EventEffectCommit>();
+            creedToSet = null;
             error = string.Empty;
             var projectedNpc = new Dictionary<CharacterId, int>();
             var projectedFamily = new Dictionary<FamilyRelationshipKey, int>();
             if (option.effects == null) return true;
             foreach (EventEffectData effect in option.effects)
             {
+                if (string.Equals(effect.type, nameof(EventEffectKind.SetFamilyCreed), StringComparison.Ordinal))
+                {
+                    if (!TryCreed(effect.familyCreedId, out FamilyCreedKind creed))
+                    {
+                        error = "事件效果的家训 ID 无效。";
+                        return false;
+                    }
+                    if (creedToSet.HasValue)
+                    {
+                        error = "同一选项不能设置多个家训。";
+                        return false;
+                    }
+                    if (familyDoctrine == null)
+                    {
+                        error = "家族家训状态不可用。";
+                        return false;
+                    }
+                    creedToSet = creed;
+                    commits.Add(EventEffectCommit.CreedChange(creed));
+                    continue;
+                }
+
                 if (string.Equals(effect.type, nameof(EventEffectKind.RelationshipDelta), StringComparison.Ordinal))
                 {
                     if (!TryNpc(effect.targetCharacterId, out CharacterId target))
@@ -598,8 +655,11 @@ namespace SengokuChronicle.Events
 
         private static void RollbackEffects(CharacterRelationships relationships,
             FamilyRelationships familyRelationships, List<RelationshipCommit> appliedNpc,
-            List<FamilyRelationshipCommit> appliedFamily)
+            List<FamilyRelationshipCommit> appliedFamily, FamilyDoctrineState familyDoctrine,
+            FamilyCreedKind? previousCreed, bool appliedCreed)
         {
+            if (appliedCreed && familyDoctrine != null && previousCreed.HasValue)
+                familyDoctrine.TrySetCreed(previousCreed.Value, out _);
             for (int i = appliedFamily.Count - 1; i >= 0; i--)
             {
                 FamilyRelationshipCommit rollback = appliedFamily[i];
@@ -662,6 +722,16 @@ namespace SengokuChronicle.Events
                    definition.Role == CharacterRole.Npc;
         }
 
+        private static bool TryCreed(string value, out FamilyCreedKind creed)
+        {
+            if (!string.IsNullOrEmpty(value) && Enum.TryParse(value, false, out creed) &&
+                Enum.IsDefined(typeof(FamilyCreedKind), creed) &&
+                string.Equals(Enum.GetName(typeof(FamilyCreedKind), creed), value, StringComparison.Ordinal))
+                return true;
+            creed = default;
+            return false;
+        }
+
         private static EventOnceScope ParseOnceScope(string value)
         {
             return string.Equals(value, nameof(EventOnceScope.PerGame), StringComparison.Ordinal)
@@ -704,26 +774,33 @@ namespace SengokuChronicle.Events
         private readonly struct EventEffectCommit
         {
             private EventEffectCommit(CharacterId characterId, PersonId headId, PersonId memberId,
-                int delta, bool isFamily)
+                int delta, bool isFamily, FamilyCreedKind creed, bool isCreed)
             {
                 CharacterId = characterId;
                 HeadId = headId;
                 MemberId = memberId;
                 Delta = delta;
                 IsFamily = isFamily;
+                Creed = creed;
+                IsCreed = isCreed;
             }
 
             public static EventEffectCommit Npc(CharacterId characterId, int delta) =>
-                new EventEffectCommit(characterId, default, default, delta, false);
+                new EventEffectCommit(characterId, default, default, delta, false, default, false);
 
             public static EventEffectCommit Family(PersonId headId, PersonId memberId, int delta) =>
-                new EventEffectCommit(default, headId, memberId, delta, true);
+                new EventEffectCommit(default, headId, memberId, delta, true, default, false);
+
+            public static EventEffectCommit CreedChange(FamilyCreedKind creed) =>
+                new EventEffectCommit(default, default, default, 0, false, creed, true);
 
             public CharacterId CharacterId { get; }
             public PersonId HeadId { get; }
             public PersonId MemberId { get; }
             public int Delta { get; }
             public bool IsFamily { get; }
+            public FamilyCreedKind Creed { get; }
+            public bool IsCreed { get; }
         }
     }
 }

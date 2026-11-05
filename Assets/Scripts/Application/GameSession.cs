@@ -67,6 +67,8 @@ namespace SengokuChronicle.Application
         private IndustryState _industryState;
         private CharacterDevelopmentState _development;
         private FamilyResearchState _researchState;
+        private FamilyDoctrineState _familyDoctrine;
+        private string _eventScenarioId = string.Empty;
         private HistoryLedger _historyLedger = HistoryLedger.CreateEmpty();
         private readonly Dictionary<Guid, DialogueState> _dialogues = new Dictionary<Guid, DialogueState>();
 
@@ -231,6 +233,29 @@ namespace SengokuChronicle.Application
         /// <summary>Transient research feedback, including pause reasons.</summary>
         public string LastResearchMessage { get; private set; } = string.Empty;
 
+        /// <summary>Persistent SC-024 family creed; survives succession unchanged.</summary>
+        public FamilyCreedKind CurrentFamilyCreed => EnsureFamilyDoctrine().Creed;
+
+        /// <summary>Current head's ambition record, or null when this head has not chosen one.</summary>
+        public FamilyAmbitionRecord CurrentHeadAmbition
+        {
+            get
+            {
+                EnsureSuccession();
+                return EnsureFamilyDoctrine().TryGetAmbition(Succession.HeadPersonId,
+                    out FamilyAmbitionRecord record)
+                    ? record
+                    : null;
+            }
+        }
+
+        /// <summary>Reads one head's retained ambition record without exposing mutable state.</summary>
+        public bool TryGetFamilyAmbition(PersonId headId, out FamilyAmbitionRecord record) =>
+            EnsureFamilyDoctrine().TryGetAmbition(headId, out record);
+
+        /// <summary>Last SC-024 family-doctrine command feedback.</summary>
+        public string LastFamilyDoctrineMessage { get; private set; } = string.Empty;
+
         /// <summary>Read-only SC-022 family-formation snapshot for the panel and tests.</summary>
         public FamilyFormationView FamilyFormation => FamilyFormationView.Build(Succession,
             CurrentGameDate, CanEditFamilyFormation, FamilyFormationBlockReason,
@@ -338,6 +363,15 @@ namespace SengokuChronicle.Application
         /// command rolls membership and kinship back. Never set by production code.
         /// </summary>
         internal Action<HistoryLedger> FamilyFormationAppendFaultInjection { get; set; }
+
+        /// <summary>
+        /// Test-only hook invoked after the SC-024 council entries are prepared but
+        /// before they are appended. Tests advance the ledger here, exactly like the
+        /// family-formation seam, so the prepared append genuinely fails and proves the
+        /// creed, relationships, queue and ledger all roll back together. Never set by
+        /// production code.
+        /// </summary>
+        internal Action<HistoryLedger> Sc024ChronicleAppendFaultInjection { get; set; }
 
         /// <summary>True only when one more day stays inside the current month and settlement is consistent.</summary>
         public bool CanAdvanceOneDayWithinMonth
@@ -608,6 +642,23 @@ namespace SengokuChronicle.Application
                 SC022FamilyFormationScenario.StartDate, null);
         }
 
+        /// <summary>Starts the separate fixed SC-024 family-creed demonstration.</summary>
+        public void InitFamilyDoctrineDemoScenario() => InitFamilyDoctrineDemoScenario(DefaultRandomSeed);
+
+        /// <summary>
+        /// Starts the SC-024 demonstration with a caller-selected deterministic seed. It
+        /// reuses the SC-013 six-person roster but tags the event route as SC-024, so the
+        /// creed council rows are eligible only in this explicit demonstration.
+        /// </summary>
+        public void InitFamilyDoctrineDemoScenario(ulong initialSeed)
+        {
+            InitSession(initialSeed, SC024FamilyDoctrineScenario.CreateSuccession(),
+                SC024FamilyDoctrineScenario.StartDate, null, null,
+                SC024FamilyDoctrineScenario.ScenarioId);
+            EnsureFamilyDoctrine().TrySetCreed(FamilyCreedKind.RighteousnessFirst, out _);
+            TryStartCurrentHeadAmbition(FamilyAmbitionKind.DevelopHousehold);
+        }
+
         private void InitSession(ulong initialSeed, SuccessionState succession) =>
             InitSession(initialSeed, succession, WorldClock.NewGameDate, null);
 
@@ -616,7 +667,11 @@ namespace SengokuChronicle.Application
             InitSession(initialSeed, succession, startDate, development, null);
 
         private void InitSession(ulong initialSeed, SuccessionState succession, GameDate startDate,
-            CharacterDevelopmentState development, IndustryState industry)
+            CharacterDevelopmentState development, IndustryState industry) =>
+            InitSession(initialSeed, succession, startDate, development, industry, null);
+
+        private void InitSession(ulong initialSeed, SuccessionState succession, GameDate startDate,
+            CharacterDevelopmentState development, IndustryState industry, string eventScenarioId)
         {
             WorldClock = new WorldClock(startDate);
             CurrentLocation = LocationId.Kiyosu;
@@ -633,6 +688,9 @@ namespace SengokuChronicle.Application
             _development = development ?? CreateDevelopmentFor(_succession);
             _industryState = industry ?? IndustryState.CreateInitial(WorldClock.CurrentDate);
             _researchState = FamilyResearchState.CreateInitial(WorldClock.CurrentDate);
+            _familyDoctrine = new FamilyDoctrineState();
+            _eventScenarioId = eventScenarioId ?? string.Empty;
+            LastFamilyDoctrineMessage = string.Empty;
             LastIndustryReport = null;
             LastIndustryMessage = string.Empty;
             LastEducationMessage = string.Empty;
@@ -1507,6 +1565,47 @@ namespace SengokuChronicle.Application
             return _researchState;
         }
 
+        private FamilyDoctrineState EnsureFamilyDoctrine()
+        {
+            if (_familyDoctrine == null)
+                _familyDoctrine = new FamilyDoctrineState();
+            return _familyDoctrine;
+        }
+
+        /// <summary>Selects the current head's one lifetime ambition; old heads are retained.</summary>
+        public bool TryStartCurrentHeadAmbition(FamilyAmbitionKind kind)
+        {
+            EnsureSuccession();
+            EnsureResearch();
+            FamilyDoctrineState doctrine = EnsureFamilyDoctrine();
+            if (Succession == null || Succession.HeadPersonId.IsEmpty)
+            {
+                LastFamilyDoctrineMessage = "当前没有可选定抱负的家主。";
+                return false;
+            }
+            if (!doctrine.TryStartAmbition(Succession.HeadPersonId, kind,
+                    _researchState.KnownTechniqueIds, out string error))
+            {
+                LastFamilyDoctrineMessage = error;
+                return false;
+            }
+
+            LastFamilyDoctrineMessage = "家主已选定抱负：" + FamilyAmbitionName(kind) + "。";
+            SessionStateChanged?.Invoke();
+            return true;
+        }
+
+        private static string FamilyAmbitionName(FamilyAmbitionKind kind)
+        {
+            switch (kind)
+            {
+                case FamilyAmbitionKind.DevelopHousehold: return "发展家业";
+                case FamilyAmbitionKind.PassDownTechnique: return "传承家技";
+                case FamilyAmbitionKind.EducateHeir: return "培养继承人";
+                default: return "未知抱负";
+            }
+        }
+
         /// <summary>Creates zero growth rows for every registered family person.</summary>
         private static CharacterDevelopmentState CreateDevelopmentFor(SuccessionState succession)
         {
@@ -1742,6 +1841,11 @@ namespace SengokuChronicle.Application
             _industryState = industry;
             _development = development;
             _researchState = research;
+            // Until the v9 doctrine block exists, a loaded v8 or earlier save starts
+            // with the documented default doctrine and no SC-024 scenario route.
+            _familyDoctrine = new FamilyDoctrineState();
+            _eventScenarioId = string.Empty;
+            LastFamilyDoctrineMessage = string.Empty;
             LastIndustryReport = null;
             LastIndustryMessage = string.Empty;
             LastEducationMessage = string.Empty;
@@ -2183,37 +2287,154 @@ namespace SengokuChronicle.Application
                 ? WorldClock.CurrentDate
                 : SengokuChronicle.Domain.WorldClock.NewGameDate;
             EnsureRelationships();
+            bool sc024 = IsSc024CouncilEvent(eventId);
+            FamilyDoctrineState doctrineBefore = sc024 ? EnsureFamilyDoctrine().Clone() : null;
+            FamilyRelationshipEntry[] familyBefore = sc024 ? CaptureFamilyRelationshipEntries() : null;
+            FamilyChronicleEntry[] chronicleBefore = sc024 ? EnsureHistoryLedger().Capture() : null;
+            EventRuntimeState runtimeBefore = sc024 ? _eventRuntimeState.Clone() : null;
             EventChoiceResult result = _eventEngine.TryChooseEventOption(eventId, optionId, committedResultId,
-                currentDate, _relationships, _eventRuntimeState, BuildEventRuleContext(), _familyRelationships);
+                currentDate, _relationships, _eventRuntimeState, BuildEventRuleContext(), _familyRelationships,
+                EnsureFamilyDoctrine().Creed, EnsureFamilyDoctrine());
             if (result.Succeeded)
             {
-                RecordEventChoice(result);
-                foreach (RelationshipResult relationship in result.AppliedRelationships)
-                    RecordRelationshipChange(relationship, "event");
-                foreach (FamilyRelationshipResult relationship in result.AppliedFamilyRelationships)
-                    RecordFamilyRelationshipChange(relationship, "event");
+                if (sc024)
+                {
+                    if (!TryRecordSc024Council(result, out string appendError))
+                    {
+                        RestoreSc024Choice(doctrineBefore, familyBefore, chronicleBefore, runtimeBefore);
+                        return new EventChoiceResult(false, eventId, optionId, committedResultId,
+                            "家族编年史写入失败，家训与关系已回滚：" + appendError, string.Empty);
+                    }
+                }
+                else
+                {
+                    RecordEventChoice(result);
+                    foreach (RelationshipResult relationship in result.AppliedRelationships)
+                        RecordRelationshipChange(relationship, "event");
+                    foreach (FamilyRelationshipResult relationship in result.AppliedFamilyRelationships)
+                        RecordFamilyRelationshipChange(relationship, "event");
+                }
                 LastEventMessage = result.Feedback;
                 SessionStateChanged?.Invoke();
             }
             return result;
         }
 
+        private static bool IsSc024CouncilEvent(string eventId) =>
+            string.Equals(eventId, SC024EventIds.SecrecyCouncilEventId, StringComparison.Ordinal) ||
+            string.Equals(eventId, SC024EventIds.RighteousnessCouncilEventId, StringComparison.Ordinal) ||
+            string.Equals(eventId, SC024EventIds.MeritCouncilEventId, StringComparison.Ordinal);
+
+        private FamilyRelationshipEntry[] CaptureFamilyRelationshipEntries()
+        {
+            IReadOnlyList<FamilyRelationshipEntry> entries = _familyRelationships.Entries;
+            var copy = new FamilyRelationshipEntry[entries.Count];
+            for (int i = 0; i < entries.Count; i++)
+                copy[i] = entries[i];
+            return copy;
+        }
+
+        private void RestoreSc024Choice(FamilyDoctrineState doctrineBefore,
+            FamilyRelationshipEntry[] familyBefore, FamilyChronicleEntry[] chronicleBefore,
+            EventRuntimeState runtimeBefore)
+        {
+            _familyDoctrine = doctrineBefore;
+            var restored = FamilyRelationships.CreateEmpty();
+            if (familyBefore != null)
+                foreach (FamilyRelationshipEntry entry in familyBefore)
+                    restored.TryChange(entry.HeadId, entry.MemberId, entry.Value);
+            _familyRelationships = restored;
+            HistoryLedger.TryRestore(chronicleBefore, out _historyLedger, out _);
+            _eventRuntimeState = runtimeBefore;
+        }
+
+        /// <summary>
+        /// Writes the council event record and both exact relationship records. Any
+        /// failed append reports false so the caller can restore the whole choice.
+        /// </summary>
+        private bool TryRecordSc024Council(EventChoiceResult result, out string error)
+        {
+            GameDate date = CurrentGameDate;
+            string title = _eventEngine != null &&
+                           _eventEngine.TryGetEventText(result.EventId, out EventTextEntry text)
+                ? text.title
+                : result.EventId;
+
+            // Prepare every record against the same ledger snapshot first. Like the
+            // family-formation path, a test seam may advance the ledger before the
+            // prepared records are appended, so the real TryAppendPrepared call fails
+            // and the caller restores the whole choice.
+            var entries = new List<FamilyChronicleEntry>();
+            int sequence = EnsureHistoryLedger().Count + 1;
+            if (!TryPrepareChronicleEntry(sequence, date, ChronicleCategory.Event,
+                    result.EventId, result.OptionId, title, result.Feedback, 0, 0,
+                    out FamilyChronicleEntry eventEntry, out error))
+                return false;
+            entries.Add(eventEntry);
+
+            foreach (FamilyRelationshipResult relationship in result.AppliedFamilyRelationships)
+            {
+                string headName = PersonDisplayName(relationship.HeadId, "家主");
+                string memberName = PersonDisplayName(relationship.MemberId, "家人");
+                string summary = "家主" + headName + "与" + memberName + "的关系 " +
+                                 relationship.PreviousValue.ToString(CultureInfo.InvariantCulture) +
+                                 " → " +
+                                 relationship.CurrentValue.ToString(CultureInfo.InvariantCulture) +
+                                 "（家族议事）。";
+                sequence++;
+                if (!TryPrepareChronicleEntry(sequence, date, ChronicleCategory.Relationship,
+                        relationship.HeadId.Value + "->" + relationship.MemberId.Value, "event",
+                        headName + " 与 " + memberName, summary,
+                        relationship.PreviousValue, relationship.CurrentValue,
+                        out FamilyChronicleEntry relationshipEntry, out error))
+                    return false;
+                entries.Add(relationshipEntry);
+            }
+
+            Sc024ChronicleAppendFaultInjection?.Invoke(EnsureHistoryLedger());
+            foreach (FamilyChronicleEntry entry in entries)
+                if (!EnsureHistoryLedger().TryAppendPrepared(entry, out error))
+                    return false;
+
+            error = string.Empty;
+            return true;
+        }
+
+        private static bool TryPrepareChronicleEntry(int sequence, GameDate date,
+            ChronicleCategory category, string subjectId, string sourceId, string title,
+            string summary, int fromValue, int toValue, out FamilyChronicleEntry entry,
+            out string error)
+        {
+            entry = null;
+            string entryId = FamilyChronicleEntry.BuildEntryId(sequence);
+            return FamilyChronicleEntry.TryCreate(sequence, entryId, date.Year, date.Month,
+                category, subjectId, sourceId, title, summary, fromValue, toValue,
+                0, 0, 0, 0, out entry, out error);
+        }
+
         /// <summary>
         /// Snapshot the SC-010 succession facts used by event offer gates. Settled count is
         /// the raw count only while no succession decision, regency, or extinction owns play.
         /// </summary>
-        private EventRuleContext BuildEventRuleContext() => BuildEventRuleContext(Succession);
+        private EventRuleContext BuildEventRuleContext() =>
+            BuildEventRuleContext(Succession, _eventScenarioId);
 
         /// <summary>
         /// Builds the same scenario/succession snapshot for live play and for an
         /// already-validated load candidate.
         /// </summary>
-        private static EventRuleContext BuildEventRuleContext(SuccessionState succession)
+        private static EventRuleContext BuildEventRuleContext(SuccessionState succession) =>
+            BuildEventRuleContext(succession, string.Empty);
+
+        private static EventRuleContext BuildEventRuleContext(SuccessionState succession,
+            string eventScenarioId)
         {
             if (succession == null || succession.World == null)
                 return EventRuleContext.Default;
             int settled = succession.Phase == SuccessionPhase.None ? succession.SuccessionCount : 0;
-            string scenario = M2FixedScenario.IsActive(succession) ? EventScenarioIds.Sc013 : string.Empty;
+            string scenario = !string.IsNullOrWhiteSpace(eventScenarioId)
+                ? eventScenarioId
+                : M2FixedScenario.IsActive(succession) ? EventScenarioIds.Sc013 : string.Empty;
             IReadOnlyList<FamilyMembership> memberships = succession.World.Family.Members;
             var members = new PersonId[memberships.Count];
             for (int i = 0; i < memberships.Count; i++)
@@ -2470,6 +2691,83 @@ namespace SengokuChronicle.Application
         }
 
         /// <summary>
+        /// Advances only the current head's matching ambition from results this month
+        /// already produced. A different ambition kind, an absent record or a completed
+        /// record is a no-op; the doctrine methods themselves reject duplicate months,
+        /// techniques and education years.
+        /// </summary>
+        private static FamilyAmbitionRecord AdvanceFamilyDoctrineForSettlement(
+            FamilyDoctrineState doctrine, PersonId headId, IndustryMonthReport industryReport,
+            bool researchCompleted, string techniqueId, PersonId designatedHeirId,
+            List<EducationSettlementRecord> educationRecords)
+        {
+            if (doctrine == null || headId.IsEmpty ||
+                !doctrine.TryGetAmbition(headId, out FamilyAmbitionRecord record) ||
+                record.IsComplete)
+                return null;
+
+            switch (record.Kind)
+            {
+                case FamilyAmbitionKind.DevelopHousehold:
+                    if (industryReport != null)
+                        doctrine.TryAdvanceHouseholdAmbition(headId, industryReport, out _);
+                    break;
+                case FamilyAmbitionKind.PassDownTechnique:
+                    if (researchCompleted && !string.IsNullOrWhiteSpace(techniqueId))
+                        doctrine.TryAdvanceTechniqueAmbition(headId, new[] { techniqueId }, out _);
+                    break;
+                case FamilyAmbitionKind.EducateHeir:
+                    if (designatedHeirId.IsEmpty || educationRecords == null)
+                        break;
+                    foreach (EducationSettlementRecord educationRecord in educationRecords)
+                    {
+                        if (educationRecord.Learner != designatedHeirId)
+                            continue;
+                        doctrine.TryAdvanceHeirEducationAmbition(headId, designatedHeirId,
+                            educationRecord.AgeYear, educationRecord.Result, out _);
+                    }
+                    break;
+            }
+
+            // Return the record only for the single transition into completion so the
+            // monthly boundary appends exactly one chronicle result.
+            return doctrine.TryGetAmbition(headId, out FamilyAmbitionRecord advanced) &&
+                   advanced.IsComplete
+                ? advanced
+                : null;
+        }
+
+        /// <summary>
+        /// Appends the one completion record for a month that just finished an ambition.
+        /// It reuses the existing event chronicle schema and grants no bonus resource or
+        /// ability; the caller treats a failed append as a failed month transaction.
+        /// </summary>
+        private bool TryAppendAmbitionCompletion(GameDate date, PersonId headId,
+            FamilyAmbitionRecord record, out string error)
+        {
+            string headName = PersonDisplayName(headId, "家主");
+            string title = headName + "的抱负达成";
+            string summary = "家主" + headName + "完成抱负「" + FamilyAmbitionName(record.Kind) +
+                             "」：进度 " +
+                             record.Progress.ToString(CultureInfo.InvariantCulture) + "/" +
+                             record.Target.ToString(CultureInfo.InvariantCulture) +
+                             "。未获得额外资源或能力。";
+            return EnsureHistoryLedger().TryAppendEvent(date.Year, date.Month, headId.Value,
+                AmbitionSourceId(record.Kind), title, summary, out _, out error);
+        }
+
+        private static string AmbitionSourceId(FamilyAmbitionKind kind)
+        {
+            switch (kind)
+            {
+                case FamilyAmbitionKind.DevelopHousehold: return "ambition.develop-household";
+                case FamilyAmbitionKind.PassDownTechnique: return "ambition.pass-down-technique";
+                case FamilyAmbitionKind.EducateHeir: return "ambition.educate-heir";
+                default: return "ambition.unknown";
+            }
+        }
+
+        /// <summary>
         /// 结束本月：推进到下月 1 日并排定一个可用月度事件。
         /// 有待处理事件、内容无效或日期越界时拒绝推进。
         /// </summary>
@@ -2513,6 +2811,7 @@ namespace SengokuChronicle.Application
             IndustryState industryBefore = EnsureIndustryState().Clone();
             CharacterDevelopmentState developmentBefore = EnsureDevelopment().Clone();
             FamilyResearchState researchBefore = EnsureResearch().Clone();
+            FamilyDoctrineState doctrineBefore = EnsureFamilyDoctrine().Clone();
             RandomStateSaveData rngBefore = _randomStateManager.CaptureState();
             FamilyChronicleEntry[] chronicleBefore = EnsureHistoryLedger().Capture();
             EventRuntimeState runtimeBefore = _eventRuntimeState.Clone();
@@ -2573,7 +2872,7 @@ namespace SengokuChronicle.Application
                 EventRuntimeState nextRuntime = runtimeBefore.Clone();
                 EventScheduleResult schedule = _eventEngine.ScheduleMonthly(nextDate, _relationships,
                     _randomStateManager.GetStream(RandomStreamKind.Events), nextRuntime,
-                    BuildEventRuleContext());
+                    BuildEventRuleContext(), EnsureFamilyDoctrine().Creed);
                 if (!schedule.Succeeded)
                 {
                     RandomStateManager.TryRestore(rngBefore, out _randomStateManager);
@@ -2621,6 +2920,25 @@ namespace SengokuChronicle.Application
                     }
                 }
 
+                FamilyDoctrineState nextDoctrine = doctrineBefore.Clone();
+                FamilyAmbitionRecord completedAmbition = AdvanceFamilyDoctrineForSettlement(
+                    nextDoctrine, _succession.HeadPersonId,
+                    settlement.Succeeded ? settlement.Report : null, researchSettlement.Completed,
+                    researchSettlement.TechniqueId, _succession.DesignatedHeirId, educationRecords);
+                if (completedAmbition != null &&
+                    !TryAppendAmbitionCompletion(previousDate, _succession.HeadPersonId,
+                        completedAmbition, out string ambitionChronicleError))
+                {
+                    RandomStateManager.TryRestore(rngBefore, out _randomStateManager);
+                    HistoryLedger.TryRestore(chronicleBefore, out _historyLedger, out _);
+                    LastMonthTurnOutcome = MonthTurnOutcome.SchedulingFailed;
+                    LastEventMessage = "抱负达成编年史写入失败：" +
+                                       (string.IsNullOrEmpty(ambitionChronicleError)
+                                           ? "未知原因"
+                                           : ambitionChronicleError);
+                    return false;
+                }
+
                 if (!WorldClock.TryAdvanceToNextMonth())
                 {
                     RandomStateManager.TryRestore(rngBefore, out _randomStateManager);
@@ -2638,6 +2956,7 @@ namespace SengokuChronicle.Application
                 _eventRuntimeState = nextRuntime;
                 _development = nextDevelopment;
                 _researchState = researchSettlement.NextState ?? researchBefore;
+                _familyDoctrine = nextDoctrine;
                 LastIndustryReport = settlement.Report;
                 if (settlement.Report != null)
                     LastIndustryMessage = settlement.Report.Summary;
@@ -2659,6 +2978,7 @@ namespace SengokuChronicle.Application
                 _eventRuntimeState = runtimeBefore;
                 _development = developmentBefore;
                 _researchState = researchBefore;
+                _familyDoctrine = doctrineBefore;
                 RandomStateManager.TryRestore(rngBefore, out _randomStateManager);
                 HistoryLedger.TryRestore(chronicleBefore, out _historyLedger, out _);
                 LastIndustryReport = reportBefore;

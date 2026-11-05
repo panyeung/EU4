@@ -73,7 +73,8 @@ namespace SengokuChronicle.Events
                 if (!TryEnum(definition.onceScope, out EventOnceScope _))
                     errors.Add($"Event {definition.eventId} has an unsupported onceScope.");
                 if (!string.IsNullOrWhiteSpace(definition.scenario) &&
-                    !string.Equals(definition.scenario, EventScenarioIds.Sc013, StringComparison.Ordinal))
+                    !string.Equals(definition.scenario, EventScenarioIds.Sc013, StringComparison.Ordinal) &&
+                    !string.Equals(definition.scenario, EventScenarioIds.Sc024, StringComparison.Ordinal))
                     errors.Add($"Event {definition.eventId} has an unsupported scenario gate.");
                 RequireText(textById, definition.textId, $"event {definition.eventId}", errors);
 
@@ -258,7 +259,25 @@ namespace SengokuChronicle.Events
                     errors.Add($"Event {eventId} condition {index} has an out-of-range succession threshold.");
                 if (!string.Equals(definition.trigger, nameof(EventTriggerKind.Monthly), StringComparison.Ordinal))
                     errors.Add($"Event {eventId} condition {index} is only allowed on Monthly events.");
+                return;
             }
+            if (kind == EventConditionKind.FamilyCreedIs)
+            {
+                if (!TryCreed(condition.familyCreedId, out _))
+                    errors.Add($"Event {eventId} condition {index} has an invalid family creed ID.");
+                if (!string.Equals(definition.scenario, EventScenarioIds.Sc024, StringComparison.Ordinal))
+                    errors.Add($"Event {eventId} condition {index} is only allowed in the SC-024 scenario.");
+            }
+        }
+
+        private static bool TryCreed(string value, out FamilyCreedKind creed)
+        {
+            if (!string.IsNullOrEmpty(value) && Enum.TryParse(value, false, out creed) &&
+                Enum.IsDefined(typeof(FamilyCreedKind), creed) &&
+                string.Equals(Enum.GetName(typeof(FamilyCreedKind), creed), value, StringComparison.Ordinal))
+                return true;
+            creed = default;
+            return false;
         }
 
         private static void ValidateRequirement(EventRequirementData requirement, string optionId, int index, List<string> errors)
@@ -293,6 +312,8 @@ namespace SengokuChronicle.Events
                     errors.Add($"Option {optionId} effect {index} targets an unknown NPC.");
                 if (!string.IsNullOrWhiteSpace(effect.targetPersonId))
                     errors.Add($"Option {optionId} effect {index} must not set a family target on an NPC effect.");
+                if (!string.IsNullOrWhiteSpace(effect.familyCreedId))
+                    errors.Add($"Option {optionId} effect {index} must not set a creed on an NPC effect.");
                 if (effect.delta == 0 || effect.delta < CharacterRelationships.MinimumValue ||
                     effect.delta > CharacterRelationships.MaximumValue)
                     errors.Add($"Option {optionId} effect {index} has an invalid relationship delta.");
@@ -305,9 +326,22 @@ namespace SengokuChronicle.Events
                     errors.Add($"Option {optionId} effect {index} targets an invalid family person ID.");
                 if (!string.IsNullOrWhiteSpace(effect.targetCharacterId))
                     errors.Add($"Option {optionId} effect {index} must not set an NPC target on a family effect.");
+                if (!string.IsNullOrWhiteSpace(effect.familyCreedId))
+                    errors.Add($"Option {optionId} effect {index} must not set a creed on a family effect.");
                 if (effect.delta == 0 || effect.delta < FamilyRelationships.MinimumValue ||
                     effect.delta > FamilyRelationships.MaximumValue)
                     errors.Add($"Option {optionId} effect {index} has an invalid family relationship delta.");
+                return;
+            }
+            if (kind == EventEffectKind.SetFamilyCreed)
+            {
+                if (!TryCreed(effect.familyCreedId, out _))
+                    errors.Add($"Option {optionId} effect {index} has an invalid family creed ID.");
+                if (!string.IsNullOrWhiteSpace(effect.targetCharacterId) ||
+                    !string.IsNullOrWhiteSpace(effect.targetPersonId))
+                    errors.Add($"Option {optionId} effect {index} must not set a target on a creed effect.");
+                if (effect.delta != 0)
+                    errors.Add($"Option {optionId} effect {index} must not set a delta on a creed effect.");
             }
         }
 

@@ -695,6 +695,111 @@
       "textId": "summary.sc018.family-assembly.decide-directly",
       "title": "众人领命而退",
       "body": "正綱和信正都领了分派，却觉得自己的话没有说完，对家主的信任下降五点。"
+    },
+    {
+      "textId": "event.sc024.creed-council.secrecy",
+      "title": "密议之夜",
+      "body": "家训守秘为先。晴信只召正綱与信正入内室，请二人就近日家中事务各陈所见。"
+    },
+    {
+      "textId": "option.sc024.creed-council.secrecy.keep",
+      "title": "小范围议事",
+      "body": "只让少数近亲知情，正綱与信正分别领受密令，各按本分行事。"
+    },
+    {
+      "textId": "summary.sc024.creed-council.secrecy.keep",
+      "title": "守秘议事",
+      "body": "正綱对家主的信任增加五点，信正因被排除在外而下降五点；家训仍为守秘为先。"
+    },
+    {
+      "textId": "option.sc024.creed-council.secrecy.reform-righteousness",
+      "title": "改为义理至上",
+      "body": "家主宣布今后各房先开口，不再以少数密议定夺家中大事。"
+    },
+    {
+      "textId": "summary.sc024.creed-council.secrecy.reform-righteousness",
+      "title": "家训改革",
+      "body": "正綱与信正对家主的信任各下降五点，家训改为义理至上。"
+    },
+    {
+      "textId": "option.sc024.creed-council.secrecy.reform-merit",
+      "title": "改为唯才是举",
+      "body": "家主宣布今后按各人所长分派事务，不再以亲疏与密议为先。"
+    },
+    {
+      "textId": "summary.sc024.creed-council.secrecy.reform-merit",
+      "title": "家训改革",
+      "body": "正綱与信正对家主的信任各下降五点，家训改为唯才是举。"
+    },
+    {
+      "textId": "event.sc024.creed-council.righteousness",
+      "title": "各房议事",
+      "body": "家训义理至上。晴信让各房先开口，正綱与信正当众陈述家中近况与难处。"
+    },
+    {
+      "textId": "option.sc024.creed-council.righteousness.keep",
+      "title": "各房先开口",
+      "body": "让每一位家人把话说完，再由家主依义理裁断，众人心服。"
+    },
+    {
+      "textId": "summary.sc024.creed-council.righteousness.keep",
+      "title": "义理议事",
+      "body": "正綱与信正都感到被家主信任，对家主的关系各增加五点；家训仍为义理至上。"
+    },
+    {
+      "textId": "option.sc024.creed-council.righteousness.reform-secrecy",
+      "title": "改为守秘为先",
+      "body": "家主宣布今后机密事务只由少数近亲议定，不再当众陈说。"
+    },
+    {
+      "textId": "summary.sc024.creed-council.righteousness.reform-secrecy",
+      "title": "家训改革",
+      "body": "正綱与信正对家主的信任各下降五点，家训改为守秘为先。"
+    },
+    {
+      "textId": "option.sc024.creed-council.righteousness.reform-merit",
+      "title": "改为唯才是举",
+      "body": "家主宣布今后不论亲疏，只按各人所长分派事务。"
+    },
+    {
+      "textId": "summary.sc024.creed-council.righteousness.reform-merit",
+      "title": "家训改革",
+      "body": "正綱与信正对家主的信任各下降五点，家训改为唯才是举。"
+    },
+    {
+      "textId": "event.sc024.creed-council.merit",
+      "title": "按才分议",
+      "body": "家训唯才是举。晴信请正綱与信正各陈所长，按才干重新分派家中事务。"
+    },
+    {
+      "textId": "option.sc024.creed-council.merit.keep",
+      "title": "按所长分工",
+      "body": "正綱领武备与家中警护，信正掌文书与账目，各展其才。"
+    },
+    {
+      "textId": "summary.sc024.creed-council.merit.keep",
+      "title": "唯才议事",
+      "body": "正綱因职责加重而对家主信任下降五点，信正因才干被重用而上升五点；家训仍为唯才是举。"
+    },
+    {
+      "textId": "option.sc024.creed-council.merit.reform-secrecy",
+      "title": "改为守秘为先",
+      "body": "家主宣布今后机密事务只由少数近亲议定，才干不再是唯一准绳。"
+    },
+    {
+      "textId": "summary.sc024.creed-council.merit.reform-secrecy",
+      "title": "家训改革",
+      "body": "正綱与信正对家主的信任各下降五点，家训改为守秘为先。"
+    },
+    {
+      "textId": "option.sc024.creed-council.merit.reform-righteousness",
+      "title": "改为义理至上",
+      "body": "家主宣布今后各房先开口，以义理而非才干作为议事准绳。"
+    },
+    {
+      "textId": "summary.sc024.creed-council.merit.reform-righteousness",
+      "title": "家训改革",
+      "body": "正綱与信正对家主的信任各下降五点，家训改为义理至上。"
     }
   ]
 }

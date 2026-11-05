@@ -223,7 +223,7 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
-        public void CatalogLoadsAndValidatesWithThirtyEventsAndFiveChains()
+        public void CatalogLoadsAndValidatesWithThirtyThreeEventsAndFiveChains()
         {
             EventCatalogData catalog = LoadCatalog();
             EventTextCatalog text = LoadText();
@@ -233,10 +233,10 @@ namespace SengokuChronicle.Tests.EditMode
             EventCatalogValidationResult result = EventCatalogValidator.Validate(catalog, text);
             Assert.That(result.Succeeded, Is.True, result.Message);
 
-            Assert.That(catalog.events, Has.Length.EqualTo(30));
+            Assert.That(catalog.events, Has.Length.EqualTo(33));
             Assert.That(catalog.chains, Has.Length.EqualTo(5));
             Assert.That(catalog.events.Select(definition => definition.eventId).Distinct().Count(),
-                Is.EqualTo(30));
+                Is.EqualTo(33));
             Assert.That(catalog.events.Count(
                     definition => definition.eventId.StartsWith("event.sc018.", StringComparison.Ordinal)),
                 Is.EqualTo(7));
@@ -294,7 +294,7 @@ namespace SengokuChronicle.Tests.EditMode
 
             Assert.That(catalog.events.Count(definition =>
                     !definition.eventId.StartsWith("event.sc018.", StringComparison.Ordinal)),
-                Is.EqualTo(23));
+                Is.EqualTo(26));
 
             foreach (string row in BaselineEvents)
             {
