@@ -1,7 +1,7 @@
 # SC-021 家族研究与技艺传承示范：试玩与验收说明
 
 日期：2026-11-04  
-状态：代码、场景集成、Unity 编译、UI 收尾聚焦 `2/2`、全量 EditMode `1105/1105` 与 `FoundationSceneValidator` 已完成；**Play Mode 与用户正式验收 pending**。本切片集成提交在 feature 分支 `panyeung/sc021-scene-integration`，未合并 `main`、未打 tag。
+状态：代码、场景集成、Unity 编译、UI 收尾聚焦测试与全量 EditMode `1105/1105`、`FoundationSceneValidator` 已完成；Mochi 已执行无截图 Play Mode 主路线，**用户正式验收 pending**。本切片集成提交在 feature 分支 `panyeung/sc021-scene-integration`，未合并 `main`、未打 tag。
 范围：M3 的家族研究纵向切片——影山家从 `1560-01-01` 开始，安排一项原创家族技艺「烟幕调制术」的研究，在两次月结后把完成的研究保存为家族知识。**不是完整 M3**，不包含战斗/任务中实际施放技艺、个人掌握、师徒教授、大型科技树、研究随机事件、可视化节点编辑器或多人协作。
 
 ## 0. 场景集成状态（已完成，2026-11-04）
@@ -15,7 +15,7 @@
 - Console 在场景集成轮聚焦测试后最近 11 条为 `0 errors / 4 warnings / 7 info`；其中 3 条 warning 来自负向测试刻意触发的回滚日志，1 条是 Unity AI 账号网络提示，不是本切片运行错误。复审 follow-up 使用 batchmode，不呈现 Editor Console UI，因此不新增 Console 条目计数；三份 Unity 日志的 `error CS` 均为 0。
 - 2026-11-04 UI 收尾：活动研究月只保留一条进度结果——状态行只显示研究者，进度行显示 `P/N（每次月结推进 1 点）`，月结摘要不再同时出现在消息行；灭亡继承状态改为可读文案，不再渲染原始 `extinction.*` 结果 ID。新增聚焦回归 `2/2`（活动月单一进度结果、灭亡可读状态），全量 EditMode `1105/1105`（`0` failed/skipped/inconclusive，`Logs/sc021-worker-full-editmode.txt`）。`FoundationSceneValidator` 重跑仍为 `RESULT: FAIL; Errors: 1`（既有 SC-009 反馈条布局），SC-021 行 `PASS`；测试后 Console 最近 20 条为 `2 errors / 12 warnings / 6 info`，全部来自负向测试刻意触发的编年史 append 失败日志、生成器回滚 warning 与故障注入 warning，不是本切片回归。
 - 2026-11-04 复审 follow-up：开局/未安排计划时月推进率只在进度行显示一次；暂停只在结果行显示原因与保持的 `P/N` 一次，状态行只保留研究者、进度行暂停时不承诺月结推进、消息行不重复同一报告；灭亡状态改为「已无符合资格的继承人，家业无人继承」。`SC021ResearchCostText` 生成器默认文案与 `FoundationScene` 序列化文本同步为当前费用行。聚焦 EditMode `83/83`、全量 EditMode `1105/1105`（均 `0` failed/skipped/inconclusive），场景验证 SC-021 行 `PASS`、整体仍为既有 SC-009 单项 `1` error；编译 `error CS` 为 `0`。测试后 Console 为 `32` 条（`2 errors / 21 warnings / 9 info`），来自负向/故障注入测试与本地 relay 诊断，不是本切片运行回归；本次未运行 Play Mode。
-- **Play Mode 未由本 worker 运行**；用户 Play Test 按第 1–11 节执行并报告。
+- 2026-11-04 Mochi 无截图 Play Mode：在 Unity `6000.6.6f1` 的现有 feature worktree Editor 中，从 SC-021 标题入口开始；通过测试存档核对开局 `1560-01-01`、资金/物资 `2/2`，安排研究无即时扣费；第一次月结后 `1560-02-01`、资源 `1/1`、进度 `1`；第二次月结后 `1560-03-01`、资源 `0/0`、研究计划清空、`technique.smoke-mixing` 成为家族知识且只有一条研究编年史；继承后家主为 `person.sc021.heir`（影山小太郎）、家族知识保留；再推进一个月没有新增研究记录或研究费用。禁用截图期间无法直接读取画面文案；准确 UI 字符串由 EditMode 回归断言覆盖。没有通过 UI 构造资源短缺暂停路线，Play Mode 未覆盖该分支。Play Mode 后无新 C# 编译错误或运行时异常记录；测试前保存槽及备份均按 SHA-256 原样恢复。此记录是 Mochi 的 Play Mode 证据，不代表用户正式验收。
 
 如需在干净工作区重跑，菜单仍是 `Tools/Sengoku Chronicle/Add SC-021 Family Research`，随后 `Tools/Sengoku Chronicle/Validate Foundation Scene`；生成器要求活动场景为 `Assets/Scenes/FoundationScene.unity`、不在 Play Mode 且未 dirty。
 
