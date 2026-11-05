@@ -12,8 +12,8 @@
 
 ## Global Constraints
 
-- Implement code through OpenCode2 on the current task worktree `feature/sc018-independent-core-events`; preserve every pre-existing dirty or untracked path and do not stage unrelated files.
-- Use the existing Unity project and its already-open Editor; first verify the Editor PID and `-projectPath`. Never run batchmode against this project folder or open a second Editor for it.
+- Implement code through OpenCode2 on the current task worktree `panyeung/sc021-scene-integration`; preserve every pre-existing dirty or untracked path and do not stage unrelated files.
+- Use the existing Unity project. Before any Unity work, inspect every running Unity PID and its exact `-projectPath`; never target the user's open `C:\Users\panye\My project` Editor. Verify with that worktree's own Editor when one is open; otherwise a temporary batchmode run against this worktree is allowed only when no Editor holds this folder, and never against a folder held by an Editor.
 - Keep all rule/state code in pure C# where practical; do not create a new Unity project or Scene, install packages, or copy external code.
 - Preserve existing `.meta` files and GUIDs; do not modify `Library` or `Temp`.
 - Only the designated integration worker edits `FoundationScene`, prefabs, or `ProjectSettings`. The generator uses one Undo group, validates before saving, reverts through Undo on exceptions, does not reload a scene for rollback, and places all new UI under one fixed root.

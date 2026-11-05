@@ -1,14 +1,14 @@
 # SC-021 家族研究与技艺传承实施报告
 
 日期：2026-11-04  
-分支/工作区：`feature/sc018-independent-core-events`，`C:\Users\panye\My project`  
+分支/工作区：`panyeung/sc021-scene-integration`，`C:\Users\panye\orca\workspaces\My project\sc021-scene-integration`（场景集成与复审 follow-up 均在此 worktree）  
 设计依据：`docs/superpowers/specs/2026-11-04-sc-021-family-research-design.md`  
 实施计划：`docs/superpowers/plans/2026-11-04-sc-021-family-research.md`  
 复用调研：`docs/research/SC021-family-knowledge-reuse-research.md`
 
 ## 1. 结论摘要
 
-SC-021 的纯 C# 家族研究领域、月结事务、v8 存档、研究编年史、固定剧本、研究面板与事务式场景生成器已经写入当前工作区；前一轮修复了首次静态编译暴露的缺陷，随后按只读审查 RETURN 修复了已完成技艺的 UI 状态、剧本自动弹窗、SC-020 重叠校验、短缺文案、回滚证据、暂停计划存读档与文档清单；correction review 又补齐了读档后研究者失效时的即时暂停显示、对应视图/面板测试与证据计数。**2026-11-04 场景集成轮已在独立 worktree Editor 中运行生成器、保存 `FoundationScene`、运行 Validator 与聚焦 EditMode，并修复了 v7 载荷拒绝顺序导致的两个既有测试失败**；Unity 编译、聚焦 EditMode `125/125`、SC-021 Validator PASS 与 Console 计数见第 11 节。用户 Play Test 与正式验收仍 pending。
+SC-021 的纯 C# 家族研究领域、月结事务、v8 存档、研究编年史、固定剧本、研究面板与事务式场景生成器已经写入当前工作区；前一轮修复了首次静态编译暴露的缺陷，随后按只读审查 RETURN 修复了已完成技艺的 UI 状态、剧本自动弹窗、SC-020 重叠校验、短缺文案、回滚证据、暂停计划存读档与文档清单；correction review 又补齐了读档后研究者失效时的即时暂停显示、对应视图/面板测试与证据计数。**2026-11-04 场景集成轮已在独立 worktree Editor 中运行生成器、保存 `FoundationScene`、运行 Validator 与聚焦 EditMode，并修复了 v7 载荷拒绝顺序导致的两个既有测试失败**；复审 follow-up 又补齐正向 v7 JSON 迁移回归测试，并在同一 worktree 复跑聚焦 `126/126`、全量 EditMode `1103/1103`。Unity 编译、EditMode、SC-021 Validator PASS 与 Console 计数见第 7 节。用户 Play Test 与正式验收仍 pending。
 
 ## 2. 环境与安全边界
 
@@ -59,7 +59,7 @@ SC-021 的纯 C# 家族研究领域、月结事务、v8 存档、研究编年史
 - `Assets/Scripts/Presentation/TitleScreenController.cs`：`researchDemoButton`、`BindResearchScenarioButton`、`StartResearchDemo`。
 - `Assets/Scripts/Editor/AddM6TitleScreen.cs`：标题根允许新增 SC-021 入口，并保持既有入口计数校验。
 - `Assets/Scripts/Editor/FoundationSceneValidator.cs`：要求并检查 `FamilyResearchPanel` 与 `AddSC021FamilyResearch.Validate`。
-- `Assets/Scripts/Persistence/SaveData.cs`：`research` DTO、presence probe、捕获/恢复、v8 校验。
+- `Assets/Scripts/Persistence/SaveData.cs`：`research` DTO、presence probe、捕获/恢复与研究块范围校验。
 - `Assets/Scripts/Persistence/SaveDataMigrator.cs`：v7→v8 空研究迁移；v1–v6 迁移链补空研究；拒绝旧版研究载荷。
 - `Assets/Scripts/Persistence/SaveDataValidator.cs`：`CurrentVersion = 8`、v8 research presence/validation。
 - `Assets/Tests/EditMode/FamilyChroniclePanelTests.cs`：研究完成行可读性用例。
@@ -126,6 +126,15 @@ SC-021 的纯 C# 家族研究领域、月结事务、v8 存档、研究编年史
 3. **v7 载荷拒绝顺序**：SC-022 记录的两个既有失败用例（`FamilyResearchSaveTests.V7PayloadWithResearch_IsRejected`、`SaveDataMigratorTests.V7Migration_RejectsAConflictingResearchPayload`）根因是 v7 已拥有 `development`，但通用遗留检查先以 `development` 拒绝，导致本应报告的 `research` 消息不出现。将 `SaveDataValidator.ValidatePresence` 与 `SaveDataMigrator` 的通用 `development` 拒绝范围收窄到 v2–v6；v7 继续由版本专属分支先检查 `research`。未改变 v8 schema、研究规则或迁移数据。
 4. **证据边界**：Unity 编译、EditMode 与 Validator 均由本轮 worktree Editor 实际执行；Play Mode 仍未运行，用户 Play Test 与验收仍 pending。
 
+## 6D. 复审 follow-up：v7 正向迁移回归与证据补齐（2026-11-04）
+
+独立复审 ACCEPT 后，本轮只处理复审指出的正向 v7 迁移测试缺口与 SC-021 文档交叉引用/措辞问题：
+
+1. **新增正向 v7 JSON 回归测试**：`SaveDataMigratorTests.V7ToV8Migration_AcceptsLegitimateDevelopmentJsonAndPreservesIt` 先由 `InitEducationDemoScenario` 取得带真实成长值的存档，再构造与真实 v7 文件一致的 JSON（保留 `industry`、`development` 等 v7 已有块，完全没有 `research` 根属性）。测试同时走 `ValidatePresence` 与 `TryMigrate(parsed, json, ...)`，断言迁移成功、`saveFormatVersion=8`、`rulesVersion=4`、研究为空且 `lastSettledMonthIndex` 等于当前产业已结算月，并逐项比较 `development`、`industry`、`familyRelationships`、`chronicle` 的 JSON 不变。该测试在收窄 `development` 拒绝范围前会以“旧版存档包含人物成长状态（development）”失败。既有 `FamilyResearchSaveTests.V7PayloadWithResearch_IsRejected` 与 `SaveDataMigratorTests.V7Migration_RejectsAConflictingResearchPayload` 保留，v7 携带 `research` 仍被拒绝。**生产逻辑未改动**：新测试证明当前迁移路径正确，无需修代码。
+2. **Unity 复跑**：在同一 worktree 上用 `C:\Program Files\Unity\Hub\Editor\6000.6.6f1\Editor\Unity.exe -batchmode -runTests -testPlatform EditMode` 执行。单测 `1/1`、聚焦套件 `126/126`、全量 EditMode `1103/1103`，均 `0 failed / 0 skipped / 0 inconclusive`；三份日志的 `error CS` 计数均为 0。结果文件：`Logs/sc021-followup-v7-test.xml`、`Logs/sc021-followup-focused.xml`、`Logs/sc021-followup-full.xml`（日志为同名 `.log`）。这是 Unity Test Runner 结果，不是 Play Mode 证据。
+3. **进程与安全边界**：执行前检查到用户 Editor PID `87340` 的 `-projectPath` 仍为 `C:\Users\panye\My project`，另有其 AssetImportWorker（PID `89572`，同一 canonical 项目）。本轮只对本 worktree 启动临时 batchmode 进程，未对用户 checkout 运行 batchmode，未使用截图/Computer Use，未进入 Play Mode；batchmode 退出后没有为本 worktree 留下 Editor。batchmode 不呈现 Editor Console UI，因此本轮没有新增“Console 最近条目”计数，也不把日志行数冒充 Console 统计。
+4. **文档修正**：实施报告头部改为当前 feature 分支/worktree；实施计划把过时的 `feature/sc018-independent-core-events` 与“使用已打开 Editor”改为当前分支及“先核对 PID/`-projectPath`、只使用本 worktree 的 Editor/临时 batchmode、绝不针对用户已打开项目跑 batchmode”的安全路径；设计稿月结顺序补上“研究”，并把“用户验收前不提交/push”改为与项目规则一致（可提交并推送 feature 分支，验收前不合并 `main`、不打 tag）。
+
 ## 7. 验证证据（按类型分开）
 
 ### 7.1 Host-side 静态编译（不是 Unity Editor 编译）
@@ -185,12 +194,12 @@ passed=21 failed=0
 
 ### 7.4 Unity EditMode Test Runner（场景集成轮）
 
-**已运行（聚焦）。** 在 worktree Editor 的 Test Runner 运行 SC-021 及受影响套件：`125 passed / 0 failed / 0 skipped / 0 inconclusive`。结果文件：
+**已运行（聚焦与全量）。** 场景集成轮在 worktree Editor 的 Test Runner 运行 SC-021 及受影响套件：`125 passed / 0 failed / 0 skipped / 0 inconclusive`。复审 follow-up 在同一 worktree 通过 batchmode Test Runner 复跑：新增单测 `1/1`、聚焦套件 `126/126`、全量 EditMode `1103/1103`，均为 `0 failed / 0 skipped / 0 inconclusive`；结果见 `Logs/sc021-followup-v7-test.xml`、`Logs/sc021-followup-focused.xml` 与 `Logs/sc021-followup-full.xml`。场景集成轮的结果文件：
 
 - `Logs/sc021-integration-tests.txt`（`SUMMARY 125 0 0 0` 与逐项结果）
 - `Logs/sc021-integration-tests.xml`（`%LOCALAPPDATA%Low\DefaultCompany\My project\TestResults.xml` 的副本）
 
-覆盖 `FamilyResearchCatalogTests`、`FamilyResearchStateTests`、`FamilyResearchSettlementTests`、`FamilyResearchSessionTests`、`FamilyResearchSaveTests`、`FamilyResearchViewTests`、`FamilyResearchPanelTests`、`AddSC021FamilyResearchTests`、`SC021FamilyResearchScenarioTests`、`FamilyChroniclePanelTests`、`SaveDataMigratorTests`、`SaveDataValidatorTests`、`AddM6TitleScreenTests` 与 `AddSC013TitleScenarioButtonsTests`。此前 SC-022 记录的 2 个 SC-021 迁移失败已由 6C 第 3 条修复并通过。未运行全量 EditMode。
+覆盖 `FamilyResearchCatalogTests`、`FamilyResearchStateTests`、`FamilyResearchSettlementTests`、`FamilyResearchSessionTests`、`FamilyResearchSaveTests`、`FamilyResearchViewTests`、`FamilyResearchPanelTests`、`AddSC021FamilyResearchTests`、`SC021FamilyResearchScenarioTests`、`FamilyChroniclePanelTests`、`SaveDataMigratorTests`、`SaveDataValidatorTests`、`AddM6TitleScreenTests` 与 `AddSC013TitleScenarioButtonsTests`。此前 SC-022 记录的 2 个 SC-021 迁移失败已由 6C 第 3 条修复并通过。复审 follow-up 已补跑全量 EditMode `1103/1103`（含新增的正向 v7 JSON 迁移测试）。
 
 ### 7.5 Console（场景集成轮）
 
@@ -200,7 +209,7 @@ passed=21 failed=0
 - 1 条 warning 是 Unity AI Toolkit 的账号/网络提示（`Account API did not become accessible…`），与项目代码无关；
 - 7 条 info 含生成器成功日志、Validator 报告与 Test Runner 结果保存提示。
 
-没有观察到未处理异常。该计数不是 Play Mode Console，也不代表全量历史为零。
+没有观察到未处理异常。该计数不是 Play Mode Console，也不代表全量历史为零。复审 follow-up 使用 batchmode Test Runner，不呈现 Editor Console UI，因此没有新增“Console 最近条目”计数；只记录三份 Unity 日志均为 `error CS` 0。
 
 ### 7.6 FoundationScene 生成与 Validator（场景集成轮）
 
@@ -220,15 +229,15 @@ passed=21 failed=0
 
 ## 8. 未解决项与未验证行为
 
-1. **全量 EditMode 未重跑**：本轮只运行覆盖本切片及受影响套件的 125 项；全量结果与耗时未取得，不声明全量通过。
+1. **全量 EditMode（已补跑）**：复审 follow-up 在同一 worktree 补跑全量 `1103/1103`（`0 failed / 0 skipped / 0 inconclusive`，结果见 `Logs/sc021-followup-full.xml`）；此前场景集成轮只运行覆盖本切片及受影响套件的 125 项。
 2. **Validator 整体仍为 FAIL（1 项既有 SC-009 错误）**：SC-021 行 PASS；SC-009 反馈条位置是集成前已存在的缺口，未在本切片修复，不能声称整体 `RESULT: PASS`。
 3. **Play Mode 分支未验证**：资金/物资短缺、无效研究者、完成/编年史、读档、继承保留知识均需用户按 `SC021_DEMO.md` 执行。
 4. **继承 UI 在 SC-021 固定家族中的可操作性未验证**：领域/会话测试使用标准剧本覆盖了继承后知识保留，但 SC-021 固定家族的继承按钮/流程尚未在 Play Mode 实测。
-5. **QATester 同任务复审未发起**：当前 OpenCode harness 未暴露 `kanban_request_review(reviewer="qatester")` / `kanban_complete` 工具，无法按 `AGENTS.md` 在同一任务上发起复审；需由协调方在 Kanban 中创建/转交同任务复审，不应另建 QA 卡。本轮完成后仍需新的同任务复审与顺序只读复审。
+5. **QATester 同任务复审未发起**：当前 OpenCode harness 未暴露 `kanban_request_review(reviewer="qatester")` / `kanban_complete` 工具，复审 follow-up 仍无法按 `AGENTS.md` 在同一任务上发起 QATester 复审；需由协调方在 Kanban 中创建/转交同任务复审，不应另建 QA 卡。本轮完成后仍需新的同任务复审与顺序只读复审。
 
 ## 9. 工作区保护
 
-- 本轮只修改 `Assets/Scenes/FoundationScene.unity`、`Assets/Scripts/Persistence/SaveDataMigrator.cs`、`Assets/Scripts/Persistence/SaveDataValidator.cs` 与相关 SC-021 文档；没有新增或删除 `.meta`/GUID，没有新增资产或 package。
+- 场景集成轮只修改 `Assets/Scenes/FoundationScene.unity`、`Assets/Scripts/Persistence/SaveDataMigrator.cs`、`Assets/Scripts/Persistence/SaveDataValidator.cs` 与相关 SC-021 文档；复审 follow-up 只修改 `Assets/Tests/EditMode/SaveDataMigratorTests.cs` 与 SC-021 文档。没有新增或删除 `.meta`/GUID，没有新增资产或 package。
 - 场景由生成器的单一 Undo 事务写入并保存；没有直接编辑 YAML，没有在回滚时重载场景。
 - worktree 首次导入生成的 `Library`/`Logs` 均被 `.gitignore` 忽略；Unity 自动改写的 `.vscode/settings.json`、`ProjectSettings/Packages/com.unity.learn.iet-framework/Settings.json` 与生成的 `ProjectSettings/SceneTemplateSettings.json` 已还原/删除，未纳入提交。
 - 未修改用户 checkout `C:\Users\panye\My project`、其 `Library`/`Temp`、package manifest、既有 `.meta` GUID 或 OpenCode 配置。
@@ -237,7 +246,7 @@ passed=21 failed=0
 ## 10. 下一步（协调方）
 
 1. 按 `SC021_DEMO.md` 第 1–11 节把纯文本 Play Test 步骤交给用户；用户明确接受前不合并 `main`、不打 tag。
-2. 若需全量回归，在现有项目上运行全量 EditMode；本轮只提供聚焦 `125/125`。
+2. 全量 EditMode 已在复审 follow-up 补跑（`1103/1103`）；后续若再改代码，需重新运行全量 EditMode。
 3. 按 `AGENTS.md` 在同一任务上请求 QATester 复审；复审通过后再由独立的 OpenCode worker 做只读审查。
 4. 记录 SC-009 反馈条位置这一既有 Validator 缺口；它不属于 SC-021，不应计入本切片失败。
 
@@ -246,4 +255,4 @@ passed=21 failed=0
 
 用户明确要求累计合并并推送后，SC-021 随 checkpoint `714cb3a` 推送到 `origin/main`；该次 Git 集成没有补做 Unity 编译、EditMode、场景接入/Validator、Console、Play Mode、QATester 复审或用户验收。
 
-场景集成轮随后在 `panyeung/sc021-scene-integration` worktree 完成生成器、Validator、聚焦 EditMode 与 Console 记录（第 6C、7.3–7.6 节），并提交推送该 feature 分支；仍未合并 `main`、未打 tag。Play Mode、全量 EditMode、QATester 复审与用户验收仍 pending。
+场景集成轮随后在 `panyeung/sc021-scene-integration` worktree 完成生成器、Validator、聚焦 EditMode 与 Console 记录（第 6C、7.3–7.6 节），并提交推送该 feature 分支。复审 follow-up 又补齐正向 v7 JSON 回归测试与全量 EditMode `1103/1103`（第 6D 节）；仍未合并 `main`、未打 tag。Play Mode、QATester 复审与用户验收仍 pending。

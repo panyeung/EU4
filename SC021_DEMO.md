@@ -1,7 +1,7 @@
 # SC-021 家族研究与技艺传承示范：试玩与验收说明
 
 日期：2026-11-04  
-状态：代码、场景集成、Unity 编译、聚焦 EditMode 测试与 `FoundationSceneValidator` 已完成；**Play Mode 与用户正式验收 pending**。本切片集成提交在 feature 分支 `panyeung/sc021-scene-integration`，未合并 `main`、未打 tag。
+状态：代码、场景集成、Unity 编译、聚焦 EditMode `126/126`、全量 EditMode `1103/1103` 与 `FoundationSceneValidator` 已完成；**Play Mode 与用户正式验收 pending**。本切片集成提交在 feature 分支 `panyeung/sc021-scene-integration`，未合并 `main`、未打 tag。
 范围：M3 的家族研究纵向切片——影山家从 `1560-01-01` 开始，安排一项原创家族技艺「烟幕调制术」的研究，在两次月结后把完成的研究保存为家族知识。**不是完整 M3**，不包含战斗/任务中实际施放技艺、个人掌握、师徒教授、大型科技树、研究随机事件、可视化节点编辑器或多人协作。
 
 ## 0. 场景集成状态（已完成，2026-11-04）
@@ -10,8 +10,9 @@
 
 - `Tools/Sengoku Chronicle/Add SC-021 Family Research` 已执行并保存 `FoundationScene`：新增 `SC021ResearchRoot`、隐藏的 `SC021ResearchPanel`、`SC021ResearchOpenButton`、研究者模板、全部文本行与标题入口 `SC021ResearchDemoButton`。
 - `Tools/Sengoku Chronicle/Validate Foundation Scene` 输出 `PASS SC-021 family-research panel, title entry, bindings, and layout.`；SC-019、SC-020、SC-022 与既有条目的 PASS 行保持。整体结果为 `RESULT: FAIL; Errors: 1`，唯一错误是既有 SC-009 反馈条位置检查，不属于 SC-021。
-- 聚焦 EditMode：`125 passed / 0 failed / 0 skipped / 0 inconclusive`，覆盖本 demo 涉及的 Catalog/State/Settlement/Session/Save/View/Panel/Generator/Scenario、编年史、存档迁移/校验与标题入口；记录见 `Logs/sc021-integration-tests.txt` 与 `Logs/sc021-integration-tests.xml`。
-- Console 在聚焦测试后最近 11 条为 `0 errors / 4 warnings / 7 info`；其中 3 条 warning 来自负向测试刻意触发的回滚日志，1 条是 Unity AI 账号网络提示，不是本切片运行错误。
+- 聚焦 EditMode：`126 passed / 0 failed / 0 skipped / 0 inconclusive`（场景集成轮 `125/125`，复审 follow-up 新增正向 v7 JSON 迁移回归测试后为 `126/126`），覆盖本 demo 涉及的 Catalog/State/Settlement/Session/Save/View/Panel/Generator/Scenario、编年史、存档迁移/校验与标题入口；记录见 `Logs/sc021-integration-tests.txt`、`.xml` 与 `Logs/sc021-followup-focused.xml`。
+- 全量 EditMode：复审 follow-up 在同一 worktree 通过 batchmode Test Runner 运行 `1103 passed / 0 failed / 0 skipped / 0 inconclusive`；记录见 `Logs/sc021-followup-full.xml`。这是 Unity Test Runner 结果，不是 Play Mode 证据。
+- Console 在场景集成轮聚焦测试后最近 11 条为 `0 errors / 4 warnings / 7 info`；其中 3 条 warning 来自负向测试刻意触发的回滚日志，1 条是 Unity AI 账号网络提示，不是本切片运行错误。复审 follow-up 使用 batchmode，不呈现 Editor Console UI，因此不新增 Console 条目计数；三份 Unity 日志的 `error CS` 均为 0。
 - **Play Mode 未由本 worker 运行**；用户 Play Test 按第 1–11 节执行并报告。
 
 如需在干净工作区重跑，菜单仍是 `Tools/Sengoku Chronicle/Add SC-021 Family Research`，随后 `Tools/Sengoku Chronicle/Validate Foundation Scene`；生成器要求活动场景为 `Assets/Scenes/FoundationScene.unity`、不在 Play Mode 且未 dirty。
