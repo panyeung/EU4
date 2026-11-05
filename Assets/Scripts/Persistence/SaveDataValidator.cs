@@ -131,7 +131,9 @@ namespace SengokuChronicle.Persistence
             if (probe.saveFormatVersion >= 2 && probe.saveFormatVersion <= 5 &&
                 HasRootProperty(json, "industry"))
                 return Invalid("旧版存档包含产业状态（industry）；迁移不会静默替换该数据。");
-            if (probe.saveFormatVersion >= 2 && probe.saveFormatVersion < CurrentVersion &&
+            // v7 introduced development; a v7 payload may legitimately carry it. Only
+            // v2-v6 cannot own that block, so v7 falls through to the research check.
+            if (probe.saveFormatVersion >= 2 && probe.saveFormatVersion < 7 &&
                 HasNonNullRootProperty(json, "development"))
                 return Invalid("旧版存档包含人物成长状态（development）；迁移不会静默替换该数据。");
             if (probe.saveFormatVersion >= 2 && probe.saveFormatVersion < CurrentVersion &&

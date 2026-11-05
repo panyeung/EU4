@@ -1,30 +1,28 @@
 # SC-021 家族研究与技艺传承示范：试玩与验收说明
 
 日期：2026-11-04  
-状态：代码、EditMode 测试源码、静态编译与离线领域 harness 已完成；**EditMode、场景生成/Validator、Console 与 Play Mode 尚未由本 worker 执行**。累计 checkpoint `714cb3a` 已按用户指示推送到 `origin/main`；本切片用户 Play Test 与正式验收仍 pending。
+状态：代码、场景集成、Unity 编译、聚焦 EditMode 测试与 `FoundationSceneValidator` 已完成；**Play Mode 与用户正式验收 pending**。本切片集成提交在 feature 分支 `panyeung/sc021-scene-integration`，未合并 `main`、未打 tag。
 范围：M3 的家族研究纵向切片——影山家从 `1560-01-01` 开始，安排一项原创家族技艺「烟幕调制术」的研究，在两次月结后把完成的研究保存为家族知识。**不是完整 M3**，不包含战斗/任务中实际施放技艺、个人掌握、师徒教授、大型科技树、研究随机事件、可视化节点编辑器或多人协作。
 
-> **实施边界（务必先读）**：本 OpenCode2 Dispatch 没有可用的 Unity bridge/MCP，也没有通过 Computer Use 操作 Editor。`Logs/Editor.log` 最后记录的 `Entering Playmode with Reload Domain disabled.` 之后没有可确认的退出/当前 dirty 记录，因此无法在不碰 GUI 的前提下证明当前场景可安全写入。按照协调方约束，本 worker **没有执行** `Tools/Sengoku Chronicle/Add SC-021 Family Research`、**没有保存** `FoundationScene`、**没有运行** EditMode Test Runner 或 `FoundationSceneValidator`，也不声称这些步骤已通过。下列第 0 节必须由具备 Editor 操作的集成人员完成，之后用户才能开始第 1 节。
+## 0. 场景集成状态（已完成，2026-11-04）
 
-## 0. 集成人员前置步骤（不属于用户 Play Test）
+本切片已在任务 worktree `C:\Users\panye\orca\workspaces\My project\sc021-scene-integration` 的独立 Unity `6000.6.6f1` Editor 中完成场景接入；该 Editor 已关闭，未操作或修改用户 checkout `C:\Users\panye\My project`。
 
-1. 确认 Unity `6000.6.6f1` 只打开 `C:\Users\panye\My project`，活动场景为 `Assets/Scenes/FoundationScene.unity`，且**不在 Play Mode**。
-2. 如果场景有未保存改动，先由用户决定保存或放弃；不要覆盖用户未提交的场景改动。生成器会拒绝 dirty 场景。
-3. 在 Console 无编译错误后，执行菜单 `Tools/Sengoku Chronicle/Add SC-021 Family Research`。生成器应在一个 Undo 组内新增：
-   - 标题页按钮 `SC021ResearchDemoButton`（标签「SC-021 家族研究示范」）；
-   - `Canvas/SC021ResearchRoot`、打开按钮 `SC021ResearchOpenButton`（标签「家族研究」）；
-   - 隐藏的 `SC021ResearchPanel`、研究者模板与全部文本行。
-4. 执行 `Tools/Sengoku Chronicle/Validate Foundation Scene`，确认报告写入 `Logs/SceneValidationReport.txt` 且包含：
-   - `PASS SC-021 family-research panel, title entry, bindings, and layout.`
-   - `RESULT: PASS; Errors: 0`
-5. 运行 EditMode Test Runner（Run All），记录实际 totals；确认 `FamilyResearchCatalogTests`、`FamilyResearchStateTests`、`FamilyResearchSettlementTests`、`FamilyResearchSessionTests`、`FamilyResearchSaveTests`、`FamilyResearchViewTests`、`FamilyResearchPanelTests`、`AddSC021FamilyResearchTests`、`SC021FamilyResearchScenarioTests` 与 `FamilyChroniclePanelTests` 的研究用例均无失败。
-6. 以上任一步失败：停止，不进入用户 Play Test，把错误原文与 Console 计数交给协调方。
+- `Tools/Sengoku Chronicle/Add SC-021 Family Research` 已执行并保存 `FoundationScene`：新增 `SC021ResearchRoot`、隐藏的 `SC021ResearchPanel`、`SC021ResearchOpenButton`、研究者模板、全部文本行与标题入口 `SC021ResearchDemoButton`。
+- `Tools/Sengoku Chronicle/Validate Foundation Scene` 输出 `PASS SC-021 family-research panel, title entry, bindings, and layout.`；SC-019、SC-020、SC-022 与既有条目的 PASS 行保持。整体结果为 `RESULT: FAIL; Errors: 1`，唯一错误是既有 SC-009 反馈条位置检查，不属于 SC-021。
+- 聚焦 EditMode：`125 passed / 0 failed / 0 skipped / 0 inconclusive`，覆盖本 demo 涉及的 Catalog/State/Settlement/Session/Save/View/Panel/Generator/Scenario、编年史、存档迁移/校验与标题入口；记录见 `Logs/sc021-integration-tests.txt` 与 `Logs/sc021-integration-tests.xml`。
+- Console 在聚焦测试后最近 11 条为 `0 errors / 4 warnings / 7 info`；其中 3 条 warning 来自负向测试刻意触发的回滚日志，1 条是 Unity AI 账号网络提示，不是本切片运行错误。
+- **Play Mode 未由本 worker 运行**；用户 Play Test 按第 1–11 节执行并报告。
+
+如需在干净工作区重跑，菜单仍是 `Tools/Sengoku Chronicle/Add SC-021 Family Research`，随后 `Tools/Sengoku Chronicle/Validate Foundation Scene`；生成器要求活动场景为 `Assets/Scenes/FoundationScene.unity`、不在 Play Mode 且未 dirty。
 
 ## 1. 用户 Play Test 准备
 
-1. 从标题界面确认原有入口仍在：新游戏、继续、SC-010 标准样例、SC-010 危机示范、SC-020 子女培养示范。
+1. 从标题界面确认原有入口仍在：新游戏、继续、SC-010 标准样例、SC-010 危机示范、SC-020 子女培养示范、SC-022 婚姻与收养示范。
 2. 点击「**SC-021 家族研究示范**」。
 3. 预期：标题隐藏，地图/时钟显示日期 `1560-01-01`；家族研究面板保持关闭，需由玩家点击「家族研究」打开。
+
+> 说明：SC-021 是标题界面上的独立示范按钮，启动固定影山家剧本；它不是 SC-013「标准样例 / 危机示范」成对按钮的一部分，也不改变其他入口或剧本。
 
 若标题没有 SC-021 入口或日期不是 `1560-01-01`，停止并报告“场景生成/入口失败”。
 
@@ -67,7 +65,7 @@
    - 月份仍正常推进；
    - 资源不变成负数，也不部分扣除；
    - 研究进度保持 `1/2`；
-   - 面板消息显示「研究暂停：资金不足 … / 物资不足 …」。
+   - 消息行与研究结果行显示「研究暂停：资金不足 1。资源与进度保持不变。」（物资短缺时显示「物资不足 1」；两项都缺时合并列出，不会出现「物资不足 0」）。
 4. 恢复资源到至少 `1/1` 后重试月结；研究应继续。
 
 ## 6. 第二次月结与完成
@@ -80,7 +78,7 @@
    - 家族知识行显示「烟幕调制术」；
    - 编年史新增一条「研究」记录，摘要含技艺名、研究者姓名、`1 → 2` 进度和完成月份；
    - 编年史不显示 `research.`、`technique.`、`person.` 原始 ID。
-   - 面板不再显示研究者按钮，也不再显示「每月消耗 1 资金、1 物资」；费用行改为「已记录为家族知识，无需再次研究」。
+   - 面板不再显示研究者按钮，也不再显示「每月消耗 1 资金、1 物资」；费用行改为「该技艺已记录为家族知识，无需再次研究，也不会再产生研究月度费用。」
 4. 再次结束月份：预期不会重复完成、不会重复扣研究费用、不会新增第二条研究编年史。
 
 ## 7. 无效研究者与暂停
@@ -94,7 +92,7 @@
 2. 读取同一存档。
 3. 预期：日期、资源、家族知识「烟幕调制术」保持一致；没有进行中的研究计划，也不会因读档补算研究月份。
 4. 再结束一个月，确认不会重复授予知识或重复写编年史。
-5. 暂停计划存档：若研究者的状态使其无法继续（死亡、退休、未成年、离开家族或担任产业职位），保存并读取后，打开研究面板应**立即**显示「研究暂停：…」，无需先结束月份；计划仍应保留为「暂停」。之后结束月份不得扣资源、推进进度或授予知识。若无法在 UI 中安全构造，记录“未在 UI 验证；由存档/领域测试覆盖”。
+5. 暂停计划存档：若研究者的状态使其无法继续（死亡、退休、未成年、离开家族或担任产业职位），保存并读取后，打开研究面板应**立即**看到状态行追加「研究暂停：<原因>」，结果行显示「研究暂停：<原因>资源与进度保持不变。」，无需先结束月份。存档中没有单独的「暂停」标记：计划仍是活动计划，暂停由当前研究者资格即时投影，不修改计划、资源或进度。之后结束月份不得扣资源、推进进度或授予知识。若无法在 UI 中安全构造，记录“未在 UI 验证；由存档/领域测试覆盖”。
 
 ## 9. 继承后保留家族知识
 
@@ -141,4 +139,4 @@
 
 用户验收：____________________　日期：____________________
 
-> Play Test 由用户执行并报告；本 worker 不操作 Unity、不截图、不代替用户验收。只有用户明确接受后，协调方才可创建 checkpoint commit、合并 `main`、打 tag 或推送。
+> Play Test 由用户执行并报告；本 worker 不操作 Unity 进行 Play Test、不截图、不代替用户验收。已验证的任务文件按项目规则提交并推送到 feature 分支；只有用户明确接受后，协调方才可合并 `main` 或打 tag。
