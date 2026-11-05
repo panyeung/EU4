@@ -226,7 +226,11 @@ namespace SengokuChronicle.Presentation
                     ? "尚有继承决策待处理：请先完成当前继承选择，再旅行。"
                     : gameSession.LastEventMessage);
             else if (_preview == null)
-                SetFeedback("无直达路线（热田 ↔ 那古野 不可直达）。");
+            {
+                SetFeedback(!string.IsNullOrWhiteSpace(gameSession.LastTravelBlockReason)
+                    ? gameSession.LastTravelBlockReason
+                    : "无直达路线（热田 ↔ 那古野 不可直达）。");
+            }
             else
                 SetFeedback($"已选择目的地：{LocationId.GetChineseName(destination)}，耗时 {_preview.Value.TravelDays} 天，预计 {_preview.Value.EstimatedArrivalDate} 到达。");
 
@@ -278,7 +282,9 @@ namespace SengokuChronicle.Presentation
                 SetFeedback(gameSession.IsTravelBlockedBySuccession &&
                             !string.IsNullOrWhiteSpace(gameSession.LastEventMessage)
                     ? gameSession.LastEventMessage
-                    : "旅行失败：路线或日期无效，日期与位置保持不变。");
+                    : !string.IsNullOrWhiteSpace(gameSession.LastTravelBlockReason)
+                        ? gameSession.LastTravelBlockReason
+                        : "旅行失败：路线或日期无效，日期与位置保持不变。");
                 RefreshDestinationPanel();
                 RefreshButtons();
             }

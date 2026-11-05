@@ -291,9 +291,23 @@ namespace SengokuChronicle.Events
             {
                 if (!TryNpc(effect.targetCharacterId, out _))
                     errors.Add($"Option {optionId} effect {index} targets an unknown NPC.");
+                if (!string.IsNullOrWhiteSpace(effect.targetPersonId))
+                    errors.Add($"Option {optionId} effect {index} must not set a family target on an NPC effect.");
                 if (effect.delta == 0 || effect.delta < CharacterRelationships.MinimumValue ||
                     effect.delta > CharacterRelationships.MaximumValue)
                     errors.Add($"Option {optionId} effect {index} has an invalid relationship delta.");
+                return;
+            }
+            if (kind == EventEffectKind.FamilyRelationshipDelta)
+            {
+                if (string.IsNullOrWhiteSpace(effect.targetPersonId) ||
+                    !PersonId.TryParse(effect.targetPersonId, out _))
+                    errors.Add($"Option {optionId} effect {index} targets an invalid family person ID.");
+                if (!string.IsNullOrWhiteSpace(effect.targetCharacterId))
+                    errors.Add($"Option {optionId} effect {index} must not set an NPC target on a family effect.");
+                if (effect.delta == 0 || effect.delta < FamilyRelationships.MinimumValue ||
+                    effect.delta > FamilyRelationships.MaximumValue)
+                    errors.Add($"Option {optionId} effect {index} has an invalid family relationship delta.");
             }
         }
 

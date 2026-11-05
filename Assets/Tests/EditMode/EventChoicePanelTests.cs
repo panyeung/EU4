@@ -165,6 +165,29 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
+        public void FeedbackBannerClampsInsideANarrowRoot()
+        {
+            CreatePanelFixture();
+            var narrowRoot = new GameObject("NarrowEventChoiceRoot", typeof(RectTransform));
+            try
+            {
+                narrowRoot.GetComponent<RectTransform>().sizeDelta = new Vector2(1100f, 720f);
+                _feedback.transform.SetParent(narrowRoot.transform, false);
+
+                EventChoicePanel.ApplyFeedbackBannerLayout(_feedback.rectTransform);
+
+                Assert.That(_feedback.rectTransform.sizeDelta.x,
+                    Is.EqualTo(1100f - 2f * EventChoicePanel.FeedbackSideMargin).Within(0.01f),
+                    "the banner must not extend past a narrow canvas");
+                Assert.That(EventChoicePanel.IsFeedbackBannerLayout(_feedback.rectTransform), Is.True);
+            }
+            finally
+            {
+                Object.DestroyImmediate(narrowRoot);
+            }
+        }
+
+        [Test]
         public void DisableTearsDownOwnedButtonsAndHidesModal()
         {
             CreatePanelFixture();

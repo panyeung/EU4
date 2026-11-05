@@ -37,6 +37,18 @@ namespace SengokuChronicle.Presentation
         [SerializeField]
         private Button crisisDemoButton;
 
+        [Header("SC-020 education entry")]
+        [SerializeField]
+        private Button educationDemoButton;
+
+        [Header("SC-021 family research entry")]
+        [SerializeField]
+        private Button researchDemoButton;
+
+        [Header("SC-022 family formation entry")]
+        [SerializeField]
+        private Button familyFormationDemoButton;
+
         [SerializeField]
         private Text statusText;
 
@@ -57,6 +69,15 @@ namespace SengokuChronicle.Presentation
 
         /// <summary>True when both separate SC-010 title entries are wired.</summary>
         public bool ScenarioEntriesBound => standardSampleButton != null && crisisDemoButton != null;
+
+        /// <summary>True when the separate SC-020 education entry is wired.</summary>
+        public bool EducationScenarioBound => educationDemoButton != null;
+
+        /// <summary>True when the separate SC-021 family-research entry is wired.</summary>
+        public bool ResearchScenarioBound => researchDemoButton != null;
+
+        /// <summary>True when the separate SC-022 family-formation entry is wired.</summary>
+        public bool FamilyFormationScenarioBound => familyFormationDemoButton != null;
 
         public void Bind(
             GameSession session,
@@ -83,6 +104,27 @@ namespace SengokuChronicle.Presentation
         {
             standardSampleButton = standardSample;
             crisisDemoButton = crisisDemo;
+            BindButtons(isActiveAndEnabled);
+        }
+
+        /// <summary>Binds the separate SC-020 child-education title entry.</summary>
+        public void BindEducationScenarioButton(Button educationDemo)
+        {
+            educationDemoButton = educationDemo;
+            BindButtons(isActiveAndEnabled);
+        }
+
+        /// <summary>Binds the separate SC-021 family-research title entry.</summary>
+        public void BindResearchScenarioButton(Button researchDemo)
+        {
+            researchDemoButton = researchDemo;
+            BindButtons(isActiveAndEnabled);
+        }
+
+        /// <summary>Binds the separate SC-022 family-formation title entry.</summary>
+        public void BindFamilyFormationScenarioButton(Button familyFormationDemo)
+        {
+            familyFormationDemoButton = familyFormationDemo;
             BindButtons(isActiveAndEnabled);
         }
 
@@ -151,6 +193,27 @@ namespace SengokuChronicle.Presentation
                 if (add)
                     crisisDemoButton.onClick.AddListener(OnCrisisDemoButton);
             }
+
+            if (educationDemoButton != null)
+            {
+                educationDemoButton.onClick.RemoveListener(OnEducationDemoButton);
+                if (add)
+                    educationDemoButton.onClick.AddListener(OnEducationDemoButton);
+            }
+
+            if (researchDemoButton != null)
+            {
+                researchDemoButton.onClick.RemoveListener(OnResearchDemoButton);
+                if (add)
+                    researchDemoButton.onClick.AddListener(OnResearchDemoButton);
+            }
+
+            if (familyFormationDemoButton != null)
+            {
+                familyFormationDemoButton.onClick.RemoveListener(OnFamilyFormationDemoButton);
+                if (add)
+                    familyFormationDemoButton.onClick.AddListener(OnFamilyFormationDemoButton);
+            }
         }
 
         private void OnNewGameButton()
@@ -171,6 +234,21 @@ namespace SengokuChronicle.Presentation
         private void OnCrisisDemoButton()
         {
             StartCrisisDemo();
+        }
+
+        private void OnEducationDemoButton()
+        {
+            StartEducationDemo();
+        }
+
+        private void OnResearchDemoButton()
+        {
+            StartResearchDemo();
+        }
+
+        private void OnFamilyFormationDemoButton()
+        {
+            StartFamilyFormationDemo();
         }
 
         /// <summary>显示标题覆盖层。</summary>
@@ -278,6 +356,63 @@ namespace SengokuChronicle.Presentation
             HideTitle();
             LastOperationSucceeded = true;
             SetStatus("已进入 SC-010 危机示范。");
+            return true;
+        }
+
+        /// <summary>Starts the separate fixed SC-020 child-education demonstration.</summary>
+        public bool StartEducationDemo()
+        {
+            if (gameSession == null)
+            {
+                LastOperationSucceeded = false;
+                SetStatus("缺少 GameSession，无法进入子女培养示范。");
+                return false;
+            }
+
+            gameSession.InitEducationDemoScenario();
+            if (worldMapController != null)
+                worldMapController.ReturnToMap();
+            HideTitle();
+            LastOperationSucceeded = true;
+            SetStatus("已开始 SC-020 子女培养示范。");
+            return true;
+        }
+
+        /// <summary>Starts the separate fixed SC-021 family-research demonstration.</summary>
+        public bool StartResearchDemo()
+        {
+            if (gameSession == null)
+            {
+                LastOperationSucceeded = false;
+                SetStatus("缺少 GameSession，无法进入家族研究示范。");
+                return false;
+            }
+
+            gameSession.InitResearchDemoScenario();
+            if (worldMapController != null)
+                worldMapController.ReturnToMap();
+            HideTitle();
+            LastOperationSucceeded = true;
+            SetStatus("已开始 SC-021 家族研究示范。");
+            return true;
+        }
+
+        /// <summary>Starts the separate fixed SC-022 marriage and adoption demonstration.</summary>
+        public bool StartFamilyFormationDemo()
+        {
+            if (gameSession == null)
+            {
+                LastOperationSucceeded = false;
+                SetStatus("缺少 GameSession，无法进入婚姻与收养示范。");
+                return false;
+            }
+
+            gameSession.InitFamilyFormationDemoScenario();
+            if (worldMapController != null)
+                worldMapController.ReturnToMap();
+            HideTitle();
+            LastOperationSucceeded = true;
+            SetStatus("已开始 SC-022 婚姻与收养示范。");
             return true;
         }
 

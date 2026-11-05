@@ -9,7 +9,7 @@ namespace SengokuChronicle.Tests.EditMode
     {
         private static SaveData ValidData()
         {
-            return new SaveData
+            var data = new SaveData
             {
                 saveFormatVersion = SaveDataValidator.CurrentVersion,
                 year = 1560,
@@ -24,6 +24,8 @@ namespace SengokuChronicle.Tests.EditMode
                     new RelationshipSaveEntry { characterId = "npc.kuroda.iori", value = 10 }
                 }
             };
+            data.development = CharacterDevelopmentSaveData.CreateEmpty(data.succession);
+            return data;
         }
 
         [Test]
@@ -36,6 +38,18 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
+        public void MissingResearchBlock_IsRejected()
+        {
+            SaveData data = ValidData();
+            data.research = null;
+
+            SaveOperationResult result = SaveDataValidator.Validate(data);
+
+            Assert.That(result.Succeeded, Is.False);
+            Assert.That(result.Message, Does.Contain("research"));
+        }
+
+        [Test]
         public void NullData_IsRejected()
         {
             SaveOperationResult result = SaveDataValidator.Validate(null);
@@ -45,7 +59,7 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [TestCase(0)]
-        [TestCase(5)]
+        [TestCase(4)]
         [TestCase(-1)]
         public void WrongVersion_IsUnsupported(int version)
         {

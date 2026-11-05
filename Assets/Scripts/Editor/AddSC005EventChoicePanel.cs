@@ -139,9 +139,10 @@ namespace SengokuChronicle.Editor
             RectTransform feedbackRect = feedbackTransform as RectTransform;
             if (titleRect == null || bodyRect == null || optionsRect == null || feedbackRect == null ||
                 !Contained(titleRect, modalRect) || !Contained(bodyRect, modalRect) ||
-                !Contained(optionsRect, modalRect) || !Contained(feedbackRect, rootRect) ||
+                !Contained(optionsRect, modalRect) ||
+                (enforceFeedbackBanner && !Contained(feedbackRect, rootRect)) ||
                 Overlaps(titleRect, bodyRect, modalRect) || Overlaps(bodyRect, optionsRect, modalRect) ||
-                Overlaps(modalRect, feedbackRect, rootRect))
+                (enforceFeedbackBanner && Overlaps(modalRect, feedbackRect, rootRect)))
                 return Invalid(out error, "Event choice controls overlap or lie outside their layout bounds.");
             if (enforceFeedbackBanner)
             {

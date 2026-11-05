@@ -24,6 +24,11 @@ namespace SengokuChronicle.Editor
         public const string ContinueButtonName = "M6ContinueButton";
         public const string StatusTextName = "M6TitleStatusText";
         public const string DemoSummaryTextName = "M6DemoSummaryText";
+        public const string StandardSampleButtonName = "SC013StandardSampleButton";
+        public const string CrisisDemoButtonName = "SC013CrisisDemoButton";
+        public const string EducationDemoButtonName = "SC020EducationDemoButton";
+        public const string ResearchDemoButtonName = "SC021ResearchDemoButton";
+        public const string FamilyFormationDemoButtonName = "SC022FamilyFormationDemoButton";
 
         private const string MapRootName = "M2WorldMapRoot";
         private const string TownRootName = "TownMenuRoot";
@@ -131,14 +136,18 @@ namespace SengokuChronicle.Editor
                 return Invalid(out error, "M6 title root must be a direct child of Canvas.");
             if (root.GetSiblingIndex() <= map.GetSiblingIndex())
                 return Invalid(out error, "M6 title root must render above the map (last sibling after it).");
-            bool hasStandardSample = root.Find("SC013StandardSampleButton") != null;
-            bool hasCrisisDemo = root.Find("SC013CrisisDemoButton") != null;
+            bool hasStandardSample = root.Find(StandardSampleButtonName) != null;
+            bool hasCrisisDemo = root.Find(CrisisDemoButtonName) != null;
+            bool hasEducationDemo = root.Find(EducationDemoButtonName) != null;
+            bool hasResearchDemo = root.Find(ResearchDemoButtonName) != null;
+            bool hasFamilyFormationDemo = root.Find(FamilyFormationDemoButtonName) != null;
             if (hasStandardSample != hasCrisisDemo)
                 return Invalid(out error, "SC-013 title scenario buttons must be added as a pair.");
-            if (root.childCount != 4 && root.childCount != 6)
-                return Invalid(out error, "M6 title root must have the four base controls or six with SC-013 entries.");
-            if (root.childCount == 6 && (!hasStandardSample || !hasCrisisDemo))
-                return Invalid(out error, "M6 title root with six controls must include both SC-013 entries.");
+            int expectedChildren = 4 + (hasStandardSample ? 2 : 0) + (hasEducationDemo ? 1 : 0) +
+                                   (hasResearchDemo ? 1 : 0) + (hasFamilyFormationDemo ? 1 : 0);
+            if (root.childCount != expectedChildren)
+                return Invalid(out error,
+                    "M6 title root must have the four base controls plus any added scenario entries.");
             if (root.gameObject.activeSelf)
                 return Invalid(out error, "M6 title root must be saved inactive; Play Mode shows it.");
 

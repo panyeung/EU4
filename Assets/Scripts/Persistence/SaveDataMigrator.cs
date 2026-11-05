@@ -2,7 +2,11 @@ using SengokuChronicle.Domain;
 
 namespace SengokuChronicle.Persistence
 {
-    /// <summary>Explicit v1/v2/v3-to-v4 save migration. The source object and file are never mutated.</summary>
+    /// <summary>
+    /// Explicit v1-to-current save migration. The source object and file are never
+    /// mutated. Each legacy version gains only the documented empty blocks; historical
+    /// research, industry, growth or chronicle months are never replayed.
+    /// </summary>
     public static class SaveDataMigrator
     {
         // Fixed deterministic seed for legacy v1 sessions that did not store RNG state.
@@ -27,9 +31,209 @@ namespace SengokuChronicle.Persistence
                 return false;
             }
 
+            if (legacy.saveFormatVersion < SaveDataValidator.CurrentVersion &&
+                !string.IsNullOrEmpty(rawJson))
+            {
+                // Version-specific blocks take precedence over the generic development
+                // rule. A legacy payload that wrongly carries a later block must report
+                // the earliest field that its own version cannot own, matching
+                // ValidatePresence's order (industry before development).
+                if (legacy.saveFormatVersion >= 2 && legacy.saveFormatVersion <= 5 &&
+                    SaveDataValidator.HasRootProperty(rawJson, "industry"))
+                {
+                    result = SaveOperationResult.Failure(SaveErrorCode.InvalidData,
+                        "旧版存档包含产业状态（industry）；迁移不会静默替换该数据。");
+                    return false;
+                }
+                if (legacy.saveFormatVersion == 6 &&
+                    (!SaveDataValidator.HasRootProperty(rawJson, "industry") ||
+                     !SaveDataValidator.HasNonNullRootProperty(rawJson, "industry")))
+                {
+                    result = SaveOperationResult.Failure(SaveErrorCode.InvalidData,
+                        "v6 存档缺少产业状态（industry）；迁移不会用初始状态静默替换。");
+                    return false;
+                }
+                if (SaveDataValidator.HasNonNullRootProperty(rawJson, "development"))
+                {
+                    result = SaveOperationResult.Failure(SaveErrorCode.InvalidData,
+                        "旧版存档包含人物成长状态（development）；迁移不会静默替换该数据。");
+                    return false;
+                }
+                if (SaveDataValidator.HasRootProperty(rawJson, "research"))
+                {
+                    result = SaveOperationResult.Failure(SaveErrorCode.InvalidData,
+                        "旧版存档包含家族研究状态（research）；迁移不会静默替换该数据。");
+                    return false;
+                }
+            }
+
             if (legacy.saveFormatVersion == SaveDataValidator.CurrentVersion)
             {
+                if (legacy.industry == null ||
+                    (!string.IsNullOrEmpty(rawJson) &&
+                     !SaveDataValidator.HasNonNullRootProperty(rawJson, "industry")))
+                {
+                    result = SaveOperationResult.Failure(SaveErrorCode.InvalidData,
+                        "v8 存档缺少产业状态（industry）；不会用初始状态静默替换。");
+                    return false;
+                }
+                if (legacy.development == null ||
+                    (!string.IsNullOrEmpty(rawJson) &&
+                     !SaveDataValidator.HasNonNullRootProperty(rawJson, "development")))
+                {
+                    result = SaveOperationResult.Failure(SaveErrorCode.InvalidData,
+                        "v8 存档缺少人物成长状态（development）；不会用空记录静默替换。");
+                    return false;
+                }
+                if (legacy.research == null ||
+                    (!string.IsNullOrEmpty(rawJson) &&
+                     !SaveDataValidator.HasNonNullRootProperty(rawJson, "research")))
+                {
+                    result = SaveOperationResult.Failure(SaveErrorCode.InvalidData,
+                        "v8 存档缺少家族研究状态（research）；不会用空记录静默替换。");
+                    return false;
+                }
+
                 current = Clone(legacy);
+                result = SaveDataValidator.Validate(current);
+                if (!result.Succeeded)
+                    current = null;
+                return result.Succeeded;
+            }
+
+            if (legacy.saveFormatVersion == 7)
+            {
+                if (!string.IsNullOrEmpty(rawJson) &&
+                    SaveDataValidator.HasRootProperty(rawJson, "research"))
+                {
+                    result = SaveOperationResult.Failure(SaveErrorCode.InvalidData,
+                        "v7 存档包含家族研究状态（research）；迁移不会静默替换该数据。");
+                    return false;
+                }
+                if (legacy.industry == null ||
+                    (!string.IsNullOrEmpty(rawJson) &&
+                     !SaveDataValidator.HasNonNullRootProperty(rawJson, "industry")))
+                {
+                    result = SaveOperationResult.Failure(SaveErrorCode.InvalidData,
+                        "v7 存档缺少产业状态（industry）；不会用初始状态静默替换。");
+                    return false;
+                }
+                if (legacy.development == null ||
+                    (!string.IsNullOrEmpty(rawJson) &&
+                     !SaveDataValidator.HasNonNullRootProperty(rawJson, "development")))
+                {
+                    result = SaveOperationResult.Failure(SaveErrorCode.InvalidData,
+                        "v7 存档缺少人物成长状态（development）；不会用空记录静默替换。");
+                    return false;
+                }
+
+                result = SaveDataValidator.ValidateLegacyV7Fields(legacy);
+                if (!result.Succeeded)
+                    return false;
+
+                current = Clone(legacy);
+                current.saveFormatVersion = SaveDataValidator.CurrentVersion;
+                current.rulesVersion = SaveData.CurrentRulesVersion;
+                // Migration adds empty research at the legacy date. It never replays a
+                // historical research month or writes a chronicle record.
+                current.research = FamilyResearchSaveData.CreateInitial(
+                    new GameDate(legacy.year, legacy.month, legacy.day));
+                result = SaveDataValidator.Validate(current);
+                if (!result.Succeeded)
+                    current = null;
+                return result.Succeeded;
+            }
+
+            if (legacy.saveFormatVersion == 6)
+            {
+                if (!string.IsNullOrEmpty(rawJson) &&
+                    SaveDataValidator.HasRootProperty(rawJson, "development"))
+                {
+                    result = SaveOperationResult.Failure(SaveErrorCode.InvalidData,
+                        "v6 存档包含人物成长状态（development）；迁移不会静默替换该数据。");
+                    return false;
+                }
+                if (!string.IsNullOrEmpty(rawJson) &&
+                    SaveDataValidator.HasRootProperty(rawJson, "research"))
+                {
+                    result = SaveOperationResult.Failure(SaveErrorCode.InvalidData,
+                        "v6 存档包含家族研究状态（research）；迁移不会静默替换该数据。");
+                    return false;
+                }
+
+                result = SaveDataValidator.ValidateLegacyV6Fields(legacy);
+                if (!result.Succeeded)
+                    return false;
+
+                current = Clone(legacy);
+                current.saveFormatVersion = SaveDataValidator.CurrentVersion;
+                current.rulesVersion = SaveData.CurrentRulesVersion;
+                // Migration adds five zero abilities and empty education history for each
+                // existing person. It never replays an education year or writes chronicle.
+                current.development = CharacterDevelopmentSaveData.CreateEmpty(legacy.succession);
+                current.research = FamilyResearchSaveData.CreateInitial(
+                    new GameDate(legacy.year, legacy.month, legacy.day));
+                result = SaveDataValidator.Validate(current);
+                if (!result.Succeeded)
+                    current = null;
+                return result.Succeeded;
+            }
+
+            if (legacy.saveFormatVersion == 5)
+            {
+                if (!string.IsNullOrEmpty(rawJson) &&
+                    SaveDataValidator.HasRootProperty(rawJson, "industry"))
+                {
+                    result = SaveOperationResult.Failure(SaveErrorCode.InvalidData,
+                        "v5 存档包含产业状态（industry）；迁移不会静默替换该数据。");
+                    return false;
+                }
+
+                result = SaveDataValidator.ValidateLegacyV5Fields(legacy);
+                if (!result.Succeeded)
+                    return false;
+
+                current = Clone(legacy);
+                current.saveFormatVersion = SaveDataValidator.CurrentVersion;
+                current.rulesVersion = SaveData.CurrentRulesVersion;
+                // Migration adds the documented opening state; it never replays
+                // historical production or appends a chronicle record.
+                current.industry = IndustryStateSaveData.CreateInitial(
+                    new GameDate(legacy.year, legacy.month, legacy.day));
+                current.development = CharacterDevelopmentSaveData.CreateEmpty(current.succession);
+                current.research = FamilyResearchSaveData.CreateInitial(
+                    new GameDate(legacy.year, legacy.month, legacy.day));
+                result = SaveDataValidator.Validate(current);
+                if (!result.Succeeded)
+                    current = null;
+                return result.Succeeded;
+            }
+
+            if (legacy.saveFormatVersion == 4)
+            {
+                if (!string.IsNullOrEmpty(rawJson) &&
+                    SaveDataValidator.HasRootProperty(rawJson, "industry"))
+                {
+                    result = SaveOperationResult.Failure(SaveErrorCode.InvalidData,
+                        "v4 存档包含产业状态（industry）；迁移不会静默替换该数据。");
+                    return false;
+                }
+
+                result = SaveDataValidator.ValidateLegacyV4Fields(legacy);
+                if (!result.Succeeded)
+                    return false;
+
+                current = Clone(legacy);
+                current.saveFormatVersion = SaveDataValidator.CurrentVersion;
+                current.rulesVersion = SaveData.CurrentRulesVersion;
+                // Person-pair family relationships did not exist in v4. Migration must
+                // not infer values from kinship, NPC relations, or current head state.
+                current.familyRelationships = new FamilyRelationshipSaveEntry[0];
+                current.industry = IndustryStateSaveData.CreateInitial(
+                    new GameDate(legacy.year, legacy.month, legacy.day));
+                current.development = CharacterDevelopmentSaveData.CreateEmpty(current.succession);
+                current.research = FamilyResearchSaveData.CreateInitial(
+                    new GameDate(legacy.year, legacy.month, legacy.day));
                 result = SaveDataValidator.Validate(current);
                 if (!result.Succeeded)
                     current = null;
@@ -38,6 +242,14 @@ namespace SengokuChronicle.Persistence
 
             if (legacy.saveFormatVersion == 3)
             {
+                if (!string.IsNullOrEmpty(rawJson) &&
+                    SaveDataValidator.HasRootProperty(rawJson, "industry"))
+                {
+                    result = SaveOperationResult.Failure(SaveErrorCode.InvalidData,
+                        "v3 存档包含产业状态（industry）；迁移不会静默替换该数据。");
+                    return false;
+                }
+
                 bool containsChronicleBlock = string.IsNullOrEmpty(rawJson)
                     ? legacy.chronicle != null && legacy.chronicle.Length > 0
                     : SaveDataValidator.HasRootProperty(rawJson, "chronicle");
@@ -58,7 +270,7 @@ namespace SengokuChronicle.Persistence
                     gameVersion = string.IsNullOrWhiteSpace(legacy.gameVersion)
                         ? SaveData.CurrentGameVersion
                         : legacy.gameVersion,
-                    rulesVersion = legacy.rulesVersion > 0 ? legacy.rulesVersion : SaveData.CurrentRulesVersion,
+                    rulesVersion = SaveData.CurrentRulesVersion,
                     eventContentVersion = legacy.eventContentVersion > 0
                         ? legacy.eventContentVersion
                         : SaveData.CurrentEventContentVersion,
@@ -70,12 +282,19 @@ namespace SengokuChronicle.Persistence
                     sealedLetterStage = legacy.sealedLetterStage,
                     marketTallyStage = legacy.marketTallyStage,
                     relationships = CloneRelationships(legacy.relationships),
+                    familyRelationships = new FamilyRelationshipSaveEntry[0],
                     randomState = CloneRandomState(legacy.randomState),
                     eventRuntime = CloneEventRuntime(legacy.eventRuntime),
                     succession = legacy.succession != null
                         ? legacy.succession.Clone()
                         : SuccessionSaveData.CreateDefault(),
-                    chronicle = MigrateEventHistory(legacy.eventRuntime)
+                    chronicle = MigrateEventHistory(legacy.eventRuntime),
+                    industry = IndustryStateSaveData.CreateInitial(
+                        new GameDate(legacy.year, legacy.month, legacy.day)),
+                    development = CharacterDevelopmentSaveData.CreateEmpty(
+                        legacy.succession != null ? legacy.succession : SuccessionSaveData.CreateDefault()),
+                    research = FamilyResearchSaveData.CreateInitial(
+                        new GameDate(legacy.year, legacy.month, legacy.day))
                 };
 
                 result = SaveDataValidator.Validate(current);
@@ -86,6 +305,14 @@ namespace SengokuChronicle.Persistence
 
             if (legacy.saveFormatVersion == 2)
             {
+                if (!string.IsNullOrEmpty(rawJson) &&
+                    SaveDataValidator.HasRootProperty(rawJson, "industry"))
+                {
+                    result = SaveOperationResult.Failure(SaveErrorCode.InvalidData,
+                        "v2 存档包含产业状态（industry）；迁移不会静默替换该数据。");
+                    return false;
+                }
+
                 bool containsSuccessionBlock = string.IsNullOrEmpty(rawJson)
                     ? legacy.succession != null
                     : SaveDataValidator.HasRootProperty(rawJson, "succession");
@@ -121,7 +348,7 @@ namespace SengokuChronicle.Persistence
                     gameVersion = string.IsNullOrWhiteSpace(legacy.gameVersion)
                         ? SaveData.CurrentGameVersion
                         : legacy.gameVersion,
-                    rulesVersion = legacy.rulesVersion > 0 ? legacy.rulesVersion : SaveData.CurrentRulesVersion,
+                    rulesVersion = SaveData.CurrentRulesVersion,
                     eventContentVersion = legacy.eventContentVersion > 0
                         ? legacy.eventContentVersion
                         : SaveData.CurrentEventContentVersion,
@@ -133,10 +360,17 @@ namespace SengokuChronicle.Persistence
                     sealedLetterStage = legacy.sealedLetterStage,
                     marketTallyStage = legacy.marketTallyStage,
                     relationships = CloneRelationships(legacy.relationships),
+                    familyRelationships = new FamilyRelationshipSaveEntry[0],
                     randomState = CloneRandomState(legacy.randomState),
                     eventRuntime = CloneEventRuntime(legacy.eventRuntime),
                     succession = SuccessionSaveData.CreateDefault(),
-                    chronicle = new ChronicleSaveEntry[0]
+                    chronicle = new ChronicleSaveEntry[0],
+                    industry = IndustryStateSaveData.CreateInitial(
+                        new GameDate(legacy.year, legacy.month, legacy.day)),
+                    development = CharacterDevelopmentSaveData.CreateEmpty(
+                        SuccessionSaveData.CreateDefault()),
+                    research = FamilyResearchSaveData.CreateInitial(
+                        new GameDate(legacy.year, legacy.month, legacy.day))
                 };
 
                 result = SaveDataValidator.Validate(current);
@@ -149,7 +383,15 @@ namespace SengokuChronicle.Persistence
             {
                 result = SaveOperationResult.Failure(
                     SaveErrorCode.UnsupportedVersion,
-                    $"不支持的存档版本：{legacy.saveFormatVersion}（仅支持 v1/v2/v3 迁移到 v{SaveDataValidator.CurrentVersion}）。");
+                    $"不支持的存档版本：{legacy.saveFormatVersion}（仅支持 v1–v7 迁移到 v{SaveDataValidator.CurrentVersion}）。");
+                return false;
+            }
+
+            if (!string.IsNullOrEmpty(rawJson) &&
+                SaveDataValidator.HasRootProperty(rawJson, "industry"))
+            {
+                result = SaveOperationResult.Failure(SaveErrorCode.InvalidData,
+                    "v1 存档包含产业状态（industry）；迁移不会静默替换该数据。");
                 return false;
             }
 
@@ -160,6 +402,7 @@ namespace SengokuChronicle.Persistence
             current = new SaveData
             {
                 saveFormatVersion = SaveDataValidator.CurrentVersion,
+                rulesVersion = SaveData.CurrentRulesVersion,
                 year = legacy.year,
                 month = legacy.month,
                 day = legacy.day,
@@ -168,10 +411,16 @@ namespace SengokuChronicle.Persistence
                 sealedLetterStage = legacy.sealedLetterStage,
                 marketTallyStage = legacy.marketTallyStage,
                 relationships = CloneRelationships(legacy.relationships),
+                familyRelationships = new FamilyRelationshipSaveEntry[0],
                 randomState = RandomStateManager.Create(V1DefaultSeed).CaptureState(),
                 eventRuntime = new EventRuntimeSaveData(),
                 succession = SuccessionSaveData.CreateDefault(),
-                chronicle = new ChronicleSaveEntry[0]
+                chronicle = new ChronicleSaveEntry[0],
+                industry = IndustryStateSaveData.CreateInitial(
+                    new GameDate(legacy.year, legacy.month, legacy.day)),
+                development = CharacterDevelopmentSaveData.CreateEmpty(SuccessionSaveData.CreateDefault()),
+                research = FamilyResearchSaveData.CreateInitial(
+                    new GameDate(legacy.year, legacy.month, legacy.day))
             };
 
             result = SaveDataValidator.Validate(current);
@@ -196,12 +445,18 @@ namespace SengokuChronicle.Persistence
                 sealedLetterStage = source.sealedLetterStage,
                 marketTallyStage = source.marketTallyStage,
                 relationships = CloneRelationships(source.relationships),
+                familyRelationships = CloneFamilyRelationships(source.familyRelationships),
                 randomState = CloneRandomState(source.randomState),
                 eventRuntime = CloneEventRuntime(source.eventRuntime),
                 succession = source.succession != null
                     ? source.succession.Clone()
                     : SuccessionSaveData.CreateDefault(),
-                chronicle = ChronicleSaveCodec.Clone(source.chronicle)
+                chronicle = ChronicleSaveCodec.Clone(source.chronicle),
+                // Preserve null so the v6 validation path can reject a malformed
+                // payload instead of silently repairing it with opening values.
+                industry = source.industry != null ? source.industry.Clone() : null,
+                development = source.development != null ? source.development.Clone() : null,
+                research = source.research != null ? source.research.Clone() : null
             };
             return clone;
         }
@@ -290,6 +545,24 @@ namespace SengokuChronicle.Persistence
                 clone[i] = entry == null ? null : new RelationshipSaveEntry
                 {
                     characterId = entry.characterId,
+                    value = entry.value
+                };
+            }
+            return clone;
+        }
+
+        private static FamilyRelationshipSaveEntry[] CloneFamilyRelationships(
+            FamilyRelationshipSaveEntry[] source)
+        {
+            if (source == null) return null;
+            var clone = new FamilyRelationshipSaveEntry[source.Length];
+            for (int i = 0; i < source.Length; i++)
+            {
+                FamilyRelationshipSaveEntry entry = source[i];
+                clone[i] = entry == null ? null : new FamilyRelationshipSaveEntry
+                {
+                    headPersonId = entry.headPersonId,
+                    memberPersonId = entry.memberPersonId,
                     value = entry.value
                 };
             }

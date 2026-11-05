@@ -122,7 +122,7 @@ namespace SengokuChronicle.Tests.EditMode
                 Assert.That(restored.Succession.PendingRegentId,
                     Is.EqualTo(new PersonId("person.akechi.chie")));
 
-                Assert.That(restored.AdvanceDays(800), Is.True);
+                Assert.That(restored.AdvanceDaysForLegacyFixtureSetup(800), Is.True);
                 Assert.That(restored.Succession.Phase, Is.EqualTo(SuccessionPhase.Regency));
                 Assert.That(restored.Succession.IsRegencyHandoffDue(
                     restored.WorldClock.CurrentDate), Is.True);
@@ -146,7 +146,7 @@ namespace SengokuChronicle.Tests.EditMode
             _session.SelectSuccessionSuccessor(new PersonId("person.akechi.tokihime"));
             _session.SelectSuccessionRegent(new PersonId("person.akechi.chie"));
             Assert.That(_session.ConfirmSuccession().Succeeded, Is.True);
-            Assert.That(_session.AdvanceDays(800), Is.True);
+            Assert.That(_session.AdvanceDaysForLegacyFixtureSetup(800), Is.True);
             Assert.That(_session.Succession.IsRegencyHandoffDue(
                 _session.WorldClock.CurrentDate), Is.True);
             SaveData data = _session.CaptureSave();

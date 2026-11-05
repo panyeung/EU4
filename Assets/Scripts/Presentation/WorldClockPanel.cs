@@ -32,8 +32,17 @@ namespace SengokuChronicle.Presentation
         [SerializeField]
         private WorldMapController worldMapController;
 
+        /// <summary>可空：显示最近一次被拒绝的时间操作原因。</summary>
+        [SerializeField]
+        private Text feedbackText;
+
         /// <summary>最近一次「结束月份」的结果说明；成功时为空。</summary>
         public string LastMonthTurnMessage { get; private set; } = string.Empty;
+
+        /// <summary>最近一次被拒绝的时间操作在界面上显示的可见原因。</summary>
+        public string FeedbackLine => feedbackText != null ? feedbackText.text : string.Empty;
+
+        public bool FeedbackVisible => feedbackText != null && feedbackText.gameObject.activeSelf;
 
         /// <summary>
         /// 最近一次「推进一天」被拒绝的原因（继承暂停、事件待选或日期上限）；
@@ -71,6 +80,14 @@ namespace SengokuChronicle.Presentation
                 endMonthButton.onClick.RemoveListener(OnEndMonthClicked);
                 endMonthButton.onClick.AddListener(OnEndMonthClicked);
             }
+        }
+
+        /// <summary>Injects the optional visible refusal text; used by the scene updater and tests.</summary>
+        public void BindFeedback(Text text)
+        {
+            feedbackText = text;
+            if (feedbackText != null && string.IsNullOrEmpty(feedbackText.text))
+                feedbackText.gameObject.SetActive(false);
         }
 
         private void Awake()
@@ -113,12 +130,15 @@ namespace SengokuChronicle.Presentation
             if (gameSession.AdvanceOneDay())
             {
                 LastAdvanceMessage = string.Empty;
+                ShowFeedback(string.Empty);
                 Refresh();
                 return true;
             }
 
             LastAdvanceMessage = DescribeAdvanceRefusal();
+            ShowFeedback(LastAdvanceMessage);
             Debug.Log($"{nameof(WorldClockPanel)}: {LastAdvanceMessage}");
+            Refresh();
             return false;
         }
 
@@ -134,6 +154,12 @@ namespace SengokuChronicle.Presentation
                         : gameSession.LastEventMessage;
                 case MonthTurnOutcome.DateOutOfRange:
                     return "日期已达支持上限，无法再推进。";
+                case MonthTurnOutcome.MonthSettlementRequired:
+                    return "日期将跨月：请使用「结束本月」完成月度结算。";
+                case MonthTurnOutcome.IndustryStateInvalid:
+                    return string.IsNullOrWhiteSpace(gameSession.LastEventMessage)
+                        ? "产业状态与当前月份不一致：请读取稳定存档。"
+                        : gameSession.LastEventMessage;
                 default:
                     return "无法推进时间，日期保持不变。";
             }
@@ -150,6 +176,7 @@ namespace SengokuChronicle.Presentation
             if (gameSession.TryAdvanceToNextMonth())
             {
                 LastMonthTurnMessage = string.Empty;
+                ShowFeedback(string.Empty);
                 Refresh();
                 RefreshMapDateDisplay();
                 return;
@@ -176,12 +203,31 @@ namespace SengokuChronicle.Presentation
                         ? "本月事件无法排定，日期保持不变。"
                         : gameSession.LastEventMessage;
                     break;
+                case MonthTurnOutcome.IndustryStateInvalid:
+                    LastMonthTurnMessage = string.IsNullOrWhiteSpace(gameSession.LastEventMessage)
+                        ? "产业状态与当前月份不一致：请读取稳定存档。"
+                        : gameSession.LastEventMessage;
+                    break;
+                case MonthTurnOutcome.SettlementFailed:
+                    LastMonthTurnMessage = string.IsNullOrWhiteSpace(gameSession.LastEventMessage)
+                        ? "月结异常，已回滚：日期、资源和编年史保持不变。"
+                        : gameSession.LastEventMessage;
+                    break;
                 default:
                     LastMonthTurnMessage = "无法结束月份，日期保持不变。";
                     break;
             }
 
+            ShowFeedback(LastMonthTurnMessage);
             Debug.Log($"{nameof(WorldClockPanel)}: {LastMonthTurnMessage}");
+        }
+
+        private void ShowFeedback(string message)
+        {
+            if (feedbackText == null)
+                return;
+            feedbackText.text = message ?? string.Empty;
+            feedbackText.gameObject.SetActive(!string.IsNullOrWhiteSpace(message));
         }
 
         public void Refresh()
@@ -190,6 +236,8 @@ namespace SengokuChronicle.Presentation
                 return;
 
             bool extinct = gameSession.IsFamilyExtinct;
+            // Month-end day advancement stays clickable so the refusal reason is
+            // visible; GameSession still rejects it without mutating the date.
             if (advanceButton != null)
                 advanceButton.interactable = !extinct;
             if (endMonthButton != null)

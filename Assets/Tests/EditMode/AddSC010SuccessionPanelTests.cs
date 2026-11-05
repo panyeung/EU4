@@ -193,7 +193,7 @@ namespace SengokuChronicle.Tests.EditMode
             panel.SelectRegent(new PersonId("person.akechi.chie"));
             panel.ConfirmSelection();
 
-            Assert.That(_session.AdvanceDays(800), Is.True);
+            Assert.That(_session.AdvanceDaysForLegacyFixtureSetup(800), Is.True);
             panel.Refresh();
 
             Assert.That(panel.IsModalVisible, Is.True,
@@ -377,7 +377,7 @@ namespace SengokuChronicle.Tests.EditMode
             panel.SelectRegent(new PersonId("person.akechi.chie"));
             panel.ConfirmSelection();
 
-            Assert.That(_session.AdvanceDays(800), Is.True);
+            Assert.That(_session.AdvanceDaysForLegacyFixtureSetup(800), Is.True);
             panel.Refresh();
 
             Assert.That(_session.Succession.Phase, Is.EqualTo(SuccessionPhase.Regency));

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Text;
 using UnityEngine;
 using SengokuChronicle.Domain;
 using SengokuChronicle.Events;
@@ -16,7 +17,10 @@ namespace SengokuChronicle.Application
         ContentUnavailable = 2,
         DateOutOfRange = 3,
         SchedulingFailed = 4,
-        PendingSuccession = 5
+        PendingSuccession = 5,
+        MonthSettlementRequired = 6,
+        IndustryStateInvalid = 7,
+        SettlementFailed = 8
     }
 
     /// <summary>
@@ -53,12 +57,16 @@ namespace SengokuChronicle.Application
         private MarketTallyMission _marketTallyMission = new MarketTallyMission();
         private SupplyShortageMission _supplyShortageMission = new SupplyShortageMission();
         private CharacterRelationships _relationships;
+        private FamilyRelationships _familyRelationships;
         private RandomStateManager _randomStateManager;
         private EventRuntimeState _eventRuntimeState;
         private EventCatalogData _eventCatalog;
         private EventTextCatalog _eventTextCatalog;
         private EventEngine _eventEngine;
         private SuccessionState _succession;
+        private IndustryState _industryState;
+        private CharacterDevelopmentState _development;
+        private FamilyResearchState _researchState;
         private HistoryLedger _historyLedger = HistoryLedger.CreateEmpty();
         private readonly Dictionary<Guid, DialogueState> _dialogues = new Dictionary<Guid, DialogueState>();
 
@@ -86,6 +94,270 @@ namespace SengokuChronicle.Application
 
         /// <summary>Last succession command feedback for the panel and diagnostics.</summary>
         public string LastSuccessionMessage { get; private set; } = string.Empty;
+
+        /// <summary>Read-only SC-019 industry snapshot for the panel and tests.</summary>
+        public IndustryView Industry => IndustryView.Build(EnsureIndustryState(), Succession,
+            CurrentGameDate, LastIndustryReport, LastIndustryChronicleSummary,
+            CanEditIndustryAssignments, IndustryBlockReason, LastIndustryMessage);
+
+        /// <summary>True only at a management stable point with no pending event or succession decision.</summary>
+        public bool CanEditIndustryAssignments
+        {
+            get
+            {
+                if (_industryState == null || IsFamilyExtinct || Succession.IsPending ||
+                    Succession.IsRegencyHandoffDue(CurrentGameDate))
+                    return false;
+                if (_eventRuntimeState != null && _eventRuntimeState.HasPendingEvents)
+                    return false;
+                return IndustryStateIsConsistent;
+            }
+        }
+
+        /// <summary>Actionable Chinese reason when industry appointments are locked.</summary>
+        public string IndustryBlockReason
+        {
+            get
+            {
+                if (IsFamilyExtinct)
+                    return "任命暂停：家族已经灭亡。";
+                if (Succession.IsPending)
+                    return "任命暂停：尚有继承决策待处理。";
+                if (Succession.IsRegencyHandoffDue(CurrentGameDate))
+                    return "任命暂停：幼主已成年，请先完成成年交权。";
+                if (_eventRuntimeState != null && _eventRuntimeState.HasPendingEvents)
+                    return "任命暂停：尚有事件等待选择。";
+                if (_industryState != null && !IndustryStateIsConsistent)
+                    return "产业状态与当前月份不一致：请读取稳定存档。";
+                return string.Empty;
+            }
+        }
+
+        /// <summary>Transient report of the most recent month settlement; null after load or a new game.</summary>
+        public IndustryMonthReport LastIndustryReport { get; private set; }
+
+        /// <summary>Transient industry feedback, including safe-save cleanup.</summary>
+        public string LastIndustryMessage { get; private set; } = string.Empty;
+
+        /// <summary>Read-only SC-020 growth snapshot for the education panel and tests.</summary>
+        public EducationView Education => EducationView.Build(Succession, EnsureDevelopment(),
+            CurrentGameDate, CanEditEducationPlans, EducationBlockReason, LastEducationMessage);
+
+        /// <summary>Stable growth state keyed by permanent person ID.</summary>
+        public CharacterDevelopmentState Development => EnsureDevelopment();
+
+        /// <summary>True when the child-education phase is still open for the displayed learner.</summary>
+        public bool CanEditEducationPlans
+        {
+            get
+            {
+                if (_development == null || IsFamilyExtinct || Succession.IsPending ||
+                    Succession.IsRegencyHandoffDue(CurrentGameDate))
+                    return false;
+                if (_eventRuntimeState != null && _eventRuntimeState.HasPendingEvents)
+                    return false;
+                return HasEligibleEducationLearner();
+            }
+        }
+
+        /// <summary>Actionable Chinese reason when education plans are locked.</summary>
+        public string EducationBlockReason
+        {
+            get
+            {
+                if (IsFamilyExtinct)
+                    return "培养暂停：家族已经灭亡。";
+                if (Succession.IsPending)
+                    return "培养暂停：尚有继承决策待处理。";
+                if (Succession.IsRegencyHandoffDue(CurrentGameDate))
+                    return "培养暂停：幼主已成年，请先完成成年交权。";
+                if (_eventRuntimeState != null && _eventRuntimeState.HasPendingEvents)
+                    return "培养暂停：尚有事件等待选择。";
+                if (_development == null)
+                    return "培养暂停：缺少人物成长记录。";
+                if (!HasEligibleEducationLearner())
+                    return "培养暂停：没有 0..15 岁的未成年家人，儿童年度培养已结束。";
+                return string.Empty;
+            }
+        }
+
+        /// <summary>Transient summary of the most recent annual education settlement.</summary>
+        public string LastEducationMessage { get; private set; } = string.Empty;
+
+        /// <summary>Read-only SC-021 research snapshot for the panel and tests.</summary>
+        public FamilyResearchView Research => FamilyResearchView.Build(EnsureResearch(), Succession,
+            EnsureIndustryState(), CurrentGameDate, CanEditResearch, ResearchBlockReason,
+            LastResearchReport, LastResearchMessage);
+
+        /// <summary>Stable research state keyed by permanent person and technique IDs.</summary>
+        public FamilyResearchState ResearchState => EnsureResearch();
+
+        /// <summary>True only at a management stable point; the project itself may pause later.</summary>
+        public bool CanEditResearch
+        {
+            get
+            {
+                if (_researchState == null || IsFamilyExtinct || Succession.IsPending ||
+                    Succession.IsRegencyHandoffDue(CurrentGameDate))
+                    return false;
+                if (_eventRuntimeState != null && _eventRuntimeState.HasPendingEvents)
+                    return false;
+                return true;
+            }
+        }
+
+        /// <summary>Actionable Chinese reason when research plans are locked.</summary>
+        public string ResearchBlockReason
+        {
+            get
+            {
+                if (IsFamilyExtinct)
+                    return "研究暂停：家族已经灭亡。";
+                if (Succession.IsPending)
+                    return "研究暂停：尚有继承决策待处理。";
+                if (Succession.IsRegencyHandoffDue(CurrentGameDate))
+                    return "研究暂停：幼主已成年，请先完成成年交权。";
+                if (_eventRuntimeState != null && _eventRuntimeState.HasPendingEvents)
+                    return "研究暂停：尚有事件等待选择。";
+                if (_researchState == null)
+                    return "研究暂停：缺少家族研究记录。";
+                return string.Empty;
+            }
+        }
+
+        /// <summary>Transient report of the most recent monthly research settlement.</summary>
+        public FamilyResearchMonthReport LastResearchReport { get; private set; }
+
+        /// <summary>Transient research feedback, including pause reasons.</summary>
+        public string LastResearchMessage { get; private set; } = string.Empty;
+
+        /// <summary>Read-only SC-022 family-formation snapshot for the panel and tests.</summary>
+        public FamilyFormationView FamilyFormation => FamilyFormationView.Build(Succession,
+            CurrentGameDate, CanEditFamilyFormation, FamilyFormationBlockReason,
+            LastFamilyFormationMessage);
+
+        /// <summary>Explicit projection accessor used by the SC-022 panel and tests.</summary>
+        public FamilyFormationView GetFamilyFormationView() => FamilyFormation;
+
+        /// <summary>True only at a management stable point inside the SC-022 scenario.</summary>
+        public bool CanEditFamilyFormation
+        {
+            get
+            {
+                if (!SC022FamilyFormationScenario.IsActive(Succession))
+                    return false;
+                if (IsFamilyExtinct || Succession.IsPending ||
+                    Succession.IsRegencyHandoffDue(CurrentGameDate))
+                    return false;
+                if (_eventRuntimeState != null && _eventRuntimeState.HasPendingEvents)
+                    return false;
+                return true;
+            }
+        }
+
+        /// <summary>Actionable Chinese reason when marriage/adoption commands are locked.</summary>
+        public string FamilyFormationBlockReason
+        {
+            get
+            {
+                if (IsFamilyExtinct)
+                    return "家族管理暂停：家族已经灭亡。";
+                if (!SC022FamilyFormationScenario.IsActive(Succession))
+                    return "家族管理暂停：当前不是 SC-022 婚姻与收养示范。";
+                if (Succession.IsPending)
+                    return "家族管理暂停：尚有继承决策待处理。";
+                if (Succession.IsRegencyHandoffDue(CurrentGameDate))
+                    return "家族管理暂停：幼主已成年，请先完成成年交权。";
+                if (_eventRuntimeState != null && _eventRuntimeState.HasPendingEvents)
+                    return "家族管理暂停：尚有事件等待选择。";
+                return string.Empty;
+            }
+        }
+
+        /// <summary>Transient SC-022 command feedback for the panel.</summary>
+        public string LastFamilyFormationMessage { get; private set; } = string.Empty;
+
+        /// <summary>Read-only eligible researcher options; stable roster order.</summary>
+        public IReadOnlyList<FamilyResearchResearcherOption> ResearchResearchers
+        {
+            get
+            {
+                var options = new List<FamilyResearchResearcherOption>();
+                EnsureSuccession();
+                EnsureIndustryState();
+                if (Succession.World == null)
+                    return options.AsReadOnly();
+                foreach (FamilyMembership membership in Succession.World.Family.Members)
+                {
+                    if (!FamilyResearchSettlement.IsEligibleResearcher(Succession,
+                            membership.PersonId, CurrentGameDate, _industryState, out _))
+                        continue;
+                    options.Add(new FamilyResearchResearcherOption(membership.PersonId,
+                        IndustryService.PersonName(Succession, membership.PersonId)));
+                }
+                return options.AsReadOnly();
+            }
+        }
+
+        /// <summary>Read-only mentor options for the current learner; stable roster order.</summary>
+        public IReadOnlyList<EducationMentorOption> EducationMentors
+        {
+            get
+            {
+                var options = new List<EducationMentorOption>();
+                EnsureSuccession();
+                EnsureDevelopment();
+                PersonId learner = Education.HasLearner ? Education.LearnerId : default;
+                foreach (FamilyMembership membership in Succession.World.Family.Members)
+                {
+                    if (!IsEligibleEducationMentor(membership.PersonId, learner, CurrentGameDate))
+                        continue;
+                    string name = Succession.World.TryGetPerson(membership.PersonId, out PersonState person)
+                        ? person.DisplayName
+                        : membership.PersonId.Value;
+                    options.Add(new EducationMentorOption(membership.PersonId, name,
+                        SC020EducationScenario.SpecialtyOf(membership.PersonId)));
+                }
+                return options.AsReadOnly();
+            }
+        }
+
+        /// <summary>
+        /// Test-only fault injection executed after the clock crosses into the next
+        /// month but before the settlement transaction commits. Any exception proves
+        /// that every snapshot (date, resources, lastSettled, chronicle, RNG, runtime)
+        /// is restored atomically. Never set by production code.
+        /// </summary>
+        internal Action MonthSettlementFaultInjection { get; set; }
+
+        /// <summary>
+        /// Test-only hook invoked after a family-formation command has added the new
+        /// member and kinship fact but before the prepared chronicle entry is appended.
+        /// Tests use it to advance the ledger so the real append fails, proving the
+        /// command rolls membership and kinship back. Never set by production code.
+        /// </summary>
+        internal Action<HistoryLedger> FamilyFormationAppendFaultInjection { get; set; }
+
+        /// <summary>True only when one more day stays inside the current month and settlement is consistent.</summary>
+        public bool CanAdvanceOneDayWithinMonth
+        {
+            get
+            {
+                if (WorldClock == null)
+                    return false;
+                if (_industryState == null || !IndustryStateIsConsistent)
+                    return false;
+                return GameDate.TryNext(CurrentGameDate, out GameDate next) &&
+                       next.Year == CurrentGameDate.Year && next.Month == CurrentGameDate.Month;
+            }
+        }
+
+        /// <summary>Last visible travel refusal reason; cleared by a successful preview/confirm.</summary>
+        public string LastTravelBlockReason { get; private set; } = string.Empty;
+
+        private bool IndustryStateIsConsistent =>
+            _industryState != null &&
+            _industryState.LastSettledMonthIndex == IndustryCalendar.MonthIndex(CurrentGameDate) - 1;
 
         /// <summary>
         /// True once the family has no lawful continuation and the player declined the
@@ -293,11 +565,52 @@ namespace SengokuChronicle.Application
         public void InitStandardDemo(ulong initialSeed) =>
             InitSession(initialSeed, SuccessionSample.CreateStandard());
 
-        private void InitSession(ulong initialSeed, SuccessionState succession)
+        /// <summary>Starts the separate fixed SC-020 child-education demonstration.</summary>
+        public void InitEducationDemoScenario() => InitEducationDemoScenario(DefaultRandomSeed);
+
+        /// <summary>Starts the SC-020 demonstration with a caller-selected deterministic seed.</summary>
+        public void InitEducationDemoScenario(ulong initialSeed)
         {
-            WorldClock = new WorldClock();
+            InitSession(initialSeed, SC020EducationScenario.CreateSuccession(),
+                SC020EducationScenario.StartDate, SC020EducationScenario.CreateDevelopmentState());
+        }
+
+        /// <summary>Starts the separate fixed SC-021 family-research demonstration.</summary>
+        public void InitResearchDemoScenario() => InitResearchDemoScenario(DefaultRandomSeed);
+
+        /// <summary>Starts the SC-021 demonstration with a caller-selected deterministic seed.</summary>
+        public void InitResearchDemoScenario(ulong initialSeed)
+        {
+            InitSession(initialSeed, SC021FamilyResearchScenario.CreateSuccession(),
+                SC021FamilyResearchScenario.StartDate, null,
+                SC021FamilyResearchScenario.CreateIndustryState());
+        }
+
+        /// <summary>Starts the separate fixed SC-022 marriage and adoption demonstration.</summary>
+        public void InitFamilyFormationDemoScenario() =>
+            InitFamilyFormationDemoScenario(DefaultRandomSeed);
+
+        /// <summary>Starts the SC-022 demonstration with a caller-selected deterministic seed.</summary>
+        public void InitFamilyFormationDemoScenario(ulong initialSeed)
+        {
+            InitSession(initialSeed, SC022FamilyFormationScenario.CreateSuccession(),
+                SC022FamilyFormationScenario.StartDate, null);
+        }
+
+        private void InitSession(ulong initialSeed, SuccessionState succession) =>
+            InitSession(initialSeed, succession, WorldClock.NewGameDate, null);
+
+        private void InitSession(ulong initialSeed, SuccessionState succession, GameDate startDate,
+            CharacterDevelopmentState development) =>
+            InitSession(initialSeed, succession, startDate, development, null);
+
+        private void InitSession(ulong initialSeed, SuccessionState succession, GameDate startDate,
+            CharacterDevelopmentState development, IndustryState industry)
+        {
+            WorldClock = new WorldClock(startDate);
             CurrentLocation = LocationId.Kiyosu;
             _relationships = new CharacterRelationships();
+            _familyRelationships = FamilyRelationships.CreateEmpty();
             _randomStateManager = RandomStateManager.Create(initialSeed);
             _eventRuntimeState = new EventRuntimeState();
             LoadEventContent();
@@ -306,6 +619,16 @@ namespace SengokuChronicle.Application
             _marketTallyMission = new MarketTallyMission();
             _succession = succession ?? throw new ArgumentNullException(nameof(succession));
             M2FixedScenario.SyncDesignation(_succession);
+            _development = development ?? CreateDevelopmentFor(_succession);
+            _industryState = industry ?? IndustryState.CreateInitial(WorldClock.CurrentDate);
+            _researchState = FamilyResearchState.CreateInitial(WorldClock.CurrentDate);
+            LastIndustryReport = null;
+            LastIndustryMessage = string.Empty;
+            LastEducationMessage = string.Empty;
+            LastResearchReport = null;
+            LastResearchMessage = string.Empty;
+            LastFamilyFormationMessage = string.Empty;
+            LastTravelBlockReason = string.Empty;
             _historyLedger = HistoryLedger.CreateEmpty();
             LastSuccessionMessage = string.Empty;
             _dialogues.Clear();
@@ -324,6 +647,21 @@ namespace SengokuChronicle.Application
             if (!CanStartCrisisDemo)
                 return false;
             _succession = SuccessionSample.CreateCrisis();
+            // The crisis roster replaces the standard family snapshot, so any
+            // appointment held by a person outside the new roster is invalid.
+            // Reconcile through the same total function used by succession so the
+            // demo never starts with an unusable industry assignment.
+            ReconcileIndustryAssignments();
+            // The pristine guard above means no education history can exist yet;
+            // rebuild growth rows for the replacement roster instead of leaving IDs
+            // that no longer belong to this family.
+            _development = CreateDevelopmentFor(_succession);
+            // The crisis roster replaces the whole family snapshot, so any research plan
+            // that referenced the old roster is rebuilt empty for the new family.
+            _researchState = FamilyResearchState.CreateInitial(CurrentGameDate);
+            LastEducationMessage = string.Empty;
+            LastResearchReport = null;
+            LastResearchMessage = string.Empty;
             LastSuccessionMessage = "已进入固定示范：无合法继承人危机。";
             SessionStateChanged?.Invoke();
             return true;
@@ -449,10 +787,601 @@ namespace SengokuChronicle.Application
             LastSuccessionMessage = result.Message;
             if (M2FixedScenario.IsActive(_succession))
                 M2FixedScenario.SyncDesignation(_succession);
+            ReconcileDevelopmentRoster();
             if (before.DiffersFrom(_succession))
                 RecordSuccession(before, result);
+            IReadOnlyList<IndustryVacancy> vacated = ReconcileIndustryAssignments();
+            if (vacated.Count > 0)
+                RecordIndustryPersonnel(vacated);
             SessionStateChanged?.Invoke();
             return result;
+        }
+
+        /// <summary>
+        /// Assigns or atomically replaces the head of one industry. This is a
+        /// reservation for the current month plan; it never charges resources or
+        /// writes history. Only management stable points may change appointments.
+        /// </summary>
+        public IndustryAssignmentResult TryAssignIndustry(string industryId, PersonId personId)
+        {
+            EnsureSuccession();
+            EnsureIndustryState();
+            if (!CanEditIndustryAssignments)
+            {
+                LastIndustryMessage = string.IsNullOrEmpty(IndustryBlockReason)
+                    ? "当前不能调整产业任命。"
+                    : IndustryBlockReason;
+                return new IndustryAssignmentResult(false, IndustryAssignmentOutcome.Blocked,
+                    LastIndustryMessage, default, default);
+            }
+
+            IndustryAssignmentResult result = IndustryService.TryAssign(_industryState, _succession,
+                CurrentGameDate, industryId, personId);
+            LastIndustryMessage = result.Message;
+            if (result.Succeeded)
+                SessionStateChanged?.Invoke();
+            return result;
+        }
+
+        /// <summary>Clears one industry post and releases its 3-unit reservation.</summary>
+        public IndustryAssignmentResult TryUnassignIndustry(string industryId)
+        {
+            EnsureSuccession();
+            EnsureIndustryState();
+            if (!CanEditIndustryAssignments)
+            {
+                LastIndustryMessage = string.IsNullOrEmpty(IndustryBlockReason)
+                    ? "当前不能调整产业任命。"
+                    : IndustryBlockReason;
+                return new IndustryAssignmentResult(false, IndustryAssignmentOutcome.Blocked,
+                    LastIndustryMessage, default, default);
+            }
+
+            IndustryAssignmentResult result = IndustryService.TryUnassign(_industryState, _succession,
+                CurrentGameDate, industryId);
+            LastIndustryMessage = result.Message;
+            if (result.Succeeded)
+                SessionStateChanged?.Invoke();
+            return result;
+        }
+
+        /// <summary>
+        /// Computes the exact deterministic preview for one direction/mentor pair without
+        /// modifying any state. Free growth ignores the mentor argument.
+        /// </summary>
+        public EducationPreview PreviewEducation(EducationDirection direction, PersonId mentor)
+        {
+            EnsureSuccession();
+            EnsureDevelopment();
+            EducationView view = Education;
+            if (!view.HasLearner)
+                return new EducationPreview(false, "当前没有可培养的家族成员。", direction, mentor,
+                    string.Empty, default, default, string.Empty);
+            if (!Enum.IsDefined(typeof(EducationDirection), direction))
+                return new EducationPreview(false, "培养方向无效。", direction, mentor, string.Empty,
+                    view.Values, view.Values, string.Empty);
+
+            try
+            {
+                if (!view.IsEligible)
+                    return new EducationPreview(false, "孩子已成年，儿童年度培养已结束。", direction,
+                        mentor, string.Empty, view.Values, view.Values, string.Empty);
+
+                MentorSpecialty specialty = MentorSpecialty.None;
+                PersonId effectiveMentor = default;
+                if (direction == EducationDirection.FreeGrowth)
+                {
+                    if (!mentor.IsEmpty)
+                        return new EducationPreview(false, "自由成长不能指定导师。", direction, mentor,
+                            string.Empty, view.Values, view.Values, string.Empty);
+                }
+                else
+                {
+                    if (!TryMentorSpecialty(mentor, view.LearnerId, CurrentGameDate, out specialty))
+                        return new EducationPreview(false, "请选择一位存活且未退休的成年家族导师。",
+                            direction, mentor, string.Empty, view.Values, view.Values, string.Empty);
+                    effectiveMentor = mentor;
+                }
+
+                if (!CharacterGrowthRules.TryResolve(view.Values, direction, HasAptitude(view.LearnerId),
+                        AptitudeOf(view.LearnerId), specialty,
+                        IsSupportiveEnvironment(view.LearnerId),
+                        out EducationYearResult resolved, out string error))
+                    return new EducationPreview(false, error, direction, mentor, string.Empty,
+                        view.Values, view.Values, string.Empty);
+
+                string mentorName = effectiveMentor.IsEmpty
+                    ? string.Empty
+                    : Succession.World.TryGetPerson(effectiveMentor, out PersonState person)
+                        ? person.DisplayName
+                        : effectiveMentor.Value;
+                return new EducationPreview(true, string.Empty, direction, effectiveMentor,
+                    mentorName, resolved.Before, resolved.After, resolved.Explanation);
+            }
+            catch (Exception exception)
+            {
+                return new EducationPreview(false, "培养预览失败：" + exception.Message, direction,
+                    mentor, string.Empty, view.Values, view.Values, string.Empty);
+            }
+        }
+
+        /// <summary>
+        /// Stores or replaces the pending annual plan at a management stable point. It
+        /// grants no growth and writes no chronicle; the December-to-January settlement
+        /// is the only writer of education results. A settled age year cannot be replanned.
+        /// </summary>
+        public EducationPlanCommandResult TrySetEducationPlan(PersonId learner,
+            EducationDirection direction, PersonId mentor)
+        {
+            EnsureSuccession();
+            EnsureDevelopment();
+            if (learner.IsEmpty || !_development.Contains(learner) ||
+                !_succession.World.Family.IsMember(learner))
+            {
+                LastEducationMessage = "培养对象不是当前家族的成长记录成员。";
+                return EducationPlanCommandResult.Failure(EducationPlanOutcome.InvalidLearner,
+                    LastEducationMessage);
+            }
+            if (!_succession.World.TryGetLife(learner, out SuccessionPersonLife life) || !life.Alive)
+            {
+                LastEducationMessage = "培养对象不是存活人物。";
+                return EducationPlanCommandResult.Failure(EducationPlanOutcome.InvalidLearner,
+                    LastEducationMessage);
+            }
+
+            // Learner identity and age stay specific even when no learner is currently
+            // eligible (for example after the child turns 16). Only an otherwise valid
+            // request is reported as Blocked by a pending event, succession or regency.
+            int age = life.AgeAt(CurrentGameDate);
+            if (age < SC020EducationScenario.MinimumLearnerAge ||
+                age > SC020EducationScenario.MaximumLearnerAge)
+            {
+                LastEducationMessage = "培养对象已成年（" + age + " 岁），儿童年度培养已结束。";
+                return EducationPlanCommandResult.Failure(EducationPlanOutcome.InvalidAge,
+                    LastEducationMessage);
+            }
+
+            if (!CanEditEducationPlans)
+            {
+                LastEducationMessage = string.IsNullOrEmpty(EducationBlockReason)
+                    ? "当前不能提交培养计划。"
+                    : EducationBlockReason;
+                return EducationPlanCommandResult.Failure(EducationPlanOutcome.Blocked,
+                    LastEducationMessage);
+            }
+
+            if (!Enum.IsDefined(typeof(EducationDirection), direction))
+            {
+                LastEducationMessage = "培养方向无效。";
+                return EducationPlanCommandResult.Failure(EducationPlanOutcome.InvalidDirection,
+                    LastEducationMessage);
+            }
+            if (direction == EducationDirection.FreeGrowth)
+            {
+                if (!mentor.IsEmpty)
+                {
+                    LastEducationMessage = "自由成长不能指定导师。";
+                    return EducationPlanCommandResult.Failure(EducationPlanOutcome.InvalidMentor,
+                        LastEducationMessage);
+                }
+            }
+            else if (!TryMentorSpecialty(mentor, learner, CurrentGameDate, out _))
+            {
+                LastEducationMessage = "导师必须是存活、未退休的成年家族成员，且不能是培养对象本人。";
+                return EducationPlanCommandResult.Failure(EducationPlanOutcome.InvalidMentor,
+                    LastEducationMessage);
+            }
+
+            if (_development.HasResult(learner, age))
+            {
+                LastEducationMessage = "该年龄年度已经结算，不能再次提交计划。";
+                return EducationPlanCommandResult.Failure(EducationPlanOutcome.AlreadySettled,
+                    LastEducationMessage);
+            }
+            if (!EducationYearPlan.TryCreate(learner, age, direction, mentor,
+                    out EducationYearPlan plan, out string planError))
+            {
+                LastEducationMessage = planError;
+                return EducationPlanCommandResult.Failure(EducationPlanOutcome.InvalidState,
+                    LastEducationMessage);
+            }
+
+            CharacterDevelopmentState next = _development.Clone();
+            if (!next.TrySetPlan(plan, out string error))
+            {
+                LastEducationMessage = error;
+                return EducationPlanCommandResult.Failure(EducationPlanOutcome.AlreadySettled, error);
+            }
+
+            _development = next;
+            LastEducationMessage = "已提交 " + age + " 岁年度计划：" +
+                CharacterGrowthRules.DirectionName(direction) +
+                (direction == EducationDirection.FreeGrowth
+                    ? "（无导师）"
+                    : "／导师 " + PersonDisplayName(mentor, "家人")) + "。";
+            SessionStateChanged?.Invoke();
+            return new EducationPlanCommandResult(true, EducationPlanOutcome.Succeeded,
+                LastEducationMessage, plan);
+        }
+
+        /// <summary>
+        /// Starts or replaces the single active research project at a management stable
+        /// point. It grants no progress and writes no chronicle; only the monthly
+        /// settlement advances or completes a project. Replacing the researcher keeps
+        /// the same project's progress.
+        /// </summary>
+        public FamilyResearchPlanCommandResult TrySetResearchPlan(string researchId,
+            PersonId researcherId)
+        {
+            EnsureSuccession();
+            EnsureIndustryState();
+            EnsureResearch();
+            if (!FamilyResearchCatalog.TryGet(researchId, out FamilyResearchDefinition definition))
+            {
+                LastResearchMessage = "未知研究项目：" + (researchId ?? "(null)") + "。";
+                return FamilyResearchPlanCommandResult.Failure(
+                    FamilyResearchPlanOutcome.UnknownResearch, LastResearchMessage, researchId,
+                    researcherId);
+            }
+            if (researcherId.IsEmpty)
+            {
+                LastResearchMessage = "请选择一位存活、未退休的成年家族研究者。";
+                return FamilyResearchPlanCommandResult.Failure(
+                    FamilyResearchPlanOutcome.InvalidResearcher, LastResearchMessage, researchId,
+                    researcherId);
+            }
+            if (_researchState.IsKnownTechnique(definition.TechniqueId))
+            {
+                LastResearchMessage = "「" + definition.TechniqueDisplayName +
+                                      "」已经记录为家族知识，无需再次研究。";
+                return FamilyResearchPlanCommandResult.Failure(
+                    FamilyResearchPlanOutcome.AlreadyKnown, LastResearchMessage, researchId,
+                    researcherId);
+            }
+            if (!CanEditResearch)
+            {
+                LastResearchMessage = string.IsNullOrEmpty(ResearchBlockReason)
+                    ? "当前不能安排研究计划。"
+                    : ResearchBlockReason;
+                return FamilyResearchPlanCommandResult.Failure(FamilyResearchPlanOutcome.Blocked,
+                    LastResearchMessage, researchId, researcherId);
+            }
+            if (!FamilyResearchSettlement.IsEligibleResearcher(Succession, researcherId,
+                    CurrentGameDate, _industryState, out string reason))
+            {
+                LastResearchMessage = "研究者不符合条件：" + reason;
+                return FamilyResearchPlanCommandResult.Failure(
+                    FamilyResearchPlanOutcome.InvalidResearcher, LastResearchMessage, researchId,
+                    researcherId);
+            }
+
+            FamilyResearchState next = _researchState.Clone();
+            if (!next.TryStartOrReplacePlan(researchId, researcherId, out string error))
+            {
+                LastResearchMessage = error;
+                return FamilyResearchPlanCommandResult.Failure(
+                    FamilyResearchPlanOutcome.InvalidState, error, researchId, researcherId);
+            }
+
+            _researchState = next;
+            LastResearchMessage = "已安排「" + definition.ProjectDisplayName + "」：研究者" +
+                                  IndustryService.PersonName(Succession, researcherId) +
+                                  "。每月推进 " + definition.MonthlyProgress + " 点进度，消耗 " +
+                                  definition.MonthlyFundsCost + " 资金、" +
+                                  definition.MonthlySuppliesCost + " 物资。";
+            SessionStateChanged?.Invoke();
+            return new FamilyResearchPlanCommandResult(true, FamilyResearchPlanOutcome.Succeeded,
+                LastResearchMessage, researchId, researcherId);
+        }
+
+        /// <summary>
+        /// Registers one formal marriage between a living adult family member and one
+        /// registered, living, adult non-member candidate. Multiple spouses are allowed;
+        /// self, duplicate spouse facts and direct blood/adoptive ancestors/descendants
+        /// are rejected. Sibling facts do not block the marriage.
+        /// </summary>
+        public FamilyFormationCommandResult TryRegisterMarriage(PersonId memberId,
+            PersonId candidateId)
+        {
+            EnsureSuccession();
+            EnsureHistoryLedger();
+            if (!SC022FamilyFormationScenario.IsActive(_succession))
+                return FailFamilyFormation(FamilyFormationOutcome.InvalidState,
+                    "当前不是 SC-022 婚姻与收养示范。", memberId, candidateId);
+            if (memberId.IsEmpty || candidateId.IsEmpty)
+                return FailFamilyFormation(FamilyFormationOutcome.InvalidInitiator,
+                    "请选择一位家族成员与一位候选人。", memberId, candidateId);
+            if (memberId == candidateId)
+                return FailFamilyFormation(FamilyFormationOutcome.SelfRelation,
+                    "不能与本人登记婚姻。", memberId, candidateId);
+            if (!_succession.World.TryGetPerson(memberId, out PersonState member))
+                return FailFamilyFormation(FamilyFormationOutcome.InvalidInitiator,
+                    "婚姻发起人不是已登记人物。", memberId, candidateId);
+            if (!_succession.World.Family.IsMember(memberId))
+                return FailFamilyFormation(FamilyFormationOutcome.InvalidInitiator,
+                    "婚姻发起人不是当前家族成员。", memberId, candidateId);
+            if (!_succession.World.TryGetLife(memberId, out SuccessionPersonLife memberLife) ||
+                !memberLife.Alive)
+                return FailFamilyFormation(FamilyFormationOutcome.InvalidInitiator,
+                    "婚姻发起人必须是在世人物。", memberId, candidateId);
+            if (memberLife.AgeAt(CurrentGameDate) < _succession.AdulthoodAge)
+                return FailFamilyFormation(FamilyFormationOutcome.InvalidInitiator,
+                    "婚姻发起人必须达到家族成年年龄。", memberId, candidateId);
+
+            if (!_succession.World.TryGetPerson(candidateId, out PersonState candidate))
+                return FailFamilyFormation(FamilyFormationOutcome.InvalidCandidate,
+                    "婚姻候选人不是已登记人物。", memberId, candidateId);
+            if (!_succession.World.TryGetLife(candidateId,
+                    out SuccessionPersonLife candidateLife) || !candidateLife.Alive)
+                return FailFamilyFormation(FamilyFormationOutcome.InvalidCandidate,
+                    "婚姻候选人必须是在世人物。", memberId, candidateId);
+            if (!SC022FamilyFormationScenario.IsScenarioCandidate(candidateId))
+                return FailFamilyFormation(FamilyFormationOutcome.InvalidCandidate,
+                    "婚姻候选人不在 SC-022 示范名单中。", memberId, candidateId);
+
+            if (HasKinshipLink(memberId, candidateId, KinshipType.Spouse))
+                return FailFamilyFormation(FamilyFormationOutcome.DuplicateRelation,
+                    "这两位人物已经登记为正式配偶。", memberId, candidateId);
+            if (_succession.World.Family.IsMember(candidateId))
+                return FailFamilyFormation(FamilyFormationOutcome.AlreadyMember,
+                    "候选人已经属于当前家族。", memberId, candidateId);
+            if (candidateLife.AgeAt(CurrentGameDate) < _succession.AdulthoodAge)
+                return FailFamilyFormation(FamilyFormationOutcome.CandidateNotEligible,
+                    "婚姻候选人必须达到家族成年年龄。", memberId, candidateId);
+            if (!CanEditFamilyFormation)
+                return FailFamilyFormation(FamilyFormationOutcome.Blocked,
+                    FamilyFormationBlockReason, memberId, candidateId);
+            if (FamilyFormationRules.IsDirectLineRelation(_succession.World.Kinship, memberId,
+                    candidateId))
+                return FailFamilyFormation(FamilyFormationOutcome.DirectLineRelation,
+                    "直系血亲或直系养亲不能登记婚姻。", memberId, candidateId);
+
+            GameDate date = CurrentGameDate;
+            string memberName = member.DisplayName;
+            string candidateName = candidate.DisplayName;
+            string summary = "婚姻登记：" + memberName + " 与 " + candidateName +
+                             " 结为正式配偶。";
+            if (!EnsureHistoryLedger().TryPrepareFamilyFormation(date.Year, date.Month,
+                    memberId.Value, FamilyChronicleEntry.MarriageSourceId, "家族婚姻", summary,
+                    out FamilyChronicleEntry entry, out string chronicleError))
+                return FailFamilyFormation(FamilyFormationOutcome.ChronicleFailed,
+                    "家族编年史记录无法创建：" + chronicleError, memberId, candidateId);
+
+            if (!_succession.World.TryAddMember(candidateId, FamilyMemberRole.Spouse,
+                    out string error))
+                return FailFamilyFormation(FamilyFormationOutcome.InvalidState, error, memberId,
+                    candidateId);
+            var spouseLink = new KinshipLink(memberId, candidateId, KinshipType.Spouse);
+            if (!_succession.World.TryAddKinship(spouseLink, out error))
+            {
+                _succession.World.TryRemoveMember(candidateId, out _);
+                return FailFamilyFormation(FamilyFormationOutcome.InvalidState, error, memberId,
+                    candidateId);
+            }
+            FamilyFormationAppendFaultInjection?.Invoke(EnsureHistoryLedger());
+            if (!EnsureHistoryLedger().TryAppendPrepared(entry, out error))
+            {
+                // A prepared entry can still fail if the ledger advanced after
+                // preparation. Roll back both relationship mutations so a rejected
+                // command leaves membership, kinship and chronicle unchanged.
+                _succession.World.Kinship.TryRemove(spouseLink, out _);
+                _succession.World.TryRemoveMember(candidateId, out _);
+                ReportChronicleAppendFailure("家族婚姻", error);
+                return FailFamilyFormation(FamilyFormationOutcome.ChronicleFailed,
+                    "家族编年史记录写入失败：" + error, memberId, candidateId);
+            }
+
+            LastFamilyFormationMessage = "已登记婚姻：" + memberName + " 与 " + candidateName + "。";
+            SessionStateChanged?.Invoke();
+            return new FamilyFormationCommandResult(true, FamilyFormationOutcome.Succeeded,
+                LastFamilyFormationMessage, memberId, candidateId);
+        }
+
+        /// <summary>
+        /// Registers one ordinary adoption. The candidate may be a child or an adult;
+        /// the adopter must be a living adult family member. Self, a formal spouse,
+        /// duplicate adoption facts and candidates that would close a directed
+        /// parent/child cycle are rejected. Blood facts and succession state are not
+        /// changed.
+        /// </summary>
+        public FamilyFormationCommandResult TryAdopt(PersonId adopterId, PersonId candidateId)
+        {
+            EnsureSuccession();
+            EnsureHistoryLedger();
+            if (!SC022FamilyFormationScenario.IsActive(_succession))
+                return FailFamilyFormation(FamilyFormationOutcome.InvalidState,
+                    "当前不是 SC-022 婚姻与收养示范。", adopterId, candidateId);
+            if (adopterId.IsEmpty || candidateId.IsEmpty)
+                return FailFamilyFormation(FamilyFormationOutcome.InvalidInitiator,
+                    "请选择一位收养人与一位候选人。", adopterId, candidateId);
+            if (adopterId == candidateId)
+                return FailFamilyFormation(FamilyFormationOutcome.SelfRelation,
+                    "不能收养本人。", adopterId, candidateId);
+            if (!_succession.World.TryGetPerson(adopterId, out PersonState adopter))
+                return FailFamilyFormation(FamilyFormationOutcome.InvalidInitiator,
+                    "收养人不是已登记人物。", adopterId, candidateId);
+            if (!_succession.World.Family.IsMember(adopterId))
+                return FailFamilyFormation(FamilyFormationOutcome.InvalidInitiator,
+                    "收养人不是当前家族成员。", adopterId, candidateId);
+            if (!_succession.World.TryGetLife(adopterId, out SuccessionPersonLife adopterLife) ||
+                !adopterLife.Alive)
+                return FailFamilyFormation(FamilyFormationOutcome.InvalidInitiator,
+                    "收养人必须是在世人物。", adopterId, candidateId);
+            if (adopterLife.AgeAt(CurrentGameDate) < _succession.AdulthoodAge)
+                return FailFamilyFormation(FamilyFormationOutcome.InvalidInitiator,
+                    "收养人必须达到家族成年年龄。", adopterId, candidateId);
+
+            if (!_succession.World.TryGetPerson(candidateId, out PersonState candidate))
+                return FailFamilyFormation(FamilyFormationOutcome.InvalidCandidate,
+                    "收养候选人不是已登记人物。", adopterId, candidateId);
+            if (!_succession.World.TryGetLife(candidateId,
+                    out SuccessionPersonLife candidateLife) || !candidateLife.Alive)
+                return FailFamilyFormation(FamilyFormationOutcome.InvalidCandidate,
+                    "收养候选人必须是在世人物。", adopterId, candidateId);
+            if (HasKinshipLink(adopterId, candidateId, KinshipType.Spouse))
+                return FailFamilyFormation(FamilyFormationOutcome.SpouseRelation,
+                    "不能收养自己的正式配偶。", adopterId, candidateId);
+            if (_succession.World.Family.IsMember(candidateId))
+                return FailFamilyFormation(FamilyFormationOutcome.AlreadyMember,
+                    "候选人已经属于当前家族。", adopterId, candidateId);
+            if (!SC022FamilyFormationScenario.IsScenarioCandidate(candidateId))
+                return FailFamilyFormation(FamilyFormationOutcome.InvalidCandidate,
+                    "收养候选人不在 SC-022 示范名单中。", adopterId, candidateId);
+            if (HasKinshipLink(adopterId, candidateId, KinshipType.Adoption))
+                return FailFamilyFormation(FamilyFormationOutcome.DuplicateRelation,
+                    "这条收养关系已经登记。", adopterId, candidateId);
+            if (!CanEditFamilyFormation)
+                return FailFamilyFormation(FamilyFormationOutcome.Blocked,
+                    FamilyFormationBlockReason, adopterId, candidateId);
+            if (FamilyFormationRules.WouldCreateAdoptionCycle(_succession.World.Kinship, adopterId,
+                    candidateId))
+                return FailFamilyFormation(FamilyFormationOutcome.AdoptionCycle,
+                    "该收养会使亲子关系形成循环。", adopterId, candidateId);
+
+            GameDate date = CurrentGameDate;
+            string adopterName = adopter.DisplayName;
+            string candidateName = candidate.DisplayName;
+            string summary = "普通收养：" + adopterName + " 收养 " + candidateName +
+                             " 为养子/养女。";
+            if (!EnsureHistoryLedger().TryPrepareFamilyFormation(date.Year, date.Month,
+                    adopterId.Value, FamilyChronicleEntry.AdoptionSourceId, "家族收养", summary,
+                    out FamilyChronicleEntry entry, out string chronicleError))
+                return FailFamilyFormation(FamilyFormationOutcome.ChronicleFailed,
+                    "家族编年史记录无法创建：" + chronicleError, adopterId, candidateId);
+
+            if (!_succession.World.TryAddMember(candidateId, FamilyMemberRole.AdoptedChild,
+                    out string error))
+                return FailFamilyFormation(FamilyFormationOutcome.InvalidState, error, adopterId,
+                    candidateId);
+            var adoptionLink = new KinshipLink(adopterId, candidateId, KinshipType.Adoption);
+            if (!_succession.World.TryAddKinship(adoptionLink, out error))
+            {
+                _succession.World.TryRemoveMember(candidateId, out _);
+                return FailFamilyFormation(FamilyFormationOutcome.InvalidState, error, adopterId,
+                    candidateId);
+            }
+            FamilyFormationAppendFaultInjection?.Invoke(EnsureHistoryLedger());
+            if (!EnsureHistoryLedger().TryAppendPrepared(entry, out error))
+            {
+                // Same atomic rollback as marriage: the append can fail if the ledger
+                // advanced after preparation, so remove the uncommitted member and
+                // kinship fact before reporting the failure.
+                _succession.World.Kinship.TryRemove(adoptionLink, out _);
+                _succession.World.TryRemoveMember(candidateId, out _);
+                ReportChronicleAppendFailure("家族收养", error);
+                return FailFamilyFormation(FamilyFormationOutcome.ChronicleFailed,
+                    "家族编年史记录写入失败：" + error, adopterId, candidateId);
+            }
+
+            LastFamilyFormationMessage = "已办理收养：" + adopterName + " 收养 " +
+                                         candidateName + "。";
+            SessionStateChanged?.Invoke();
+            return new FamilyFormationCommandResult(true, FamilyFormationOutcome.Succeeded,
+                LastFamilyFormationMessage, adopterId, candidateId);
+        }
+
+        private FamilyFormationCommandResult FailFamilyFormation(FamilyFormationOutcome outcome,
+            string message, PersonId initiatorId, PersonId candidateId)
+        {
+            LastFamilyFormationMessage = message ?? string.Empty;
+            return FamilyFormationCommandResult.Failure(outcome, LastFamilyFormationMessage,
+                initiatorId, candidateId);
+        }
+
+        private bool HasKinshipLink(PersonId from, PersonId to, KinshipType type) =>
+            _succession != null && _succession.World != null &&
+            _succession.World.Kinship.Contains(new KinshipLink(from, to, type));
+
+        /// <summary>
+        /// Keeps the v7 growth rows aligned with the current succession roster after a
+        /// successful succession command. Crisis adoption adds one person; the new row
+        /// starts at zero and existing values, plans and results are never rewritten.
+        /// Roster replacement (starting the crisis demo) rebuilds the whole state instead.
+        /// </summary>
+        private void ReconcileDevelopmentRoster()
+        {
+            if (_development == null || _succession == null || _succession.World == null)
+                return;
+            foreach (PersonState person in _succession.World.Persons)
+            {
+                if (_development.Contains(person.Id))
+                    continue;
+                _development.TryAddPerson(person.Id,
+                    CharacterGrowthValues.CreateClamped(0, 0, 0, 0, 0), out _);
+            }
+        }
+
+        /// <summary>Total cleanup used after succession and before capture; no production or history.</summary>
+        private IReadOnlyList<IndustryVacancy> ReconcileIndustryAssignments()
+        {
+            if (_industryState == null)
+                return Array.Empty<IndustryVacancy>();
+            IReadOnlyList<IndustryVacancy> vacated = IndustryService.ReconcileAssignments(
+                _industryState, Succession, CurrentGameDate);
+            if (vacated.Count > 0)
+                LastIndustryMessage = DescribeVacancies(vacated);
+            return vacated;
+        }
+
+        private void EnsureIndustryAssignmentsValid()
+        {
+            EnsureSuccession();
+            EnsureIndustryState();
+            ReconcileIndustryAssignments();
+        }
+
+        /// <summary>
+        /// Readable completion record. The stable research/technique IDs stay in the
+        /// ledger fields; the player-facing title and summary contain only names and
+        /// the exact progress/month values.
+        /// </summary>
+        private string BuildResearchChronicleSummary(FamilyResearchSettlementResult result,
+            GameDate completedMonth)
+        {
+            string technique = FamilyResearchCatalog.TechniqueDisplayName(result.TechniqueId);
+            string researcher = IndustryService.PersonName(Succession, result.ResearcherId);
+            return "「" + technique + "」研究完成：研究者" + researcher + "，进度 " +
+                   result.BeforeProgress.ToString(CultureInfo.InvariantCulture) + " → " +
+                   result.AfterProgress.ToString(CultureInfo.InvariantCulture) + "，完成于 " +
+                   completedMonth.Year.ToString("0000", CultureInfo.InvariantCulture) + " 年 " +
+                   completedMonth.Month.ToString(CultureInfo.InvariantCulture) + " 月。";
+        }
+
+        private string DescribeVacancies(IReadOnlyList<IndustryVacancy> vacated)
+        {
+            var builder = new StringBuilder(96);
+            builder.Append("已移除失效产业任命：");
+            for (int i = 0; i < vacated.Count; i++)
+            {
+                if (i > 0)
+                    builder.Append('；');
+                builder.Append(IndustryService.IndustryName(vacated[i].IndustryId)).Append('/')
+                    .Append(IndustryService.PersonName(Succession, vacated[i].PreviousAssignee))
+                    .Append("（").Append(vacated[i].Reason).Append('）');
+            }
+            builder.Append('。');
+            return builder.ToString();
+        }
+
+        /// <summary>Appends exactly one personnel record for a real succession-driven cleanup.</summary>
+        private void RecordIndustryPersonnel(IReadOnlyList<IndustryVacancy> vacated)
+        {
+            GameDate date = CurrentGameDate;
+            var builder = new StringBuilder(128);
+            builder.Append(DescribeVacancies(vacated));
+            foreach (IndustryAssignment assignment in EnsureIndustryState().Assignments)
+            {
+                if (assignment.PersonId.IsEmpty)
+                    continue;
+                builder.Append(IndustryService.IndustryName(assignment.IndustryId)).Append("仍由")
+                    .Append(IndustryService.PersonName(Succession, assignment.PersonId))
+                    .Append("负责。");
+            }
+
+            if (!EnsureHistoryLedger().TryAppendIndustry(date.Year, date.Month,
+                    "industry.assignments", "succession", 0, 0, "产业人事", builder.ToString(),
+                    out _, out string error))
+                ReportChronicleAppendFailure("产业人事", error);
         }
 
         private readonly struct SuccessionSnapshot
@@ -541,12 +1470,123 @@ namespace SengokuChronicle.Application
             }
         }
 
+        private IndustryState EnsureIndustryState()
+        {
+            if (_industryState == null)
+                _industryState = IndustryState.CreateInitial(CurrentGameDate);
+            return _industryState;
+        }
+
+        private CharacterDevelopmentState EnsureDevelopment()
+        {
+            if (_development == null)
+                _development = CreateDevelopmentFor(Succession);
+            return _development;
+        }
+
+        private FamilyResearchState EnsureResearch()
+        {
+            if (_researchState == null)
+                _researchState = FamilyResearchState.CreateInitial(CurrentGameDate);
+            return _researchState;
+        }
+
+        /// <summary>Creates zero growth rows for every registered family person.</summary>
+        private static CharacterDevelopmentState CreateDevelopmentFor(SuccessionState succession)
+        {
+            var development = CharacterDevelopmentState.CreateEmpty();
+            if (succession == null || succession.World == null)
+                return development;
+
+            bool sc020 = SC020EducationScenario.IsActive(succession);
+            foreach (PersonState person in succession.World.Persons)
+            {
+                CharacterGrowthValues values = sc020 && person.Id == SC020EducationScenario.ChildId
+                    ? CharacterGrowthValues.CreateClamped(SC020EducationScenario.ChildNinjutsu,
+                        SC020EducationScenario.ChildMartialArts, SC020EducationScenario.ChildScholarship,
+                        SC020EducationScenario.ChildManagement, SC020EducationScenario.ChildSocial)
+                    : CharacterGrowthValues.CreateClamped(0, 0, 0, 0, 0);
+                development.TryAddPerson(person.Id, values, out _);
+            }
+            return development;
+        }
+
+        private bool HasEligibleEducationLearner()
+        {
+            if (_development == null || _succession == null || _succession.World == null)
+                return false;
+            foreach (PersonId personId in _development.PersonIds)
+            {
+                if (!_succession.World.Family.IsMember(personId) ||
+                    !_succession.World.TryGetLife(personId, out SuccessionPersonLife life) ||
+                    !life.Alive)
+                    continue;
+                int age = life.AgeAt(CurrentGameDate);
+                if (age >= SC020EducationScenario.MinimumLearnerAge &&
+                    age <= SC020EducationScenario.MaximumLearnerAge)
+                    return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// One shared mentor rule for plan submission and settlement. The learner is never
+        /// its own mentor; the mentor must be a living, non-retired adult family member.
+        /// </summary>
+        private bool IsEligibleEducationMentor(PersonId mentorId, PersonId learnerId, GameDate date)
+        {
+            if (mentorId.IsEmpty || mentorId == learnerId || _succession == null ||
+                _succession.World == null ||
+                !_succession.World.Family.IsMember(mentorId) ||
+                !_succession.World.TryGetLife(mentorId, out SuccessionPersonLife life) ||
+                !life.Alive || life.Retired)
+                return false;
+            return life.IsAdultAt(date, _succession.AdulthoodAge);
+        }
+
+        private bool TryMentorSpecialty(PersonId mentorId, PersonId learnerId, GameDate date,
+            out MentorSpecialty specialty)
+        {
+            if (!IsEligibleEducationMentor(mentorId, learnerId, date))
+            {
+                specialty = MentorSpecialty.None;
+                return false;
+            }
+            specialty = SC020EducationScenario.SpecialtyOf(mentorId);
+            return true;
+        }
+
+        private bool HasAptitude(PersonId personId) =>
+            SC020EducationScenario.IsActive(Succession) && SC020EducationScenario.IsChild(personId);
+
+        private GrowthAttribute AptitudeOf(PersonId personId) =>
+            HasAptitude(personId) ? SC020EducationScenario.ChildAptitude : default;
+
+        private bool IsSupportiveEnvironment(PersonId personId) =>
+            SC020EducationScenario.IsActive(Succession) && SC020EducationScenario.IsChild(personId) &&
+            SC020EducationScenario.SupportiveEnvironment;
+
+        private string LastIndustryChronicleSummary
+        {
+            get
+            {
+                IReadOnlyList<FamilyChronicleEntry> entries = EnsureHistoryLedger().Entries;
+                for (int i = entries.Count - 1; i >= 0; i--)
+                    if (entries[i].Category == ChronicleCategory.Industry)
+                        return entries[i].Summary;
+                return string.Empty;
+            }
+        }
+
         /// <summary>Captures the current runtime state as versioned save data.</summary>
         public SaveData CaptureSave()
         {
             EnsureRelationships();
             EnsureRandomState();
             EnsureEventRuntimeState();
+            // A stable save point must remain saveable after a death, retirement or
+            // departure. Cleanup is a total function: no production, no chronicle.
+            EnsureIndustryAssignmentsValid();
             GameDate date = WorldClock != null ? WorldClock.CurrentDate : SengokuChronicle.Domain.WorldClock.NewGameDate;
 
             return new SaveData
@@ -565,10 +1605,14 @@ namespace SengokuChronicle.Application
                 sealedLetterStage = (int)_sealedLetterMission.Stage,
                 marketTallyStage = (int)_marketTallyMission.Stage,
                 relationships = CaptureRelationships(),
+                familyRelationships = CaptureFamilyRelationships(),
                 randomState = _randomStateManager.CaptureState(),
                 eventRuntime = _eventRuntimeState.Capture(),
                 succession = SuccessionSaveData.Capture(Succession),
-                chronicle = ChronicleSaveCodec.Capture(EnsureHistoryLedger())
+                chronicle = ChronicleSaveCodec.Capture(EnsureHistoryLedger()),
+                industry = IndustryStateSaveData.Capture(EnsureIndustryState()),
+                development = CharacterDevelopmentSaveData.Capture(EnsureDevelopment()),
+                research = FamilyResearchSaveData.Capture(EnsureResearch())
             };
         }
 
@@ -595,6 +1639,19 @@ namespace SengokuChronicle.Application
             if (!SuccessionSaveData.TryRestore(data.succession, date,
                     out SuccessionState succession, out string successionError))
                 return InvalidSave(string.IsNullOrEmpty(successionError) ? "存档继承状态无效。" : successionError);
+            if (!IndustryStateSaveData.TryRestore(data.industry, data.succession, date,
+                    out IndustryState industry, out string industryError))
+                return InvalidSave(string.IsNullOrEmpty(industryError) ? "存档产业状态无效。" : industryError);
+            if (!CharacterDevelopmentSaveData.TryRestore(data.development, succession,
+                    out CharacterDevelopmentState development, out string developmentError))
+                return InvalidSave(string.IsNullOrEmpty(developmentError)
+                    ? "存档人物成长状态无效。"
+                    : developmentError);
+            if (!FamilyResearchSaveData.TryRestore(data.research, date, data.succession,
+                    out FamilyResearchState research, out string researchError))
+                return InvalidSave(string.IsNullOrEmpty(researchError)
+                    ? "存档家族研究状态无效。"
+                    : researchError);
             if (!_eventEngine.TryRestoreState(data.eventRuntime, date, BuildEventRuleContext(succession),
                     out EventRuntimeState eventRuntime, out string eventError))
                 return InvalidSave(string.IsNullOrEmpty(eventError) ? "存档事件状态无效。" : eventError);
@@ -628,16 +1685,51 @@ namespace SengokuChronicle.Application
                 }
             }
 
+            var familyRelationships = FamilyRelationships.CreateEmpty();
+            var familyPairs = new HashSet<FamilyRelationshipKey>();
+            if (data.familyRelationships != null)
+            {
+                foreach (FamilyRelationshipSaveEntry entry in data.familyRelationships)
+                {
+                    if (entry == null ||
+                        !PersonId.TryParse(entry.headPersonId, out PersonId headId) || headId.IsEmpty ||
+                        !PersonId.TryParse(entry.memberPersonId, out PersonId memberId) || memberId.IsEmpty ||
+                        headId == memberId)
+                        return InvalidSave("存档家庭关系数据无效。");
+                    if (!succession.World.Family.IsMember(headId) ||
+                        !succession.World.Family.IsMember(memberId))
+                        return InvalidSave("存档家庭关系引用了非家庭成员。");
+                    if (!familyPairs.Add(new FamilyRelationshipKey(headId, memberId)))
+                        return InvalidSave("存档家庭关系人物对重复。");
+
+                    FamilyRelationshipResult changed =
+                        familyRelationships.TryChange(headId, memberId, entry.value);
+                    if (!changed.Succeeded)
+                        return InvalidSave(changed.Error);
+                }
+            }
+
             WorldClock = new WorldClock(date);
             CurrentLocation = location;
             _supplyShortageMission = supplyShortage;
             _sealedLetterMission = sealedLetter;
             _marketTallyMission = marketTally;
             _relationships = relationships;
+            _familyRelationships = familyRelationships;
             _randomStateManager = randomState;
             _eventRuntimeState = eventRuntime;
             _succession = succession;
             M2FixedScenario.SyncDesignation(_succession);
+            _industryState = industry;
+            _development = development;
+            _researchState = research;
+            LastIndustryReport = null;
+            LastIndustryMessage = string.Empty;
+            LastEducationMessage = string.Empty;
+            LastResearchReport = null;
+            LastResearchMessage = string.Empty;
+            LastFamilyFormationMessage = string.Empty;
+            LastTravelBlockReason = string.Empty;
             _historyLedger = historyLedger;
             LastSuccessionMessage = string.Empty;
             NoticeRegencyHandoffIfDue();
@@ -685,6 +1777,24 @@ namespace SengokuChronicle.Application
             }
 
             return entries.ToArray();
+        }
+
+        private FamilyRelationshipSaveEntry[] CaptureFamilyRelationships()
+        {
+            EnsureRelationships();
+            IReadOnlyList<FamilyRelationshipEntry> source = _familyRelationships.Entries;
+            var entries = new FamilyRelationshipSaveEntry[source.Count];
+            for (int i = 0; i < source.Count; i++)
+            {
+                FamilyRelationshipEntry entry = source[i];
+                entries[i] = new FamilyRelationshipSaveEntry
+                {
+                    headPersonId = entry.HeadId.Value,
+                    memberPersonId = entry.MemberId.Value,
+                    value = entry.Value
+                };
+            }
+            return entries;
         }
 
         private static SaveOperationResult InvalidSave(string message)
@@ -791,6 +1901,48 @@ namespace SengokuChronicle.Application
             return result;
         }
 
+        /// <summary>Reads the value of the current head and member pair.</summary>
+        public FamilyRelationshipResult TryGetFamilyRelationship(PersonId memberId) =>
+            TryGetFamilyRelationship(Succession != null ? Succession.HeadPersonId : default, memberId);
+
+        /// <summary>Reads one explicit (head, member) pair value; used by tests and history review.</summary>
+        public FamilyRelationshipResult TryGetFamilyRelationship(PersonId headId, PersonId memberId)
+        {
+            EnsureRelationships();
+            return _familyRelationships.TryGet(headId, memberId);
+        }
+
+        /// <summary>Applies a delta to the current head and member pair value.</summary>
+        public FamilyRelationshipResult TryChangeFamilyRelationship(PersonId memberId, int delta) =>
+            TryChangeFamilyRelationship(Succession != null ? Succession.HeadPersonId : default, memberId, delta);
+
+        /// <summary>
+        /// Applies a delta to one explicit (head, member) pair. The head must be the
+        /// current head, both people must belong to the active family, and the member
+        /// may not be the head. Historical pairs remain readable but are never
+        /// rewritten by a later head.
+        /// </summary>
+        public FamilyRelationshipResult TryChangeFamilyRelationship(PersonId headId, PersonId memberId, int delta)
+        {
+            EnsureRelationships();
+            SuccessionState succession = Succession;
+            if (succession == null || succession.World == null ||
+                headId != succession.HeadPersonId)
+                return new FamilyRelationshipResult(headId, memberId, 0, 0, false,
+                    "家庭关系只能由当前家主变更。");
+            if (!succession.World.Family.IsMember(headId) || !succession.World.Family.IsMember(memberId))
+                return new FamilyRelationshipResult(headId, memberId, 0, 0, false,
+                    "家庭关系目标不是当前家庭成员。");
+            if (headId == memberId)
+                return new FamilyRelationshipResult(headId, memberId, 0, 0, false,
+                    "家庭关系不能指向家主本人。");
+
+            FamilyRelationshipResult result = _familyRelationships.TryChange(headId, memberId, delta);
+            if (RecordFamilyRelationshipChange(result, "direct"))
+                SessionStateChanged?.Invoke();
+            return result;
+        }
+
         /// <summary>
         /// Appends one relationship record only when the change really happened.
         /// Callers pass the applied <see cref="RelationshipResult"/> so the record shows
@@ -818,6 +1970,43 @@ namespace SengokuChronicle.Application
             // The relationship value already changed, so callers must still refresh
             // observers even when the separate chronicle bookkeeping append failed.
             return true;
+        }
+
+        /// <summary>
+        /// Appends one person-pair family relationship record with both display names
+        /// and the exact before/after values. Raw person IDs never become the title.
+        /// </summary>
+        private bool RecordFamilyRelationshipChange(FamilyRelationshipResult result, string channel)
+        {
+            if (!result.Succeeded || result.PreviousValue == result.CurrentValue)
+                return false;
+
+            GameDate date = CurrentGameDate;
+            string headName = PersonDisplayName(result.HeadId, "家主");
+            string memberName = PersonDisplayName(result.MemberId, "家人");
+            // Key order is (head, member); the summary below carries the numeric change.
+            string title = headName + " 与 " + memberName;
+            string summary = "家主" + headName + "与" + memberName + "的关系 " +
+                             result.PreviousValue.ToString(CultureInfo.InvariantCulture) + " → " +
+                             result.CurrentValue.ToString(CultureInfo.InvariantCulture) +
+                             "（" + RelationshipChannelName(channel) + "）。";
+            if (!EnsureHistoryLedger().TryAppendRelationship(date.Year, date.Month,
+                    result.HeadId.Value + "->" + result.MemberId.Value, channel,
+                    result.PreviousValue, result.CurrentValue, title, summary,
+                    out _, out string error))
+                ReportChronicleAppendFailure("家庭关系", error);
+
+            return true;
+        }
+
+        private string PersonDisplayName(PersonId personId, string fallback)
+        {
+            SuccessionState succession = Succession;
+            return succession != null && succession.World != null &&
+                   succession.World.TryGetPerson(personId, out PersonState person) &&
+                   !string.IsNullOrWhiteSpace(person.DisplayName)
+                ? person.DisplayName
+                : fallback;
         }
 
         /// <summary>
@@ -904,6 +2093,8 @@ namespace SengokuChronicle.Application
         {
             if (_relationships == null)
                 _relationships = new CharacterRelationships();
+            if (_familyRelationships == null)
+                _familyRelationships = FamilyRelationships.CreateEmpty();
         }
 
         private void EnsureRandomState()
@@ -972,13 +2163,16 @@ namespace SengokuChronicle.Application
             GameDate currentDate = WorldClock != null
                 ? WorldClock.CurrentDate
                 : SengokuChronicle.Domain.WorldClock.NewGameDate;
+            EnsureRelationships();
             EventChoiceResult result = _eventEngine.TryChooseEventOption(eventId, optionId, committedResultId,
-                currentDate, _relationships, _eventRuntimeState, BuildEventRuleContext());
+                currentDate, _relationships, _eventRuntimeState, BuildEventRuleContext(), _familyRelationships);
             if (result.Succeeded)
             {
                 RecordEventChoice(result);
                 foreach (RelationshipResult relationship in result.AppliedRelationships)
                     RecordRelationshipChange(relationship, "event");
+                foreach (FamilyRelationshipResult relationship in result.AppliedFamilyRelationships)
+                    RecordFamilyRelationshipChange(relationship, "event");
                 LastEventMessage = result.Feedback;
                 SessionStateChanged?.Invoke();
             }
@@ -997,11 +2191,16 @@ namespace SengokuChronicle.Application
         /// </summary>
         private static EventRuleContext BuildEventRuleContext(SuccessionState succession)
         {
-            if (succession == null)
+            if (succession == null || succession.World == null)
                 return EventRuleContext.Default;
             int settled = succession.Phase == SuccessionPhase.None ? succession.SuccessionCount : 0;
             string scenario = M2FixedScenario.IsActive(succession) ? EventScenarioIds.Sc013 : string.Empty;
-            return new EventRuleContext(succession.SuccessionCount, settled, scenario);
+            IReadOnlyList<FamilyMembership> memberships = succession.World.Family.Members;
+            var members = new PersonId[memberships.Count];
+            for (int i = 0; i < memberships.Count; i++)
+                members[i] = memberships[i].PersonId;
+            return new EventRuleContext(succession.SuccessionCount, settled, scenario,
+                succession.HeadPersonId, members);
         }
 
         /// <summary>Creates an idempotent event-result ID from stable content and current game date.</summary>
@@ -1044,6 +2243,20 @@ namespace SengokuChronicle.Application
                 ReportSuccessionTimePause();
                 return false;
             }
+            if (!ValidateIndustryMonthConsistency())
+                return false;
+            if (!GameDate.TryNext(WorldClock.CurrentDate, out GameDate nextDate))
+            {
+                LastMonthTurnOutcome = MonthTurnOutcome.DateOutOfRange;
+                return false;
+            }
+            if (nextDate.Year != WorldClock.CurrentDate.Year ||
+                nextDate.Month != WorldClock.CurrentDate.Month)
+            {
+                LastMonthTurnOutcome = MonthTurnOutcome.MonthSettlementRequired;
+                LastEventMessage = "日期将跨月：请使用「结束本月」完成月度结算。";
+                return false;
+            }
             if (!WorldClock.AdvanceOneDay())
             {
                 LastMonthTurnOutcome = MonthTurnOutcome.DateOutOfRange;
@@ -1076,6 +2289,25 @@ namespace SengokuChronicle.Application
                 ReportSuccessionTimePause();
                 return false;
             }
+            if (count <= 0)
+            {
+                LastMonthTurnOutcome = MonthTurnOutcome.DateOutOfRange;
+                return false;
+            }
+            if (!ValidateIndustryMonthConsistency())
+                return false;
+            if (!GameDate.TryAddDays(WorldClock.CurrentDate, count, out GameDate targetDate))
+            {
+                LastMonthTurnOutcome = MonthTurnOutcome.DateOutOfRange;
+                return false;
+            }
+            if (targetDate.Year != WorldClock.CurrentDate.Year ||
+                targetDate.Month != WorldClock.CurrentDate.Month)
+            {
+                LastMonthTurnOutcome = MonthTurnOutcome.MonthSettlementRequired;
+                LastEventMessage = "日期将跨月：请使用「结束本月」完成月度结算。";
+                return false;
+            }
             if (!WorldClock.AdvanceDays(count))
             {
                 LastMonthTurnOutcome = MonthTurnOutcome.DateOutOfRange;
@@ -1085,6 +2317,137 @@ namespace SengokuChronicle.Application
             if (NoticeRegencyHandoffIfDue())
                 SessionStateChanged?.Invoke();
             return true;
+        }
+
+        /// <summary>One applied education year used only inside the month transaction.</summary>
+        private readonly struct EducationSettlementRecord
+        {
+            public EducationSettlementRecord(PersonId learner, int ageYear, EducationYearResult result)
+            {
+                Learner = learner;
+                AgeYear = ageYear;
+                Result = result;
+            }
+
+            public PersonId Learner { get; }
+            public int AgeYear { get; }
+            public EducationYearResult Result { get; }
+        }
+
+        /// <summary>
+        /// Applies every open 0..15 age year to a clone. A missing plan settles as free
+        /// growth; a plan whose mentor is no longer eligible also falls back to free growth
+        /// so a death or retirement cannot freeze the world clock forever.
+        /// </summary>
+        private bool TryPlanEducationSettlement(CharacterDevelopmentState working,
+            GameDate previousDate, out List<EducationSettlementRecord> records, out string error)
+        {
+            records = new List<EducationSettlementRecord>();
+            foreach (PersonId personId in working.PersonIds)
+            {
+                if (!_succession.World.Family.IsMember(personId) ||
+                    !_succession.World.TryGetLife(personId, out SuccessionPersonLife life) ||
+                    !life.Alive)
+                    continue;
+                int ageYear = life.AgeAt(previousDate);
+                if (ageYear < SC020EducationScenario.MinimumLearnerAge ||
+                    ageYear > SC020EducationScenario.MaximumLearnerAge ||
+                    working.HasResult(personId, ageYear))
+                    continue;
+
+                bool hasPlan = working.TryGetPlan(personId, ageYear, out EducationYearPlan plan);
+                bool mentorUnavailable = false;
+                MentorSpecialty specialty = MentorSpecialty.None;
+                if (hasPlan && !plan.IsFreeGrowth &&
+                    !TryMentorSpecialty(plan.Mentor, personId, previousDate, out specialty))
+                    mentorUnavailable = true;
+
+                if (!working.TrySettleYear(personId, ageYear, HasAptitude(personId),
+                        AptitudeOf(personId), specialty, IsSupportiveEnvironment(personId),
+                        mentorUnavailable, out EducationYearResult result, out string settleError))
+                {
+                    error = "教育年度结算失败：" + settleError;
+                    return false;
+                }
+                records.Add(new EducationSettlementRecord(personId, ageYear, result));
+            }
+
+            error = string.Empty;
+            return true;
+        }
+
+        /// <summary>Appends exactly one chronicle record per settled education year.</summary>
+        private bool TryAppendEducationChronicles(List<EducationSettlementRecord> records,
+            GameDate date, out string error)
+        {
+            foreach (EducationSettlementRecord record in records)
+            {
+                string learnerName = PersonDisplayName(record.Learner, "家人");
+                string mentorName = record.Result.Mentor.IsEmpty
+                    ? "无导师"
+                    : PersonDisplayName(record.Result.Mentor, "家人");
+                int fromValue = 0;
+                int toValue = 0;
+                if (CharacterGrowthRules.TryGetAttribute(record.Result.Direction,
+                        out GrowthAttribute attribute))
+                {
+                    fromValue = record.Result.Before.Get(attribute);
+                    toValue = record.Result.After.Get(attribute);
+                }
+
+                string summary = learnerName + "：" +
+                    CharacterGrowthRules.DirectionName(record.Result.Direction) + "培养，导师 " +
+                    mentorName + "；" + DescribeGrowthChange(record.Result) + "。" +
+                    record.Result.Explanation;
+                if (!EnsureHistoryLedger().TryAppendEducation(date.Year, date.Month,
+                        record.Learner.Value, EducationSourceId(record.Result.Direction),
+                        fromValue, toValue, learnerName + "的年度培养", summary,
+                        out _, out string appendError))
+                {
+                    error = "教育年度编年史写入失败：" +
+                            (string.IsNullOrEmpty(appendError) ? "未知原因" : appendError);
+                    return false;
+                }
+            }
+
+            error = string.Empty;
+            return true;
+        }
+
+        private static string DescribeGrowthChange(EducationYearResult result)
+        {
+            var builder = new StringBuilder(96);
+            AppendGrowth(builder, "忍术", result.Before.Ninjutsu, result.After.Ninjutsu);
+            builder.Append('；');
+            AppendGrowth(builder, "武艺", result.Before.MartialArts, result.After.MartialArts);
+            builder.Append('；');
+            AppendGrowth(builder, "学问", result.Before.Scholarship, result.After.Scholarship);
+            builder.Append('；');
+            AppendGrowth(builder, "经营", result.Before.Management, result.After.Management);
+            builder.Append('；');
+            AppendGrowth(builder, "社交", result.Before.Social, result.After.Social);
+            return builder.ToString();
+        }
+
+        private static void AppendGrowth(StringBuilder builder, string label, int before, int after)
+        {
+            builder.Append(label).Append(' ').Append(before);
+            if (after != before)
+                builder.Append(" → ").Append(after);
+        }
+
+        private static string EducationSourceId(EducationDirection direction)
+        {
+            switch (direction)
+            {
+                case EducationDirection.Ninjutsu: return "education.ninjutsu";
+                case EducationDirection.MartialArts: return "education.martial-arts";
+                case EducationDirection.Scholarship: return "education.scholarship";
+                case EducationDirection.Management: return "education.management";
+                case EducationDirection.Social: return "education.social";
+                case EducationDirection.FreeGrowth: return "education.free-growth";
+                default: return "education.unknown";
+            }
         }
 
         /// <summary>
@@ -1128,29 +2491,168 @@ namespace SengokuChronicle.Application
                 return false;
             }
 
+            IndustryState industryBefore = EnsureIndustryState().Clone();
+            CharacterDevelopmentState developmentBefore = EnsureDevelopment().Clone();
+            FamilyResearchState researchBefore = EnsureResearch().Clone();
             RandomStateSaveData rngBefore = _randomStateManager.CaptureState();
-            EventRuntimeState nextRuntime = _eventRuntimeState.Clone();
-            EventScheduleResult schedule = _eventEngine.ScheduleMonthly(nextDate, _relationships,
-                _randomStateManager.GetStream(RandomStreamKind.Events), nextRuntime, BuildEventRuleContext());
-            if (!schedule.Succeeded)
+            FamilyChronicleEntry[] chronicleBefore = EnsureHistoryLedger().Capture();
+            EventRuntimeState runtimeBefore = _eventRuntimeState.Clone();
+            IndustryMonthReport reportBefore = LastIndustryReport;
+            string industryMessageBefore = LastIndustryMessage;
+            string educationMessageBefore = LastEducationMessage;
+            FamilyResearchMonthReport researchReportBefore = LastResearchReport;
+            string researchMessageBefore = LastResearchMessage;
+            try
             {
+                IndustrySettlementResult settlement = IndustrySettlement.Plan(
+                    _industryState, Succession, previousDate);
+                if (settlement.Outcome == IndustrySettlementOutcome.SettlementGap ||
+                    settlement.Outcome == IndustrySettlementOutcome.InvalidState)
+                {
+                    LastMonthTurnOutcome = MonthTurnOutcome.IndustryStateInvalid;
+                    LastEventMessage = settlement.Message;
+                    return false;
+                }
+
+                IndustryState nextIndustry = settlement.NextState ?? industryBefore.Clone();
+                FamilyResearchSettlementResult researchSettlement = FamilyResearchSettlement.Plan(
+                    _researchState, nextIndustry.Resources, Succession, previousDate, nextIndustry);
+                if (researchSettlement.Outcome == FamilyResearchOutcome.SettlementGap ||
+                    researchSettlement.Outcome == FamilyResearchOutcome.InvalidState)
+                {
+                    LastMonthTurnOutcome = MonthTurnOutcome.SettlementFailed;
+                    LastEventMessage = researchSettlement.Message;
+                    return false;
+                }
+                nextIndustry.TrySetResources(researchSettlement.NextResources, out _);
+
+                // The annual education year settles exactly at the December-to-January
+                // boundary, after the industry and research plans and before the new month
+                // is scheduled.
+                CharacterDevelopmentState nextDevelopment = developmentBefore;
+                List<EducationSettlementRecord> educationRecords = null;
+                if (previousDate.Month == 12)
+                {
+                    nextDevelopment = developmentBefore.Clone();
+                    if (!TryPlanEducationSettlement(nextDevelopment, previousDate,
+                            out educationRecords, out string educationError))
+                    {
+                        LastMonthTurnOutcome = MonthTurnOutcome.SettlementFailed;
+                        LastEventMessage = educationError;
+                        return false;
+                    }
+                    if (!TryAppendEducationChronicles(educationRecords, previousDate,
+                            out string educationChronicleError))
+                    {
+                        HistoryLedger.TryRestore(chronicleBefore, out _historyLedger, out _);
+                        LastMonthTurnOutcome = MonthTurnOutcome.SchedulingFailed;
+                        LastEventMessage = educationChronicleError;
+                        return false;
+                    }
+                }
+
+                EventRuntimeState nextRuntime = runtimeBefore.Clone();
+                EventScheduleResult schedule = _eventEngine.ScheduleMonthly(nextDate, _relationships,
+                    _randomStateManager.GetStream(RandomStreamKind.Events), nextRuntime,
+                    BuildEventRuleContext());
+                if (!schedule.Succeeded)
+                {
+                    RandomStateManager.TryRestore(rngBefore, out _randomStateManager);
+                    HistoryLedger.TryRestore(chronicleBefore, out _historyLedger, out _);
+                    LastMonthTurnOutcome = MonthTurnOutcome.SchedulingFailed;
+                    LastEventMessage = schedule.Message;
+                    return false;
+                }
+
+                bool appendMonthly = settlement.Succeeded && settlement.Report != null &&
+                                     (settlement.Report.AnyStaffed || settlement.Report.Vacated.Count > 0);
+                if (appendMonthly)
+                {
+                    if (!EnsureHistoryLedger().TryAppendIndustry(previousDate.Year, previousDate.Month,
+                            "industry.monthly", "settlement",
+                            settlement.Report.Before.Funds, settlement.Report.After.Funds,
+                            "产业月结", settlement.Report.Summary,
+                            out _, out string chronicleError))
+                    {
+                        RandomStateManager.TryRestore(rngBefore, out _randomStateManager);
+                        HistoryLedger.TryRestore(chronicleBefore, out _historyLedger, out _);
+                        LastMonthTurnOutcome = MonthTurnOutcome.SchedulingFailed;
+                        LastEventMessage = "产业月结编年史写入失败：" +
+                                           (string.IsNullOrEmpty(chronicleError) ? "未知原因" : chronicleError);
+                        return false;
+                    }
+                }
+
+                if (researchSettlement.Completed)
+                {
+                    string summary = BuildResearchChronicleSummary(researchSettlement, previousDate);
+                    if (!EnsureHistoryLedger().TryAppendResearch(previousDate.Year, previousDate.Month,
+                            researchSettlement.ResearchId, researchSettlement.TechniqueId,
+                            researchSettlement.BeforeProgress, researchSettlement.AfterProgress,
+                            "家族研究", summary, out _, out string researchChronicleError))
+                    {
+                        RandomStateManager.TryRestore(rngBefore, out _randomStateManager);
+                        HistoryLedger.TryRestore(chronicleBefore, out _historyLedger, out _);
+                        LastMonthTurnOutcome = MonthTurnOutcome.SchedulingFailed;
+                        LastEventMessage = "研究编年史写入失败：" +
+                                           (string.IsNullOrEmpty(researchChronicleError)
+                                               ? "未知原因"
+                                               : researchChronicleError);
+                        return false;
+                    }
+                }
+
+                if (!WorldClock.TryAdvanceToNextMonth())
+                {
+                    RandomStateManager.TryRestore(rngBefore, out _randomStateManager);
+                    HistoryLedger.TryRestore(chronicleBefore, out _historyLedger, out _);
+                    _industryState = industryBefore;
+                    LastMonthTurnOutcome = MonthTurnOutcome.DateOutOfRange;
+                    return false;
+                }
+
+                // Fault-injection seam: the date has already crossed, so any exception
+                // below must restore the clock as well as resources/history/RNG.
+                MonthSettlementFaultInjection?.Invoke();
+
+                _industryState = nextIndustry;
+                _eventRuntimeState = nextRuntime;
+                _development = nextDevelopment;
+                _researchState = researchSettlement.NextState ?? researchBefore;
+                LastIndustryReport = settlement.Report;
+                if (settlement.Report != null)
+                    LastIndustryMessage = settlement.Report.Summary;
+                LastResearchReport = researchSettlement.Report;
+                LastResearchMessage = researchSettlement.Message;
+                if (educationRecords != null && educationRecords.Count > 0)
+                    LastEducationMessage = "年度培养已结算：" +
+                        educationRecords.Count.ToString(CultureInfo.InvariantCulture) + " 人。";
+                NoticeRegencyHandoffIfDue();
+                LastEventMessage = string.Empty;
+                LastMonthTurnOutcome = MonthTurnOutcome.Succeeded;
+                SessionStateChanged?.Invoke();
+                return true;
+            }
+            catch (Exception exception)
+            {
+                WorldClock.TryRestoreDate(previousDate);
+                _industryState = industryBefore;
+                _eventRuntimeState = runtimeBefore;
+                _development = developmentBefore;
+                _researchState = researchBefore;
                 RandomStateManager.TryRestore(rngBefore, out _randomStateManager);
-                LastMonthTurnOutcome = MonthTurnOutcome.SchedulingFailed;
-                LastEventMessage = schedule.Message;
+                HistoryLedger.TryRestore(chronicleBefore, out _historyLedger, out _);
+                LastIndustryReport = reportBefore;
+                LastIndustryMessage = "月结异常，已回滚到本月初始状态：" + exception.Message;
+                LastEducationMessage = educationMessageBefore;
+                LastResearchReport = researchReportBefore;
+                LastResearchMessage = researchMessageBefore;
+                LastEventMessage = "月结异常，日期、资源、成长、研究和编年史均保持不变：" +
+                                   exception.Message;
+                LastMonthTurnOutcome = MonthTurnOutcome.SettlementFailed;
+                Debug.LogWarning($"SC-021 month settlement rolled back: {exception.Message}");
                 return false;
             }
-            if (!WorldClock.TryAdvanceToNextMonth())
-            {
-                RandomStateManager.TryRestore(rngBefore, out _randomStateManager);
-                LastMonthTurnOutcome = MonthTurnOutcome.DateOutOfRange;
-                return false;
-            }
-            _eventRuntimeState = nextRuntime;
-            NoticeRegencyHandoffIfDue();
-            LastEventMessage = string.Empty;
-            LastMonthTurnOutcome = MonthTurnOutcome.Succeeded;
-            SessionStateChanged?.Invoke();
-            return true;
         }
 
         /// <summary>
@@ -1160,6 +2662,7 @@ namespace SengokuChronicle.Application
         /// </summary>
         public TravelPreview? PreviewTravel(LocationId destination)
         {
+            LastTravelBlockReason = string.Empty;
             if (WorldClock == null)
                 InitNewGame();
             if (IsFamilyExtinct)
@@ -1173,6 +2676,11 @@ namespace SengokuChronicle.Application
             if (SuccessionBlocksTimeAdvance)
             {
                 ReportSuccessionTravelPause();
+                return null;
+            }
+            if (!ValidateIndustryMonthConsistency())
+            {
+                LastTravelBlockReason = LastEventMessage;
                 return null;
             }
 
@@ -1184,6 +2692,12 @@ namespace SengokuChronicle.Application
                 return null;
             if (!GameDate.TryAddDays(WorldClock.CurrentDate, days, out GameDate arrival))
                 return null;
+            if (arrival.Year != WorldClock.CurrentDate.Year ||
+                arrival.Month != WorldClock.CurrentDate.Month)
+            {
+                LastTravelBlockReason = "行程将跨越月末：请先结束本月，再安排旅行。";
+                return null;
+            }
 
             return new TravelPreview(destination, LocationId.GetChineseName(destination), days, arrival);
         }
@@ -1194,6 +2708,7 @@ namespace SengokuChronicle.Application
         /// </summary>
         public bool ConfirmTravel(TravelPreview preview)
         {
+            LastTravelBlockReason = string.Empty;
             if (WorldClock == null)
                 InitNewGame();
             if (IsFamilyExtinct)
@@ -1207,6 +2722,11 @@ namespace SengokuChronicle.Application
             if (SuccessionBlocksTimeAdvance)
             {
                 ReportSuccessionTravelPause();
+                return false;
+            }
+            if (!ValidateIndustryMonthConsistency())
+            {
+                LastTravelBlockReason = LastEventMessage;
                 return false;
             }
 
@@ -1222,13 +2742,55 @@ namespace SengokuChronicle.Application
                 return false;
             if (arrival != preview.EstimatedArrivalDate)
                 return false;
+            if (arrival.Year != WorldClock.CurrentDate.Year ||
+                arrival.Month != WorldClock.CurrentDate.Month)
+            {
+                LastTravelBlockReason = "行程将跨越月末：请先结束本月，再安排旅行。";
+                return false;
+            }
 
             if (!WorldClock.AdvanceDays(days))
                 return false;
             CurrentLocation = preview.Destination;
+            LastTravelBlockReason = string.Empty;
             if (NoticeRegencyHandoffIfDue())
                 SessionStateChanged?.Invoke();
             return true;
+        }
+
+        /// <summary>
+        /// Fixture-only date seam for legacy cross-year tests. It is internal, never
+        /// used by UI or production paths, performs no production, and realigns the
+        /// industry settled month so the save invariant stays valid.
+        /// </summary>
+        internal bool AdvanceDaysForLegacyFixtureSetup(int count)
+        {
+            if (WorldClock == null)
+                InitNewGame();
+            if (count <= 0 || !WorldClock.AdvanceDays(count))
+                return false;
+            EnsureIndustryState();
+            _industryState.TrySetLastSettledMonthIndex(
+                IndustryCalendar.MonthIndex(WorldClock.CurrentDate) - 1, out _);
+            EnsureResearch().TrySetLastSettledMonthIndex(
+                IndustryCalendar.MonthIndex(WorldClock.CurrentDate) - 1, out _);
+            LastIndustryReport = null;
+            LastIndustryMessage = string.Empty;
+            LastResearchReport = null;
+            LastResearchMessage = string.Empty;
+            LastEventMessage = string.Empty;
+            LastMonthTurnOutcome = MonthTurnOutcome.Succeeded;
+            return true;
+        }
+
+        private bool ValidateIndustryMonthConsistency()
+        {
+            EnsureIndustryState();
+            if (IndustryStateIsConsistent)
+                return true;
+            LastMonthTurnOutcome = MonthTurnOutcome.IndustryStateInvalid;
+            LastEventMessage = "产业状态与当前月份不一致：请读取稳定存档。";
+            return false;
         }
     }
 }

@@ -60,7 +60,10 @@ namespace SengokuChronicle.Events
     public sealed class EventEffectData
     {
         public string type;
+        /// <summary>NPC target used by <see cref="EventEffectKind.RelationshipDelta"/>.</summary>
         public string targetCharacterId;
+        /// <summary>Family member target used by <see cref="EventEffectKind.FamilyRelationshipDelta"/>.</summary>
+        public string targetPersonId;
         public int delta;
     }
 
@@ -111,7 +114,9 @@ namespace SengokuChronicle.Events
 
     public enum EventEffectKind
     {
-        RelationshipDelta = 1
+        RelationshipDelta = 1,
+        /// <summary>Changes one (current head, non-head family member) pair value.</summary>
+        FamilyRelationshipDelta = 2
     }
 
     public enum EventOnceScope

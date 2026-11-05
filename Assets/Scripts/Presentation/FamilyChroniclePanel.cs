@@ -227,6 +227,10 @@ namespace SengokuChronicle.Presentation
                 case ChronicleCategory.Relationship: return "关系";
                 case ChronicleCategory.Mission: return "任务";
                 case ChronicleCategory.Succession: return "继承";
+                case ChronicleCategory.Industry: return "产业";
+                case ChronicleCategory.Education: return "教育";
+                case ChronicleCategory.Research: return "研究";
+                case ChronicleCategory.FamilyFormation: return "家族关系";
                 default: return category.ToString();
             }
         }
@@ -250,6 +254,21 @@ namespace SengokuChronicle.Presentation
                             : "家督交接・" + phases;
                     }
                     return phases;
+                case ChronicleCategory.Industry:
+                    return "资金 " + entry.FromValue + " → " + entry.ToValue;
+                case ChronicleCategory.Education:
+                    return string.Equals(entry.SourceId, "education.free-growth",
+                        System.StringComparison.Ordinal)
+                        ? "自由成长"
+                        : "能力 " + entry.FromValue + " → " + entry.ToValue;
+                case ChronicleCategory.Research:
+                    return "进度 " + entry.FromValue + " → " + entry.ToValue;
+                case ChronicleCategory.FamilyFormation:
+                    return entry.SourceId == FamilyChronicleEntry.MarriageSourceId
+                        ? "婚姻登记"
+                        : entry.SourceId == FamilyChronicleEntry.AdoptionSourceId
+                            ? "普通收养"
+                            : string.Empty;
                 default:
                     return string.Empty;
             }

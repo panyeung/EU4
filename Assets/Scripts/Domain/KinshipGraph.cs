@@ -117,6 +117,26 @@ namespace SengokuChronicle.Domain
             return true;
         }
 
+        /// <summary>
+        /// Removes one fact that the current application-level transaction appended but
+        /// has not committed. This is rollback support only: the public graph remains
+        /// append-only, production code never removes a committed fact, and the saved
+        /// representation is unchanged.
+        /// </summary>
+        internal bool TryRemove(KinshipLink link, out string error)
+        {
+            if (!_exact.Remove(link))
+            {
+                error = "Kinship link is not recorded: " + link;
+                return false;
+            }
+            _links.Remove(link);
+            if (link.IsSymmetric)
+                _symmetricReverses.Remove(link.Reversed());
+            error = string.Empty;
+            return true;
+        }
+
         /// <summary>All recorded facts that mention one person, either as From or as To.</summary>
         public IReadOnlyList<KinshipLink> LinksFor(PersonId personId)
         {

@@ -106,7 +106,7 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(_session.ConfirmSuccession().Succeeded, Is.True);
             Assert.That(_session.Succession.Phase, Is.EqualTo(SuccessionPhase.Regency));
 
-            Assert.That(_session.AdvanceDays(800), Is.True);
+            Assert.That(_session.AdvanceDaysForLegacyFixtureSetup(800), Is.True);
             Assert.That(_session.Succession.Phase, Is.EqualTo(SuccessionPhase.Regency),
                 "Adulthood must pause the regency instead of transferring silently.");
             Assert.That(_session.Succession.IsRegencyHandoffDue(_session.WorldClock.CurrentDate), Is.True);
@@ -173,7 +173,7 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(_session.SelectSuccessionRegent(
                 new PersonId("person.akechi.chie")).Succeeded, Is.True);
             Assert.That(_session.ConfirmSuccession().Succeeded, Is.True);
-            Assert.That(_session.AdvanceDays(800), Is.True);
+            Assert.That(_session.AdvanceDaysForLegacyFixtureSetup(800), Is.True);
             Assert.That(_session.Succession.IsRegencyHandoffDue(
                 _session.WorldClock.CurrentDate), Is.True);
             GameDate pausedDate = _session.WorldClock.CurrentDate;

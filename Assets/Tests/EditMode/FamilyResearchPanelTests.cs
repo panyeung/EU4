@@ -1,0 +1,257 @@
+using System.Linq;
+using NUnit.Framework;
+using SengokuChronicle.Application;
+using SengokuChronicle.Domain;
+using SengokuChronicle.Editor;
+using SengokuChronicle.Persistence;
+using SengokuChronicle.Presentation;
+using UnityEditor.SceneManagement;
+using UnityEngine;
+using UnityEngine.SceneManagement;
+using UnityEngine.UI;
+
+namespace SengokuChronicle.Tests.EditMode
+{
+    /// <summary>SC-021 Task 4: panel projection, real button callbacks and single refresh.</summary>
+    public sealed class FamilyResearchPanelTests
+    {
+        private Scene _scene;
+        private Scene _previousScene;
+        private bool _previousDirty;
+        private GameSession _session;
+
+        [SetUp]
+        public void SetUp()
+        {
+            _previousScene = SceneManager.GetActiveScene();
+            _previousDirty = _previousScene.isDirty;
+            _scene = EditorSceneManager.NewPreviewScene();
+            GameObject canvas = Create("Canvas", null, typeof(Canvas));
+            canvas.GetComponent<RectTransform>().sizeDelta = new Vector2(1280f, 720f);
+            _session = Create("GameSession", null, typeof(GameSession)).GetComponent<GameSession>();
+            _session.InitResearchDemoScenario();
+            Assert.That(AddSC021FamilyResearch.Update(_scene),
+                Is.EqualTo(AddSC021FamilyResearch.UpdateResult.Success));
+        }
+
+        [TearDown]
+        public void TearDown()
+        {
+            if (_scene.IsValid())
+                EditorSceneManager.ClosePreviewScene(_scene);
+            Assert.That(SceneManager.GetActiveScene(), Is.EqualTo(_previousScene));
+            Assert.That(_previousScene.isDirty, Is.EqualTo(_previousDirty));
+        }
+
+        private FamilyResearchPanel Panel() =>
+            Find(AddSC021FamilyResearch.RootName).GetComponent<FamilyResearchPanel>();
+
+        [Test]
+        public void Panel_ShowsBudgetProgressTechniqueAndThreeResearchers()
+        {
+            FamilyResearchPanel panel = Panel();
+            panel.Open();
+
+            Assert.That(panel.IsOpen, Is.True);
+            Assert.That(panel.TitleLine, Does.Contain("家族研究"));
+            Assert.That(panel.ResourceLine, Does.Contain("资金 2").And.Contain("物资 2"));
+            Assert.That(panel.TechniqueLine, Does.Contain("烟幕调制术"));
+            Assert.That(panel.TechniqueLine, Does.Not.Contain("已记录"));
+            Assert.That(panel.ProgressLine, Does.Contain("0/2"));
+            Assert.That(panel.CostLine, Does.Contain("1 资金"));
+            Assert.That(panel.VisibleResearcherCount, Is.EqualTo(3));
+            Assert.That(panel.ResearcherLabel(0), Is.EqualTo(SC021FamilyResearchScenario.HeadName));
+        }
+
+        [Test]
+        public void Panel_ContainerKeepsOnlyTheInactiveTemplateAfterGeneration()
+        {
+            Transform container = Find(AddSC021FamilyResearch.ResearcherContainerName);
+            Assert.That(container.childCount, Is.EqualTo(1));
+            Assert.That(container.GetChild(0).name,
+                Is.EqualTo(AddSC021FamilyResearch.ResearcherTemplateName));
+            Assert.That(container.GetChild(0).gameObject.activeSelf, Is.False);
+        }
+
+        [Test]
+        public void Panel_ClickingResearcherStartsPlanAndRefreshesExactlyOnce()
+        {
+            FamilyResearchPanel panel = Panel();
+            panel.Open();
+            int refreshes = panel.RefreshCount;
+
+            panel.ClickResearcher(0);
+
+            Assert.That(_session.ResearchState.HasPlan, Is.True);
+            Assert.That(_session.ResearchState.ResearcherId,
+                Is.EqualTo(SC021FamilyResearchScenario.HeadId));
+            Assert.That(panel.RefreshCount, Is.EqualTo(refreshes + 1));
+            Assert.That(panel.StatusLine, Does.Contain(SC021FamilyResearchScenario.HeadName));
+            Assert.That(panel.ProgressLine, Does.Contain("0/2"));
+        }
+
+        [Test]
+        public void Panel_RejectedPlanShowsMessageAndRefreshesExactlyOnce()
+        {
+            FamilyResearchPanel panel = Panel();
+            panel.Open();
+            // Mutate the roster directly so the already-built head button becomes stale
+            // without publishing a session refresh first.
+            _session.Succession.World.TrySetLife(SC021FamilyResearchScenario.HeadId,
+                new SuccessionPersonLife(SC021FamilyResearchScenario.HeadBirthYear, false, false), out _);
+            int refreshes = panel.RefreshCount;
+
+            panel.ClickResearcher(0);
+
+            Assert.That(_session.ResearchState.HasPlan, Is.False);
+            Assert.That(panel.RefreshCount, Is.EqualTo(refreshes + 1));
+            Assert.That(panel.MessageVisible, Is.True);
+            Assert.That(panel.MessageLine, Does.Contain("研究者"));
+            Assert.That(panel.VisibleResearcherCount, Is.EqualTo(2));
+        }
+
+        [Test]
+        public void Panel_KnownTechniqueHidesResearcherChoicesAndMonthlyCost()
+        {
+            CompleteResearch();
+
+            FamilyResearchPanel panel = Panel();
+            panel.Open();
+
+            Assert.That(_session.ResearchState.IsKnownTechnique(
+                FamilyResearchCatalog.SmokeMixingTechniqueId), Is.True);
+            Assert.That(panel.VisibleResearcherCount, Is.Zero,
+                "a recorded family technique must not offer new researcher buttons");
+            Assert.That(panel.CostLine, Does.Contain("已记录为家族知识"));
+            Assert.That(panel.CostLine, Does.Not.Contain("每月消耗"));
+            Assert.That(panel.TechniqueLine, Does.Contain("已记录"));
+            Assert.That(panel.ProgressLine, Does.Contain("已完成"));
+        }
+
+        [Test]
+        public void Panel_DoesNotAutoOpenWhenEnteringTheResearchScenario()
+        {
+            FamilyResearchPanel panel = Panel();
+            Assert.That(panel.IsOpen, Is.False);
+
+            _session.InitStandardDemo();
+            Assert.That(panel.IsOpen, Is.False);
+
+            _session.InitResearchDemoScenario();
+            Assert.That(panel.IsOpen, Is.False,
+                "the SC-021 demo requires the player to open the panel explicitly");
+
+            Find(AddSC021FamilyResearch.OpenButtonName).GetComponent<Button>().onClick.Invoke();
+            Assert.That(panel.IsOpen, Is.True);
+        }
+
+        [Test]
+        public void Panel_OpenAndCloseButtonsDriveThePanel()
+        {
+            FamilyResearchPanel panel = Panel();
+
+            Find(AddSC021FamilyResearch.OpenButtonName).GetComponent<Button>().onClick.Invoke();
+            Assert.That(panel.IsOpen, Is.True);
+
+            Find(AddSC021FamilyResearch.CloseButtonName).GetComponent<Button>().onClick.Invoke();
+            Assert.That(panel.IsOpen, Is.False);
+        }
+
+        [Test]
+        public void Panel_ShowsShortagePauseFromTheMonthlyReport()
+        {
+            Assert.That(_session.TrySetResearchPlan(FamilyResearchCatalog.SmokeMixingResearchId,
+                SC021FamilyResearchScenario.HeadId).Succeeded, Is.True);
+            SaveData data = _session.CaptureSave();
+            data.industry.funds = 0;
+            Assert.That(_session.TryApplySave(data).Succeeded, Is.True);
+            Assert.That(_session.TryAdvanceToNextMonth(), Is.True, _session.LastEventMessage);
+            ResolvePending(_session);
+
+            FamilyResearchPanel panel = Panel();
+            panel.Open();
+
+            Assert.That(panel.ReportLine, Does.Contain("研究暂停"));
+            Assert.That(panel.ReportLine, Does.Contain("资金不足"));
+            Assert.That(panel.ProgressLine, Does.Contain("0/2"));
+        }
+
+        [Test]
+        public void Panel_SavedFormerMemberResearcher_ShowsImmediatePauseWithoutSpending()
+        {
+            Assert.That(_session.TrySetResearchPlan(FamilyResearchCatalog.SmokeMixingResearchId,
+                SC021FamilyResearchScenario.SpouseId).Succeeded, Is.True);
+            Assert.That(_session.Succession.World.TryRemoveMember(
+                SC021FamilyResearchScenario.SpouseId, out _), Is.True);
+
+            // Persist and reload the already-invalid plan. Loading clears the previous
+            // month report, so the visible pause must come from live eligibility.
+            SaveData data = _session.CaptureSave();
+            Assert.That(_session.TryApplySave(data).Succeeded, Is.True, _session.LastEventMessage);
+            Assert.That(_session.LastResearchReport, Is.Null);
+
+            FamilyResearchPanel panel = Panel();
+            panel.Open();
+
+            Assert.That(panel.StatusLine, Does.Contain("研究暂停"));
+            Assert.That(panel.StatusLine, Does.Contain("不是当前家族成员"));
+            Assert.That(panel.ReportLine, Does.Contain("研究暂停"));
+            Assert.That(panel.ReportLine, Does.Contain("资源与进度保持不变"));
+            Assert.That(panel.ProgressLine, Does.Contain("0/2"));
+            Assert.That(_session.ResearchState.HasPlan, Is.True);
+            Assert.That(_session.ResearchState.Progress, Is.Zero);
+            Assert.That(_session.Industry.Resources.Funds,
+                Is.EqualTo(SC021FamilyResearchScenario.OpeningFunds),
+                "loading a paused plan must not spend funds");
+            Assert.That(_session.Industry.Resources.Supplies,
+                Is.EqualTo(SC021FamilyResearchScenario.OpeningSupplies),
+                "loading a paused plan must not spend supplies");
+        }
+
+        private GameObject Create(string name, Transform parent, params System.Type[] components)
+        {
+            var go = new GameObject(name, typeof(RectTransform));
+            SceneManager.MoveGameObjectToScene(go, _scene);
+            if (parent != null)
+                go.transform.SetParent(parent, false);
+            foreach (System.Type component in components)
+                go.AddComponent(component);
+            return go;
+        }
+
+        private Transform Find(string name) =>
+            _scene.GetRootGameObjects()
+                .SelectMany(root => root.GetComponentsInChildren<Transform>(true))
+                .SingleOrDefault(transform => transform.name == name);
+
+        private void CompleteResearch()
+        {
+            Assert.That(_session.TrySetResearchPlan(FamilyResearchCatalog.SmokeMixingResearchId,
+                SC021FamilyResearchScenario.HeadId).Succeeded, Is.True);
+            Assert.That(_session.TryAdvanceToNextMonth(), Is.True, _session.LastEventMessage);
+            ResolvePending(_session);
+            Assert.That(_session.TryAdvanceToNextMonth(), Is.True, _session.LastEventMessage);
+            ResolvePending(_session);
+        }
+
+        private static void ResolvePending(GameSession session)
+        {
+            if (string.IsNullOrEmpty(session.PendingEventId))
+                return;
+            string pending = session.PendingEventId;
+            Events.EventDefinitionData definition = session.EventCatalog.events
+                .FirstOrDefault(item => item.eventId == pending);
+            Assert.That(definition, Is.Not.Null);
+            foreach (Events.EventOptionData option in definition.options)
+            {
+                if (!session.TryGetEventOptionAvailability(pending, option.optionId,
+                        out bool enabled, out _) || !enabled)
+                    continue;
+                Assert.That(session.TryChooseEventOption(pending, option.optionId,
+                    session.CreateEventResultId(pending, option.optionId)).Succeeded, Is.True);
+                return;
+            }
+            Assert.Fail("no enabled option for " + pending);
+        }
+    }
+}

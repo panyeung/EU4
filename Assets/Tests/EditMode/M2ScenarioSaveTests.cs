@@ -42,6 +42,10 @@ namespace SengokuChronicle.Tests.EditMode
                 // be rejected by the scenario gate regardless of the target session.
                 standard.InitStandardDemo();
                 mismatched.succession = standard.CaptureSave().succession;
+                // v7 requires growth rows to match the replaced roster exactly. Keep the
+                // fixture valid so the load still reaches the scenario/event gate.
+                mismatched.development =
+                    CharacterDevelopmentSaveData.CreateEmpty(mismatched.succession);
 
                 SaveOperationResult standardResult = standard.TryApplySave(mismatched);
                 Assert.That(standardResult.Succeeded, Is.False,

@@ -10,7 +10,7 @@ namespace SengokuChronicle.Persistence
     /// </summary>
     public static class SaveDataValidator
     {
-        public const int CurrentVersion = 4;
+        public const int CurrentVersion = 8;
 
         public static SaveOperationResult Validate(SaveData data)
         {
@@ -52,6 +52,32 @@ namespace SengokuChronicle.Persistence
             if (!succession.Succeeded)
                 return succession;
 
+            SaveOperationResult familyRelationships =
+                ValidateFamilyRelationships(data.familyRelationships, data.succession);
+            if (!familyRelationships.Succeeded)
+                return familyRelationships;
+
+            if (data.industry == null)
+                return Invalid("存档缺少产业状态（industry）。");
+            SaveOperationResult industry = data.industry.ValidateForSave(
+                new GameDate(data.year, data.month, data.day), data.succession);
+            if (!industry.Succeeded)
+                return industry;
+
+            if (data.development == null)
+                return Invalid("存档缺少人物成长状态（development）。");
+            SaveOperationResult development = data.development.ValidateForSave(
+                new GameDate(data.year, data.month, data.day), data.succession);
+            if (!development.Succeeded)
+                return development;
+
+            GameDate date = new GameDate(data.year, data.month, data.day);
+            if (data.research == null)
+                return Invalid("存档缺少家族研究状态（research）。");
+            SaveOperationResult research = data.research.ValidateForSave(date, data.succession);
+            if (!research.Succeeded)
+                return research;
+
             SaveOperationResult chronicle = ValidateChronicle(data.chronicle);
             if (!chronicle.Succeeded)
                 return chronicle;
@@ -85,6 +111,8 @@ namespace SengokuChronicle.Persistence
                 return SaveOperationResult.Success();
 
             if (probe.saveFormatVersion != 2 && probe.saveFormatVersion != 3 &&
+                probe.saveFormatVersion != 4 && probe.saveFormatVersion != 5 &&
+                probe.saveFormatVersion != 6 && probe.saveFormatVersion != 7 &&
                 probe.saveFormatVersion != CurrentVersion)
                 return SaveOperationResult.Failure(
                     SaveErrorCode.UnsupportedVersion,
@@ -94,8 +122,21 @@ namespace SengokuChronicle.Persistence
                 return Invalid("v2 存档包含继承状态（succession）；迁移不会静默替换该数据。");
             if (probe.saveFormatVersion == 2 && HasRootProperty(json, "chronicle"))
                 return Invalid("v2 存档包含编年史（chronicle）；迁移不会静默替换该数据。");
+            if (probe.saveFormatVersion == 2 && HasRootProperty(json, "familyRelationships"))
+                return Invalid("v2 存档包含家庭关系（familyRelationships）；迁移不会静默替换该数据。");
             if (probe.saveFormatVersion == 3 && HasRootProperty(json, "chronicle"))
                 return Invalid("v3 存档包含编年史（chronicle）；迁移不会静默替换该数据。");
+            if (probe.saveFormatVersion == 3 && HasRootProperty(json, "familyRelationships"))
+                return Invalid("v3 存档包含家庭关系（familyRelationships）；迁移不会静默替换该数据。");
+            if (probe.saveFormatVersion >= 2 && probe.saveFormatVersion <= 5 &&
+                HasRootProperty(json, "industry"))
+                return Invalid("旧版存档包含产业状态（industry）；迁移不会静默替换该数据。");
+            if (probe.saveFormatVersion >= 2 && probe.saveFormatVersion < CurrentVersion &&
+                HasNonNullRootProperty(json, "development"))
+                return Invalid("旧版存档包含人物成长状态（development）；迁移不会静默替换该数据。");
+            if (probe.saveFormatVersion >= 2 && probe.saveFormatVersion < CurrentVersion &&
+                HasRootProperty(json, "research"))
+                return Invalid("旧版存档包含家族研究状态（research）；迁移不会静默替换该数据。");
 
             if (string.IsNullOrWhiteSpace(probe.gameVersion) || probe.rulesVersion <= 0 ||
                 probe.eventContentVersion <= 0)
@@ -107,9 +148,27 @@ namespace SengokuChronicle.Persistence
             if (probe.saveFormatVersion >= 3 &&
                 (probe.succession == null || !HasRootProperty(json, "succession")))
                 return Invalid("存档缺少继承状态（succession）。");
-            if (probe.saveFormatVersion == CurrentVersion &&
+            // v4 introduced the chronicle and v5 keeps it. A legacy v4 file must
+            // still carry that block; only the family-relationship set is optional
+            // before migration.
+            if (probe.saveFormatVersion >= 4 &&
                 (probe.chronicle == null || !HasRootProperty(json, "chronicle")))
                 return Invalid("存档缺少编年史（chronicle）。");
+            if (probe.saveFormatVersion >= 5 &&
+                (probe.familyRelationships == null || !HasRootProperty(json, "familyRelationships")))
+                return Invalid("存档缺少家庭关系（familyRelationships）。");
+            if (probe.saveFormatVersion >= 6 &&
+                (probe.industry == null ||
+                 (!string.IsNullOrEmpty(json) && !HasNonNullRootProperty(json, "industry"))))
+                return Invalid("存档缺少产业状态（industry）。");
+            if (probe.saveFormatVersion >= 7 &&
+                (probe.development == null ||
+                 (!string.IsNullOrEmpty(json) && !HasNonNullRootProperty(json, "development"))))
+                return Invalid("存档缺少人物成长状态（development）。");
+            if (probe.saveFormatVersion == CurrentVersion &&
+                (probe.research == null ||
+                 (!string.IsNullOrEmpty(json) && !HasNonNullRootProperty(json, "research"))))
+                return Invalid("存档缺少家族研究状态（research）。");
 
             return SaveOperationResult.Success();
         }
@@ -181,6 +240,87 @@ namespace SengokuChronicle.Persistence
             return false;
         }
 
+        /// <summary>
+        /// Like <see cref="HasRootProperty"/> but also rejects an explicit JSON null.
+        /// JsonUtility materializes a default nested object for a null class field,
+        /// so the raw payload is the only reliable presence check for v6 industry.
+        /// </summary>
+        internal static bool HasNonNullRootProperty(string json, string propertyName)
+        {
+            if (string.IsNullOrEmpty(json) || string.IsNullOrEmpty(propertyName))
+                return false;
+
+            int depth = 0;
+            int index = 0;
+            while (index < json.Length)
+            {
+                char current = json[index];
+                if (current == '"')
+                {
+                    int contentStart = ++index;
+                    bool escaped = false;
+                    while (index < json.Length)
+                    {
+                        char character = json[index];
+                        if (escaped)
+                            escaped = false;
+                        else if (character == '\\')
+                            escaped = true;
+                        else if (character == '"')
+                            break;
+                        index++;
+                    }
+
+                    if (index >= json.Length)
+                        return false;
+
+                    int contentLength = index - contentStart;
+                    index++;
+
+                    if (depth == 1 && contentLength == propertyName.Length &&
+                        string.CompareOrdinal(json, contentStart, propertyName, 0, contentLength) == 0)
+                    {
+                        int lookahead = index;
+                        while (lookahead < json.Length && char.IsWhiteSpace(json[lookahead]))
+                            lookahead++;
+                        if (lookahead >= json.Length || json[lookahead] != ':')
+                            continue;
+                        lookahead++;
+                        while (lookahead < json.Length && char.IsWhiteSpace(json[lookahead]))
+                            lookahead++;
+                        if (lookahead + 4 <= json.Length &&
+                            string.CompareOrdinal(json, lookahead, "null", 0, 4) == 0)
+                        {
+                            int after = lookahead + 4;
+                            while (after < json.Length && char.IsWhiteSpace(json[after]))
+                                after++;
+                            if (after >= json.Length || json[after] == ',' || json[after] == '}' ||
+                                json[after] == ']')
+                                return false;
+                        }
+                        return true;
+                    }
+
+                    continue;
+                }
+
+                if (current == '{' || current == '[')
+                {
+                    depth++;
+                }
+                else if (current == '}' || current == ']')
+                {
+                    if (depth == 0)
+                        return false;
+                    depth--;
+                }
+
+                index++;
+            }
+
+            return false;
+        }
+
         internal static SaveOperationResult ValidateLegacyV1Fields(SaveData data)
         {
             if (data == null)
@@ -227,7 +367,100 @@ namespace SengokuChronicle.Persistence
         }
 
         /// <summary>
-        /// Validates the complete v4 chronicle through the same domain rules used for
+        /// v4 already owns the chronicle but predates person-pair family relationships.
+        /// The migrator adds an empty set; it must not invent any value.
+        /// </summary>
+        internal static SaveOperationResult ValidateLegacyV4Fields(SaveData data)
+        {
+            SaveOperationResult legacy = ValidateLegacyV3Fields(data);
+            if (!legacy.Succeeded)
+                return legacy;
+            if (data.familyRelationships != null && data.familyRelationships.Length > 0)
+                return Invalid("v4 存档包含家庭关系（familyRelationships）；迁移不会静默替换该数据。");
+            return ValidateChronicle(data.chronicle);
+        }
+
+        /// <summary>
+        /// v5 already owns person-pair family relationships. The migrator keeps them
+        /// verbatim and adds only the initial industry state.
+        /// </summary>
+        internal static SaveOperationResult ValidateLegacyV5Fields(SaveData data)
+        {
+            // v5 predates only the industry block. It already owns the chronicle and
+            // person-pair relationships, so the v4 "reject relationships" rule must
+            // not be applied here.
+            SaveOperationResult legacy = ValidateLegacyV3Fields(data);
+            if (!legacy.Succeeded)
+                return legacy;
+            SaveOperationResult chronicle = ValidateChronicle(data.chronicle);
+            if (!chronicle.Succeeded)
+                return chronicle;
+            return ValidateFamilyRelationships(data.familyRelationships, data.succession);
+        }
+
+        /// <summary>
+        /// v6 already owns every current block except the SC-020 development block. The
+        /// migrator keeps relationships, chronicle, events, succession and industry
+        /// verbatim and adds zero growth rows for the existing roster.
+        /// </summary>
+        internal static SaveOperationResult ValidateLegacyV6Fields(SaveData data)
+        {
+            if (data == null)
+                return Invalid("存档数据为空。");
+            if (!GameDate.IsValidDate(data.year, data.month, data.day))
+                return Invalid("存档日期无效。");
+            if (string.IsNullOrWhiteSpace(data.gameVersion) || data.eventContentVersion <= 0)
+                return Invalid("存档版本元数据无效。");
+            if (!LocationId.TryParse(data.locationId, out _))
+                return Invalid("存档地点无效。");
+            if (!Enum.IsDefined(typeof(SupplyShortageStage), data.supplyShortageStage) ||
+                !Enum.IsDefined(typeof(SealedLetterStage), data.sealedLetterStage) ||
+                !Enum.IsDefined(typeof(MarketTallyStage), data.marketTallyStage))
+                return Invalid("存档任务阶段无效。");
+
+            SaveOperationResult relationships = ValidateRelationships(data.relationships);
+            if (!relationships.Succeeded)
+                return relationships;
+            if (data.succession == null)
+                return Invalid("存档缺少继承状态（succession）。");
+            GameDate date = new GameDate(data.year, data.month, data.day);
+            SaveOperationResult succession = data.succession.ValidateForSave(date);
+            if (!succession.Succeeded)
+                return succession;
+            SaveOperationResult family = ValidateFamilyRelationships(data.familyRelationships,
+                data.succession);
+            if (!family.Succeeded)
+                return family;
+            if (data.industry == null)
+                return Invalid("存档缺少产业状态（industry）。");
+            SaveOperationResult industry = data.industry.ValidateForSave(date, data.succession);
+            if (!industry.Succeeded)
+                return industry;
+            SaveOperationResult chronicle = ValidateChronicle(data.chronicle);
+            if (!chronicle.Succeeded)
+                return chronicle;
+            if (!RandomStateManager.TryRestore(data.randomState, out _))
+                return Invalid("存档随机流状态无效。");
+            return ValidateEventRuntimeSnapshot(data.eventRuntime, date);
+        }
+
+        /// <summary>
+        /// v7 owns every block except the SC-021 research state. The migrator keeps the
+        /// existing growth rows and adds empty research without replaying a month.
+        /// </summary>
+        internal static SaveOperationResult ValidateLegacyV7Fields(SaveData data)
+        {
+            SaveOperationResult legacy = ValidateLegacyV6Fields(data);
+            if (!legacy.Succeeded)
+                return legacy;
+            if (data.development == null)
+                return Invalid("存档缺少人物成长状态（development）。");
+            return data.development.ValidateForSave(
+                new GameDate(data.year, data.month, data.day), data.succession);
+        }
+
+        /// <summary>
+        /// Validates the complete current-version chronicle through the same domain rules used for
         /// capture, so an accepted save is always restorable without a second check.
         /// </summary>
         internal static SaveOperationResult ValidateChronicle(ChronicleSaveEntry[] entries)
@@ -237,6 +470,54 @@ namespace SengokuChronicle.Persistence
             return ChronicleSaveCodec.TryRestore(entries, out _, out string error)
                 ? SaveOperationResult.Success()
                 : Invalid(string.IsNullOrEmpty(error) ? "存档编年史记录无效。" : error);
+        }
+
+        private static SaveOperationResult ValidateFamilyRelationships(
+            FamilyRelationshipSaveEntry[] entries, SuccessionSaveData succession)
+        {
+            if (entries == null)
+                return Invalid("存档缺少家庭关系（familyRelationships）。");
+            if (succession == null || succession.persons == null || succession.members == null)
+                return Invalid("存档家庭关系缺少继承人物名册。");
+
+            var persons = new HashSet<string>(StringComparer.Ordinal);
+            foreach (SuccessionPersonSaveEntry person in succession.persons)
+                if (person != null && !string.IsNullOrWhiteSpace(person.personId))
+                    persons.Add(person.personId);
+
+            var members = new HashSet<string>(StringComparer.Ordinal);
+            foreach (SuccessionMemberSaveEntry member in succession.members)
+                if (member != null && !string.IsNullOrWhiteSpace(member.personId))
+                    members.Add(member.personId);
+
+            // The head key may be a historical head: old-head records remain valid
+            // while that person is still a family member. Membership, not
+            // current-head equality, is the invariant enforced here.
+            var seen = new HashSet<FamilyRelationshipKey>();
+            foreach (FamilyRelationshipSaveEntry entry in entries)
+            {
+                if (entry == null)
+                    return Invalid("家庭关系记录为空。");
+
+                if (!PersonId.TryParse(entry.headPersonId, out PersonId head) || head.IsEmpty ||
+                    !PersonId.TryParse(entry.memberPersonId, out PersonId member) || member.IsEmpty)
+                    return Invalid($"家庭关系人物 ID 无效：{entry.headPersonId ?? "(null)"} -> " +
+                                   $"{entry.memberPersonId ?? "(null)"}。");
+                if (head == member)
+                    return Invalid("家庭关系不能指向家主本人。");
+                if (!persons.Contains(head.Value) || !persons.Contains(member.Value) ||
+                    !members.Contains(head.Value) || !members.Contains(member.Value))
+                    return Invalid($"家庭关系引用了未知或非家庭成员：{head.Value} -> {member.Value}。");
+
+                var key = new FamilyRelationshipKey(head, member);
+                if (!seen.Add(key))
+                    return Invalid($"家庭关系人物对重复：{head.Value} -> {member.Value}。");
+                if (entry.value < FamilyRelationships.MinimumValue ||
+                    entry.value > FamilyRelationships.MaximumValue)
+                    return Invalid($"家庭关系值超出范围：{head.Value} -> {member.Value}={entry.value}。");
+            }
+
+            return SaveOperationResult.Success();
         }
 
         private static SaveOperationResult ValidateRelationships(RelationshipSaveEntry[] entries)

@@ -23,6 +23,9 @@ namespace SengokuChronicle.Editor
         public const string StandardButtonName = "SC013StandardSampleButton";
         public const string CrisisButtonName = "SC013CrisisDemoButton";
         public const string StatusTextName = "M6TitleStatusText";
+        public const string EducationButtonName = "SC020EducationDemoButton";
+        public const string ResearchButtonName = "SC021ResearchDemoButton";
+        public const string FamilyFormationButtonName = "SC022FamilyFormationDemoButton";
         public const string MenuPath = "Tools/Sengoku Chronicle/Add SC-013 Title Scenario Buttons";
 
         private const string UndoName = "Add SC-013 Title Scenario Buttons";
@@ -93,8 +96,12 @@ namespace SengokuChronicle.Editor
                 return Invalid(out error, "M6TitleRoot must be a direct child of Canvas.");
             if (root.gameObject.activeSelf)
                 return Invalid(out error, "M6TitleRoot must be saved inactive; Play Mode shows it.");
-            if (root.childCount != CompleteChildCount)
-                return Invalid(out error, "M6TitleRoot must contain the four base controls and two SC-013 entries.");
+            int optionalEntries = (Named(scene, EducationButtonName).Any() ? 1 : 0) +
+                                  (Named(scene, ResearchButtonName).Any() ? 1 : 0) +
+                                  (Named(scene, FamilyFormationButtonName).Any() ? 1 : 0);
+            if (root.childCount != CompleteChildCount + optionalEntries)
+                return Invalid(out error,
+                    "M6TitleRoot must contain the four base controls, two SC-013 entries and at most one SC-020 and one SC-021 entry.");
             if (standard.parent != root || crisis.parent != root || status.parent != root)
                 return Invalid(out error, "SC-013 title entries and status text must be direct title-root children.");
             if (!standard.gameObject.activeSelf || !crisis.gameObject.activeSelf)
@@ -145,7 +152,10 @@ namespace SengokuChronicle.Editor
                 HasSerializedReference(controller, "standardSampleButton") ||
                 HasSerializedReference(controller, "crisisDemoButton"))
                 return UpdateResult.ExistingPartialControl;
-            if (root.childCount != BaseChildCount)
+            int optionalEntries = (Named(scene, EducationButtonName).Any() ? 1 : 0) +
+                                  (Named(scene, ResearchButtonName).Any() ? 1 : 0) +
+                                  (Named(scene, FamilyFormationButtonName).Any() ? 1 : 0);
+            if (root.childCount != BaseChildCount + optionalEntries)
                 return UpdateResult.InvalidHierarchyOrBindings;
 
             Undo.IncrementCurrentGroup();
@@ -169,7 +179,10 @@ namespace SengokuChronicle.Editor
                 if (statusRect == null)
                     throw new InvalidOperationException("M6TitleStatusText has no RectTransform.");
                 Undo.RecordObject(statusRect, UndoName);
-                statusRect.anchoredPosition = new Vector2(0f, -260f);
+                bool hasLowerScenarioEntry = Named(scene, EducationButtonName).Any() ||
+                                             Named(scene, ResearchButtonName).Any();
+                statusRect.anchoredPosition = new Vector2(0f,
+                    hasLowerScenarioEntry ? -330f : -260f);
                 EditorUtility.SetDirty(statusRect);
 
                 Undo.RecordObject(controller, UndoName);

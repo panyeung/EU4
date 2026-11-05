@@ -172,7 +172,7 @@ namespace SengokuChronicle.Tests.EditMode
         {
             var session = NewSession();
             // 1560-04-01 + 160981 days == 2000-12-31 (max supported date)
-            Assert.That(session.AdvanceDays(160981), Is.True);
+            Assert.That(session.AdvanceDaysForLegacyFixtureSetup(160981), Is.True);
             Assert.That(session.WorldClock.CurrentDate, Is.EqualTo(new GameDate(2000, 12, 31)));
             Assert.That(session.PreviewTravel(LocationId.Atsuta).HasValue, Is.False, "travel beyond max date must fail preview");
             Assert.That(session.CurrentLocation, Is.EqualTo(LocationId.Kiyosu));
@@ -247,7 +247,7 @@ namespace SengokuChronicle.Tests.EditMode
         public void ConfirmTravel_DateOverflow_FailsAtomically()
         {
             var session = NewSession();
-            Assert.That(session.AdvanceDays(160981), Is.True); // -> 2000-12-31 (max date)
+            Assert.That(session.AdvanceDaysForLegacyFixtureSetup(160981), Is.True); // -> 2000-12-31 (max date)
             Assert.That(session.CurrentLocation, Is.EqualTo(LocationId.Kiyosu));
             // Forge a preview claiming arrival at 2000-12-31 (+1 from 2000-12-30).
             // At 2000-12-31, +1 day would overflow past the supported range, so confirm must fail.
@@ -257,30 +257,35 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(session.WorldClock.CurrentDate, Is.EqualTo(new GameDate(2000, 12, 31)), "date must not change on overflow");
         }
 
-        // 6. Month/year boundaries.
+        // 6. Month/year boundaries: SC-019 forbids travel across a month end.
         [Test]
-        public void ConfirmTravel_MonthBoundary_April30ToMay1()
+        public void PreviewTravel_MonthBoundary_April30ToMay1_IsRefused()
         {
             var session = NewSession();
             Assert.That(session.AdvanceDays(29), Is.True); // -> 1560-04-30
-            var p = session.PreviewTravel(LocationId.Nagoya).Value;
-            Assert.That(p.EstimatedArrivalDate, Is.EqualTo(new GameDate(1560, 5, 1)));
-            Assert.That(session.ConfirmTravel(p), Is.True);
-            Assert.That(session.CurrentLocation, Is.EqualTo(LocationId.Nagoya));
-            Assert.That(session.WorldClock.CurrentDate, Is.EqualTo(new GameDate(1560, 5, 1)));
+            GameDate date = session.WorldClock.CurrentDate;
+            LocationId location = session.CurrentLocation;
+
+            Assert.That(session.PreviewTravel(LocationId.Nagoya).HasValue, Is.False);
+            Assert.That(session.LastTravelBlockReason, Does.Contain("跨越月末"));
+            Assert.That(session.CurrentLocation, Is.EqualTo(location));
+            Assert.That(session.WorldClock.CurrentDate, Is.EqualTo(date));
         }
 
         [Test]
-        public void ConfirmTravel_YearBoundary_Dec31ToJan1NextYear()
+        public void ConfirmTravel_YearBoundary_Dec31ToJan1NextYear_IsRefused()
         {
             var session = NewSession();
-            Assert.That(session.AdvanceDays(273), Is.True); // -> 1560-12-30
-            session.ConfirmTravel(session.PreviewTravel(LocationId.Nagoya).Value); // -> 1560-12-31 at Nagoya
-            var p = session.PreviewTravel(LocationId.Kiyosu).Value;
-            Assert.That(p.EstimatedArrivalDate, Is.EqualTo(new GameDate(1561, 1, 1)));
-            Assert.That(session.ConfirmTravel(p), Is.True);
-            Assert.That(session.CurrentLocation, Is.EqualTo(LocationId.Kiyosu));
-            Assert.That(session.WorldClock.CurrentDate, Is.EqualTo(new GameDate(1561, 1, 1)));
+            Assert.That(session.AdvanceDaysForLegacyFixtureSetup(273), Is.True); // -> 1560-12-30
+            Assert.That(session.ConfirmTravel(session.PreviewTravel(LocationId.Nagoya).Value), Is.True); // -> 12-31
+            GameDate date = session.WorldClock.CurrentDate;
+            LocationId location = session.CurrentLocation;
+            var forged = new TravelPreview(LocationId.Kiyosu, "清洲", 1, new GameDate(1561, 1, 1));
+
+            Assert.That(session.PreviewTravel(LocationId.Kiyosu).HasValue, Is.False);
+            Assert.That(session.ConfirmTravel(forged), Is.False);
+            Assert.That(session.CurrentLocation, Is.EqualTo(location));
+            Assert.That(session.WorldClock.CurrentDate, Is.EqualTo(date));
         }
 
         [Test]

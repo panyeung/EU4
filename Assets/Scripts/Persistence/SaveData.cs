@@ -15,7 +15,7 @@ namespace SengokuChronicle.Persistence
         public const int CurrentGameSchemaVersion = SaveDataValidator.CurrentVersion;
 
         /// <summary>Rules contract version shared by capture, validation and migration.</summary>
-        public const int CurrentRulesVersion = 1;
+        public const int CurrentRulesVersion = 4;
 
         /// <summary>
         /// Fallback event-content version used only when no catalog is loaded. The
@@ -38,10 +38,14 @@ namespace SengokuChronicle.Persistence
         public int sealedLetterStage;
         public int marketTallyStage;
         public RelationshipSaveEntry[] relationships;
+        public FamilyRelationshipSaveEntry[] familyRelationships;
         public RandomStateSaveData randomState;
         public EventRuntimeSaveData eventRuntime;
         public SuccessionSaveData succession;
         public ChronicleSaveEntry[] chronicle;
+        public IndustryStateSaveData industry;
+        public CharacterDevelopmentSaveData development;
+        public FamilyResearchSaveData research;
 
         public SaveData()
         {
@@ -49,10 +53,18 @@ namespace SengokuChronicle.Persistence
             gameVersion = CurrentGameVersion;
             rulesVersion = CurrentRulesVersion;
             eventContentVersion = CurrentEventContentVersion;
+            relationships = new RelationshipSaveEntry[0];
+            familyRelationships = new FamilyRelationshipSaveEntry[0];
             randomState = RandomStateManager.Create(0UL).CaptureState();
             eventRuntime = new EventRuntimeSaveData();
             succession = SuccessionSaveData.CreateDefault();
             chronicle = new ChronicleSaveEntry[0];
+            industry = IndustryStateSaveData.CreateInitial(WorldClock.NewGameDate);
+            // A new SaveData owns the default roster. Its v7 development block must
+            // cover exactly that roster so the constructor's baseline is a valid save;
+            // callers that replace the succession snapshot must supply matching rows.
+            development = CharacterDevelopmentSaveData.CreateEmpty(succession);
+            research = FamilyResearchSaveData.CreateInitial(WorldClock.NewGameDate);
         }
     }
 
@@ -76,6 +88,10 @@ namespace SengokuChronicle.Persistence
         public EventRuntimeSaveData eventRuntime;
         public SuccessionSaveData succession;
         public ChronicleSaveEntry[] chronicle;
+        public FamilyRelationshipSaveEntry[] familyRelationships;
+        public IndustryStateSaveData industry;
+        public CharacterDevelopmentSaveData development;
+        public FamilyResearchSaveData research;
     }
 
     /// <summary>One player-to-NPC relationship value, keyed by stable character ID.</summary>
@@ -84,6 +100,924 @@ namespace SengokuChronicle.Persistence
     {
         public string characterId;
         public int value;
+    }
+
+    /// <summary>One ordered (head, family member) pair value.</summary>
+    [Serializable]
+    public sealed class FamilyRelationshipSaveEntry
+    {
+        public string headPersonId;
+        public string memberPersonId;
+        public int value;
+    }
+
+    /// <summary>
+    /// Versioned SC-019 industry snapshot: the three resources, the last settled
+    /// month and exactly two stable slots. Runtime reports are not persisted.
+    /// </summary>
+    [Serializable]
+    public sealed class IndustryStateSaveData
+    {
+        public int funds;
+        public int supplies;
+        public int intelligence;
+        public int lastSettledMonthIndex;
+        public IndustrySlotSaveEntry[] slots;
+
+        /// <summary>Opening state for a new game or a migrated legacy save.</summary>
+        public static IndustryStateSaveData CreateInitial(GameDate date)
+        {
+            var slots = new IndustrySlotSaveEntry[IndustryCatalog.All.Count];
+            for (int i = 0; i < slots.Length; i++)
+                slots[i] = new IndustrySlotSaveEntry
+                {
+                    industryId = IndustryCatalog.All[i].Id,
+                    assignedPersonId = string.Empty
+                };
+
+            return new IndustryStateSaveData
+            {
+                funds = 30,
+                supplies = 12,
+                intelligence = 0,
+                lastSettledMonthIndex = IndustryCalendar.MonthIndex(date) - 1,
+                slots = slots
+            };
+        }
+
+        public static IndustryStateSaveData Capture(IndustryState state)
+        {
+            if (state == null)
+                return null;
+
+            var slots = new IndustrySlotSaveEntry[state.Assignments.Count];
+            for (int i = 0; i < slots.Length; i++)
+            {
+                IndustryAssignment assignment = state.Assignments[i];
+                slots[i] = new IndustrySlotSaveEntry
+                {
+                    industryId = assignment.IndustryId,
+                    assignedPersonId = assignment.PersonId.IsEmpty ? string.Empty : assignment.PersonId.Value
+                };
+            }
+
+            return new IndustryStateSaveData
+            {
+                funds = state.Resources.Funds,
+                supplies = state.Resources.Supplies,
+                intelligence = state.Resources.Intelligence,
+                lastSettledMonthIndex = state.LastSettledMonthIndex,
+                slots = slots
+            };
+        }
+
+        public IndustryStateSaveData Clone()
+        {
+            var clone = new IndustryStateSaveData
+            {
+                funds = funds,
+                supplies = supplies,
+                intelligence = intelligence,
+                lastSettledMonthIndex = lastSettledMonthIndex,
+                slots = new IndustrySlotSaveEntry[slots != null ? slots.Length : 0]
+            };
+            for (int i = 0; i < clone.slots.Length; i++)
+            {
+                IndustrySlotSaveEntry entry = slots[i];
+                clone.slots[i] = entry == null ? null : new IndustrySlotSaveEntry
+                {
+                    industryId = entry.industryId,
+                    assignedPersonId = entry.assignedPersonId
+                };
+            }
+            return clone;
+        }
+
+        /// <summary>Structural and cross-reference validation; never throws.</summary>
+        public SaveOperationResult ValidateForSave(GameDate date, SuccessionSaveData succession)
+        {
+            if (funds < IndustryResources.Minimum || funds > IndustryResources.Maximum)
+                return Invalid("存档产业资金超出范围 0..999999。");
+            if (supplies < IndustryResources.Minimum || supplies > IndustryResources.Maximum)
+                return Invalid("存档产业物资超出范围 0..999999。");
+            if (intelligence < IndustryResources.Minimum || intelligence > IndustryResources.Maximum)
+                return Invalid("存档产业情报超出范围 0..999999。");
+            if (lastSettledMonthIndex != IndustryCalendar.MonthIndex(date) - 1)
+                return Invalid("存档产业已结算月份与日期不一致。");
+            if (slots == null || slots.Length != IndustryCatalog.All.Count)
+                return Invalid("存档产业槽位必须恰好包含两个产业。");
+            if (succession == null || succession.persons == null || succession.members == null)
+                return Invalid("存档产业缺少继承人物名册。");
+
+            var persons = new Dictionary<PersonId, SuccessionPersonSaveEntry>();
+            foreach (SuccessionPersonSaveEntry person in succession.persons)
+            {
+                if (person != null && PersonId.TryParse(person.personId, out PersonId personId))
+                    persons[personId] = person;
+            }
+            var members = new HashSet<PersonId>();
+            foreach (SuccessionMemberSaveEntry member in succession.members)
+            {
+                if (member != null && PersonId.TryParse(member.personId, out PersonId memberId))
+                    members.Add(memberId);
+            }
+
+            var seenIndustries = new HashSet<string>(StringComparer.Ordinal);
+            var seenPersons = new HashSet<PersonId>();
+            string previousIndustryId = null;
+            foreach (IndustrySlotSaveEntry slot in slots)
+            {
+                if (slot == null)
+                    return Invalid("存档产业槽位为空。");
+                if (string.IsNullOrWhiteSpace(slot.industryId) ||
+                    !IndustryCatalog.TryGet(slot.industryId, out _))
+                    return Invalid("存档产业槽位包含未知产业 ID。");
+                if (!seenIndustries.Add(slot.industryId))
+                    return Invalid("存档产业槽位产业 ID 重复。");
+                if (previousIndustryId != null &&
+                    string.CompareOrdinal(previousIndustryId, slot.industryId) > 0)
+                    return Invalid("存档产业槽位顺序不稳定。");
+                previousIndustryId = slot.industryId;
+
+                if (string.IsNullOrWhiteSpace(slot.assignedPersonId))
+                    continue;
+                if (!PersonId.TryParse(slot.assignedPersonId, out PersonId assignee) ||
+                    !persons.TryGetValue(assignee, out SuccessionPersonSaveEntry personEntry))
+                    return Invalid("存档产业负责人不是已登记人物。");
+                if (!members.Contains(assignee))
+                    return Invalid("存档产业负责人不是当前家庭成员。");
+                if (!personEntry.alive)
+                    return Invalid("存档产业负责人已死亡。");
+                if (personEntry.retired)
+                    return Invalid("存档产业负责人已退休。");
+                if (date.Year - personEntry.birthYear < succession.adulthoodAge)
+                    return Invalid("存档产业负责人未成年。");
+                if (!seenPersons.Add(assignee))
+                    return Invalid("同一人物不能同时担任两个产业职位。");
+            }
+
+            return SaveOperationResult.Success();
+        }
+
+        /// <summary>Rebuilds a validated runtime state; the caller must not assign it on failure.</summary>
+        public static bool TryRestore(IndustryStateSaveData data, SuccessionSaveData succession,
+            GameDate date, out IndustryState state, out string error)
+        {
+            state = null;
+            if (data == null)
+            {
+                error = "存档缺少产业状态（industry）。";
+                return false;
+            }
+
+            SaveOperationResult validation = data.ValidateForSave(date, succession);
+            if (!validation.Succeeded)
+            {
+                error = validation.Message;
+                return false;
+            }
+
+            if (!IndustryResources.TryCreate(data.funds, data.supplies, data.intelligence,
+                    out IndustryResources resources, out error))
+                return false;
+
+            IndustryState restored = IndustryState.CreateInitial(date);
+            restored.TrySetResources(resources, out _);
+            restored.TrySetLastSettledMonthIndex(data.lastSettledMonthIndex, out _);
+            foreach (IndustrySlotSaveEntry slot in data.slots)
+            {
+                if (!restored.TrySetAssignee(slot.industryId,
+                        string.IsNullOrWhiteSpace(slot.assignedPersonId)
+                            ? default
+                            : new PersonId(slot.assignedPersonId), out error))
+                    return false;
+            }
+
+            state = restored;
+            error = string.Empty;
+            return true;
+        }
+
+        private static SaveOperationResult Invalid(string message) =>
+            SaveOperationResult.Failure(SaveErrorCode.InvalidData, message);
+    }
+
+    [Serializable]
+    public sealed class IndustrySlotSaveEntry
+    {
+        public string industryId;
+        public string assignedPersonId;
+    }
+
+    /// <summary>
+    /// Plain-data v7 SC-020 snapshot. Every family person has one sorted row with the
+    /// five growth values, at most one plan and at most one settled result per 0..15
+    /// age year. Runtime reports and display names never enter the save.
+    /// </summary>
+    [Serializable]
+    public sealed class CharacterDevelopmentSaveData
+    {
+        public CharacterDevelopmentPersonSaveEntry[] persons;
+
+        public static CharacterDevelopmentSaveData CreateEmpty() =>
+            new CharacterDevelopmentSaveData { persons = new CharacterDevelopmentPersonSaveEntry[0] };
+
+        /// <summary>Migration default: every existing person gets five zeros and no history.</summary>
+        public static CharacterDevelopmentSaveData CreateEmpty(SuccessionSaveData succession)
+        {
+            if (succession == null || succession.persons == null)
+                return CreateEmpty();
+
+            var persons = new CharacterDevelopmentPersonSaveEntry[succession.persons.Length];
+            for (int i = 0; i < persons.Length; i++)
+                persons[i] = new CharacterDevelopmentPersonSaveEntry
+                {
+                    personId = succession.persons[i] != null ? succession.persons[i].personId : string.Empty,
+                    plans = new EducationPlanSaveEntry[0],
+                    results = new EducationResultSaveEntry[0]
+                };
+            return new CharacterDevelopmentSaveData { persons = persons };
+        }
+
+        public static CharacterDevelopmentSaveData Capture(CharacterDevelopmentState state)
+        {
+            if (state == null)
+                return CreateEmpty();
+
+            IReadOnlyList<PersonId> ids = state.PersonIds;
+            var persons = new CharacterDevelopmentPersonSaveEntry[ids.Count];
+            for (int i = 0; i < ids.Count; i++)
+            {
+                PersonId personId = ids[i];
+                state.TryGetValues(personId, out CharacterGrowthValues values);
+                IReadOnlyList<int> plannedYears = state.PlannedAgeYears(personId);
+                var plans = new EducationPlanSaveEntry[plannedYears.Count];
+                for (int p = 0; p < plans.Length; p++)
+                {
+                    state.TryGetPlan(personId, plannedYears[p], out EducationYearPlan plan);
+                    plans[p] = new EducationPlanSaveEntry
+                    {
+                        ageYear = plan.AgeYear,
+                        direction = (int)plan.Direction,
+                        mentorPersonId = plan.Mentor.IsEmpty ? string.Empty : plan.Mentor.Value
+                    };
+                }
+
+                IReadOnlyList<int> settledYears = state.SettledAgeYears(personId);
+                var results = new EducationResultSaveEntry[settledYears.Count];
+                for (int r = 0; r < results.Length; r++)
+                {
+                    state.TryGetResult(personId, settledYears[r], out EducationYearResult result);
+                    results[r] = new EducationResultSaveEntry
+                    {
+                        ageYear = settledYears[r],
+                        direction = (int)result.Direction,
+                        mentorPersonId = result.Mentor.IsEmpty ? string.Empty : result.Mentor.Value,
+                        before = new GrowthValuesSaveEntry
+                        {
+                            ninjutsu = result.Before.Ninjutsu,
+                            martialArts = result.Before.MartialArts,
+                            scholarship = result.Before.Scholarship,
+                            management = result.Before.Management,
+                            social = result.Before.Social
+                        },
+                        after = new GrowthValuesSaveEntry
+                        {
+                            ninjutsu = result.After.Ninjutsu,
+                            martialArts = result.After.MartialArts,
+                            scholarship = result.After.Scholarship,
+                            management = result.After.Management,
+                            social = result.After.Social
+                        },
+                        explanation = result.Explanation,
+                        usedFreeGrowthFallback = result.UsedFreeGrowthFallback
+                    };
+                }
+
+                persons[i] = new CharacterDevelopmentPersonSaveEntry
+                {
+                    personId = personId.Value,
+                    ninjutsu = values.Ninjutsu,
+                    martialArts = values.MartialArts,
+                    scholarship = values.Scholarship,
+                    management = values.Management,
+                    social = values.Social,
+                    plans = plans,
+                    results = results
+                };
+            }
+
+            return new CharacterDevelopmentSaveData { persons = persons };
+        }
+
+        public CharacterDevelopmentSaveData Clone()
+        {
+            var clone = new CharacterDevelopmentSaveData
+            {
+                persons = new CharacterDevelopmentPersonSaveEntry[persons != null ? persons.Length : 0]
+            };
+            for (int i = 0; i < clone.persons.Length; i++)
+            {
+                CharacterDevelopmentPersonSaveEntry entry = persons[i];
+                if (entry == null)
+                {
+                    clone.persons[i] = null;
+                    continue;
+                }
+
+                var plans = new EducationPlanSaveEntry[entry.plans != null ? entry.plans.Length : 0];
+                for (int p = 0; p < plans.Length; p++)
+                {
+                    EducationPlanSaveEntry plan = entry.plans[p];
+                    plans[p] = plan == null ? null : new EducationPlanSaveEntry
+                    {
+                        ageYear = plan.ageYear,
+                        direction = plan.direction,
+                        mentorPersonId = plan.mentorPersonId
+                    };
+                }
+
+                var results = new EducationResultSaveEntry[entry.results != null ? entry.results.Length : 0];
+                for (int r = 0; r < results.Length; r++)
+                {
+                    EducationResultSaveEntry result = entry.results[r];
+                    results[r] = result == null ? null : new EducationResultSaveEntry
+                    {
+                        ageYear = result.ageYear,
+                        direction = result.direction,
+                        mentorPersonId = result.mentorPersonId,
+                        before = CloneGrowth(result.before),
+                        after = CloneGrowth(result.after),
+                        explanation = result.explanation,
+                        usedFreeGrowthFallback = result.usedFreeGrowthFallback
+                    };
+                }
+
+                clone.persons[i] = new CharacterDevelopmentPersonSaveEntry
+                {
+                    personId = entry.personId,
+                    ninjutsu = entry.ninjutsu,
+                    martialArts = entry.martialArts,
+                    scholarship = entry.scholarship,
+                    management = entry.management,
+                    social = entry.social,
+                    plans = plans,
+                    results = results
+                };
+            }
+            return clone;
+        }
+
+        private static GrowthValuesSaveEntry CloneGrowth(GrowthValuesSaveEntry source) =>
+            source == null ? null : new GrowthValuesSaveEntry
+            {
+                ninjutsu = source.ninjutsu,
+                martialArts = source.martialArts,
+                scholarship = source.scholarship,
+                management = source.management,
+                social = source.social
+            };
+
+        /// <summary>
+        /// Validates every row, key, plan, mentor and result against the succession
+        /// snapshot and the save date. The person set must match the roster exactly, so a
+        /// missing growth block is rejected instead of being silently defaulted.
+        /// </summary>
+        public SaveOperationResult ValidateForSave(GameDate date, SuccessionSaveData succession)
+        {
+            if (succession == null || succession.persons == null || succession.members == null)
+                return Invalid("存档缺少人物成长所需的名册。");
+            if (persons == null)
+                return Invalid("存档缺少人物成长（development）。");
+
+            var roster = new Dictionary<PersonId, SuccessionPersonSaveEntry>();
+            foreach (SuccessionPersonSaveEntry person in succession.persons)
+                if (person != null && PersonId.TryParse(person.personId, out PersonId personId))
+                    roster[personId] = person;
+            var members = new HashSet<PersonId>();
+            foreach (SuccessionMemberSaveEntry member in succession.members)
+                if (member != null && PersonId.TryParse(member.personId, out PersonId memberId))
+                    members.Add(memberId);
+
+            if (persons.Length != roster.Count)
+                return Invalid("存档人物成长记录必须覆盖名册中的每个人物。");
+
+            var seenPersons = new HashSet<PersonId>();
+            string previousPersonId = null;
+            foreach (CharacterDevelopmentPersonSaveEntry entry in persons)
+            {
+                if (entry == null)
+                    return Invalid("存档人物成长记录为空。");
+                if (!PersonId.TryParse(entry.personId, out PersonId personId) || !roster.ContainsKey(personId))
+                    return Invalid("存档人物成长记录引用了未知人物。");
+                if (!seenPersons.Add(personId))
+                    return Invalid("存档人物成长记录人物重复。");
+                if (previousPersonId != null &&
+                    string.CompareOrdinal(previousPersonId, entry.personId) > 0)
+                    return Invalid("存档人物成长记录顺序不稳定。");
+                previousPersonId = entry.personId;
+                if (!ValidGrowth(entry.ninjutsu, entry.martialArts, entry.scholarship,
+                        entry.management, entry.social))
+                    return Invalid("存档人物成长能力超出范围 0..100。");
+
+                if (!ValidatePlans(entry, personId, members, roster, date,
+                        succession.adulthoodAge, out string planError))
+                    return Invalid(planError);
+                if (!ValidateResults(entry, personId, roster, out string resultError))
+                    return Invalid(resultError);
+                if (!ValidateValuesMatchLatestResult(entry, out string valueError))
+                    return Invalid(valueError);
+            }
+
+            foreach (PersonId rosterId in roster.Keys)
+                if (!seenPersons.Contains(rosterId))
+                    return Invalid("存档缺少名册人物的成长记录：" + rosterId.Value + "。");
+
+            return SaveOperationResult.Success();
+        }
+
+        private bool ValidatePlans(CharacterDevelopmentPersonSaveEntry entry, PersonId learner,
+            HashSet<PersonId> members, Dictionary<PersonId, SuccessionPersonSaveEntry> roster,
+            GameDate date, int adulthoodAge, out string error)
+        {
+            if (entry.plans == null)
+            {
+                error = "存档人物成长计划列表为空。";
+                return false;
+            }
+
+            var seen = new HashSet<int>();
+            int previousAge = -1;
+            foreach (EducationPlanSaveEntry plan in entry.plans)
+            {
+                if (plan == null)
+                {
+                    error = "存档人物成长计划为空。";
+                    return false;
+                }
+                if (plan.ageYear < EducationYearPlan.MinimumAgeYear ||
+                    plan.ageYear > EducationYearPlan.MaximumAgeYear)
+                {
+                    error = "存档人物成长计划年度超出 0..15。";
+                    return false;
+                }
+                if (plan.ageYear > date.Year - roster[learner].birthYear)
+                {
+                    error = "存档人物成长计划年度超出当前年龄。";
+                    return false;
+                }
+                if (!seen.Add(plan.ageYear) || plan.ageYear <= previousAge)
+                {
+                    error = "存档人物成长计划年度重复或顺序不稳定。";
+                    return false;
+                }
+                previousAge = plan.ageYear;
+
+                bool free = plan.direction == (int)EducationDirection.FreeGrowth;
+                if (!Enum.IsDefined(typeof(EducationDirection), plan.direction))
+                {
+                    error = "存档人物成长计划方向无效。";
+                    return false;
+                }
+                bool hasMentor = !string.IsNullOrWhiteSpace(plan.mentorPersonId);
+                if (free == hasMentor)
+                {
+                    error = free
+                        ? "存档自由成长计划不应有导师。"
+                        : "存档定向培养计划缺少导师。";
+                    return false;
+                }
+                if (free)
+                    continue;
+
+                if (!PersonId.TryParse(plan.mentorPersonId, out PersonId mentorId) ||
+                    mentorId == learner || !roster.TryGetValue(mentorId, out SuccessionPersonSaveEntry mentor) ||
+                    !members.Contains(mentorId))
+                {
+                    error = "存档培养计划导师不是合法的成年家族成员。";
+                    return false;
+                }
+                if (!mentor.alive || mentor.retired ||
+                    date.Year - mentor.birthYear < adulthoodAge)
+                {
+                    error = "存档培养计划导师已失效或未成年。";
+                    return false;
+                }
+            }
+
+            error = string.Empty;
+            return true;
+        }
+
+        private bool ValidateResults(CharacterDevelopmentPersonSaveEntry entry, PersonId learner,
+            Dictionary<PersonId, SuccessionPersonSaveEntry> roster, out string error)
+        {
+            if (entry.results == null)
+            {
+                error = "存档人物成长结果列表为空。";
+                return false;
+            }
+
+            var seen = new HashSet<int>();
+            int previousAge = -1;
+            foreach (EducationResultSaveEntry result in entry.results)
+            {
+                if (result == null)
+                {
+                    error = "存档人物成长结果为空。";
+                    return false;
+                }
+                if (result.ageYear < EducationYearPlan.MinimumAgeYear ||
+                    result.ageYear > EducationYearPlan.MaximumAgeYear)
+                {
+                    error = "存档人物成长结果年度超出 0..15。";
+                    return false;
+                }
+                if (!seen.Add(result.ageYear) || result.ageYear <= previousAge)
+                {
+                    error = "存档人物成长结果年度重复或顺序不稳定。";
+                    return false;
+                }
+                previousAge = result.ageYear;
+                if (!Enum.IsDefined(typeof(EducationDirection), result.direction))
+                {
+                    error = "存档人物成长结果方向无效。";
+                    return false;
+                }
+                if (result.before == null || result.after == null ||
+                    !ValidGrowth(result.before) || !ValidGrowth(result.after) ||
+                    string.IsNullOrWhiteSpace(result.explanation))
+                {
+                    error = "存档人物成长结果能力值或说明无效。";
+                    return false;
+                }
+                bool free = result.direction == (int)EducationDirection.FreeGrowth;
+                bool hasMentor = !string.IsNullOrWhiteSpace(result.mentorPersonId);
+                if (free == hasMentor)
+                {
+                    error = free
+                        ? "存档自由成长结果不应有导师。"
+                        : "存档定向培养结果缺少导师。";
+                    return false;
+                }
+                if (hasMentor &&
+                    (!PersonId.TryParse(result.mentorPersonId, out PersonId mentorId) ||
+                     !roster.ContainsKey(mentorId) || mentorId == learner))
+                {
+                    error = "存档人物成长结果导师 ID 无效。";
+                    return false;
+                }
+
+                foreach (EducationPlanSaveEntry plan in entry.plans)
+                {
+                    if (plan != null && plan.ageYear == result.ageYear &&
+                        (plan.direction != result.direction ||
+                         !string.Equals(plan.mentorPersonId ?? string.Empty,
+                             result.mentorPersonId ?? string.Empty, StringComparison.Ordinal)))
+                    {
+                        error = "存档人物成长计划与同年度结果不一致。";
+                        return false;
+                    }
+                }
+            }
+
+            error = string.Empty;
+            return true;
+        }
+
+        private static bool ValidateValuesMatchLatestResult(CharacterDevelopmentPersonSaveEntry entry,
+            out string error)
+        {
+            EducationResultSaveEntry latest = null;
+            foreach (EducationResultSaveEntry result in entry.results)
+                if (latest == null || result.ageYear > latest.ageYear)
+                    latest = result;
+            if (latest != null &&
+                (latest.after.ninjutsu != entry.ninjutsu ||
+                 latest.after.martialArts != entry.martialArts ||
+                 latest.after.scholarship != entry.scholarship ||
+                 latest.after.management != entry.management ||
+                 latest.after.social != entry.social))
+            {
+                error = "存档人物成长能力与最近年度结算结果不一致。";
+                return false;
+            }
+
+            error = string.Empty;
+            return true;
+        }
+
+        private static bool ValidGrowth(int ninjutsu, int martialArts, int scholarship, int management,
+            int social) =>
+            ninjutsu >= CharacterGrowthValues.Minimum && ninjutsu <= CharacterGrowthValues.Maximum &&
+            martialArts >= CharacterGrowthValues.Minimum && martialArts <= CharacterGrowthValues.Maximum &&
+            scholarship >= CharacterGrowthValues.Minimum && scholarship <= CharacterGrowthValues.Maximum &&
+            management >= CharacterGrowthValues.Minimum && management <= CharacterGrowthValues.Maximum &&
+            social >= CharacterGrowthValues.Minimum && social <= CharacterGrowthValues.Maximum;
+
+        private static bool ValidGrowth(GrowthValuesSaveEntry values) =>
+            values != null && ValidGrowth(values.ninjutsu, values.martialArts, values.scholarship,
+                values.management, values.social);
+
+        public static bool TryRestore(CharacterDevelopmentSaveData data, SuccessionState succession,
+            out CharacterDevelopmentState state, out string error)
+        {
+            state = null;
+            if (data == null)
+            {
+                error = "存档缺少人物成长状态（development）。";
+                return false;
+            }
+            error = string.Empty;
+
+            var restored = CharacterDevelopmentState.CreateEmpty();
+            if (data.persons == null)
+            {
+                error = "存档缺少人物成长记录（development.persons）。";
+                return false;
+            }
+
+            foreach (CharacterDevelopmentPersonSaveEntry entry in data.persons)
+            {
+                if (entry == null ||
+                    !PersonId.TryParse(entry.personId, out PersonId personId))
+                {
+                    error = "存档人物成长记录无效。";
+                    return false;
+                }
+                if (!CharacterGrowthValues.TryCreate(entry.ninjutsu, entry.martialArts,
+                        entry.scholarship, entry.management, entry.social,
+                        out CharacterGrowthValues values, out string valuesError))
+                {
+                    error = string.IsNullOrEmpty(valuesError)
+                        ? "存档人物成长记录无效。"
+                        : valuesError;
+                    return false;
+                }
+                if (!restored.TryAddPerson(personId, values, out error))
+                    return false;
+            }
+
+            foreach (CharacterDevelopmentPersonSaveEntry entry in data.persons)
+            {
+                PersonId.TryParse(entry.personId, out PersonId personId);
+                if (entry.plans != null)
+                {
+                    foreach (EducationPlanSaveEntry plan in entry.plans)
+                    {
+                        if (plan == null ||
+                            !EducationYearPlan.TryCreate(personId, plan.ageYear,
+                                (EducationDirection)plan.direction,
+                                string.IsNullOrWhiteSpace(plan.mentorPersonId)
+                                    ? default
+                                    : new PersonId(plan.mentorPersonId), out EducationYearPlan domainPlan,
+                                out error) ||
+                            !restored.TryRestorePlan(domainPlan, out error))
+                        {
+                            error = string.IsNullOrEmpty(error)
+                                ? "存档人物成长计划无效。"
+                                : error;
+                            return false;
+                        }
+                    }
+                }
+            }
+
+            foreach (CharacterDevelopmentPersonSaveEntry entry in data.persons)
+            {
+                PersonId.TryParse(entry.personId, out PersonId personId);
+                if (entry.results == null)
+                    continue;
+                foreach (EducationResultSaveEntry result in entry.results)
+                {
+                    if (result == null || result.before == null || result.after == null ||
+                        !CharacterGrowthValues.TryCreate(result.before.ninjutsu,
+                            result.before.martialArts, result.before.scholarship,
+                            result.before.management, result.before.social,
+                            out CharacterGrowthValues before, out error) ||
+                        !CharacterGrowthValues.TryCreate(result.after.ninjutsu,
+                            result.after.martialArts, result.after.scholarship,
+                            result.after.management, result.after.social,
+                            out CharacterGrowthValues after, out error))
+                    {
+                        error = string.IsNullOrEmpty(error)
+                            ? "存档人物成长结果能力值无效。"
+                            : error;
+                        return false;
+                    }
+
+                    var domainResult = new EducationYearResult(
+                        (EducationDirection)result.direction,
+                        string.IsNullOrWhiteSpace(result.mentorPersonId)
+                            ? default
+                            : new PersonId(result.mentorPersonId),
+                        before, after, result.explanation, result.usedFreeGrowthFallback);
+                    if (!restored.TryRestoreSettledYear(personId, result.ageYear, domainResult, out error))
+                        return false;
+                }
+            }
+
+            if (!restored.TryValidate(out error))
+                return false;
+            state = restored;
+            error = string.Empty;
+            return true;
+        }
+
+        private static SaveOperationResult Invalid(string message) =>
+            SaveOperationResult.Failure(SaveErrorCode.InvalidData, message);
+    }
+
+    [Serializable]
+    public sealed class CharacterDevelopmentPersonSaveEntry
+    {
+        public string personId;
+        public int ninjutsu;
+        public int martialArts;
+        public int scholarship;
+        public int management;
+        public int social;
+        public EducationPlanSaveEntry[] plans;
+        public EducationResultSaveEntry[] results;
+    }
+
+    [Serializable]
+    public sealed class EducationPlanSaveEntry
+    {
+        public int ageYear;
+        public int direction;
+        public string mentorPersonId;
+    }
+
+    [Serializable]
+    public sealed class EducationResultSaveEntry
+    {
+        public int ageYear;
+        public int direction;
+        public string mentorPersonId;
+        public GrowthValuesSaveEntry before;
+        public GrowthValuesSaveEntry after;
+        public string explanation;
+        public bool usedFreeGrowthFallback;
+    }
+
+    [Serializable]
+    public sealed class GrowthValuesSaveEntry
+    {
+        public int ninjutsu;
+        public int martialArts;
+        public int scholarship;
+        public int management;
+        public int social;
+    }
+
+    /// <summary>
+    /// Plain-data v8 SC-021 research snapshot. One optional plan is represented by
+    /// <see cref="researchId"/> plus <see cref="researcherPersonId"/>; empty strings
+    /// mean no active project. Only stable IDs, progress, the last settled month and
+    /// sorted unique family technique IDs are stored. There is no person-mastery field:
+    /// family knowledge must not make an individual able to use a technique.
+    /// </summary>
+    [Serializable]
+    public sealed class FamilyResearchSaveData
+    {
+        public string researchId;
+        public string researcherPersonId;
+        public int progress;
+        public int lastSettledMonthIndex;
+        public string[] knownTechniqueIds;
+
+        public static FamilyResearchSaveData CreateInitial(GameDate date) =>
+            new FamilyResearchSaveData
+            {
+                researchId = string.Empty,
+                researcherPersonId = string.Empty,
+                progress = 0,
+                lastSettledMonthIndex = IndustryCalendar.MonthIndex(date) - 1,
+                knownTechniqueIds = new string[0]
+            };
+
+        public static FamilyResearchSaveData Capture(FamilyResearchState state)
+        {
+            if (state == null)
+                return null;
+
+            string[] known = new string[state.KnownTechniqueIds.Count];
+            for (int i = 0; i < known.Length; i++)
+                known[i] = state.KnownTechniqueIds[i];
+
+            return new FamilyResearchSaveData
+            {
+                researchId = state.HasPlan ? state.ResearchId : string.Empty,
+                researcherPersonId = state.HasPlan ? state.ResearcherId.Value : string.Empty,
+                progress = state.HasPlan ? state.Progress : 0,
+                lastSettledMonthIndex = state.LastSettledMonthIndex,
+                knownTechniqueIds = known
+            };
+        }
+
+        public FamilyResearchSaveData Clone() => new FamilyResearchSaveData
+        {
+            researchId = researchId,
+            researcherPersonId = researcherPersonId,
+            progress = progress,
+            lastSettledMonthIndex = lastSettledMonthIndex,
+            knownTechniqueIds = knownTechniqueIds != null
+                ? (string[])knownTechniqueIds.Clone()
+                : null
+        };
+
+        public SaveOperationResult ValidateForSave(GameDate date, SuccessionSaveData succession)
+        {
+            if (lastSettledMonthIndex != IndustryCalendar.MonthIndex(date) - 1)
+                return Invalid("存档研究已结算月份与日期不一致。");
+            if (knownTechniqueIds == null)
+                return Invalid("存档缺少家族技艺知识列表（knownTechniqueIds）。");
+
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            string previous = null;
+            foreach (string techniqueId in knownTechniqueIds)
+            {
+                if (string.IsNullOrWhiteSpace(techniqueId) ||
+                    !FamilyResearchCatalog.IsKnownTechniqueId(techniqueId))
+                    return Invalid("存档包含未知家族技艺 ID：" + (techniqueId ?? "(null)") + "。");
+                if (!seen.Add(techniqueId))
+                    return Invalid("存档家族技艺重复：" + techniqueId + "。");
+                if (previous != null && string.CompareOrdinal(previous, techniqueId) > 0)
+                    return Invalid("存档家族技艺顺序不稳定。");
+                previous = techniqueId;
+            }
+
+            bool hasResearch = !string.IsNullOrWhiteSpace(researchId);
+            bool hasResearcher = !string.IsNullOrWhiteSpace(researcherPersonId);
+            if (!hasResearch)
+            {
+                if (hasResearcher || progress != 0)
+                    return Invalid("存档研究计划缺少项目 ID，但仍有研究者或进度。");
+                return SaveOperationResult.Success();
+            }
+
+            if (!FamilyResearchCatalog.TryGet(researchId, out FamilyResearchDefinition definition))
+                return Invalid("存档研究项目 ID 未知：" + researchId + "。");
+            if (!hasResearcher)
+                return Invalid("存档研究计划缺少研究者 ID。");
+            if (progress < 0 || progress >= definition.RequiredProgress)
+                return Invalid("存档研究进度必须在 0.." + (definition.RequiredProgress - 1) + " 之间。");
+            if (seen.Contains(definition.TechniqueId))
+                return Invalid("存档研究计划与已记录家族知识冲突。");
+            if (succession == null || succession.persons == null || succession.members == null)
+                return Invalid("存档研究缺少继承人物名册。");
+
+            if (!PersonId.TryParse(researcherPersonId, out PersonId researcher))
+                return Invalid("存档研究者 ID 无效。");
+            bool knownPerson = false;
+            foreach (SuccessionPersonSaveEntry person in succession.persons)
+            {
+                if (person == null || !PersonId.TryParse(person.personId, out PersonId personId))
+                    continue;
+                if (personId == researcher)
+                {
+                    knownPerson = true;
+                    break;
+                }
+            }
+            if (!knownPerson)
+                return Invalid("存档研究者不是已登记人物。");
+
+            // Do not require current family membership here. A researcher can die,
+            // retire, leave the family or take an industry post after the plan starts;
+            // the monthly settlement then pauses without charging or progressing. The
+            // paused plan must still round-trip through save/load so the player can
+            // inspect or replace the researcher later. Only an unregistered person ID
+            // is rejected.
+
+            return SaveOperationResult.Success();
+        }
+
+        public static bool TryRestore(FamilyResearchSaveData data, GameDate date,
+            SuccessionSaveData succession, out FamilyResearchState state, out string error)
+        {
+            state = null;
+            if (data == null)
+            {
+                error = "存档缺少家族研究状态（research）。";
+                return false;
+            }
+
+            SaveOperationResult validation = data.ValidateForSave(date, succession);
+            if (!validation.Succeeded)
+            {
+                error = validation.Message;
+                return false;
+            }
+
+            return FamilyResearchState.TryRestore(data.researchId, data.researcherPersonId,
+                data.progress, data.lastSettledMonthIndex, data.knownTechniqueIds,
+                out state, out error);
+        }
+
+        private static SaveOperationResult Invalid(string message) =>
+            SaveOperationResult.Failure(SaveErrorCode.InvalidData, message);
     }
 
     /// <summary>Stable phases in which a save is allowed.</summary>

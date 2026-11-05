@@ -39,6 +39,10 @@ namespace SengokuChronicle.Editor
             FamilyChroniclePanel chroniclePanel = FindComponent<FamilyChroniclePanel>(scene);
             FamilyRosterPanel rosterPanel = FindComponent<FamilyRosterPanel>(scene);
             M2EndingPanel endingPanel = FindComponent<M2EndingPanel>(scene);
+            IndustryPanel industryPanel = FindComponent<IndustryPanel>(scene);
+            CharacterEducationPanel educationPanel = FindComponent<CharacterEducationPanel>(scene);
+            FamilyResearchPanel researchPanel = FindComponent<FamilyResearchPanel>(scene);
+            FamilyFormationPanel formationPanel = FindComponent<FamilyFormationPanel>(scene);
 
             CheckFound(report, ref errors, "Canvas", canvas);
             CheckFound(report, ref errors, "Canvas/M2WorldMapRoot", mapRoot);
@@ -54,6 +58,10 @@ namespace SengokuChronicle.Editor
             CheckFound(report, ref errors, "FamilyChroniclePanel", chroniclePanel);
             CheckFound(report, ref errors, "FamilyRosterPanel", rosterPanel);
             CheckFound(report, ref errors, "M2EndingPanel", endingPanel);
+            CheckFound(report, ref errors, "IndustryPanel", industryPanel);
+            CheckFound(report, ref errors, "CharacterEducationPanel", educationPanel);
+            CheckFound(report, ref errors, "FamilyResearchPanel", researchPanel);
+            CheckFound(report, ref errors, "FamilyFormationPanel", formationPanel);
             if (!AddM4SupplyShortageMissionPanel.Validate(scene, out string missionError))
                 AddError(report, ref errors, missionError);
             else
@@ -98,6 +106,22 @@ namespace SengokuChronicle.Editor
                 AddError(report, ref errors, sc013TitleError);
             else
                 report.AppendLine("PASS SC-013 title scenario entries, bindings, and layout.");
+            if (!AddSC019IndustryPanel.Validate(scene, out string sc019Error))
+                AddError(report, ref errors, sc019Error);
+            else
+                report.AppendLine("PASS SC-019 industry panel hierarchy, bindings, ordering, and layout.");
+            if (!AddSC020CharacterEducation.Validate(scene, out string sc020Error))
+                AddError(report, ref errors, sc020Error);
+            else
+                report.AppendLine("PASS SC-020 character-education panel, title entry, bindings, and layout.");
+            if (!AddSC021FamilyResearch.Validate(scene, out string sc021Error))
+                AddError(report, ref errors, sc021Error);
+            else
+                report.AppendLine("PASS SC-021 family-research panel, title entry, bindings, and layout.");
+            if (!AddSC022FamilyFormation.Validate(scene, out string sc022Error))
+                AddError(report, ref errors, sc022Error);
+            else
+                report.AppendLine("PASS SC-022 family-formation panel, title entry, bindings, and layout.");
 
             if (controller != null)
             {
@@ -141,7 +165,8 @@ namespace SengokuChronicle.Editor
                 report.AppendLine("\nTITLE SCREEN CONTROLLER REFERENCES:");
                 CheckReferences(report, ref errors, titleController,
                     "gameSession", "worldMapController", "titleRoot", "newGameButton", "continueButton",
-                    "standardSampleButton", "crisisDemoButton", "statusText");
+                    "standardSampleButton", "crisisDemoButton", "educationDemoButton",
+                    "researchDemoButton", "familyFormationDemoButton", "statusText");
             }
 
             if (demoPanel != null)
@@ -190,6 +215,51 @@ namespace SengokuChronicle.Editor
                 report.AppendLine("\nM2 ENDING PANEL REFERENCES:");
                 CheckReferences(report, ref errors, endingPanel,
                     "gameSession", "panelRoot", "titleText", "bodyText", "closeButton");
+            }
+
+            if (industryPanel != null)
+            {
+                report.AppendLine("\nINDUSTRY PANEL REFERENCES:");
+                CheckReferences(report, ref errors, industryPanel,
+                    "gameSession", "panelRoot", "openButton", "closeButton", "titleText",
+                    "resourceText", "blockReasonText", "messageText", "reportText", "rowFarm",
+                    "rowTradingHouse",
+                    "farmStatusText", "farmAssigneeText", "farmUnassignButton", "farmCandidateContainer",
+                    "tradingStatusText", "tradingAssigneeText", "tradingUnassignButton",
+                    "tradingCandidateContainer", "candidateTemplate");
+            }
+
+            if (educationPanel != null)
+            {
+                report.AppendLine("\nCHARACTER EDUCATION PANEL REFERENCES:");
+                CheckReferences(report, ref errors, educationPanel,
+                    "gameSession", "panelRoot", "openButton", "closeButton", "overviewText",
+                    "directionContainer", "directionTemplate", "mentorContainer", "mentorTemplate",
+                    "previewText", "confirmButton", "messageText");
+            }
+
+            if (researchPanel != null)
+            {
+                report.AppendLine("\nFAMILY RESEARCH PANEL REFERENCES:");
+                CheckReferences(report, ref errors, researchPanel,
+                    "gameSession", "panelRoot", "openButton", "closeButton", "titleText",
+                    "resourceText", "techniqueText", "statusText", "progressText", "costText",
+                    "blockReasonText", "messageText", "reportText", "researcherContainer",
+                    "researcherTemplate");
+            }
+
+            if (formationPanel != null)
+            {
+                report.AppendLine("\nFAMILY FORMATION PANEL REFERENCES:");
+                CheckReferences(report, ref errors, formationPanel,
+                    "gameSession", "panelRoot", "openButton", "closeButton", "titleText",
+                    "blockReasonText", "marriageMemberInfo", "marriageMemberContainer",
+                    "marriageMemberTemplate", "marriageCandidateInfo",
+                    "marriageCandidateContainer", "marriageCandidateTemplate",
+                    "marriageConfirmButton", "marriageMessage", "adoptionMemberInfo",
+                    "adoptionMemberContainer", "adoptionMemberTemplate", "adoptionCandidateInfo",
+                    "adoptionCandidateContainer", "adoptionCandidateTemplate",
+                    "adoptionConfirmButton", "adoptionMessage");
             }
 
             report.AppendLine("\nHIERARCHY AND RECTTRANSFORMS:");

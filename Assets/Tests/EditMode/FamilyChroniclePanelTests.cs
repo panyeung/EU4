@@ -61,6 +61,26 @@ namespace SengokuChronicle.Tests.EditMode
                 _session.CreateEventResultId(eventId, SampleEventIds.OfferRestOptionId)).Succeeded, Is.True);
         }
 
+        private void ResolvePending()
+        {
+            if (string.IsNullOrEmpty(_session.PendingEventId))
+                return;
+            string pending = _session.PendingEventId;
+            SengokuChronicle.Events.EventDefinitionData definition = _session.EventCatalog.events
+                .FirstOrDefault(item => item.eventId == pending);
+            Assert.That(definition, Is.Not.Null);
+            foreach (SengokuChronicle.Events.EventOptionData option in definition.options)
+            {
+                if (!_session.TryGetEventOptionAvailability(pending, option.optionId,
+                        out bool enabled, out _) || !enabled)
+                    continue;
+                Assert.That(_session.TryChooseEventOption(pending, option.optionId,
+                    _session.CreateEventResultId(pending, option.optionId)).Succeeded, Is.True);
+                return;
+            }
+            Assert.Fail("no enabled option for " + pending);
+        }
+
         private void TravelTo(LocationId destination)
         {
             TravelPreview? preview = _session.PreviewTravel(destination);
@@ -110,6 +130,76 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(panel.RowText(3), Does.Contain("阶段 未接受 → 已接受"));
 
             Assert.That(panel.RowText(4), Does.Contain("继承"));
+        }
+
+        [Test]
+        public void ResearchCompletion_RendersReadableTechniqueResearcherProgressAndMonth()
+        {
+            _session.InitResearchDemoScenario(99UL);
+            Assert.That(_session.TrySetResearchPlan(FamilyResearchCatalog.SmokeMixingResearchId,
+                SC021FamilyResearchScenario.HeadId).Succeeded, Is.True);
+            Assert.That(_session.TryAdvanceToNextMonth(), Is.True, _session.LastEventMessage);
+            ResolvePending();
+            Assert.That(_session.TryAdvanceToNextMonth(), Is.True, _session.LastEventMessage);
+            ResolvePending();
+
+            FamilyChroniclePanel panel = Panel();
+            panel.Open();
+            int index = -1;
+            for (int i = 0; i < _session.ChronicleEntries.Count; i++)
+                if (_session.ChronicleEntries[i].Category == ChronicleCategory.Research)
+                    index = i;
+            Assert.That(index, Is.GreaterThanOrEqualTo(0));
+            string row = panel.RowText(index);
+
+            Assert.That(row, Does.Contain("研究"));
+            Assert.That(row, Does.Contain("烟幕调制术"));
+            Assert.That(row, Does.Contain("影山 宗次"));
+            Assert.That(row, Does.Contain("进度 1 → 2"));
+            Assert.That(row, Does.Contain("1560年2月"));
+            Assert.That(row, Does.Not.Contain("research."));
+            Assert.That(row, Does.Not.Contain("technique."));
+            Assert.That(row, Does.Not.Contain("person."));
+        }
+
+        [Test]
+        public void FamilyFormation_RendersReadableMarriageAndAdoptionRows()
+        {
+            _session.InitFamilyFormationDemoScenario(99UL);
+            Assert.That(_session.TryRegisterMarriage(SC022FamilyFormationScenario.HeadId,
+                SC022FamilyFormationScenario.MarriageCandidateOneId).Succeeded, Is.True);
+            Assert.That(_session.TryAdopt(SC022FamilyFormationScenario.HeadId,
+                SC022FamilyFormationScenario.ChildAdoptionCandidateId).Succeeded, Is.True);
+
+            FamilyChroniclePanel panel = Panel();
+            panel.Open();
+            int marriageIndex = -1;
+            int adoptionIndex = -1;
+            for (int i = 0; i < _session.ChronicleEntries.Count; i++)
+            {
+                FamilyChronicleEntry entry = _session.ChronicleEntries[i];
+                if (entry.SourceId == FamilyChronicleEntry.MarriageSourceId)
+                    marriageIndex = i;
+                if (entry.SourceId == FamilyChronicleEntry.AdoptionSourceId)
+                    adoptionIndex = i;
+            }
+            Assert.That(marriageIndex, Is.GreaterThanOrEqualTo(0));
+            Assert.That(adoptionIndex, Is.GreaterThanOrEqualTo(0));
+
+            string marriageRow = panel.RowText(marriageIndex);
+            Assert.That(marriageRow, Does.Contain("家族关系"));
+            Assert.That(marriageRow, Does.Contain("婚姻登记"));
+            Assert.That(marriageRow, Does.Contain(SC022FamilyFormationScenario.HeadName));
+            Assert.That(marriageRow, Does.Contain(
+                SC022FamilyFormationScenario.MarriageCandidateOneName));
+            Assert.That(marriageRow, Does.Not.Contain("person."));
+
+            string adoptionRow = panel.RowText(adoptionIndex);
+            Assert.That(adoptionRow, Does.Contain("家族关系"));
+            Assert.That(adoptionRow, Does.Contain("普通收养"));
+            Assert.That(adoptionRow, Does.Contain(
+                SC022FamilyFormationScenario.ChildAdoptionCandidateName));
+            Assert.That(adoptionRow, Does.Not.Contain("person."));
         }
 
         [Test]

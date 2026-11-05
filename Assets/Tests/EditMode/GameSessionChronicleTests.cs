@@ -333,7 +333,7 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(_session.ChronicleEntries[2].ToPhase,
                 Is.EqualTo((int)SuccessionPhase.Regency));
 
-            Assert.That(_session.AdvanceDays(800), Is.True);
+            Assert.That(_session.AdvanceDaysForLegacyFixtureSetup(800), Is.True);
             Assert.That(_session.TryCompleteSuccessionRegency().Succeeded, Is.True);
 
             Assert.That(_session.ChronicleEntries, Has.Count.EqualTo(4));

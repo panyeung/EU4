@@ -13,7 +13,15 @@ namespace SengokuChronicle.Domain
         /// <summary>One successful mission stage change.</summary>
         Mission = 2,
         /// <summary>One successful succession state change.</summary>
-        Succession = 3
+        Succession = 3,
+        /// <summary>One monthly industry settlement or succession-driven industry personnel change.</summary>
+        Industry = 4,
+        /// <summary>One settled annual child-education year.</summary>
+        Education = 5,
+        /// <summary>One completed family research project recorded as family knowledge.</summary>
+        Research = 6,
+        /// <summary>One committed marriage or ordinary adoption relationship.</summary>
+        FamilyFormation = 7
     }
 
     /// <summary>
@@ -31,6 +39,8 @@ namespace SengokuChronicle.Domain
         public const string SupplyShortageMissionId = "mission.supply-shortage";
         public const string SealedLetterMissionId = "mission.sealed-letter";
         public const string MarketTallyMissionId = "mission.market-tally";
+        public const string MarriageSourceId = "marriage";
+        public const string AdoptionSourceId = "adoption";
 
         private FamilyChronicleEntry(int sequence, string entryId, int year, int month,
             ChronicleCategory category, string subjectId, string sourceId, string title, string summary,
@@ -63,7 +73,7 @@ namespace SengokuChronicle.Domain
         public int Year { get; }
         public int Month { get; }
         public ChronicleCategory Category { get; }
-        /// <summary>Stable subject: event, NPC, mission or person ID.</summary>
+        /// <summary>Stable subject: event, NPC, person-pair, mission or person ID.</summary>
         public string SubjectId { get; }
         /// <summary>Stable source: option, change channel, mission action or succession result.</summary>
         public string SourceId { get; }
@@ -212,6 +222,65 @@ namespace SengokuChronicle.Domain
                             error = "继承记录阶段相同且没有家督交接，没有实际变化。";
                             return false;
                         }
+                    }
+                    break;
+                case ChronicleCategory.Industry:
+                    if (fromValue < IndustryResources.Minimum || fromValue > IndustryResources.Maximum ||
+                        toValue < IndustryResources.Minimum || toValue > IndustryResources.Maximum)
+                    {
+                        error = "产业记录资金值超出允许范围。";
+                        return false;
+                    }
+                    if (string.IsNullOrWhiteSpace(summary))
+                    {
+                        error = "产业记录摘要不能为空。";
+                        return false;
+                    }
+                    break;
+                case ChronicleCategory.Education:
+                    if (fromValue < CharacterGrowthValues.Minimum ||
+                        fromValue > CharacterGrowthValues.Maximum ||
+                        toValue < CharacterGrowthValues.Minimum ||
+                        toValue > CharacterGrowthValues.Maximum)
+                    {
+                        error = "培养记录能力值超出允许范围。";
+                        return false;
+                    }
+                    if (string.IsNullOrWhiteSpace(summary))
+                    {
+                        error = "培养记录摘要不能为空。";
+                        return false;
+                    }
+                    break;
+                case ChronicleCategory.Research:
+                    if (fromValue < 0 || toValue <= fromValue ||
+                        toValue > FamilyResearchCatalog.MaximumRequiredProgress)
+                    {
+                        error = "研究记录进度无效，必须是从 0 开始的真实推进。";
+                        return false;
+                    }
+                    if (!FamilyResearchCatalog.TryGet(subjectId, out _) ||
+                        !FamilyResearchCatalog.IsKnownTechniqueId(sourceId))
+                    {
+                        error = "研究记录包含未知项目或技艺 ID。";
+                        return false;
+                    }
+                    if (string.IsNullOrWhiteSpace(summary))
+                    {
+                        error = "研究记录摘要不能为空。";
+                        return false;
+                    }
+                    break;
+                case ChronicleCategory.FamilyFormation:
+                    if (sourceId != MarriageSourceId && sourceId != AdoptionSourceId)
+                    {
+                        error = "家族关系记录来源必须是婚姻或收养。";
+                        return false;
+                    }
+                    if (string.IsNullOrWhiteSpace(summary))
+                    {
+                        error = "家族关系记录摘要不能为空。";
+                        return false;
                     }
                     break;
             }

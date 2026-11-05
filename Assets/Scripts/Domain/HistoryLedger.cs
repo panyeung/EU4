@@ -77,6 +77,92 @@ namespace SengokuChronicle.Domain
             TryAppend(year, month, ChronicleCategory.Succession, subjectId, sourceId, title, summary,
                 0, 0, 0, 0, fromPhase, toPhase, fromHeadId, toHeadId, out entry, out error);
 
+        /// <summary>
+        /// Appends one industry record. Funds before/after are reused as the generic
+        /// value pair; the summary carries supplies, intelligence and per-line detail.
+        /// </summary>
+        public bool TryAppendIndustry(int year, int month, string subjectId, string sourceId,
+            int fromFunds, int toFunds, string title, string summary,
+            out FamilyChronicleEntry entry, out string error) =>
+            TryAppend(year, month, ChronicleCategory.Industry, subjectId, sourceId, title, summary,
+                fromFunds, toFunds, 0, 0, 0, 0, null, null, out entry, out error);
+
+        /// <summary>
+        /// Appends one annual education record. The value pair is the settled attribute
+        /// before/after (or 0/0 for free growth; the summary carries all five values).
+        /// </summary>
+        public bool TryAppendEducation(int year, int month, string subjectId, string sourceId,
+            int fromValue, int toValue, string title, string summary,
+            out FamilyChronicleEntry entry, out string error) =>
+            TryAppend(year, month, ChronicleCategory.Education, subjectId, sourceId, title, summary,
+                fromValue, toValue, 0, 0, 0, 0, null, null, out entry, out error);
+
+        /// <summary>
+        /// Appends one completed research record. Subject is the stable research project ID,
+        /// source is the stable technique ID, and the value pair is the progress before/after.
+        /// </summary>
+        public bool TryAppendResearch(int year, int month, string researchId, string techniqueId,
+            int fromProgress, int toProgress, string title, string summary,
+            out FamilyChronicleEntry entry, out string error) =>
+            TryAppend(year, month, ChronicleCategory.Research, researchId, techniqueId, title, summary,
+                fromProgress, toProgress, 0, 0, 0, 0, null, null, out entry, out error);
+
+        /// <summary>
+        /// Appends one committed marriage or ordinary adoption record. Subject is the
+        /// initiating family member, source is <see cref="FamilyChronicleEntry.MarriageSourceId"/>
+        /// or <see cref="FamilyChronicleEntry.AdoptionSourceId"/>.
+        /// </summary>
+        public bool TryAppendFamilyFormation(int year, int month, string subjectId, string sourceId,
+            string title, string summary, out FamilyChronicleEntry entry, out string error) =>
+            TryAppend(year, month, ChronicleCategory.FamilyFormation, subjectId, sourceId, title,
+                summary, 0, 0, 0, 0, 0, 0, null, null, out entry, out error);
+
+        /// <summary>
+        /// Validates a family-formation record against the next append slot without
+        /// mutating the ledger. The session calls this before adding any member or
+        /// kinship edge so a rejected command cannot leave a partial relationship.
+        /// </summary>
+        internal bool TryPrepareFamilyFormation(int year, int month, string subjectId,
+            string sourceId, string title, string summary, out FamilyChronicleEntry entry,
+            out string error)
+        {
+            entry = null;
+            error = string.Empty;
+            int sequence = _entries.Count + 1;
+            string entryId = FamilyChronicleEntry.BuildEntryId(sequence);
+            if (_entryIds.Contains(entryId))
+            {
+                error = "编年史记录 ID 已存在。" + entryId;
+                return false;
+            }
+            return FamilyChronicleEntry.TryCreate(sequence, entryId, year, month,
+                ChronicleCategory.FamilyFormation, subjectId, sourceId, title, summary,
+                0, 0, 0, 0, 0, 0, null, null, out entry, out error);
+        }
+
+        /// <summary>
+        /// Appends a record previously produced by <see cref="TryPrepareFamilyFormation"/>.
+        /// The entry is immutable and already validated, so this cannot create a malformed
+        /// record; it still refuses a stale sequence or duplicate ID.
+        /// </summary>
+        internal bool TryAppendPrepared(FamilyChronicleEntry entry, out string error)
+        {
+            error = string.Empty;
+            if (entry == null || entry.Sequence != _entries.Count + 1)
+            {
+                error = "编年史预备记录序号无效。";
+                return false;
+            }
+            if (_entryIds.Contains(entry.EntryId))
+            {
+                error = "编年史记录 ID 已存在。" + entry.EntryId;
+                return false;
+            }
+            _entries.Add(entry);
+            _entryIds.Add(entry.EntryId);
+            return true;
+        }
+
         /// <summary>Returns a shallow copy of the record references; records are immutable.</summary>
         public FamilyChronicleEntry[] Capture() => _entries.ToArray();
 

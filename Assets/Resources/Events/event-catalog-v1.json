@@ -927,6 +927,370 @@
       "onceScope": "PerGame",
       "chainId": "chain.sc013.commission-legacy",
       "priority": 800
+    },
+    {
+      "eventId": "event.sc018.sibling-duty",
+      "scenario": "sc013",
+      "trigger": "Monthly",
+      "conditions": [],
+      "weight": 10,
+      "textId": "event.sc018.sibling-duty",
+      "options": [
+        {
+          "optionId": "option.sc018.sibling-duty.let-rest",
+          "textId": "option.sc018.sibling-duty.let-rest",
+          "summaryTextId": "summary.sc018.sibling-duty.let-rest",
+          "requirements": [
+            {
+              "type": "Always"
+            }
+          ],
+          "effects": [
+            {
+              "type": "FamilyRelationshipDelta",
+              "targetPersonId": "person.sc013.tokihime",
+              "delta": 5
+            }
+          ]
+        },
+        {
+          "optionId": "option.sc018.sibling-duty.keep-watch",
+          "textId": "option.sc018.sibling-duty.keep-watch",
+          "summaryTextId": "summary.sc018.sibling-duty.keep-watch",
+          "requirements": [
+            {
+              "type": "Always"
+            }
+          ],
+          "effects": [
+            {
+              "type": "FamilyRelationshipDelta",
+              "targetPersonId": "person.sc013.tokihime",
+              "delta": -5
+            }
+          ]
+        }
+      ],
+      "cooldownMonths": 0,
+      "onceScope": "PerGame",
+      "priority": 1
+    },
+    {
+      "eventId": "event.sc018.child-study",
+      "scenario": "sc013",
+      "trigger": "Monthly",
+      "conditions": [
+        {
+          "type": "SuccessionCountEquals",
+          "threshold": 0
+        }
+      ],
+      "weight": 10,
+      "textId": "event.sc018.child-study",
+      "options": [
+        {
+          "optionId": "option.sc018.child-study.allow-study",
+          "textId": "option.sc018.child-study.allow-study",
+          "summaryTextId": "summary.sc018.child-study.allow-study",
+          "requirements": [
+            {
+              "type": "Always"
+            }
+          ],
+          "effects": [
+            {
+              "type": "FamilyRelationshipDelta",
+              "targetPersonId": "person.sc013.nobumasa",
+              "delta": 5
+            }
+          ]
+        },
+        {
+          "optionId": "option.sc018.child-study.keep-training",
+          "textId": "option.sc018.child-study.keep-training",
+          "summaryTextId": "summary.sc018.child-study.keep-training",
+          "requirements": [
+            {
+              "type": "Always"
+            }
+          ],
+          "effects": [
+            {
+              "type": "FamilyRelationshipDelta",
+              "targetPersonId": "person.sc013.nobumasa",
+              "delta": -5
+            }
+          ]
+        }
+      ],
+      "cooldownMonths": 0,
+      "onceScope": "PerGame",
+      "priority": 1
+    },
+    {
+      "eventId": "event.sc018.parent-care",
+      "scenario": "sc013",
+      "trigger": "Monthly",
+      "conditions": [],
+      "weight": 10,
+      "textId": "event.sc018.parent-care",
+      "options": [
+        {
+          "optionId": "option.sc018.parent-care.nurse-personally",
+          "textId": "option.sc018.parent-care.nurse-personally",
+          "summaryTextId": "summary.sc018.parent-care.nurse-personally",
+          "requirements": [
+            {
+              "type": "Always"
+            }
+          ],
+          "effects": [
+            {
+              "type": "FamilyRelationshipDelta",
+              "targetPersonId": "person.sc013.chie",
+              "delta": 5
+            }
+          ]
+        },
+        {
+          "optionId": "option.sc018.parent-care.rotate-care",
+          "textId": "option.sc018.parent-care.rotate-care",
+          "summaryTextId": "summary.sc018.parent-care.rotate-care",
+          "requirements": [
+            {
+              "type": "Always"
+            }
+          ],
+          "effects": [
+            {
+              "type": "FamilyRelationshipDelta",
+              "targetPersonId": "person.sc013.chie",
+              "delta": -5
+            }
+          ]
+        }
+      ],
+      "cooldownMonths": 0,
+      "onceScope": "PerGame",
+      "priority": 1
+    },
+    {
+      "eventId": "event.sc018.heirloom",
+      "scenario": "sc013",
+      "trigger": "Monthly",
+      "conditions": [
+        {
+          "type": "SuccessionCountEquals",
+          "threshold": 0
+        }
+      ],
+      "weight": 10,
+      "textId": "event.sc018.heirloom",
+      "options": [
+        {
+          "optionId": "option.sc018.heirloom.keep-in-main-hall",
+          "textId": "option.sc018.heirloom.keep-in-main-hall",
+          "summaryTextId": "summary.sc018.heirloom.keep-in-main-hall",
+          "requirements": [
+            {
+              "type": "Always"
+            }
+          ],
+          "effects": [
+            {
+              "type": "FamilyRelationshipDelta",
+              "targetPersonId": "person.sc013.masatsuna",
+              "delta": 5
+            },
+            {
+              "type": "FamilyRelationshipDelta",
+              "targetPersonId": "person.sc013.tokihime",
+              "delta": -5
+            }
+          ]
+        },
+        {
+          "optionId": "option.sc018.heirloom.keep-with-user",
+          "textId": "option.sc018.heirloom.keep-with-user",
+          "summaryTextId": "summary.sc018.heirloom.keep-with-user",
+          "requirements": [
+            {
+              "type": "Always"
+            }
+          ],
+          "effects": [
+            {
+              "type": "FamilyRelationshipDelta",
+              "targetPersonId": "person.sc013.masatsuna",
+              "delta": -5
+            },
+            {
+              "type": "FamilyRelationshipDelta",
+              "targetPersonId": "person.sc013.tokihime",
+              "delta": 5
+            }
+          ]
+        }
+      ],
+      "cooldownMonths": 0,
+      "onceScope": "PerGame",
+      "priority": 1
+    },
+    {
+      "eventId": "event.sc018.spouse-visit",
+      "scenario": "sc013",
+      "trigger": "Monthly",
+      "conditions": [],
+      "weight": 10,
+      "textId": "event.sc018.spouse-visit",
+      "options": [
+        {
+          "optionId": "option.sc018.spouse-visit.accompany",
+          "textId": "option.sc018.spouse-visit.accompany",
+          "summaryTextId": "summary.sc018.spouse-visit.accompany",
+          "requirements": [
+            {
+              "type": "Always"
+            }
+          ],
+          "effects": [
+            {
+              "type": "FamilyRelationshipDelta",
+              "targetPersonId": "person.sc013.chie",
+              "delta": 5
+            }
+          ]
+        },
+        {
+          "optionId": "option.sc018.spouse-visit.postpone",
+          "textId": "option.sc018.spouse-visit.postpone",
+          "summaryTextId": "summary.sc018.spouse-visit.postpone",
+          "requirements": [
+            {
+              "type": "Always"
+            }
+          ],
+          "effects": [
+            {
+              "type": "FamilyRelationshipDelta",
+              "targetPersonId": "person.sc013.chie",
+              "delta": -5
+            }
+          ]
+        }
+      ],
+      "cooldownMonths": 0,
+      "onceScope": "PerGame",
+      "priority": 1
+    },
+    {
+      "eventId": "event.sc018.adoption-welcome",
+      "scenario": "sc013",
+      "trigger": "Monthly",
+      "conditions": [],
+      "weight": 10,
+      "textId": "event.sc018.adoption-welcome",
+      "options": [
+        {
+          "optionId": "option.sc018.adoption-welcome.welcome-as-family",
+          "textId": "option.sc018.adoption-welcome.welcome-as-family",
+          "summaryTextId": "summary.sc018.adoption-welcome.welcome-as-family",
+          "requirements": [
+            {
+              "type": "Always"
+            }
+          ],
+          "effects": [
+            {
+              "type": "FamilyRelationshipDelta",
+              "targetPersonId": "person.sc013.tokihime",
+              "delta": 5
+            }
+          ]
+        },
+        {
+          "optionId": "option.sc018.adoption-welcome.keep-guest-distance",
+          "textId": "option.sc018.adoption-welcome.keep-guest-distance",
+          "summaryTextId": "summary.sc018.adoption-welcome.keep-guest-distance",
+          "requirements": [
+            {
+              "type": "Always"
+            }
+          ],
+          "effects": [
+            {
+              "type": "FamilyRelationshipDelta",
+              "targetPersonId": "person.sc013.tokihime",
+              "delta": -5
+            }
+          ]
+        }
+      ],
+      "cooldownMonths": 0,
+      "onceScope": "PerGame",
+      "priority": 1
+    },
+    {
+      "eventId": "event.sc018.family-assembly",
+      "scenario": "sc013",
+      "trigger": "Monthly",
+      "conditions": [
+        {
+          "type": "SuccessionCountEquals",
+          "threshold": 0
+        }
+      ],
+      "weight": 10,
+      "textId": "event.sc018.family-assembly",
+      "options": [
+        {
+          "optionId": "option.sc018.family-assembly.open-floor",
+          "textId": "option.sc018.family-assembly.open-floor",
+          "summaryTextId": "summary.sc018.family-assembly.open-floor",
+          "requirements": [
+            {
+              "type": "Always"
+            }
+          ],
+          "effects": [
+            {
+              "type": "FamilyRelationshipDelta",
+              "targetPersonId": "person.sc013.masatsuna",
+              "delta": 5
+            },
+            {
+              "type": "FamilyRelationshipDelta",
+              "targetPersonId": "person.sc013.nobumasa",
+              "delta": 5
+            }
+          ]
+        },
+        {
+          "optionId": "option.sc018.family-assembly.decide-directly",
+          "textId": "option.sc018.family-assembly.decide-directly",
+          "summaryTextId": "summary.sc018.family-assembly.decide-directly",
+          "requirements": [
+            {
+              "type": "Always"
+            }
+          ],
+          "effects": [
+            {
+              "type": "FamilyRelationshipDelta",
+              "targetPersonId": "person.sc013.masatsuna",
+              "delta": -5
+            },
+            {
+              "type": "FamilyRelationshipDelta",
+              "targetPersonId": "person.sc013.nobumasa",
+              "delta": -5
+            }
+          ]
+        }
+      ],
+      "cooldownMonths": 0,
+      "onceScope": "PerGame",
+      "priority": 1
     }
   ]
 }

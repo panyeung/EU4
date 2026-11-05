@@ -1,3 +1,5 @@
+using SengokuChronicle.Domain;
+
 namespace SengokuChronicle.Events
 {
     /// <summary>
@@ -13,15 +15,23 @@ namespace SengokuChronicle.Events
     public readonly struct EventRuleContext
     {
         public EventRuleContext(int successionCount, int settledSuccessionCount)
-            : this(successionCount, settledSuccessionCount, string.Empty)
+            : this(successionCount, settledSuccessionCount, string.Empty, default, null)
         {
         }
 
         public EventRuleContext(int successionCount, int settledSuccessionCount, string scenarioId)
+            : this(successionCount, settledSuccessionCount, scenarioId, default, null)
+        {
+        }
+
+        public EventRuleContext(int successionCount, int settledSuccessionCount, string scenarioId,
+            PersonId headPersonId, PersonId[] familyMemberIds)
         {
             SuccessionCount = successionCount;
             SettledSuccessionCount = settledSuccessionCount;
             ScenarioId = scenarioId ?? string.Empty;
+            HeadPersonId = headPersonId;
+            FamilyMemberIds = familyMemberIds ?? new PersonId[0];
         }
 
         /// <summary>Raw SC-010 count; increments on every handoff, including a regency start.</summary>
@@ -38,6 +48,12 @@ namespace SengokuChronicle.Events
         /// succession, a regency, or extinction.
         /// </summary>
         public int SettledSuccessionCount { get; }
+
+        /// <summary>Current head used as the relationship source for family effects.</summary>
+        public PersonId HeadPersonId { get; }
+
+        /// <summary>All family members eligible as family-effect targets; empty means unavailable.</summary>
+        public PersonId[] FamilyMemberIds { get; }
 
         /// <summary>Zero counts: the generation-one state.</summary>
         public static EventRuleContext Default => default;

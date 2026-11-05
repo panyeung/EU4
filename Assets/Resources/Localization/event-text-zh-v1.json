@@ -520,6 +520,181 @@
       "textId": "summary.sc013.commission-legacy.third-severed.receive",
       "title": "酒井家系不再信任明智家",
       "body": "酒井家系封存了旧账。商路不再相通，酒井家系也不再信任明智家。"
+    },
+    {
+      "textId": "event.sc018.sibling-duty",
+      "title": "家人的夜巡",
+      "body": "夜巡排班轮到時姫。她近来旧伤在雨夜发作，想暂歇两月；家中人手紧，有人主张照旧，千恵却劝你让她喘一口气。時姫没有替你拿主意，只等你一句话。"
+    },
+    {
+      "textId": "option.sc018.sibling-duty.let-rest",
+      "title": "准時姫暂歇，另找帮手",
+      "body": "答应時姫的请求，另托千恵安排可靠的人手代巡。"
+    },
+    {
+      "textId": "summary.sc018.sibling-duty.let-rest",
+      "title": "時姫记下这份体谅",
+      "body": "時姫得以歇下两个月的夜巡。她见家主把她的旧伤放在心上，对家主的信任增加五点。"
+    },
+    {
+      "textId": "option.sc018.sibling-duty.keep-watch",
+      "title": "劝時姫以职责为先",
+      "body": "请時姫把这两个月的夜巡走完，再让千恵替她调理旧伤。"
+    },
+    {
+      "textId": "summary.sc018.sibling-duty.keep-watch",
+      "title": "時姫按原排班巡夜",
+      "body": "時姫没有等到例外。她觉得家主更重职责而非她的处境，对家主的信任下降五点。"
+    },
+    {
+      "textId": "event.sc018.child-study",
+      "title": "灯下的课业",
+      "body": "信正捧着读到一半的《庭训》，请求把明日的武艺晨课换成读书。正綱认为家训不可荒废，千恵却看见他眼里的光。信正低头等着你的答复。"
+    },
+    {
+      "textId": "option.sc018.child-study.allow-study",
+      "title": "准他读完这一卷",
+      "body": "让信正留在灯下，把这一卷读完，再补晨课。"
+    },
+    {
+      "textId": "summary.sc018.child-study.allow-study",
+      "title": "信正读完了那一卷",
+      "body": "信正得以读完手中的书。他觉得家主愿意听他的想法，对家主的信任增加五点。"
+    },
+    {
+      "textId": "option.sc018.child-study.keep-training",
+      "title": "晨课不可荒废",
+      "body": "收起书卷，让信正先去练完晨课，晚间再读。"
+    },
+    {
+      "textId": "summary.sc018.child-study.keep-training",
+      "title": "信正收起书卷",
+      "body": "信正按家训去练晨课。他觉得自己的请求没有被听见，对家主的信任下降五点。"
+    },
+    {
+      "textId": "event.sc018.parent-care",
+      "title": "病榻前的轮值",
+      "body": "千恵染了风寒，病势反复。家中有人主张由各房轮值，免得家主被病榻拖住；時姫却记得千恵这些年照看全家的情分。千恵躺在里屋，听见争论，只说自己不值得兴师动众。"
+    },
+    {
+      "textId": "option.sc018.parent-care.nurse-personally",
+      "title": "由家主亲自陪护",
+      "body": "把案上的事务暂交给可信的家人，自己每日到病榻前坐一个时辰。"
+    },
+    {
+      "textId": "summary.sc018.parent-care.nurse-personally",
+      "title": "千恵记下这份亲自照看",
+      "body": "千恵见家主亲自守在榻前，对家主的信任增加五点。"
+    },
+    {
+      "textId": "option.sc018.parent-care.rotate-care",
+      "title": "按房次轮值",
+      "body": "定下轮值次序，让各房按日陪护，家主只在夜间探视。"
+    },
+    {
+      "textId": "summary.sc018.parent-care.rotate-care",
+      "title": "千恵不愿成为负担",
+      "body": "千恵接受了轮值安排，却觉得自己被当成了家务负担，对家主的信任下降五点。"
+    },
+    {
+      "textId": "event.sc018.heirloom",
+      "title": "旧茶碗的归处",
+      "body": "先代留下的一只旧茶碗被取了出来。正綱说它该按长幼收进正堂，只在年节使用；時姫却说，这些年一直是她在用这只碗待客，碗沿的缺口也是她补的。两人都看着家主，等你决定这只碗归谁。"
+    },
+    {
+      "textId": "option.sc018.heirloom.keep-in-main-hall",
+      "title": "按长幼收进正堂",
+      "body": "把茶碗交给正綱保管，今后只在年节取出。"
+    },
+    {
+      "textId": "summary.sc018.heirloom.keep-in-main-hall",
+      "title": "正綱得碗，時姫失意",
+      "body": "正綱认可长幼有序，对家主的信任增加五点；時姫失去常用之物，对家主的信任下降五点。"
+    },
+    {
+      "textId": "option.sc018.heirloom.keep-with-user",
+      "title": "交给最常使用它的人",
+      "body": "让時姫继续带着茶碗待客，只在家中留一份拓样。"
+    },
+    {
+      "textId": "summary.sc018.heirloom.keep-with-user",
+      "title": "時姫得碗，正綱不悦",
+      "body": "時姫保住了常用之物，对家主的信任增加五点；正綱觉得长幼之分被轻看，对家主的信任下降五点。"
+    },
+    {
+      "textId": "event.sc018.spouse-visit",
+      "title": "探亲的行李",
+      "body": "千恵收到娘家捎来的口信，想回去住两日，看看旧宅与旧亲。她又怕耽误家中秋收，只把行李收了一半。家中有人说家议正紧，時姫却劝你陪她走一趟。"
+    },
+    {
+      "textId": "option.sc018.spouse-visit.accompany",
+      "title": "亲自陪千恵探亲",
+      "body": "把两日的事务交给可信的家人，亲自陪千恵回娘家。"
+    },
+    {
+      "textId": "summary.sc018.spouse-visit.accompany",
+      "title": "千恵得以安心探亲",
+      "body": "千恵见家主没有把她的心愿推给别人，对家主的信任增加五点。"
+    },
+    {
+      "textId": "option.sc018.spouse-visit.postpone",
+      "title": "说明家中事务，改日再行",
+      "body": "请千恵等到秋收之后再走，并托人先捎一封回信。"
+    },
+    {
+      "textId": "summary.sc018.spouse-visit.postpone",
+      "title": "千恵把行李重新收好",
+      "body": "千恵没有再多说，只把行李重新收好。她觉得自己的心愿被排在最后，对家主的信任下降五点。"
+    },
+    {
+      "textId": "event.sc018.adoption-welcome",
+      "title": "家中的位置",
+      "body": "時姫在廊下问起：自己只是旁系亲族，还是也算这个家真正的一员。她没有提任何名分，只想知道下次家议时，自己该不该开口。廊下的家人恰好经过，也停下了脚步。"
+    },
+    {
+      "textId": "option.sc018.adoption-welcome.welcome-as-family",
+      "title": "告诉她，旁系也是这个家的人",
+      "body": "明确让時姫在家议上开口，家中为她留一个位置。"
+    },
+    {
+      "textId": "summary.sc018.adoption-welcome.welcome-as-family",
+      "title": "時姫被当作自家人",
+      "body": "時姫得到了清楚的回答，对家主的信任增加五点。"
+    },
+    {
+      "textId": "option.sc018.adoption-welcome.keep-guest-distance",
+      "title": "提醒她旁系自有分寸",
+      "body": "告诉她家中自有规矩，旁系仍应按本分行事。"
+    },
+    {
+      "textId": "summary.sc018.adoption-welcome.keep-guest-distance",
+      "title": "時姫重新退回本分",
+      "body": "時姫点头记下，不再多问，对家主的信任下降五点。"
+    },
+    {
+      "textId": "event.sc018.family-assembly",
+      "title": "家议上的分工",
+      "body": "秋收将近，家中照例要议一议来年的分工。正綱主张让各房先说自己能担什么，再由家主定夺；信正却担心人一多便议而不决，误了农时。众人都看着家主，等你决定这场家议怎么开。"
+    },
+    {
+      "textId": "option.sc018.family-assembly.open-floor",
+      "title": "让各房先开口",
+      "body": "把家议放开，让每个人先说出自己的打算，再做定夺。"
+    },
+    {
+      "textId": "summary.sc018.family-assembly.open-floor",
+      "title": "众人得以开口",
+      "body": "正綱和信正都在家议上说完了自己的看法。参与者感到被听见，对家主的信任增加五点。"
+    },
+    {
+      "textId": "option.sc018.family-assembly.decide-directly",
+      "title": "由家主直接定案",
+      "body": "不再逐一询问，把来年的分工当场定下。"
+    },
+    {
+      "textId": "summary.sc018.family-assembly.decide-directly",
+      "title": "众人领命而退",
+      "body": "正綱和信正都领了分派，却觉得自己的话没有说完，对家主的信任下降五点。"
     }
   ]
 }

@@ -67,7 +67,7 @@ namespace SengokuChronicle.Tests.EditMode
 
         private void CompleteRegencyToAdulthood()
         {
-            Assert.That(_session.AdvanceDays(800), Is.True, _session.LastEventMessage);
+            Assert.That(_session.AdvanceDaysForLegacyFixtureSetup(800), Is.True, _session.LastEventMessage);
             Assert.That(_session.Succession.IsRegencyHandoffDue(_session.WorldClock.CurrentDate), Is.True);
             SuccessionResult handoff = _session.TryCompleteSuccessionRegency();
             Assert.That(handoff.Succeeded, Is.True, handoff.Message);

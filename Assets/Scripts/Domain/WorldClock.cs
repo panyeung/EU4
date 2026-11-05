@@ -93,6 +93,19 @@ namespace SengokuChronicle.Domain
             return true;
         }
 
+        /// <summary>
+        /// Restores a previously valid date inside the same clock instance. Used only
+        /// by the transactional month-settlement rollback; production time entry
+        /// points never call it to move forward.
+        /// </summary>
+        internal bool TryRestoreDate(GameDate date)
+        {
+            if (!date.IsValid)
+                return false;
+            _current = date;
+            return true;
+        }
+
         public bool EqualsClock(WorldClock other)
         {
             if (other == null)

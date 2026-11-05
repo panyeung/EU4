@@ -542,6 +542,39 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
+        public void Panel_DayClick_AtMonthEnd_ShowsVisibleReasonWithoutCrossing()
+        {
+            GameSession session = SpawnSession();
+            WorldClockPanel panel = SpawnPanel(session, out Text panelDate, out Button advanceButton);
+            Text feedback = CreateLabel("SC004MonthFeedback");
+            panel.BindFeedback(feedback);
+            InvokePanelLifecycle(panel, "OnEnable");
+
+            Assert.That(session.AdvanceDays(29), Is.True);
+            panel.Refresh();
+            GameDate lastDay = session.WorldClock.CurrentDate;
+            IndustryResources resources = session.Industry.Resources;
+            int settled = session.Industry.LastSettledMonthIndex;
+            int chronicle = session.ChronicleEntries.Count;
+
+            Assert.That(lastDay, Is.EqualTo(new GameDate(1560, 4, 30)));
+            Assert.That(advanceButton.interactable, Is.True,
+                "the day button must stay clickable so the refusal reason is reachable");
+
+            advanceButton.onClick.Invoke();
+
+            Assert.That(session.WorldClock.CurrentDate, Is.EqualTo(lastDay));
+            Assert.That(panelDate.text, Is.EqualTo("1560-04-30"));
+            Assert.That(panel.LastAdvanceMessage, Does.Contain("结束本月"));
+            Assert.That(panel.FeedbackVisible, Is.True);
+            Assert.That(panel.FeedbackLine, Does.Contain("跨月"));
+            Assert.That(session.Industry.Resources, Is.EqualTo(resources));
+            Assert.That(session.Industry.LastSettledMonthIndex, Is.EqualTo(settled),
+                "a refused day step must not settle the month");
+            Assert.That(session.ChronicleEntries.Count, Is.EqualTo(chronicle));
+        }
+
+        [Test]
         public void Panel_DayButtonStillAdvancesExactlyOneDay()
         {
             GameSession session = SpawnSession();
@@ -609,7 +642,9 @@ namespace SengokuChronicle.Tests.EditMode
                 supplyShortageStage = (int)SupplyShortageStage.NotAccepted,
                 sealedLetterStage = (int)SealedLetterStage.NotAccepted,
                 marketTallyStage = (int)MarketTallyStage.NotAccepted,
-                relationships = null
+                relationships = null,
+                industry = IndustryStateSaveData.CreateInitial(new GameDate(2000, 12, 31)),
+                research = FamilyResearchSaveData.CreateInitial(new GameDate(2000, 12, 31))
             };
         }
 

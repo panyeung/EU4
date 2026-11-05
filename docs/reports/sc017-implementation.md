@@ -1,7 +1,11 @@
 # SC-017 Generic Family Graph Implementation Report
 
 Date: 2026-11-03
-Branch: `feature/sc013-fixed-three-generation`
+Implementation branch at time of work: `feature/sc013-fixed-three-generation`
+
+Integrated checkpoint: `3ae2ade2c08afa17c1fcc590ece356c39d590788` (`feat(sc013-017): consolidate M2 family demo`)
+
+Remote: `origin/main`; tag `demo-SC017` pushed
 Worktree: `C:\Users\panye\My project`
 Spec: `docs/superpowers/specs/2026-11-03-sc-017-family-tree-roster-design.md`
 Plan: `docs/superpowers/plans/2026-11-03-sc-017-generic-family-tree.md`
@@ -347,6 +351,8 @@ user-acceptance evidence.
   unrecorded.
 - The independent read-only review completed with ACCEPT. Its minor note is the
   missing focused panel test for the empty-route branch.
-- GitHub integration has not been performed. This branch also contains SC-013–SC-016
-  work that is not recorded as user-accepted; preserve it and do not publish the
-  accumulated branch as an SC-017-only checkpoint.
+- GitHub integration completed after user acceptance: cumulative M2 checkpoint
+  `3ae2ade2c08afa17c1fcc590ece356c39d590788` was pushed to `origin/main`, and
+  annotated tag `demo-SC017` was pushed. The checkpoint includes SC-013–SC-017;
+  SC-017 acceptance does not independently certify every earlier slice. The
+  current working tree has unrelated preserved dirty files; see `PROJECT_STATE.md`.

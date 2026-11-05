@@ -22,6 +22,7 @@ namespace SengokuChronicle.Presentation
         public const float FeedbackTopMargin = 18f;
         public const float FeedbackWidth = 1180f;
         public const float FeedbackHeight = 42f;
+        public const float FeedbackSideMargin = 16f;
         public const int FeedbackFontSize = 18;
 
         [SerializeField] private GameSession gameSession;
@@ -63,7 +64,7 @@ namespace SengokuChronicle.Presentation
             feedback.anchorMin = feedback.anchorMax = new Vector2(0.5f, 1f);
             feedback.pivot = new Vector2(0.5f, 1f);
             feedback.anchoredPosition = new Vector2(0f, -FeedbackTopMargin);
-            feedback.sizeDelta = new Vector2(FeedbackWidth, FeedbackHeight);
+            feedback.sizeDelta = new Vector2(BannerWidth(feedback.parent as RectTransform), FeedbackHeight);
             feedback.localScale = Vector3.one;
             Text text = feedback.GetComponent<Text>();
             if (text != null)
@@ -80,6 +81,7 @@ namespace SengokuChronicle.Presentation
             if (feedback == null)
                 return false;
             Text text = feedback.GetComponent<Text>();
+            float maxWidth = BannerWidth(feedback.parent as RectTransform);
             return text != null &&
                    feedback.anchorMin == feedback.anchorMax &&
                    Mathf.Approximately(feedback.anchorMin.x, 0.5f) &&
@@ -88,10 +90,22 @@ namespace SengokuChronicle.Presentation
                    Mathf.Approximately(feedback.pivot.y, 1f) &&
                    Mathf.Approximately(feedback.anchoredPosition.x, 0f) &&
                    Mathf.Approximately(feedback.anchoredPosition.y, -FeedbackTopMargin) &&
-                   Mathf.Approximately(feedback.sizeDelta.x, FeedbackWidth) &&
+                   Mathf.Approximately(feedback.sizeDelta.x, maxWidth) &&
                    Mathf.Approximately(feedback.sizeDelta.y, FeedbackHeight) &&
                    text.alignment == TextAnchor.UpperCenter &&
                    !text.raycastTarget;
+        }
+
+        /// <summary>
+        /// Keeps the banner inside narrow canvases instead of forcing the full design
+        /// width, which would extend past the root at small Game view sizes.
+        /// </summary>
+        private static float BannerWidth(RectTransform parent)
+        {
+            if (parent == null)
+                return FeedbackWidth;
+            float available = parent.rect.width - 2f * FeedbackSideMargin;
+            return available > 0f ? Mathf.Min(FeedbackWidth, available) : FeedbackWidth;
         }
 
         public void BindReferences(GameSession session, EventCatalogData catalog, EventTextCatalog text,

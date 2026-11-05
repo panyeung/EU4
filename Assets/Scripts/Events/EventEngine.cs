@@ -24,12 +24,19 @@ namespace SengokuChronicle.Events
     {
         public EventChoiceResult(bool succeeded, string eventId, string optionId, string resultId,
             string message, string feedback)
-            : this(succeeded, eventId, optionId, resultId, message, feedback, null)
+            : this(succeeded, eventId, optionId, resultId, message, feedback, null, null)
         {
         }
 
         public EventChoiceResult(bool succeeded, string eventId, string optionId, string resultId,
             string message, string feedback, IReadOnlyList<RelationshipResult> appliedRelationships)
+            : this(succeeded, eventId, optionId, resultId, message, feedback, appliedRelationships, null)
+        {
+        }
+
+        public EventChoiceResult(bool succeeded, string eventId, string optionId, string resultId,
+            string message, string feedback, IReadOnlyList<RelationshipResult> appliedRelationships,
+            IReadOnlyList<FamilyRelationshipResult> appliedFamilyRelationships)
         {
             Succeeded = succeeded;
             EventId = eventId ?? string.Empty;
@@ -37,17 +44,30 @@ namespace SengokuChronicle.Events
             ResultId = resultId ?? string.Empty;
             Message = message ?? string.Empty;
             Feedback = feedback ?? string.Empty;
-            if (appliedRelationships == null || appliedRelationships.Count == 0)
-            {
-                AppliedRelationships = Array.Empty<RelationshipResult>();
-            }
-            else
-            {
-                var copy = new RelationshipResult[appliedRelationships.Count];
-                for (int i = 0; i < appliedRelationships.Count; i++)
-                    copy[i] = appliedRelationships[i];
-                AppliedRelationships = Array.AsReadOnly(copy);
-            }
+            AppliedRelationships = CopyRelationships(appliedRelationships);
+            AppliedFamilyRelationships = CopyFamilyRelationships(appliedFamilyRelationships);
+        }
+
+        private static IReadOnlyList<RelationshipResult> CopyRelationships(
+            IReadOnlyList<RelationshipResult> source)
+        {
+            if (source == null || source.Count == 0)
+                return Array.Empty<RelationshipResult>();
+            var copy = new RelationshipResult[source.Count];
+            for (int i = 0; i < source.Count; i++)
+                copy[i] = source[i];
+            return Array.AsReadOnly(copy);
+        }
+
+        private static IReadOnlyList<FamilyRelationshipResult> CopyFamilyRelationships(
+            IReadOnlyList<FamilyRelationshipResult> source)
+        {
+            if (source == null || source.Count == 0)
+                return Array.Empty<FamilyRelationshipResult>();
+            var copy = new FamilyRelationshipResult[source.Count];
+            for (int i = 0; i < source.Count; i++)
+                copy[i] = source[i];
+            return Array.AsReadOnly(copy);
         }
 
         public bool Succeeded { get; }
@@ -62,6 +82,9 @@ namespace SengokuChronicle.Events
         /// rolled-back or no-op effect.
         /// </summary>
         public IReadOnlyList<RelationshipResult> AppliedRelationships { get; }
+
+        /// <summary>Current-head-to-family-member values actually applied and committed.</summary>
+        public IReadOnlyList<FamilyRelationshipResult> AppliedFamilyRelationships { get; }
     }
 
     /// <summary>
@@ -185,7 +208,7 @@ namespace SengokuChronicle.Events
 
         public EventChoiceResult TryChooseEventOption(string eventId, string optionId, string committedResultId,
             GameDate currentDate, CharacterRelationships relationships, EventRuntimeState state,
-            EventRuleContext context = default)
+            EventRuleContext context = default, FamilyRelationships familyRelationships = null)
         {
             if (!IsReady)
                 return ChoiceFailure(eventId, optionId, committedResultId, ValidationMessage);
@@ -202,27 +225,44 @@ namespace SengokuChronicle.Events
                 return ChoiceFailure(eventId, optionId, committedResultId,
                     string.IsNullOrWhiteSpace(requirementReason) ? "当前不满足此选项条件。" : requirementReason);
 
-            if (!TryPreflightEffects(option, relationships, out List<RelationshipCommit> effects, out string effectError))
+            if (!TryPreflightEffects(option, relationships, familyRelationships, context,
+                    out List<EventEffectCommit> effects, out string effectError))
                 return ChoiceFailure(eventId, optionId, committedResultId, effectError);
 
-            var applied = new List<RelationshipCommit>();
+            var appliedNpc = new List<RelationshipCommit>();
+            var appliedFamily = new List<FamilyRelationshipCommit>();
             var appliedRelationships = new List<RelationshipResult>();
-            foreach (RelationshipCommit effect in effects)
+            var appliedFamilyRelationships = new List<FamilyRelationshipResult>();
+            foreach (EventEffectCommit effect in effects)
             {
-                RelationshipResult change = relationships.TryChange(effect.CharacterId, effect.Delta);
-                if (!change.Succeeded)
+                if (effect.IsFamily)
                 {
-                    for (int i = applied.Count - 1; i >= 0; i--)
+                    FamilyRelationshipResult change = familyRelationships.TryChange(
+                        effect.HeadId, effect.MemberId, effect.Delta);
+                    if (!change.Succeeded)
                     {
-                        RelationshipCommit rollback = applied[i];
-                        relationships.TryChange(rollback.CharacterId, -rollback.Delta);
+                        RollbackEffects(relationships, familyRelationships, appliedNpc, appliedFamily);
+                        return ChoiceFailure(eventId, optionId, committedResultId,
+                            "家庭关系效果提交失败，已恢复此前效果。");
                     }
-                    return ChoiceFailure(eventId, optionId, committedResultId,
-                        "关系效果提交失败，已恢复此前效果。");
+                    appliedFamily.Add(new FamilyRelationshipCommit(
+                        effect.HeadId, effect.MemberId, effect.Delta));
+                    if (change.PreviousValue != change.CurrentValue)
+                        appliedFamilyRelationships.Add(change);
                 }
-                applied.Add(effect);
-                if (change.PreviousValue != change.CurrentValue)
-                    appliedRelationships.Add(change);
+                else
+                {
+                    RelationshipResult change = relationships.TryChange(effect.CharacterId, effect.Delta);
+                    if (!change.Succeeded)
+                    {
+                        RollbackEffects(relationships, familyRelationships, appliedNpc, appliedFamily);
+                        return ChoiceFailure(eventId, optionId, committedResultId,
+                            "关系效果提交失败，已恢复此前效果。");
+                    }
+                    appliedNpc.Add(new RelationshipCommit(effect.CharacterId, effect.Delta));
+                    if (change.PreviousValue != change.CurrentValue)
+                        appliedRelationships.Add(change);
+                }
             }
 
             EventOnceScope onceScope = ParseOnceScope(definition.onceScope);
@@ -232,14 +272,13 @@ namespace SengokuChronicle.Events
                     definition.cooldownMonths, onceScope, feedback, currentDate.Year, currentDate.Month))
             {
                 // The queue and result were preflighted above; this is defensive for a
-                // stale caller, and rolls back the relationship delta before returning.
-                for (int i = applied.Count - 1; i >= 0; i--)
-                    relationships.TryChange(applied[i].CharacterId, -applied[i].Delta);
+                // stale caller, and rolls back every applied effect before returning.
+                RollbackEffects(relationships, familyRelationships, appliedNpc, appliedFamily);
                 return ChoiceFailure(eventId, optionId, committedResultId, "事件队列已变化，结果未提交。");
             }
 
             return new EventChoiceResult(true, eventId, optionId, committedResultId, string.Empty,
-                feedback, appliedRelationships);
+                feedback, appliedRelationships, appliedFamilyRelationships);
         }
 
         /// <summary>Validates saved IDs against the active catalog before accepting a load.</summary>
@@ -429,41 +468,148 @@ namespace SengokuChronicle.Events
         }
 
         private static bool TryPreflightEffects(EventOptionData option, CharacterRelationships relationships,
-            out List<RelationshipCommit> commits, out string error)
+            FamilyRelationships familyRelationships, EventRuleContext context,
+            out List<EventEffectCommit> commits, out string error)
         {
-            commits = new List<RelationshipCommit>();
+            commits = new List<EventEffectCommit>();
             error = string.Empty;
-            var projected = new Dictionary<CharacterId, int>();
+            var projectedNpc = new Dictionary<CharacterId, int>();
+            var projectedFamily = new Dictionary<FamilyRelationshipKey, int>();
             if (option.effects == null) return true;
             foreach (EventEffectData effect in option.effects)
             {
-                if (!string.Equals(effect.type, nameof(EventEffectKind.RelationshipDelta), StringComparison.Ordinal) ||
-                    !TryNpc(effect.targetCharacterId, out CharacterId target))
+                if (string.Equals(effect.type, nameof(EventEffectKind.RelationshipDelta), StringComparison.Ordinal))
                 {
-                    error = "事件效果类型或目标人物无效。";
-                    return false;
-                }
-                int current;
-                if (!projected.TryGetValue(target, out current))
-                {
-                    RelationshipResult relationship = relationships.TryGet(target);
-                    if (!relationship.Succeeded)
+                    if (!TryNpc(effect.targetCharacterId, out CharacterId target))
                     {
-                        error = relationship.Error;
+                        error = "事件效果类型或目标人物无效。";
                         return false;
                     }
-                    current = relationship.CurrentValue;
+                    int current;
+                    if (!projectedNpc.TryGetValue(target, out current))
+                    {
+                        RelationshipResult relationship = relationships.TryGet(target);
+                        if (!relationship.Succeeded)
+                        {
+                            error = relationship.Error;
+                            return false;
+                        }
+                        current = relationship.CurrentValue;
+                    }
+                    long next = (long)current + effect.delta;
+                    if (next < CharacterRelationships.MinimumValue || next > CharacterRelationships.MaximumValue)
+                    {
+                        error = "关系效果超出允许范围，选择未提交。";
+                        return false;
+                    }
+                    projectedNpc[target] = (int)next;
+                    commits.Add(EventEffectCommit.Npc(target, effect.delta));
+                    continue;
                 }
-                long next = (long)current + effect.delta;
-                if (next < CharacterRelationships.MinimumValue || next > CharacterRelationships.MaximumValue)
+
+                if (string.Equals(effect.type, nameof(EventEffectKind.FamilyRelationshipDelta),
+                        StringComparison.Ordinal))
                 {
-                    error = "关系效果超出允许范围，选择未提交。";
-                    return false;
+                    if (!TryFamilyTarget(effect, context, out PersonId target, out error))
+                        return false;
+                    if (familyRelationships == null)
+                    {
+                        error = "家庭关系状态不可用。";
+                        return false;
+                    }
+
+                    var key = new FamilyRelationshipKey(context.HeadPersonId, target);
+                    int current;
+                    if (!projectedFamily.TryGetValue(key, out current))
+                    {
+                        FamilyRelationshipResult relationship =
+                            familyRelationships.TryGet(context.HeadPersonId, target);
+                        if (!relationship.Succeeded)
+                        {
+                            error = relationship.Error;
+                            return false;
+                        }
+                        current = relationship.CurrentValue;
+                    }
+                    // Family deltas clamp per the approved plan; NPC deltas keep their
+                    // existing overflow-rejection behavior. The commit carries the actual
+                    // applied delta so rollback and the chronicle use exact before/after
+                    // values rather than the requested amount.
+                    long requested = (long)current + effect.delta;
+                    int next = requested < FamilyRelationships.MinimumValue
+                        ? FamilyRelationships.MinimumValue
+                        : requested > FamilyRelationships.MaximumValue
+                            ? FamilyRelationships.MaximumValue
+                            : (int)requested;
+                    projectedFamily[key] = next;
+                    commits.Add(EventEffectCommit.Family(context.HeadPersonId, target, next - current));
+                    continue;
                 }
-                projected[target] = (int)next;
-                commits.Add(new RelationshipCommit(target, effect.delta));
+
+                error = "事件效果类型或目标人物无效。";
+                return false;
             }
             return true;
+        }
+
+        private static bool TryFamilyTarget(EventEffectData effect, EventRuleContext context,
+            out PersonId target, out string error)
+        {
+            target = default;
+            error = string.Empty;
+            if (context.HeadPersonId.IsEmpty)
+            {
+                error = "家庭关系效果缺少当前家主。";
+                return false;
+            }
+            if (context.FamilyMemberIds == null ||
+                !Contains(context.FamilyMemberIds, context.HeadPersonId))
+            {
+                error = "当前家主不在家庭成员名册中。";
+                return false;
+            }
+            if (string.IsNullOrWhiteSpace(effect.targetPersonId) ||
+                !PersonId.TryParse(effect.targetPersonId, out target) || target.IsEmpty)
+            {
+                error = "家庭关系效果目标人物 ID 无效。";
+                return false;
+            }
+            if (target == context.HeadPersonId)
+            {
+                error = "家庭关系效果不能指向家主本人。";
+                return false;
+            }
+            if (context.FamilyMemberIds == null || !Contains(context.FamilyMemberIds, target))
+            {
+                error = "家庭关系效果目标不是当前家庭成员。";
+                return false;
+            }
+            return true;
+        }
+
+        private static bool Contains(PersonId[] ids, PersonId target)
+        {
+            if (ids == null) return false;
+            for (int i = 0; i < ids.Length; i++)
+                if (ids[i] == target)
+                    return true;
+            return false;
+        }
+
+        private static void RollbackEffects(CharacterRelationships relationships,
+            FamilyRelationships familyRelationships, List<RelationshipCommit> appliedNpc,
+            List<FamilyRelationshipCommit> appliedFamily)
+        {
+            for (int i = appliedFamily.Count - 1; i >= 0; i--)
+            {
+                FamilyRelationshipCommit rollback = appliedFamily[i];
+                familyRelationships.TryChange(rollback.HeadId, rollback.MemberId, -rollback.Delta);
+            }
+            for (int i = appliedNpc.Count - 1; i >= 0; i--)
+            {
+                RelationshipCommit rollback = appliedNpc[i];
+                relationships.TryChange(rollback.CharacterId, -rollback.Delta);
+            }
         }
 
         private bool TryFindOption(string eventId, string optionId,
@@ -540,6 +686,44 @@ namespace SengokuChronicle.Events
             }
             public CharacterId CharacterId { get; }
             public int Delta { get; }
+        }
+
+        private readonly struct FamilyRelationshipCommit
+        {
+            public FamilyRelationshipCommit(PersonId headId, PersonId memberId, int delta)
+            {
+                HeadId = headId;
+                MemberId = memberId;
+                Delta = delta;
+            }
+            public PersonId HeadId { get; }
+            public PersonId MemberId { get; }
+            public int Delta { get; }
+        }
+
+        private readonly struct EventEffectCommit
+        {
+            private EventEffectCommit(CharacterId characterId, PersonId headId, PersonId memberId,
+                int delta, bool isFamily)
+            {
+                CharacterId = characterId;
+                HeadId = headId;
+                MemberId = memberId;
+                Delta = delta;
+                IsFamily = isFamily;
+            }
+
+            public static EventEffectCommit Npc(CharacterId characterId, int delta) =>
+                new EventEffectCommit(characterId, default, default, delta, false);
+
+            public static EventEffectCommit Family(PersonId headId, PersonId memberId, int delta) =>
+                new EventEffectCommit(default, headId, memberId, delta, true);
+
+            public CharacterId CharacterId { get; }
+            public PersonId HeadId { get; }
+            public PersonId MemberId { get; }
+            public int Delta { get; }
+            public bool IsFamily { get; }
         }
     }
 }

@@ -10,7 +10,7 @@
 - 实现与审查 worker 未操作 Unity；随后用户于 2026-11-03 明确接受本次演示。用户未回传 EditMode Passed/Failed/Skipped 数量、Console 计数或 Validator 报告原文。
 - 已取得：Unity 随附 Roslyn 对八个程序集编译 0 错误；纯图/布局 harness 86/86 通过（既有 77/77 保持不变，新增 9 项拥挤配偶线回归）。**这两项都不是 Unity Editor 编译、EditMode、Play Mode 或用户验收。**
 - 顺序只读复审：由 Codex fallback 完成（OpenCode reviewer launcher 不可用），结论 ACCEPT；无 Critical/Important。轻微备注：空路由失败分支没有 FamilyRosterPanel 专项测试；源码检查确认该分支记录空路径且不绘制线段。复审未运行 Unity 或测试。
-- 当前仍未提交、未推送、未合并、未打标签。工作区累积有 SC-013–SC-016 等未验收改动；本次只记录 SC-017 接受，不把其他切片一并发布。
+- 集成状态：checkpoint `3ae2ade`（`feat(sc013-017): consolidate M2 family demo`）已推送到 `origin/main`，标签 `demo-SC017` 已推送。此 checkpoint 包含 SC-013–SC-017 累积 M2 演示内容；不要把本文件中的 SC-017 用户验收扩写成对未单独验收内容的独立验收结论。
 
 ## 1. 场景接入（必须由用户在已打开的 Unity Editor 完成）
 
