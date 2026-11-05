@@ -103,6 +103,30 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
+        public void UpdaterKeepsStatusRowInBoundsBesideExistingSeclusionEntry()
+        {
+            Button seclusion = CreateButton(AddSC013TitleScenarioButtons.SeclusionButtonName, _root,
+                "SC-023 隐居与后见人示范");
+            SetCenteredRect((RectTransform)seclusion.transform, new Vector2(495f, -325f),
+                new Vector2(250f, 40f));
+            _status.rectTransform.anchoredPosition = new Vector2(0f, -330f);
+            _controller.BindSeclusionScenarioButton(seclusion);
+
+            Assert.That(AddSC013TitleScenarioButtons.Update(_scene),
+                Is.EqualTo(AddSC013TitleScenarioButtons.UpdateResult.Success));
+
+            Assert.That(_root.childCount, Is.EqualTo(7));
+            Assert.That(Find(AddSC013TitleScenarioButtons.StandardButtonName), Is.Not.Null);
+            Assert.That(Find(AddSC013TitleScenarioButtons.CrisisButtonName), Is.Not.Null);
+            Assert.That(_status.rectTransform.anchoredPosition,
+                Is.EqualTo(new Vector2(0f, -330f)),
+                "the shared SC-023 layout keeps the status row inside M6TitleRoot");
+            Assert.That(((RectTransform)seclusion.transform).anchoredPosition,
+                Is.EqualTo(new Vector2(495f, -325f)));
+            Assert.That(AddSC013TitleScenarioButtons.Validate(_scene, out string error), Is.True, error);
+        }
+
+        [Test]
         public void UpdaterIsIdempotentAndPreflightRefusesWrongScenes()
         {
             Assert.That(AddSC013TitleScenarioButtons.Update(_scene),

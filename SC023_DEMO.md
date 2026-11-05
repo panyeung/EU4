@@ -1,6 +1,6 @@
 # SC-023 隐居与后见人演示
 
-**状态：** 代码与文档已实现，独立源码复审 ACCEPT；checkpoint `a2c7a48` 已推送至 `origin/panyeung/sc023-seclusion`。Unity 编译、EditMode、Console、场景生成/Validator 与 Play Mode 均未执行，待验证  
+**状态：** SC-023 场景集成、聚焦 EditMode 与代理 Play Mode 已完成；SC-023/SC-021 专项场景检查通过。整体 Validator 仍有一条既存 Feedback banner 布局错误；SC-020 负例因示范家族没有退休成员未能在 UI 中直接复现。等待用户验收，未合并或打 tag。
 **日期：** 2026-11-05  
 **设计：** `docs/superpowers/specs/2026-11-05-sc-023-seclusion-design.md`  
 **计划：** `docs/superpowers/plans/2026-11-05-sc-023-seclusion.md`
@@ -64,8 +64,19 @@
 1. 从标题选择 **「SC-020 子女培养示范」**，确认青叶家起始值、导师列表与既有预览不变。
 2. SC-020 的退休成员仍不得成为导师；SC-023 的放宽只在其固定家族 ID 下生效。
 
+## 本轮执行结果（2026-11-05）
+
+- Play Mode：SC-023 从 1560-12-01 开始；退休宗严后赖久成为家主，宗严留在家族树中显示为退休直系亲属；千代仍为第三代。
+- 教育：学问导师列表包含现任家主赖久和有真实交接记录的隐居前任家主宗严。选宗严后预览为学问 18→27（基础 +4、资质契合 +2、导师专长 +2、有利家庭环境 +1）；提交计划时千代能力值未立即改变。
+- 存档：结算前保存/读取保留培养对象、方向、宗严导师与预览；结算后保存/读取保留学问 27、导师和结算结果。
+- 年度结算与编年史：推进至 1561-01-01 后学问为 27；编年史显示千代、宗严、18→27 和规则分解，未显示 `person.sc023.*` 原始 ID。
+- SC-020 回归入口可启动，现有青叶场景及培养预览可见；其家族树只有家主、配偶与子女，没有退休人物，因此未能直接验证“退休但从未担任家主者不在导师候选”负例。
+- Unity Console：两轮 Play Mode 退出后显示 0 errors / 0 warnings / 0 logs。聚焦 EditMode fixture `AddSC013TitleScenarioButtonsTests` 为 4/4 passed（不是全量套件）。
+- 场景验证：SC-023 与 SC-021 专项行均 PASS；整体 `FoundationSceneValidator` 仍为 1 error，内容是 `Feedback text must be a top-anchored banner clear of the map HUD controls.`，与本次功能无关，未改动。
+- 代理 Play Mode 不等于用户验收；用户验收仍待完成。
+
 ## 证据边界
 
-- 本文件只提供用户 Play Test 步骤。实现 worker 未进入 Play Mode、未运行 EditMode、未截图、未使用 Computer Use、未操作 Unity。
+- 本文件记录测试步骤和本轮代理执行结果。代理使用现有 Unity Editor、截图与 Computer Use 执行 Play Mode；这不替代用户验收。
 - Unity 编译、EditMode、Console 计数、场景生成/Validator 与 Play Mode 必须分别取得证据；静态源码检查不能替代其中任何一项。
 - 详细静态检查与未验证项见 `docs/reports/sc023-implementation.md`。

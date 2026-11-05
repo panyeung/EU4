@@ -182,11 +182,14 @@ namespace SengokuChronicle.Editor
                 if (statusRect == null)
                     throw new InvalidOperationException("M6TitleStatusText has no RectTransform.");
                 Undo.RecordObject(statusRect, UndoName);
+                // SC-020/021/022 share the lower scenario row and SC-023 shares the same
+                // status band on the right (x 370..620). M6TitleRoot only spans y -360..360,
+                // so the status row must stay at its canonical (0,-330) instead of moving
+                // below it, which would leave the title bounds and fail validation.
                 bool hasLowerScenarioEntry = Named(scene, EducationButtonName).Any() ||
-                                             Named(scene, ResearchButtonName).Any();
-                bool hasSeclusionEntry = Named(scene, SeclusionButtonName).Any();
-                statusRect.anchoredPosition = new Vector2(0f,
-                    hasSeclusionEntry ? -386f : hasLowerScenarioEntry ? -330f : -260f);
+                                             Named(scene, ResearchButtonName).Any() ||
+                                             Named(scene, SeclusionButtonName).Any();
+                statusRect.anchoredPosition = new Vector2(0f, hasLowerScenarioEntry ? -330f : -260f);
                 EditorUtility.SetDirty(statusRect);
 
                 Undo.RecordObject(controller, UndoName);

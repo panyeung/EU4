@@ -3,7 +3,7 @@
 **日期：** 2026-11-05  
 **分支：** `panyeung/sc023-seclusion`  
 **范围：** 实现 `docs/superpowers/specs/2026-11-05-sc-023-seclusion-design.md` 与 `docs/superpowers/plans/2026-11-05-sc-023-seclusion.md`；checkpoint `a2c7a48` 已推送到 `origin/panyeung/sc023-seclusion`，尚未合并或打 tag。  
-**执行边界：** 未新增或运行测试；未操作 Unity、GUI、截图、Computer Use 或 batchmode；未编辑序列化场景、Prefab 或 `ProjectSettings`；未改 `Library`/`Temp`；未安装包；未改既有 `.meta` GUID。
+**执行边界：** OpenCode2 完成代码实现；集成者在当前 Unity Editor 生成并验证场景，运行聚焦 EditMode 与代理 Play Mode。未使用 batchmode；未改 `Library`/`Temp`、未安装包、未改既有 `.meta` GUID。用户验收待完成。
 
 ## 审查修正（2026-11-05）
 
@@ -90,21 +90,22 @@
 - 手工审阅：`AddSC013TitleScenarioButtons.Execute` 的 `optionalEntries` 已统计 `SeclusionButtonName`，且存在 SC-023 入口时状态行固定为 `(0,-386)`。
 - 手工审阅：新增生成器未调用 `DestroyImmediate`、未重载场景、未修改 Prefab；所有场景写操作经 `Undo`；异常路径回滚到同一 Undo group。
 
-## 未验证项（必须分别取证）
+## 验证记录（2026-11-05）
 
 | 项目 | 状态 | 说明 |
 |---|---|---|
-| Unity 编译 | **pending / unverified** | 本 worker 未打开 Unity、未使用 batchmode、未运行任何编译器。 |
-| EditMode 测试 | **pending / unverified** | 按要求未新增或运行测试。 |
-| Console | **pending / unverified** | 未进入 Play Mode 或 Editor 运行态。 |
-| 场景生成 | **pending** | `Assets/Scenes/FoundationScene.unity` 未修改；标题入口尚未写入场景。集成执行者需在现有 Editor 运行 `Tools/Sengoku Chronicle/Add SC-023 Seclusion`。 |
-| `FoundationSceneValidator` | **pending / unverified** | 未运行；预期在场景生成前 SC-023 行会因缺少入口失败。 |
-| Play Mode | **pending / unverified** | 由用户执行；本 worker 未操作 Unity。 |
-| 用户验收 | **pending** | 需用户按 `SC023_DEMO.md` 试玩并明确接受。 |
+| Unity 编译 | **通过** | 当前 Editor `Logs/Editor.log` 最新完整编译记录 `CompileScripts: 7329.438ms`，随后完成资产刷新和域重载。 |
+| EditMode 测试 | **聚焦通过** | `AddSC013TitleScenarioButtonsTests` fixture 4/4 passed；不是全量 EditMode 套件。 |
+| Console | **通过（本轮结束时）** | 两轮 Play Mode 退出后 Unity Console 为 0 errors / 0 warnings / 0 logs。 |
+| 场景生成 | **通过** | 在当前 Editor 中运行 `Tools/Sengoku Chronicle/Add SC-023 Seclusion` 与 `Add SC-021 Family Research`，均提示验证完成并保存 `FoundationScene`。 |
+| `FoundationSceneValidator` | **专项通过 / 整体失败** | SC-023、SC-021 专项行 PASS；整体报告为 `RESULT: FAIL; Errors: 1`，唯一错误是 `Feedback text must be a top-anchored banner clear of the map HUD controls.`，未在本任务中修改。 |
+| Play Mode | **代理执行通过，用户验收待定** | SC-023 继承交接、隐居前任家主导师、预览/提交、年度结算、编年史与结算前后存读均符合演示预期。详见 `SC023_DEMO.md`。 |
+| SC-020 回归 | **部分验证** | 回归入口可启动且原场景预览可见；示范家族不含退休人物，无法直接复现退休非前任家主不得成为导师的负例。 |
+| 用户验收 | **待定** | 代理 Play Mode 不等于用户接受；不得据此合并或打 tag。 |
 
 ## 已知风险
 
 - `AddSC023Seclusion` 依赖已存在的 `SC020EducationRoot` 与绑定的 `CharacterEducationPanel`；若场景中 SC-020 尚未集成，SC-023 生成器会拒绝运行而不是创建第二套教育 UI。
-- 标题状态行从 `(0,-330)` 下移到 `(0,-386)`；需在场景生成后由 Validator/Play Mode 确认不与标题底部裁切。
+- 整体场景 Validator 仍报一条 Feedback banner 与地图 HUD 位置冲突；SC-023 专项布局检查通过，该问题不属于 SC-023 范围。
 - SC-023 存档计划允许失效导师 ID 保留；这是为满足「导师死亡/离族后存读稳定并回退」的设计要求。预览/提交仍使用共享严格资格规则，因此不会把失效导师重新变为可选。
 - 未取得任何 Unity 编译或运行证据；不得把本报告的静态检查表述为编译、EditMode、Console、Validator 或 Play Mode 通过。

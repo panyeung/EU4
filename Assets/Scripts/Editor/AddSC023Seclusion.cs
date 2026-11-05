@@ -37,10 +37,17 @@ namespace SengokuChronicle.Editor
         private const string ResearchTitleButtonName = "SC021ResearchDemoButton";
         private const string FamilyFormationTitleButtonName = "SC022FamilyFormationDemoButton";
 
-        // Centered below the SC-020/021/022 row; the status line moves further down.
-        private static readonly Vector2 TitleButtonPosition = new Vector2(0f, -332f);
-        private static readonly Vector2 TitleButtonSize = new Vector2(360f, 48f);
-        private static readonly Vector2 StatusPosition = new Vector2(0f, -386f);
+        // M6TitleRoot stretches to the 1280x720 canvas, so its local rect is y -360..360.
+        // The SC-020/021/022 row occupies y -298..-250 and the shared status row stays at
+        // its canonical (0,-330), 700x30 position that AddSC020CharacterEducation and
+        // AddSC013TitleScenarioButtons already use. There is no room for a centered fourth
+        // row below the scenario row: anything under -330 leaves the root, and a -332 row
+        // collides with the status row. SC-023 therefore shares the status band on the
+        // right (x 370..620, y -345..-305), clear of the status rect (x -350..350) and of
+        // every existing title entry, which keeps the recovery paths geometry-compatible.
+        private static readonly Vector2 TitleButtonPosition = new Vector2(495f, -325f);
+        private static readonly Vector2 TitleButtonSize = new Vector2(250f, 40f);
+        private static readonly Vector2 StatusPosition = new Vector2(0f, -330f);
         private static readonly Vector2 StatusSize = new Vector2(700f, 30f);
 
         public enum UpdateResult
@@ -124,9 +131,13 @@ namespace SengokuChronicle.Editor
             RectTransform rootRect = titleRoot as RectTransform;
             RectTransform buttonRect = button as RectTransform;
             RectTransform statusRect = Require(scene, TitleStatusName) as RectTransform;
-            if (rootRect == null || buttonRect == null || statusRect == null ||
-                !Contained(buttonRect, rootRect) || !Contained(statusRect, rootRect))
-                return Invalid(out error, "The SC-023 title entry or status line lies outside M6TitleRoot.");
+            if (rootRect == null || buttonRect == null || statusRect == null)
+                return Invalid(out error,
+                    "The SC-023 title entry or status line has no valid RectTransform.");
+            if (!Contained(buttonRect, rootRect))
+                return Invalid(out error, "The SC-023 title entry lies outside M6TitleRoot.");
+            if (!Contained(statusRect, rootRect))
+                return Invalid(out error, "The M6 title status line lies outside M6TitleRoot.");
             if (Overlaps(buttonRect, statusRect, rootRect) ||
                 OverlapsNamed(scene, buttonRect, NewGameButtonName, rootRect) ||
                 OverlapsNamed(scene, buttonRect, ContinueButtonName, rootRect) ||
