@@ -174,8 +174,8 @@
 - 数据：`SC023SeclusionScenario` 固定千代五项 `10/12/18/11/13`、资质学问、有利环境，宗严固定学问专长；`EducationScenarioProvider` 路由 SC-020/SC-023 的年龄、资质、环境、初始值与专长，其他场景使用中性值。学年结算仍只发生在 12→1 月事务中。
 - 存档：不新增字段、不升 schema，`saveFormatVersion` 保持 `8`、`rulesVersion` 保持 `4`。计划仍按既有 `mentorPersonId` 持久化；存档校验从既有 succession 编年史的 `fromHeadId` 派生前任家主证明。SC-023 可保留真实前任家主的失效计划并在年结按自由成长回退，但退休非前任家主的计划会被拒绝；SC-020 仍严格拒绝退休/失效导师。修正了既有回退结果与保留计划的一致性校验。
 - 场景/UI：教育面板复用 SC-020 的 `Canvas/SC020EducationRoot`，不新建第二套 UI。新增事务式 `AddSC023Seclusion`，仅添加标题入口 `SC023SeclusionDemoButton` 并绑定 `TitleScreenController.seclusionDemoButton`；复用单 Undo 组、保存前验证、Undo 回滚、不重载场景。`AddM6TitleScreen`/`AddSC013TitleScenarioButtons` 的标题子节点计数已接受该可选入口，`FoundationSceneValidator` 已接入 SC-023 行。
-- 验证边界：本 worker **未修改 `FoundationScene`**，未运行场景生成器、Validator、Unity 编译、EditMode、Console 或 Play Mode；仅完成静态源码检查。后续 P2/P3 修正加入「编年史证明前任家主」资格与 SC-013 恢复路径的 SC-023 计数；所有编译/测试/场景/Play Mode 证据仍 pending。SC-023 标题入口和 Validator 行在场景生成前预期失败。用户 Play Test 与验收 pending。详见 `SC023_DEMO.md` 与 `docs/reports/sc023-implementation.md`。
-- 工作区：`SampleScene.unity`、`Assets/1.unity`、`Assets/1.unity.meta`、`ProjectSettings/SceneTemplateSettings.json`、`graphify-out/`、`nul` 保留为本地用户 WIP；未合并、未提交、未推送、未打 tag。
+- 验证边界：本 worker **未修改 `FoundationScene`**，未运行场景生成器、Validator、Unity 编译、EditMode、Console 或 Play Mode；独立源码复审 ACCEPT。所有编译/测试/场景/Play Mode 证据仍 pending。SC-023 标题入口和 Validator 行在场景生成前预期失败。用户 Play Test 与验收 pending。详见 `SC023_DEMO.md` 与 `docs/reports/sc023-implementation.md`。
+- 工作区：代码/文档 checkpoint `a2c7a48` 已推送至 `origin/panyeung/sc023-seclusion`；尚未合并、未打 tag。`SampleScene.unity`、`Assets/1.unity`、`Assets/1.unity.meta`、`ProjectSettings/SceneTemplateSettings.json`、`graphify-out/`、`nul` 继续保留为本地用户 WIP，未纳入提交。
 
 ## SC-004–SC-009 已接受 checkpoint
 

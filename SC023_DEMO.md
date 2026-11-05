@@ -1,6 +1,6 @@
 # SC-023 隐居与后见人演示
 
-**状态：** 代码与文档已实现；静态源码检查完成；Unity 编译、EditMode、Console、场景生成/Validator 与 Play Mode 均未执行，待验证  
+**状态：** 代码与文档已实现，独立源码复审 ACCEPT；checkpoint `a2c7a48` 已推送至 `origin/panyeung/sc023-seclusion`。Unity 编译、EditMode、Console、场景生成/Validator 与 Play Mode 均未执行，待验证  
 **日期：** 2026-11-05  
 **设计：** `docs/superpowers/specs/2026-11-05-sc-023-seclusion-design.md`  
 **计划：** `docs/superpowers/plans/2026-11-05-sc-023-seclusion.md`

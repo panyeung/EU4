@@ -2,7 +2,7 @@
 
 **日期：** 2026-11-05  
 **分支：** `panyeung/sc023-seclusion`  
-**范围：** 仅实现 `docs/superpowers/specs/2026-11-05-sc-023-seclusion-design.md` 与 `docs/superpowers/plans/2026-11-05-sc-023-seclusion.md`；未合并、未提交、未推送。  
+**范围：** 实现 `docs/superpowers/specs/2026-11-05-sc-023-seclusion-design.md` 与 `docs/superpowers/plans/2026-11-05-sc-023-seclusion.md`；checkpoint `a2c7a48` 已推送到 `origin/panyeung/sc023-seclusion`，尚未合并或打 tag。  
 **执行边界：** 未新增或运行测试；未操作 Unity、GUI、截图、Computer Use 或 batchmode；未编辑序列化场景、Prefab 或 `ProjectSettings`；未改 `Library`/`Temp`；未安装包；未改既有 `.meta` GUID。
 
 ## 审查修正（2026-11-05）
@@ -71,11 +71,18 @@
 - 新增 `SC023_DEMO.md`：标题入口、退休交接、退休导师、年度结算、编年史、存读档、失效回退、SC-020 回归与证据边界。
 - 更新 `PROJECT_STATE.md`、`DECISIONS.md`：记录范围、规则、存档策略与未验证状态；不声称 M3 完成。
 
+## 独立只读复审
+
+- 第一次复审为 RETURN：发现退休非前任家主可能通过资格校验，以及 SC-013 标题修复的可选按钮计数漏掉 SC-023。
+- OpenCode2 修正后，由独立 Codex worker 只读复审，结果 **ACCEPT**：退休导师必须有真实继承交接 `FromHeadId` 证明；运行时、存档、年结使用一致资格依据；SC-013 修复路径已计入 SC-023；SC-020 和更早剧本规则未被放宽。
+- 复审未运行测试、编译、Unity、场景验证或 Play Mode；这些证据仍未取得。
+
 ## 静态源码证据
 
 已执行且只做只读检查：
 
 - `git status --short`：用户既有 WIP（`Assets/Scenes/SampleScene.unity`、`Assets/1.unity`、`Assets/1.unity.meta`、`ProjectSettings/SceneTemplateSettings.json`、`graphify-out/`、`nul`）保持不变；未新增/修改测试文件。
+- Git checkpoint：`a2c7a48`（`feat(sc023): add retired leader mentorship slice`），远端 `origin/panyeung/sc023-seclusion` 指向同一提交；用户 WIP 未暂存或纳入提交。
 - `grep` 核对：SC-020 固定年龄、资质、环境、专长判断只保留在 `EducationScenarioProvider` 的 SC-020 分支与 `SC020EducationScenario` 自身；`GameSession` / `EducationView` 不再直接使用这些固定值。
 - `grep` 核对：`new EducationPreview(...)` 全部调用点已匹配新签名；`EducationMentorOption` 唯一构造点在 `GameSession.EducationMentors`。
 - `grep` 核对：`EducationMentorRules.IsEligible` 仅有两个调用点（`GameSession` 运行时、`SaveData` 存档校验），两者都传入 `hasHeldHeadRole`；运行时由 `SuccessionHistory.HasHeldHeadRole` 从 `HistoryLedger.Entries` 派生，存档由 `SaveDataValidator.FormerHeadIds` 从既有 `ChronicleSaveEntry` 派生。
