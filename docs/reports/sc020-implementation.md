@@ -189,3 +189,8 @@ SC020_SAVE_HARNESS PASS checks=20
 - 未 stage、未 commit、未 push、未 merge、未 tag。
 - 保留所有既有未提交 SC-018/SC-019 改动、`Assets/1.unity`、`ProjectSettings/SceneTemplateSettings.json`、`graphify-out/`、`nul`、旧文档等。
 - 未修改 `Library`、`Temp`、`Packages/manifest.json`、既有 `.meta` GUID；仅为新增文件添加新 `.meta`。
+
+
+## 后续 Git 集成（2026-11-04）
+
+用户明确要求累计合并并推送后，SC-020 随 SC-018–SC-022 checkpoint `714cb3a` 推送到 `origin/main`。Editor EditMode、场景生成/Validator、Console、Play Mode 与用户验收未由这次 Git 集成补做。

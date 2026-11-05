@@ -2,7 +2,7 @@
 
 日期：2026-11-03  
 最后更新：2026-11-04  
-状态：代码、EditMode 与场景 validator 已通过；协调方按用户本次临时授权完成指定 Play Mode 路线。用户正式验收仍待办；存读档、跨月日推进/旅行和资源短缺分支尚未覆盖。  
+状态：代码、EditMode 与场景 validator 已通过；协调方按用户临时授权完成指定 Play Mode 路线。累计 checkpoint `714cb3a` 已按用户指示推送到 `origin/main`；用户正式验收仍待办，存读档、跨月日推进/旅行和资源短缺分支尚未覆盖。
 范围：M3 的第一个纵向切片（农庄 + 商馆 + 人员任命 + 每月自动结算），**不是完整 M3**，不包含成长、婚姻、收养、教育、隐居、摄政、家训、抱负、产业升级、市场竞价或情报消耗。
 
 ## 1. 运行前检查
@@ -144,7 +144,7 @@
 - 审查修正覆盖：产业打开按钮不与 `SuccessionHud`、编年史/名册按钮重叠且保持在画布内，validator 能捕获按钮压住 HUD 的回归；月结注入故障发生在事件排程消耗随机流之后，回滚后随机流与事件运行态都恢复到结算前，恢复重试仍成功。
 - OpenCode2 worker **未运行** Play Mode；协调方于 2026-11-04 在用户本次临时授权下，使用 Unity 6000.6.6f1 / `FoundationScene` 完成新局主路线。
 - 本次协调方 Play Mode 与 EditMode、场景 validator 分开记录；用户正式验收仍待完成。停止 Play Mode 时 Console 为 0 errors / 0 warnings / 1 info，唯一信息项为 Unity AI `NoSubscription`。
-- 本次未保存场景或游戏存档；现有 `save-slot-1.json` 与 `.bak` 时间未变。未提交、未推送、未合并、未打 tag；用户验收前不得进行 git 集成。
+- 本次未保存场景或游戏存档；现有 `save-slot-1.json` 与 `.bak` 时间未变。之后用户明确要求累计集成，SC-019 随 checkpoint `714cb3a` 合并推送到 `origin/main`；用户正式验收仍待办，未打 tag。
 
 ## 11. 2026-11-04 协调方 Play Mode 记录（用户临时授权）
 

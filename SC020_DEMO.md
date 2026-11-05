@@ -1,7 +1,7 @@
 # SC-020 子女培养与人物成长示范：试玩与验收说明
 
 日期：2026-11-04  
-状态：代码、EditMode 测试源码、静态编译与离线领域 harness 已完成；**EditMode、场景生成/Validator、Console 与 Play Mode 尚未由本 worker 执行**。用户 Play Test 与正式验收 pending。  
+状态：代码、EditMode 测试源码、静态编译与离线领域 harness 已完成；**EditMode、场景生成/Validator、Console 与 Play Mode 尚未由本 worker 执行**。累计 checkpoint `714cb3a` 已按用户指示推送到 `origin/main`；本切片用户 Play Test 与正式验收仍 pending。
 范围：M3 的独立教育纵向切片——青叶家 1560 年、15 岁千景的一次年度培养与 16 岁成年交接。**不是完整 M3**，不包含婚姻、出生、收养、家谱编辑、导师自由创建、隐居、摄政、完整人物成长或长期人口模拟。
 
 > **实施边界（务必先读）**：本 OpenCode2 Dispatch 没有可用的 Unity bridge/MCP，也没有通过 Computer Use 操作 Editor。`Logs/Editor.log` 最后记录的 `Entering Playmode with Reload Domain disabled.` 之后没有可确认的退出/当前 dirty 记录，因此无法在不碰 GUI 的前提下证明当前场景可安全写入。按照协调方 2026-11-04 的指示，本 worker **没有执行** `Tools/Sengoku Chronicle/Add SC-020 Character Education`、**没有保存** `FoundationScene`、**没有运行** EditMode Test Runner 或 `FoundationSceneValidator`，也不声称这些步骤已通过。下列第 0 节必须由具备 Editor 操作的集成人员完成，之后用户才能开始第 1 节。

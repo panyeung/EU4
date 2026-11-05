@@ -639,3 +639,8 @@ run. No code, test, scene, prefab, `ProjectSettings`, package, `.meta`, save-slo
 - The user must still perform and accept the Play Test. The coordinator ran the
   EditMode suite (824/824), recorded Editor compilation, and observed Console
   counts before Play Mode; `FoundationSceneValidator` remains unrun.
+
+
+## 后续 Git 集成（2026-11-04）
+
+用户明确要求累计合并并推送后，SC-018 随 SC-018–SC-022 checkpoint `714cb3a` 推送到 `origin/main`。上文关于未提交/未集成的描述记录的是实现时状态；SC-018 用户 Play Test 与验收仍待办。

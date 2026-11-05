@@ -156,4 +156,4 @@
 - 存档数据恢复：对 `CaptureSave()` 结果执行 `TryApplySave()` 成功；恢复后家族成员为 6、配偶边 3 条（含开局配偶）、收养边 3 条（含既有养亲关系）、编年史 4 条，继承人与日期保持不变。打开家族编年史面板后，4 条记录均显示且顺序正确。此项验证的是会话存档数据捕获/恢复，不代表写入磁盘槽位。
 - Unity Console（Play Mode 运行后）：`0 errors / 0 warnings / 0 info`。Editor 已退出 Play Mode；活动场景仍为 `FoundationScene`，`dirty=False`。
 
-**结论：** 本次由助手执行的 Play Mode 流程通过；它不是用户本人验收。SC-022 仍待用户确认接受后，才可标记 demo accepted、合并到 `main`、打 tag 或 push。
+**结论：** 助手执行的 Play Mode 流程通过。随后用户明确要求合并和 push，累计 checkpoint `714cb3a` 已推送到 `origin/main`；这次集成指令未改写其他切片的验收记录，SC-022 正式验收状态仍待明确确认。未打 tag。

@@ -119,7 +119,7 @@
 - 运行证据（2026-11-03，协调方在用户临时授权下执行）：在现有 Unity 6.6.6f1 Editor 的 `FoundationScene` 中从「新游戏」开始全新 M2 剧本，按第 3.1 节顺序完成五个前置事件（SC-013 家议、雨夜来客、SC-016 账册托付、SC-015 千恵的家书、SC-014 门前的流亡少年）；七个 SC-018 事件各出现且仅出现一次；随后完成两次交接、SC-011 旧客回访与 SC-013 信任门槛的第三代结尾；核对家庭关系编年史前后值。保存并读取 schema-v5 存档槽，槽内四条家庭关系记录与 30 条编年史条目，读取后推进月份再读取，确认回到 1561 年 7 月状态与历史。首次运行因试玩步骤失误漏掉三个前置事件，该次作废且未保存；干净重跑通过。测试前备份用户存档槽 JSON 与 `.bak`，测试后按字节原样还原，未留下被改动的用户存档。
 - 编译与 EditMode：`Logs/Editor.log` 最新脚本重编译成功，`*** Tundra build success` 由协调方记录在第 8280、10579 行，按 1-based grep 复核为第 8279、10578 行（同两条记录，计数基准差一行）；同一会话此前有 `AddSC013FamilyRosterPanelTests.cs` 的 `CS0117`/`CS7036` 临时编译错误，后续重编译已消除，本文档保留该先后顺序。`%USERPROFILE%\AppData\LocalLow\DefaultCompany\My project\TestResults.xml` 记录 EditMode 824 passed / 0 failed / 0 skipped，时间 `2026-11-03 21:12:19Z`–`2026-11-03 21:12:24Z`，包含 `SC018IndependentFamilyEventsTests` 的 20 个用例且全部通过。Play Mode 前 Console 为 0 errors / 0 warnings，另有 1 条信息级 `NoSubscription` 消息重复五次；测试后的最终 Console 计数未直接观察，不声明为零。
 - 未完成：`FoundationSceneValidator` 未运行（本任务未改场景，不声明场景验证通过）；用户 Play Test 与验收仍未完成。协调方授权验证不替代用户验收，也不构成里程碑接受。详见 `SC018_DEMO.md` 第 0.1 节与 `docs/reports/sc018-implementation.md`。
-- 工作区保护：未提交、未推送、未合并、未打标签；既有脏文件（`SampleScene.unity`、`SC017_DEMO.md`、`docs/reports/sc017-implementation.md`、`Assets/1.unity`、`Assets/1.unity.meta`、`ProjectSettings/SceneTemplateSettings.json`、`graphify-out/`、`nul`）均未清理或覆盖。五个既有链、SC-011–SC-017 的事件定义/文本、场景、预制体、`ProjectSettings`、package、既有 `.meta` GUID、`Library` 与 `Temp` 均未改动。
+- 工作区保护：用户明确要求累计集成 SC-018–SC-022；checkpoint `714cb3a` 已推送至 `origin/main`。SC-018 的用户 Play Test/验收状态仍按本节记录。未纳入提交的 `SampleScene.unity`、`Assets/1.unity`、`Assets/1.unity.meta`、`ProjectSettings/SceneTemplateSettings.json`、`graphify-out/`、`nul` 均保留在本地。
 
 ## SC-019 家族产业首切片（2026-11-03）
 
@@ -132,7 +132,7 @@
 - 场景：事务式生成器已写入 `IndustryRoot`/`IndustryPanel` 并保存 `FoundationScene`；SC-019 专项 PASS。随后按协调方指示用既有 `AddSC005EventChoicePanel` 事务式反馈条修复路径处理已知 SC-009 基线问题，最终 `FoundationSceneValidator` 为 `PASS; Errors: 0`（`Logs/SceneValidationReport.txt`，23:54:25Z）。生成器曾因 EditMode 绑定阶段生成候选按钮而空引用回滚（未保存），修正为绑定时不刷新候选并重建场景；最终场景无运行时候选按钮，仅保留隐藏模板。一次性 `RunMenuOnFoundationScene` / `RepairSc009FeedbackOnFoundationScene` 包装方法已从源码移除，生成器只保留 `RunMenu` 菜单。
 - 场景安全说明：本 worker 曾使用一次性 `RebuildOnFoundationScene`，以 `DestroyImmediate` 在 Undo 组之外删除旧 `IndustryRoot` 后保存；这违反了项目单一 Undo 组规则，已由协调方指出并从源码移除，之后未再运行破坏性重建。独立 YAML 对比：HEAD 721 个基线块，0 个删除/改名；新增 109 个 SC-019 块；仅 3 个基线块变化（Canvas 子节点列表、`EventChoiceFeedbackText` 矩形、`EventChoicePanel` 文本对齐，后两项为既有 SC-009 修复）。
 - 审查修正（2026-11-04，同一 worker 最终收敛）：独立审查阻断项为打开按钮左上锚定 `(20,-20)` 与同原点 430×210 `SuccessionHud` 重叠，覆盖家主/年龄行。现改为 HUD 下方左上锚定 `(20,-250)`（200×44，与 HUD 底边留 20 px），位于画布内且不与编年史/名册按钮、SC-009 顶部反馈条或地图带重叠；`AddSC019IndustryPanel.Validate` 新增 `SuccessionHud` 实际矩形重叠检测。新增 `AddSC019IndustryPanel_OpenButtonClearsSuccessionHud`（按钮不压 HUD 且在画布内）与 `AddSC019IndustryPanel_ValidateRejectsOpenButtonOverSuccessionHud`（validator 能抓回归，且事务式 `Repair` 会把越界按钮移回）。月结回滚测试 `EndMonth_FaultAfterDateAdvance_RollsBackDateResourcesLastSettledAndChronicle` 现在在注入异常时证明事件排程已消耗事件随机流，并在回滚后断言完整随机状态与 `EventRuntimeSaveData` 均等于结算前，随后保留恢复重试断言。全新全量 `923/923`（`2026-11-04 04:15:29Z–04:15:35Z`，`Logs/sc019-final-correction-all.xml`），`error CS` 计数 0；修正前基线 921/921。场景仅经既有 `RunMenu`→`Repair` 事务路径保存，无新包装方法、无直接 YAML 编辑、无场景重载回滚；`FoundationSceneValidator` 最终 `PASS; Errors: 0`（`Logs/SceneValidationReport.txt`）。场景 SHA-256 `39f5c829…` → `87e80d71…`，`git diff --numstat` 行数不变，仅按钮矩形属性值改变。Unity 运行期间 `ProjectSettings/ProjectSettings.asset` 的 Standalone define 顺序被重排，已在停止 Unity 后恢复原顺序并确认 `git diff` 为空。
-- 未完成：OpenCode2 worker 未运行 Play Mode；协调方已在用户本次临时授权下实测主路线，Play Mode Console 为 0 errors / 0 warnings / 1 info（Unity AI `NoSubscription`）；用户正式验收、存读档、跨月日推进/旅行、资源短缺分支仍待完成。未提交/推送/合并/打 tag。详见 `SC019_DEMO.md` 与 `docs/reports/sc019-implementation.md`。
+- 未完成：OpenCode2 worker 未运行 Play Mode；协调方已在用户本次临时授权下实测主路线，Play Mode Console 为 0 errors / 0 warnings / 1 info（Unity AI `NoSubscription`）；用户正式验收、存读档、跨月日推进/旅行、资源短缺分支仍待完成。用户随后要求累计集成，SC-019 随 checkpoint `714cb3a` 推送到 `origin/main`；未打 tag。详见 `SC019_DEMO.md` 与 `docs/reports/sc019-implementation.md`。
 
 ## SC-020 子女培养与人物成长（2026-11-04）
 
@@ -142,7 +142,7 @@
 - 存档：schema v6→v7、`rulesVersion` 2→3；新增 `development` 五项能力、年度计划与结果；v6 迁移为每个现有名册人物初始化五项 `0` 与空教育记录，保留 SC-018 关系、chronicle、eventRuntime、succession、industry，不补算历史；旧版含非 null `development` 载荷拒绝；v1–v5 继续迁移链到 v7。
 - 场景/UI：新增 SC-020 标题入口、培养面板（五项值、年龄年度、六方向、导师、预览、提交/消息）与事务式 `AddSC020CharacterEducation` 生成器；`FoundationSceneValidator` 已接入，但**本 worker 未执行生成器/Validator**。SC-013 与 SC-019 入口和剧本保持不变。
 - 证据：Unity 随附 Roslyn host-side 编译 Domain/Events/Persistence/Application/Presentation/Editor/EditModeTests 全部 exit 0；纯 Domain harness 17/17、Persistence/Save harness 20/20。**未运行 Unity EditMode、Console、场景 Validator 或 Play Mode**；`Logs/Editor.log` 最后可见 `Entering Playmode with Reload Domain disabled.` 且无法在无 bridge/无 GUI 条件下确认当前 Play Mode/dirty 状态，故按协调方要求停在场景写入 gate。用户 Play Test 与正式验收 pending。
-- 工作区：未 stage/commit/push/merge/tag；既有 SC-018/SC-019 脏改动、`Assets/1.unity`、`ProjectSettings/SceneTemplateSettings.json`、`graphify-out/`、`nul` 等全部保留；未改 `Library`、`Temp`、package manifest 或既有 `.meta` GUID。详见 `SC020_DEMO.md` 与 `docs/reports/sc020-implementation.md`。
+- 工作区：累计 checkpoint `714cb3a` 已推送到 `origin/main`（按用户明确指示）；SC-020 的 Editor EditMode、场景生成/Validator、Console、Play Mode 与用户验收仍按上文标为未完成。`SampleScene.unity`、`Assets/1.unity`、`ProjectSettings/SceneTemplateSettings.json`、`graphify-out/`、`nul` 保留在本地且未纳入提交。详见 `SC020_DEMO.md` 与 `docs/reports/sc020-implementation.md`。
 
 ## SC-021 家族研究与技艺传承（2026-11-04）
 
@@ -154,7 +154,7 @@
 - 固定剧本：`family.kageyama.sc021`，宗次 40 / 奈绪 38 / 小太郎 18，开局 `2 资金 / 2 物资 / 0 情报`；不改变 SC-010/013/019/020 名册、事件、资源或场景行为。
 - 场景/UI：新增 `FamilyResearchPanel`、`SC021FamilyResearchScenario`、事务式 `AddSC021FamilyResearch`（一个 Undo 组、保存前验证、仅用 Undo 回滚、不重载场景、固定在 `Canvas/SC021ResearchRoot`）；`FoundationSceneValidator` 已接入。**本 worker 未执行生成器/Validator、未保存 `FoundationScene`**，因此场景目前不含 SC-021 根节点与标题入口。
 - 验证：Unity 6.6.6f1 随附 Roslyn host-side 编译 Domain/Persistence/Events/Application/Presentation/Editor/EditModeTests 全部 exit 0（0 诊断）；纯 C# SC-021 harness `70/70`，存档 harness `21/21`，26 个纯 C# 用例通过（含本轮新增的「读档后研究者失效立即暂停」视图用例；另 2 个 `GameSession` 用例因宿主缺少 Unity 运行时未执行）。**未运行 Unity Editor 编译、EditMode Test Runner、Console 计数、场景 Validator 或 Play Mode**；`Logs/Editor.log` 停在 `Entering Playmode with Reload Domain disabled.`，无安全非 GUI 路径写入场景。
-- 工作区：未 stage/commit/push/merge/tag；既有 SC-018/SC-019/SC-020 脏改动、`Assets/1.unity`、`ProjectSettings/SceneTemplateSettings.json`、`graphify-out/`、`nul` 等全部保留；未改 `Library`、`Temp`、package manifest 或既有 `.meta` GUID。详见 `SC021_DEMO.md` 与 `docs/reports/sc021-implementation.md`。
+- 工作区：累计 checkpoint `714cb3a` 已推送到 `origin/main`（按用户明确指示）；SC-021 的 Unity 编译、EditMode、场景接入/Validator、Console、Play Mode 与用户验收仍按上文标为未完成。`SampleScene.unity`、`Assets/1.unity`、`ProjectSettings/SceneTemplateSettings.json`、`graphify-out/`、`nul` 保留在本地且未纳入提交。详见 `SC021_DEMO.md` 与 `docs/reports/sc021-implementation.md`。
 
 ## SC-022 婚姻与日常收养（2026-11-04）
 
@@ -165,7 +165,7 @@
 - 存档：复用现有 `SuccessionSaveData`（全部人物、生命、成员、亲属边）与 `SaveData` 编年史，不新增字段、不升 schema；`saveFormatVersion` 保持 `8`、`rulesVersion` 保持 `4`。JSON 往返测试证明候选人、成员角色、配偶/收养边、编年史顺序与显示文字一致，旧标准存档仍可读取。
 - 场景/UI：新增 `FamilyFormationPanel`、`SC022FamilyFormationScenario`、事务式 `AddSC022FamilyFormation`（一个 Undo 组、保存前验证、Undo 回滚、不重载场景）；固定根 `Canvas/SC022FamilyFormationRoot`，面板默认隐藏，标题入口 `SC022FamilyFormationDemoButton`。生成器已实际运行并保存 `FoundationScene`；SC-022 Validator 行通过。
 - 验证：在已打开的 Unity `6000.6.6f1` Editor 中通过 MCP relay 完成刷新与编译，动态命令编译/执行成功；P2 修正后 SC-022 聚焦回归 `70/70`（0 失败/跳过，`Logs/sc022-tests.txt` 与 `Logs/sc022-tests.xml`），其中 `FamilyFormationSessionTests` 12 项（含两个 append 失败回滚用例）。全量 EditMode `1098/1100` 为修正前历史证据，未在修正后重跑；两项失败为既有 SC-021 迁移消息顺序用例，非 SC-022 路径。修正后 Console 最近 15 条为 `2 errors / 2 warnings / 11 info`，4 条 error/warning 均为测试路径刻意触发（两个 `LogAssert.Expect` append 失败日志、两个生成器负向回滚 warning），不是回归。`FoundationSceneValidator` 修正后重跑：活动场景 `loaded=True dirty=False`，SC-022 行 `PASS`，整体 `FAIL; Errors: 4`；4 项均为既有缺口（SC-021 面板/根/标题引用未写入场景、SC-009 反馈条布局）。助手已在现有 Editor 执行 SC-022 Play Mode：标题入口、面板开关、多配偶、儿童/成年人收养、直系关系拒绝、存档数据捕获/恢复与编年史显示均通过；Console `0/0/0`，随后退出 Play Mode，场景 `dirty=False`。未截图或使用 Computer Use；用户验收待办。
-- 工作区：未 stage/commit/push/merge/tag；既有 SC-018–SC-021 脏改动、`Assets/1.unity`、`ProjectSettings/SceneTemplateSettings.json`、`graphify-out/`、`nul` 等全部保留；未改 `Library`、`Temp`、package manifest 或既有 `.meta` GUID。详见 `SC022_DEMO.md` 与 `docs/reports/sc022-implementation.md`。
+- 工作区：SC-018–SC-022 累计 checkpoint `714cb3a` 已推送至 `origin/main`；用户明确要求合并与 push。Play Mode 已通过助手运行，正式用户验收仍待明确确认。`SampleScene.unity`、`Assets/1.unity`、`Assets/1.unity.meta`、`ProjectSettings/SceneTemplateSettings.json`、`graphify-out/`、`nul` 保留在本地且未纳入提交；未改 `Library`、`Temp`、package manifest 或既有 `.meta` GUID。详见 `SC022_DEMO.md` 与 `docs/reports/sc022-implementation.md`。
 
 ## SC-004–SC-009 已接受 checkpoint
 

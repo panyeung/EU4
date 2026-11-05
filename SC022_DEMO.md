@@ -1,6 +1,6 @@
 # SC-022 婚姻与日常收养演示
 
-**状态：** 代码、EditMode 测试、场景集成与助手 Play Mode 测试已完成；用户验收待办  
+**状态：** 代码、EditMode 测试、场景集成与助手 Play Mode 测试已完成；累计 checkpoint `714cb3a` 已按用户指示推送到 `origin/main`；用户正式验收状态仍待明确确认
 **日期：** 2026-11-04  
 **设计：** `docs/superpowers/specs/2026-11-04-sc-022-family-formation-design.md`  
 **计划：** `docs/superpowers/plans/2026-11-04-sc-022-family-formation.md`

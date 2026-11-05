@@ -218,3 +218,8 @@ passed=21 failed=0
 3. 在 Editor Test Runner 运行聚焦/全量 EditMode，记录实际 totals 与 Console 计数。
 4. 交给用户按 `SC021_DEMO.md` 执行 Play Test；用户明确接受前不得提交、合并、打 tag 或推送。
 5. 按 `AGENTS.md` 在同一任务上请求 QATester 复审；复审通过后再由独立的 OpenCode worker 做只读审查。
+
+
+## 后续 Git 集成（2026-11-04）
+
+用户明确要求累计合并并推送后，SC-021 随 checkpoint `714cb3a` 推送到 `origin/main`。上文待运行的 Unity 编译/EditMode、场景接入/Validator、Console、Play Mode、QATester 复审与用户验收未由这次 Git 集成补做。
