@@ -97,6 +97,9 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(Find(AddSC021FamilyResearch.ResearcherTemplateName).gameObject.activeSelf,
                 Is.False);
             Assert.That(Find(AddSC021FamilyResearch.OpenButtonName).gameObject.activeSelf, Is.True);
+            Assert.That(Find(AddSC021FamilyResearch.CostName).GetComponent<Text>().text,
+                Is.EqualTo("每月消耗 1 资金、1 物资；完成后写入家族知识，不授予个人掌握。"),
+                "the generated cost placeholder must match the current cost line");
 
             Transform titleButton = Find(AddSC021FamilyResearch.TitleButtonName);
             Assert.That(titleButton, Is.Not.Null);

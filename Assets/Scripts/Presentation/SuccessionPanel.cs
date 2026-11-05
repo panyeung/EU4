@@ -262,7 +262,9 @@ namespace SengokuChronicle.Presentation
                 case SuccessionPhase.Extinct:
                     // CompletedResultId is an internal save-stable key such as
                     // "extinction.family.sc010"; never render it in player text.
-                    return "家族灭亡：家族血脉已经断绝，无人能够在世继承家业。";
+                    // The decline path can leave living relatives behind, so this
+                    // must describe the missing eligible heir, not a dead bloodline.
+                    return "家族灭亡：已无符合资格的继承人，家业无人继承。";
                 default:
                     if (gameSession.IsM2ScenarioActive)
                     {

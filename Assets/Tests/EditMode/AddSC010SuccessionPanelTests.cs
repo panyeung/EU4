@@ -302,6 +302,10 @@ namespace SengokuChronicle.Tests.EditMode
 
             Assert.That(_session.Succession.Phase, Is.EqualTo(SuccessionPhase.Extinct));
             Assert.That(panel.StatusMessage, Does.Contain("家族灭亡"));
+            Assert.That(panel.StatusMessage, Does.Contain("无符合资格的继承人"),
+                "the decline path can leave living relatives, so the status must describe the missing heir");
+            Assert.That(panel.StatusMessage, Does.Not.Contain("血脉"),
+                "the status must not claim every family member died");
             Assert.That(panel.StatusMessage, Does.Not.Contain("extinction."),
                 "the player-facing status must not render the raw completed-result id");
             Assert.That(panel.StatusMessage, Does.Not.Contain(_session.Succession.CompletedResultId),

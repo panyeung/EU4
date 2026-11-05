@@ -423,7 +423,7 @@ namespace SengokuChronicle.Editor
                 Text progress = CreateText(scene, panelRect, ProgressName, font,
                     "进度：0/2", 0f, 52f, 700f, 28f, 16, TextAnchor.MiddleLeft);
                 Text cost = CreateText(scene, panelRect, CostName, font,
-                    "每月消耗 1 资金、1 物资，推进 1 点进度。", 0f, 14f, 700f, 28f, 14,
+                    "每月消耗 1 资金、1 物资；完成后写入家族知识，不授予个人掌握。", 0f, 14f, 700f, 28f, 14,
                     TextAnchor.MiddleLeft);
                 cost.color = new Color(0.75f, 0.9f, 1f, 1f);
                 Transform researchers = CreateContainer(scene, panelRect, ResearcherContainerName, -42f);
