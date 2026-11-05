@@ -238,6 +238,7 @@ namespace SengokuChronicle.Domain
                 return false;
             }
             if (entry.Results.TryGetValue(plan.AgeYear, out EducationYearResult settled) &&
+                !IsFallbackSettlement(settled) &&
                 (settled.Direction != plan.Direction || settled.Mentor != plan.Mentor))
             {
                 error = "已结算年度的计划与结果不一致。";
@@ -322,6 +323,7 @@ namespace SengokuChronicle.Domain
                         return false;
                     }
                     if (entry.Results.TryGetValue(plan.AgeYear, out EducationYearResult settled) &&
+                        !IsFallbackSettlement(settled) &&
                         (settled.Direction != plan.Direction || settled.Mentor != plan.Mentor))
                     {
                         error = "人物 " + personId.Value + " 的已结算计划与结果不一致。";
@@ -347,5 +349,15 @@ namespace SengokuChronicle.Domain
             error = string.Empty;
             return true;
         }
+
+        /// <summary>
+        /// A stored plan whose mentor became unavailable settles as explicit free growth;
+        /// the original directed plan is retained for display, so it legitimately differs
+        /// from the settled direction and mentor.
+        /// </summary>
+        private static bool IsFallbackSettlement(EducationYearResult settled) =>
+            settled.UsedFreeGrowthFallback &&
+            settled.Direction == EducationDirection.FreeGrowth &&
+            settled.Mentor.IsEmpty;
     }
 }

@@ -49,6 +49,10 @@ namespace SengokuChronicle.Presentation
         [SerializeField]
         private Button familyFormationDemoButton;
 
+        [Header("SC-023 seclusion entry")]
+        [SerializeField]
+        private Button seclusionDemoButton;
+
         [SerializeField]
         private Text statusText;
 
@@ -78,6 +82,9 @@ namespace SengokuChronicle.Presentation
 
         /// <summary>True when the separate SC-022 family-formation entry is wired.</summary>
         public bool FamilyFormationScenarioBound => familyFormationDemoButton != null;
+
+        /// <summary>True when the separate SC-023 seclusion entry is wired.</summary>
+        public bool SeclusionScenarioBound => seclusionDemoButton != null;
 
         public void Bind(
             GameSession session,
@@ -125,6 +132,13 @@ namespace SengokuChronicle.Presentation
         public void BindFamilyFormationScenarioButton(Button familyFormationDemo)
         {
             familyFormationDemoButton = familyFormationDemo;
+            BindButtons(isActiveAndEnabled);
+        }
+
+        /// <summary>Binds the separate SC-023 seclusion title entry.</summary>
+        public void BindSeclusionScenarioButton(Button seclusionDemo)
+        {
+            seclusionDemoButton = seclusionDemo;
             BindButtons(isActiveAndEnabled);
         }
 
@@ -214,6 +228,13 @@ namespace SengokuChronicle.Presentation
                 if (add)
                     familyFormationDemoButton.onClick.AddListener(OnFamilyFormationDemoButton);
             }
+
+            if (seclusionDemoButton != null)
+            {
+                seclusionDemoButton.onClick.RemoveListener(OnSeclusionDemoButton);
+                if (add)
+                    seclusionDemoButton.onClick.AddListener(OnSeclusionDemoButton);
+            }
         }
 
         private void OnNewGameButton()
@@ -249,6 +270,11 @@ namespace SengokuChronicle.Presentation
         private void OnFamilyFormationDemoButton()
         {
             StartFamilyFormationDemo();
+        }
+
+        private void OnSeclusionDemoButton()
+        {
+            StartSeclusionDemo();
         }
 
         /// <summary>显示标题覆盖层。</summary>
@@ -413,6 +439,25 @@ namespace SengokuChronicle.Presentation
             HideTitle();
             LastOperationSucceeded = true;
             SetStatus("已开始 SC-022 婚姻与收养示范。");
+            return true;
+        }
+
+        /// <summary>Starts the separate fixed SC-023 seclusion and mentorship demonstration.</summary>
+        public bool StartSeclusionDemo()
+        {
+            if (gameSession == null)
+            {
+                LastOperationSucceeded = false;
+                SetStatus("缺少 GameSession，无法进入隐居与后见人示范。");
+                return false;
+            }
+
+            gameSession.InitSeclusionDemoScenario();
+            if (worldMapController != null)
+                worldMapController.ReturnToMap();
+            HideTitle();
+            LastOperationSucceeded = true;
+            SetStatus("已开始 SC-023 隐居与后见人示范。");
             return true;
         }
 

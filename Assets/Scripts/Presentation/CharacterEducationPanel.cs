@@ -81,7 +81,8 @@ namespace SengokuChronicle.Presentation
             previewText = preview;
             confirmButton = confirm;
             messageText = message;
-            _educationScenarioActive = session != null && SC020EducationScenario.IsActive(session.Succession);
+            _educationScenarioActive = session != null &&
+                                       EducationScenarioProvider.IsActive(session.Succession);
             _selectionInitialized = false;
             Subscribe();
             // Never build button clones while the scene is being generated or inspected in
@@ -217,8 +218,7 @@ namespace SengokuChronicle.Presentation
                 EducationMentorOption captured = option;
                 GameObject buttonObject = CreateButton(mentorTemplate, mentorContainer,
                     "SC020Mentor_" + option.PersonId.Value,
-                    (option.PersonId == _mentor ? "▶ " : string.Empty) + option.DisplayName +
-                    "（" + option.SpecialtyName + "）");
+                    (option.PersonId == _mentor ? "▶ " : string.Empty) + option.DisplayLabel);
                 Button button = buttonObject.GetComponent<Button>();
                 if (button != null)
                 {
@@ -353,7 +353,8 @@ namespace SengokuChronicle.Presentation
 
         private void OnSessionStateChanged()
         {
-            bool active = gameSession != null && SC020EducationScenario.IsActive(gameSession.Succession);
+            bool active = gameSession != null &&
+                          EducationScenarioProvider.IsActive(gameSession.Succession);
             bool entered = active && !_educationScenarioActive;
             _educationScenarioActive = active;
             if (entered)

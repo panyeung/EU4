@@ -483,7 +483,16 @@ namespace SengokuChronicle.Persistence
         /// snapshot and the save date. The person set must match the roster exactly, so a
         /// missing growth block is rejected instead of being silently defaulted.
         /// </summary>
-        public SaveOperationResult ValidateForSave(GameDate date, SuccessionSaveData succession)
+        public SaveOperationResult ValidateForSave(GameDate date, SuccessionSaveData succession) =>
+            ValidateForSave(date, succession, null);
+
+        /// <summary>
+        /// Same validation with the former-head proof derived from the saved succession
+        /// chronicle. SC-023 uses it to distinguish a retired former head from any other
+        /// retired direct kin without adding a save field or schema version.
+        /// </summary>
+        public SaveOperationResult ValidateForSave(GameDate date, SuccessionSaveData succession,
+            HashSet<string> formerHeadIds)
         {
             if (succession == null || succession.persons == null || succession.members == null)
                 return Invalid("存档缺少人物成长所需的名册。");
@@ -495,9 +504,14 @@ namespace SengokuChronicle.Persistence
                 if (person != null && PersonId.TryParse(person.personId, out PersonId personId))
                     roster[personId] = person;
             var members = new HashSet<PersonId>();
+            var roles = new Dictionary<PersonId, FamilyMemberRole>();
             foreach (SuccessionMemberSaveEntry member in succession.members)
                 if (member != null && PersonId.TryParse(member.personId, out PersonId memberId))
+                {
                     members.Add(memberId);
+                    if (Enum.IsDefined(typeof(FamilyMemberRole), member.role))
+                        roles[memberId] = (FamilyMemberRole)member.role;
+                }
 
             if (persons.Length != roster.Count)
                 return Invalid("存档人物成长记录必须覆盖名册中的每个人物。");
@@ -520,8 +534,9 @@ namespace SengokuChronicle.Persistence
                         entry.management, entry.social))
                     return Invalid("存档人物成长能力超出范围 0..100。");
 
-                if (!ValidatePlans(entry, personId, members, roster, date,
-                        succession.adulthoodAge, out string planError))
+                if (!ValidatePlans(entry, personId, members, roles, roster, date,
+                        succession.adulthoodAge, succession.familyId, formerHeadIds,
+                        out string planError))
                     return Invalid(planError);
                 if (!ValidateResults(entry, personId, roster, out string resultError))
                     return Invalid(resultError);
@@ -537,8 +552,9 @@ namespace SengokuChronicle.Persistence
         }
 
         private bool ValidatePlans(CharacterDevelopmentPersonSaveEntry entry, PersonId learner,
-            HashSet<PersonId> members, Dictionary<PersonId, SuccessionPersonSaveEntry> roster,
-            GameDate date, int adulthoodAge, out string error)
+            HashSet<PersonId> members, Dictionary<PersonId, FamilyMemberRole> roles,
+            Dictionary<PersonId, SuccessionPersonSaveEntry> roster, GameDate date, int adulthoodAge,
+            string familyId, HashSet<string> formerHeadIds, out string error)
         {
             if (entry.plans == null)
             {
@@ -591,14 +607,40 @@ namespace SengokuChronicle.Persistence
                     continue;
 
                 if (!PersonId.TryParse(plan.mentorPersonId, out PersonId mentorId) ||
-                    mentorId == learner || !roster.TryGetValue(mentorId, out SuccessionPersonSaveEntry mentor) ||
-                    !members.Contains(mentorId))
+                    mentorId == learner || !roster.TryGetValue(mentorId, out SuccessionPersonSaveEntry mentor))
                 {
                     error = "存档培养计划导师不是合法的成年家族成员。";
                     return false;
                 }
-                if (!mentor.alive || mentor.retired ||
-                    date.Year - mentor.birthYear < adulthoodAge)
+
+                // SC-023 keeps a plan whose retired former-head mentor later dies, leaves
+                // the family or otherwise loses eligibility: the annual settlement is the
+                // single authority and falls back to free growth. The stored identity must
+                // still resolve to a known person, and the shared rule decides whether it is
+                // still an eligible mentor; an ineligible-but-known plan is retained.
+                bool hasRole = roles.TryGetValue(mentorId, out FamilyMemberRole mentorRole);
+                bool heldHeadRole = formerHeadIds != null && formerHeadIds.Contains(mentorId.Value);
+                bool stillEligible = members.Contains(mentorId) && hasRole &&
+                    EducationMentorRules.IsEligible(familyId, mentorId, learner, true,
+                        mentor.alive, mentor.retired, date.Year - mentor.birthYear, adulthoodAge,
+                        mentorRole, heldHeadRole);
+                if (EducationMentorRules.AllowsRetainedFallback(familyId))
+                {
+                    if (!stillEligible)
+                    {
+                        // A retired direct kin who never appears as the departing head of a
+                        // real handoff was never an SC-023 mentor. Do not launder that into
+                        // a free-growth fallback plan; only genuine former heads may retain
+                        // an eligibility-lost plan.
+                        if (mentor.retired && !heldHeadRole)
+                        {
+                            error = "存档培养计划导师是退休非前任家主，不能担任隐居导师。";
+                            return false;
+                        }
+                        continue;
+                    }
+                }
+                else if (!stillEligible)
                 {
                     error = "存档培养计划导师已失效或未成年。";
                     return false;
@@ -660,6 +702,11 @@ namespace SengokuChronicle.Persistence
                         : "存档定向培养结果缺少导师。";
                     return false;
                 }
+                if (result.usedFreeGrowthFallback && (!free || hasMentor))
+                {
+                    error = "存档培养回退结果必须是无导师的自由成长。";
+                    return false;
+                }
                 if (hasMentor &&
                     (!PersonId.TryParse(result.mentorPersonId, out PersonId mentorId) ||
                      !roster.ContainsKey(mentorId) || mentorId == learner))
@@ -668,9 +715,12 @@ namespace SengokuChronicle.Persistence
                     return false;
                 }
 
+                bool fallbackSettled = result.usedFreeGrowthFallback &&
+                                       result.direction == (int)EducationDirection.FreeGrowth &&
+                                       string.IsNullOrWhiteSpace(result.mentorPersonId);
                 foreach (EducationPlanSaveEntry plan in entry.plans)
                 {
-                    if (plan != null && plan.ageYear == result.ageYear &&
+                    if (plan != null && plan.ageYear == result.ageYear && !fallbackSettled &&
                         (plan.direction != result.direction ||
                          !string.Equals(plan.mentorPersonId ?? string.Empty,
                              result.mentorPersonId ?? string.Empty, StringComparison.Ordinal)))

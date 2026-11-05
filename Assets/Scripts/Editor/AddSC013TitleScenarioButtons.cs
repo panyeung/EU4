@@ -26,6 +26,7 @@ namespace SengokuChronicle.Editor
         public const string EducationButtonName = "SC020EducationDemoButton";
         public const string ResearchButtonName = "SC021ResearchDemoButton";
         public const string FamilyFormationButtonName = "SC022FamilyFormationDemoButton";
+        public const string SeclusionButtonName = "SC023SeclusionDemoButton";
         public const string MenuPath = "Tools/Sengoku Chronicle/Add SC-013 Title Scenario Buttons";
 
         private const string UndoName = "Add SC-013 Title Scenario Buttons";
@@ -98,10 +99,11 @@ namespace SengokuChronicle.Editor
                 return Invalid(out error, "M6TitleRoot must be saved inactive; Play Mode shows it.");
             int optionalEntries = (Named(scene, EducationButtonName).Any() ? 1 : 0) +
                                   (Named(scene, ResearchButtonName).Any() ? 1 : 0) +
-                                  (Named(scene, FamilyFormationButtonName).Any() ? 1 : 0);
+                                  (Named(scene, FamilyFormationButtonName).Any() ? 1 : 0) +
+                                  (Named(scene, SeclusionButtonName).Any() ? 1 : 0);
             if (root.childCount != CompleteChildCount + optionalEntries)
                 return Invalid(out error,
-                    "M6TitleRoot must contain the four base controls, two SC-013 entries and at most one SC-020 and one SC-021 entry.");
+                    "M6TitleRoot must contain the four base controls, two SC-013 entries and at most one each of the SC-020/021/022/023 entries.");
             if (standard.parent != root || crisis.parent != root || status.parent != root)
                 return Invalid(out error, "SC-013 title entries and status text must be direct title-root children.");
             if (!standard.gameObject.activeSelf || !crisis.gameObject.activeSelf)
@@ -154,7 +156,8 @@ namespace SengokuChronicle.Editor
                 return UpdateResult.ExistingPartialControl;
             int optionalEntries = (Named(scene, EducationButtonName).Any() ? 1 : 0) +
                                   (Named(scene, ResearchButtonName).Any() ? 1 : 0) +
-                                  (Named(scene, FamilyFormationButtonName).Any() ? 1 : 0);
+                                  (Named(scene, FamilyFormationButtonName).Any() ? 1 : 0) +
+                                  (Named(scene, SeclusionButtonName).Any() ? 1 : 0);
             if (root.childCount != BaseChildCount + optionalEntries)
                 return UpdateResult.InvalidHierarchyOrBindings;
 
@@ -181,8 +184,9 @@ namespace SengokuChronicle.Editor
                 Undo.RecordObject(statusRect, UndoName);
                 bool hasLowerScenarioEntry = Named(scene, EducationButtonName).Any() ||
                                              Named(scene, ResearchButtonName).Any();
+                bool hasSeclusionEntry = Named(scene, SeclusionButtonName).Any();
                 statusRect.anchoredPosition = new Vector2(0f,
-                    hasLowerScenarioEntry ? -330f : -260f);
+                    hasSeclusionEntry ? -386f : hasLowerScenarioEntry ? -330f : -260f);
                 EditorUtility.SetDirty(statusRect);
 
                 Undo.RecordObject(controller, UndoName);

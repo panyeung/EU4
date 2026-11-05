@@ -122,6 +122,10 @@ namespace SengokuChronicle.Editor
                 AddError(report, ref errors, sc022Error);
             else
                 report.AppendLine("PASS SC-022 family-formation panel, title entry, bindings, and layout.");
+            if (!AddSC023Seclusion.Validate(scene, out string sc023Error))
+                AddError(report, ref errors, sc023Error);
+            else
+                report.AppendLine("PASS SC-023 seclusion title entry, education-panel dependency, bindings, and layout.");
 
             if (controller != null)
             {
@@ -166,7 +170,8 @@ namespace SengokuChronicle.Editor
                 CheckReferences(report, ref errors, titleController,
                     "gameSession", "worldMapController", "titleRoot", "newGameButton", "continueButton",
                     "standardSampleButton", "crisisDemoButton", "educationDemoButton",
-                    "researchDemoButton", "familyFormationDemoButton", "statusText");
+                    "researchDemoButton", "familyFormationDemoButton", "seclusionDemoButton",
+                    "statusText");
             }
 
             if (demoPanel != null)

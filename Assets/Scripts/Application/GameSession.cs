@@ -139,7 +139,7 @@ namespace SengokuChronicle.Application
         /// <summary>Transient industry feedback, including safe-save cleanup.</summary>
         public string LastIndustryMessage { get; private set; } = string.Empty;
 
-        /// <summary>Read-only SC-020 growth snapshot for the education panel and tests.</summary>
+        /// <summary>Read-only child-growth snapshot for the education panel and tests.</summary>
         public EducationView Education => EducationView.Build(Succession, EnsureDevelopment(),
             CurrentGameDate, CanEditEducationPlans, EducationBlockReason, LastEducationMessage);
 
@@ -316,7 +316,8 @@ namespace SengokuChronicle.Application
                         ? person.DisplayName
                         : membership.PersonId.Value;
                     options.Add(new EducationMentorOption(membership.PersonId, name,
-                        SC020EducationScenario.SpecialtyOf(membership.PersonId)));
+                        EducationScenarioProvider.SpecialtyOf(Succession, membership.PersonId),
+                        EducationScenarioProvider.MentorRoleLabel(Succession, membership.PersonId)));
                 }
                 return options.AsReadOnly();
             }
@@ -573,6 +574,16 @@ namespace SengokuChronicle.Application
         {
             InitSession(initialSeed, SC020EducationScenario.CreateSuccession(),
                 SC020EducationScenario.StartDate, SC020EducationScenario.CreateDevelopmentState());
+        }
+
+        /// <summary>Starts the separate fixed SC-023 seclusion and mentorship demonstration.</summary>
+        public void InitSeclusionDemoScenario() => InitSeclusionDemoScenario(DefaultRandomSeed);
+
+        /// <summary>Starts the SC-023 demonstration with a caller-selected deterministic seed.</summary>
+        public void InitSeclusionDemoScenario(ulong initialSeed)
+        {
+            InitSession(initialSeed, SC023SeclusionScenario.CreateSuccession(),
+                SC023SeclusionScenario.StartDate, SC023SeclusionScenario.CreateDevelopmentState());
         }
 
         /// <summary>Starts the separate fixed SC-021 family-research demonstration.</summary>
@@ -856,52 +867,57 @@ namespace SengokuChronicle.Application
             EducationView view = Education;
             if (!view.HasLearner)
                 return new EducationPreview(false, "当前没有可培养的家族成员。", direction, mentor,
-                    string.Empty, default, default, string.Empty);
+                    string.Empty, MentorSpecialty.None, string.Empty, default, default,
+                    string.Empty);
             if (!Enum.IsDefined(typeof(EducationDirection), direction))
                 return new EducationPreview(false, "培养方向无效。", direction, mentor, string.Empty,
-                    view.Values, view.Values, string.Empty);
+                    MentorSpecialty.None, string.Empty, view.Values, view.Values, string.Empty);
+
+            EducationPreview Failure(string message) =>
+                new EducationPreview(false, message, direction, mentor, string.Empty,
+                    MentorSpecialty.None, string.Empty, view.Values, view.Values, string.Empty);
 
             try
             {
                 if (!view.IsEligible)
-                    return new EducationPreview(false, "孩子已成年，儿童年度培养已结束。", direction,
-                        mentor, string.Empty, view.Values, view.Values, string.Empty);
+                    return Failure("孩子已成年，儿童年度培养已结束。");
 
                 MentorSpecialty specialty = MentorSpecialty.None;
                 PersonId effectiveMentor = default;
                 if (direction == EducationDirection.FreeGrowth)
                 {
                     if (!mentor.IsEmpty)
-                        return new EducationPreview(false, "自由成长不能指定导师。", direction, mentor,
-                            string.Empty, view.Values, view.Values, string.Empty);
+                        return Failure("自由成长不能指定导师。");
                 }
                 else
                 {
                     if (!TryMentorSpecialty(mentor, view.LearnerId, CurrentGameDate, out specialty))
-                        return new EducationPreview(false, "请选择一位存活且未退休的成年家族导师。",
-                            direction, mentor, string.Empty, view.Values, view.Values, string.Empty);
+                        return Failure(EducationScenarioProvider.MentorRequirementMessage(Succession));
                     effectiveMentor = mentor;
                 }
 
-                if (!CharacterGrowthRules.TryResolve(view.Values, direction, HasAptitude(view.LearnerId),
-                        AptitudeOf(view.LearnerId), specialty,
-                        IsSupportiveEnvironment(view.LearnerId),
+                if (!CharacterGrowthRules.TryResolve(view.Values, direction,
+                        EducationScenarioProvider.HasAptitude(Succession, view.LearnerId),
+                        EducationScenarioProvider.AptitudeOf(Succession, view.LearnerId), specialty,
+                        EducationScenarioProvider.IsSupportiveEnvironment(Succession, view.LearnerId),
                         out EducationYearResult resolved, out string error))
-                    return new EducationPreview(false, error, direction, mentor, string.Empty,
-                        view.Values, view.Values, string.Empty);
+                    return Failure(error);
 
                 string mentorName = effectiveMentor.IsEmpty
                     ? string.Empty
                     : Succession.World.TryGetPerson(effectiveMentor, out PersonState person)
                         ? person.DisplayName
                         : effectiveMentor.Value;
+                string roleLabel = effectiveMentor.IsEmpty
+                    ? string.Empty
+                    : EducationScenarioProvider.MentorRoleLabel(Succession, effectiveMentor);
                 return new EducationPreview(true, string.Empty, direction, effectiveMentor,
-                    mentorName, resolved.Before, resolved.After, resolved.Explanation);
+                    mentorName, specialty, roleLabel, resolved.Before, resolved.After,
+                    resolved.Explanation);
             }
             catch (Exception exception)
             {
-                return new EducationPreview(false, "培养预览失败：" + exception.Message, direction,
-                    mentor, string.Empty, view.Values, view.Values, string.Empty);
+                return Failure("培养预览失败：" + exception.Message);
             }
         }
 
@@ -933,8 +949,8 @@ namespace SengokuChronicle.Application
             // eligible (for example after the child turns 16). Only an otherwise valid
             // request is reported as Blocked by a pending event, succession or regency.
             int age = life.AgeAt(CurrentGameDate);
-            if (age < SC020EducationScenario.MinimumLearnerAge ||
-                age > SC020EducationScenario.MaximumLearnerAge)
+            if (age < EducationScenarioProvider.MinimumLearnerAge ||
+                age > EducationScenarioProvider.MaximumLearnerAge)
             {
                 LastEducationMessage = "培养对象已成年（" + age + " 岁），儿童年度培养已结束。";
                 return EducationPlanCommandResult.Failure(EducationPlanOutcome.InvalidAge,
@@ -967,7 +983,7 @@ namespace SengokuChronicle.Application
             }
             else if (!TryMentorSpecialty(mentor, learner, CurrentGameDate, out _))
             {
-                LastEducationMessage = "导师必须是存活、未退休的成年家族成员，且不能是培养对象本人。";
+                LastEducationMessage = EducationScenarioProvider.MentorRequirementMessage(Succession);
                 return EducationPlanCommandResult.Failure(EducationPlanOutcome.InvalidMentor,
                     LastEducationMessage);
             }
@@ -1498,14 +1514,10 @@ namespace SengokuChronicle.Application
             if (succession == null || succession.World == null)
                 return development;
 
-            bool sc020 = SC020EducationScenario.IsActive(succession);
             foreach (PersonState person in succession.World.Persons)
             {
-                CharacterGrowthValues values = sc020 && person.Id == SC020EducationScenario.ChildId
-                    ? CharacterGrowthValues.CreateClamped(SC020EducationScenario.ChildNinjutsu,
-                        SC020EducationScenario.ChildMartialArts, SC020EducationScenario.ChildScholarship,
-                        SC020EducationScenario.ChildManagement, SC020EducationScenario.ChildSocial)
-                    : CharacterGrowthValues.CreateClamped(0, 0, 0, 0, 0);
+                CharacterGrowthValues values = EducationScenarioProvider.InitialValuesFor(succession,
+                    person.Id);
                 development.TryAddPerson(person.Id, values, out _);
             }
             return development;
@@ -1522,26 +1534,34 @@ namespace SengokuChronicle.Application
                     !life.Alive)
                     continue;
                 int age = life.AgeAt(CurrentGameDate);
-                if (age >= SC020EducationScenario.MinimumLearnerAge &&
-                    age <= SC020EducationScenario.MaximumLearnerAge)
+                if (age >= EducationScenarioProvider.MinimumLearnerAge &&
+                    age <= EducationScenarioProvider.MaximumLearnerAge)
                     return true;
             }
             return false;
         }
 
         /// <summary>
-        /// One shared mentor rule for plan submission and settlement. The learner is never
-        /// its own mentor; the mentor must be a living, non-retired adult family member.
+        /// One shared mentor rule for preview, plan submission, settlement and save
+        /// validation. The learner is never its own mentor; a mentor must be a living adult
+        /// family member. SC-023 additionally admits its retired direct-kin former head,
+        /// proven by a real head handoff already recorded in the succession chronicle.
         /// </summary>
         private bool IsEligibleEducationMentor(PersonId mentorId, PersonId learnerId, GameDate date)
         {
             if (mentorId.IsEmpty || mentorId == learnerId || _succession == null ||
                 _succession.World == null ||
                 !_succession.World.Family.IsMember(mentorId) ||
-                !_succession.World.TryGetLife(mentorId, out SuccessionPersonLife life) ||
-                !life.Alive || life.Retired)
+                !_succession.World.Family.TryGetRole(mentorId, out FamilyMemberRole role) ||
+                !_succession.World.TryGetLife(mentorId, out SuccessionPersonLife life))
                 return false;
-            return life.IsAdultAt(date, _succession.AdulthoodAge);
+            string familyId = _succession.World.Family.Id.Value;
+            bool hasHeldHeadRole = EducationMentorRules.IsSeclusionScenario(familyId) &&
+                                   SuccessionHistory.HasHeldHeadRole(
+                                       EnsureHistoryLedger().Entries, mentorId);
+            return EducationMentorRules.IsEligible(familyId, mentorId,
+                learnerId, true, life.Alive, life.Retired, life.AgeAt(date),
+                _succession.AdulthoodAge, role, hasHeldHeadRole);
         }
 
         private bool TryMentorSpecialty(PersonId mentorId, PersonId learnerId, GameDate date,
@@ -1552,19 +1572,18 @@ namespace SengokuChronicle.Application
                 specialty = MentorSpecialty.None;
                 return false;
             }
-            specialty = SC020EducationScenario.SpecialtyOf(mentorId);
+            specialty = EducationScenarioProvider.SpecialtyOf(Succession, mentorId);
             return true;
         }
 
         private bool HasAptitude(PersonId personId) =>
-            SC020EducationScenario.IsActive(Succession) && SC020EducationScenario.IsChild(personId);
+            EducationScenarioProvider.HasAptitude(Succession, personId);
 
         private GrowthAttribute AptitudeOf(PersonId personId) =>
-            HasAptitude(personId) ? SC020EducationScenario.ChildAptitude : default;
+            EducationScenarioProvider.AptitudeOf(Succession, personId);
 
         private bool IsSupportiveEnvironment(PersonId personId) =>
-            SC020EducationScenario.IsActive(Succession) && SC020EducationScenario.IsChild(personId) &&
-            SC020EducationScenario.SupportiveEnvironment;
+            EducationScenarioProvider.IsSupportiveEnvironment(Succession, personId);
 
         private string LastIndustryChronicleSummary
         {
@@ -2350,8 +2369,8 @@ namespace SengokuChronicle.Application
                     !life.Alive)
                     continue;
                 int ageYear = life.AgeAt(previousDate);
-                if (ageYear < SC020EducationScenario.MinimumLearnerAge ||
-                    ageYear > SC020EducationScenario.MaximumLearnerAge ||
+                if (ageYear < EducationScenarioProvider.MinimumLearnerAge ||
+                    ageYear > EducationScenarioProvider.MaximumLearnerAge ||
                     working.HasResult(personId, ageYear))
                     continue;
 

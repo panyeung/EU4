@@ -9,20 +9,28 @@ namespace SengokuChronicle.Application
     /// <summary>One eligible adult family member shown as a mentor option.</summary>
     public readonly struct EducationMentorOption
     {
-        public EducationMentorOption(PersonId personId, string displayName, MentorSpecialty specialty)
+        public EducationMentorOption(PersonId personId, string displayName, MentorSpecialty specialty,
+            string roleLabel = null)
         {
             PersonId = personId;
             DisplayName = displayName ?? string.Empty;
             Specialty = specialty;
+            RoleLabel = roleLabel ?? string.Empty;
         }
 
         public PersonId PersonId { get; }
         public string DisplayName { get; }
         public MentorSpecialty Specialty { get; }
+        /// <summary>Optional human-readable role such as SC-023's retired former head.</summary>
+        public string RoleLabel { get; }
         public string SpecialtyName => CharacterGrowthRules.SpecialtyName(Specialty);
+        public string DisplayLabel =>
+            DisplayName +
+            (string.IsNullOrWhiteSpace(RoleLabel) ? string.Empty : "｜" + RoleLabel) +
+            "（" + SpecialtyName + "）";
     }
 
-    /// <summary>Read-only SC-020 education snapshot for the panel and tests.</summary>
+    /// <summary>Read-only child-education snapshot for the panel and tests.</summary>
     public sealed class EducationView
     {
         public bool HasLearner { get; private set; }
@@ -37,8 +45,12 @@ namespace SengokuChronicle.Application
         public bool HasPlan { get; private set; }
         public EducationYearPlan Plan { get; private set; }
         public string PlanMentorName { get; private set; } = string.Empty;
+        public MentorSpecialty PlanMentorSpecialty { get; private set; }
+        public string PlanMentorRoleLabel { get; private set; } = string.Empty;
         public bool HasResult { get; private set; }
         public EducationYearResult Result { get; private set; }
+        public string ResultMentorName { get; private set; } = string.Empty;
+        public string ResultMentorRoleLabel { get; private set; } = string.Empty;
         public string LastMessage { get; private set; } = string.Empty;
 
         public string ValuesLine => Values.ToString();
@@ -67,7 +79,10 @@ namespace SengokuChronicle.Application
                     string mentor = Plan.IsFreeGrowth
                         ? "无导师"
                         : PlanMentorName + "（" + CharacterGrowthRules
-                            .SpecialtyName(EducationSpecialty(Plan.Mentor)) + "）";
+                            .SpecialtyName(PlanMentorSpecialty) + "）" +
+                          (string.IsNullOrWhiteSpace(PlanMentorRoleLabel)
+                              ? string.Empty
+                              : "｜" + PlanMentorRoleLabel);
                     return "本年计划：" + CharacterGrowthRules.DirectionName(Plan.Direction) +
                            "／导师 " + mentor;
                 }
@@ -86,7 +101,10 @@ namespace SengokuChronicle.Application
                 string mentor = Result.Direction == EducationDirection.FreeGrowth ||
                                 Result.Mentor.IsEmpty
                     ? "无导师"
-                    : NameOf(Result.Mentor);
+                    : ResultMentorName +
+                      (string.IsNullOrWhiteSpace(ResultMentorRoleLabel)
+                          ? string.Empty
+                          : "（" + ResultMentorRoleLabel + "）");
                 return "最近结算：第 " + AgeYear.ToString(CultureInfo.InvariantCulture) + " 年 " +
                        CharacterGrowthRules.DirectionName(Result.Direction) + "／导师 " + mentor +
                        "｜" + Result.Explanation;
@@ -113,10 +131,10 @@ namespace SengokuChronicle.Application
             view.LearnerId = learner;
             view.LearnerName = NameOf(succession, learner);
             view.Age = age;
-            view.IsEligible = age >= SC020EducationScenario.MinimumLearnerAge &&
-                              age <= SC020EducationScenario.MaximumLearnerAge;
+            view.IsEligible = age >= EducationScenarioProvider.MinimumLearnerAge &&
+                              age <= EducationScenarioProvider.MaximumLearnerAge;
             view.AgeYear = view.IsEligible ? age : Math.Min(Math.Max(age, 0),
-                SC020EducationScenario.MaximumLearnerAge);
+                EducationScenarioProvider.MaximumLearnerAge);
             development.TryGetValues(learner, out CharacterGrowthValues values);
             view.Values = values;
 
@@ -126,6 +144,12 @@ namespace SengokuChronicle.Application
                 view.HasPlan = true;
                 view.Plan = plan;
                 view.PlanMentorName = plan.Mentor.IsEmpty ? string.Empty : NameOf(succession, plan.Mentor);
+                view.PlanMentorSpecialty = plan.Mentor.IsEmpty
+                    ? MentorSpecialty.None
+                    : EducationScenarioProvider.SpecialtyOf(succession, plan.Mentor);
+                view.PlanMentorRoleLabel = plan.Mentor.IsEmpty
+                    ? string.Empty
+                    : EducationScenarioProvider.MentorRoleLabel(succession, plan.Mentor);
             }
 
             if (development.TryGetResult(learner, view.AgeYear, out EducationYearResult result) ||
@@ -133,6 +157,12 @@ namespace SengokuChronicle.Application
             {
                 view.HasResult = true;
                 view.Result = result;
+                view.ResultMentorName = result.Mentor.IsEmpty
+                    ? string.Empty
+                    : NameOf(succession, result.Mentor);
+                view.ResultMentorRoleLabel = result.Mentor.IsEmpty
+                    ? string.Empty
+                    : EducationScenarioProvider.MentorRoleLabel(succession, result.Mentor);
             }
 
             return view;
@@ -161,8 +191,8 @@ namespace SengokuChronicle.Application
                 if (planOrResultLearner.IsEmpty && (hasPlan || hasResult))
                     planOrResultLearner = personId;
                 if (minorLearner.IsEmpty &&
-                    personAge >= SC020EducationScenario.MinimumLearnerAge &&
-                    personAge <= SC020EducationScenario.MaximumLearnerAge)
+                    personAge >= EducationScenarioProvider.MinimumLearnerAge &&
+                    personAge <= EducationScenarioProvider.MaximumLearnerAge)
                 {
                     minorLearner = personId;
                     minorAge = personAge;
@@ -213,31 +243,27 @@ namespace SengokuChronicle.Application
             return false;
         }
 
-        private static MentorSpecialty EducationSpecialty(PersonId mentorId) =>
-            SC020EducationScenario.SpecialtyOf(mentorId);
-
         private static string NameOf(SuccessionState succession, PersonId personId) =>
             succession.World.TryGetPerson(personId, out PersonState person) &&
             !string.IsNullOrWhiteSpace(person.DisplayName)
                 ? person.DisplayName
                 : personId.Value;
-
-        private static string NameOf(PersonId personId) =>
-            SC020EducationScenario.MentorName(personId);
     }
 
     /// <summary>Read-only preview of one education direction and mentor combination.</summary>
     public readonly struct EducationPreview
     {
         public EducationPreview(bool succeeded, string error, EducationDirection direction,
-            PersonId mentor, string mentorName, CharacterGrowthValues before,
-            CharacterGrowthValues after, string explanation)
+            PersonId mentor, string mentorName, MentorSpecialty specialty, string mentorRoleLabel,
+            CharacterGrowthValues before, CharacterGrowthValues after, string explanation)
         {
             Succeeded = succeeded;
             Error = error ?? string.Empty;
             Direction = direction;
             Mentor = mentor;
             MentorName = mentorName ?? string.Empty;
+            Specialty = specialty;
+            MentorRoleLabel = mentorRoleLabel ?? string.Empty;
             Before = before;
             After = after;
             Explanation = explanation ?? string.Empty;
@@ -248,6 +274,8 @@ namespace SengokuChronicle.Application
         public EducationDirection Direction { get; }
         public PersonId Mentor { get; }
         public string MentorName { get; }
+        public MentorSpecialty Specialty { get; }
+        public string MentorRoleLabel { get; }
         public CharacterGrowthValues Before { get; }
         public CharacterGrowthValues After { get; }
         public string Explanation { get; }
@@ -264,8 +292,16 @@ namespace SengokuChronicle.Application
                     .Append("｜导师 ")
                     .Append(Direction == EducationDirection.FreeGrowth || Mentor.IsEmpty
                         ? "无导师"
-                        : MentorName)
-                    .Append('｜');
+                        : MentorName);
+                if (Direction != EducationDirection.FreeGrowth && !Mentor.IsEmpty)
+                {
+                    builder.Append('（')
+                        .Append(CharacterGrowthRules.SpecialtyName(Specialty));
+                    if (!string.IsNullOrWhiteSpace(MentorRoleLabel))
+                        builder.Append('·').Append(MentorRoleLabel);
+                    builder.Append('）');
+                }
+                builder.Append('｜');
                 AppendAttribute(builder, GrowthAttribute.Ninjutsu);
                 AppendAttribute(builder, GrowthAttribute.MartialArts);
                 AppendAttribute(builder, GrowthAttribute.Scholarship);

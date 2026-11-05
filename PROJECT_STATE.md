@@ -167,6 +167,16 @@
 - 验证：在已打开的 Unity `6000.6.6f1` Editor 中通过 MCP relay 完成刷新与编译，动态命令编译/执行成功；P2 修正后 SC-022 聚焦回归 `70/70`（0 失败/跳过，`Logs/sc022-tests.txt` 与 `Logs/sc022-tests.xml`），其中 `FamilyFormationSessionTests` 12 项（含两个 append 失败回滚用例）。全量 EditMode `1098/1100` 为修正前历史证据，未在修正后重跑；两项失败为既有 SC-021 迁移消息顺序用例，非 SC-022 路径。修正后 Console 最近 15 条为 `2 errors / 2 warnings / 11 info`，4 条 error/warning 均为测试路径刻意触发（两个 `LogAssert.Expect` append 失败日志、两个生成器负向回滚 warning），不是回归。`FoundationSceneValidator` 修正后重跑：活动场景 `loaded=True dirty=False`，SC-022 行 `PASS`，整体 `FAIL; Errors: 4`；4 项均为既有缺口（SC-021 面板/根/标题引用未写入场景、SC-009 反馈条布局）。助手已在现有 Editor 执行 SC-022 Play Mode：标题入口、面板开关、多配偶、儿童/成年人收养、直系关系拒绝、存档数据捕获/恢复与编年史显示均通过；Console `0/0/0`，随后退出 Play Mode，场景 `dirty=False`。未截图或使用 Computer Use；用户验收待办。
 - 工作区：SC-018–SC-022 累计 checkpoint `714cb3a` 已推送至 `origin/main`；用户明确要求合并与 push。Play Mode 已通过助手运行，正式用户验收仍待明确确认。`SampleScene.unity`、`Assets/1.unity`、`Assets/1.unity.meta`、`ProjectSettings/SceneTemplateSettings.json`、`graphify-out/`、`nul` 保留在本地且未纳入提交；未改 `Library`、`Temp`、package manifest 或既有 `.meta` GUID。详见 `SC022_DEMO.md` 与 `docs/reports/sc022-implementation.md`。
 
+## SC-023 隐居与后见人（2026-11-05）
+
+- 范围：M3 的隐居/后见人纵向切片——原创橘家 `family.tachibana.sc023` 从 `1560-12-01` 开局，宗严 62 / 赖久 32 / 千代 10。玩家先把家督交给成年继承人赖久，再让退休为 `DirectKin` 的宗严担任千代的年度导师，经历 1560→1561 年结并查看成长与编年史。**不是完整 M3**；不含复职、离族、死亡模拟、独立后见人职位、双重权威或资源成本。
+- 规则：共享 `EducationMentorRules`。非退休导师保持「存活、成年、当前家族、非培养对象本人」；仅 SC-023 固定家族放宽退休前任家主，且必须已退休、家族角色 `DirectKin`、存活、成年，并由既有继承编年史的真实交接记录证明其曾任旧家主（`FromHeadId`）。退休但非前任家主的 `DirectKin` 不获得资格。SC-020 与其他场景不放宽。预览、导师列表、提交、年结和存档校验共用同一规则。
+- 数据：`SC023SeclusionScenario` 固定千代五项 `10/12/18/11/13`、资质学问、有利环境，宗严固定学问专长；`EducationScenarioProvider` 路由 SC-020/SC-023 的年龄、资质、环境、初始值与专长，其他场景使用中性值。学年结算仍只发生在 12→1 月事务中。
+- 存档：不新增字段、不升 schema，`saveFormatVersion` 保持 `8`、`rulesVersion` 保持 `4`。计划仍按既有 `mentorPersonId` 持久化；存档校验从既有 succession 编年史的 `fromHeadId` 派生前任家主证明。SC-023 可保留真实前任家主的失效计划并在年结按自由成长回退，但退休非前任家主的计划会被拒绝；SC-020 仍严格拒绝退休/失效导师。修正了既有回退结果与保留计划的一致性校验。
+- 场景/UI：教育面板复用 SC-020 的 `Canvas/SC020EducationRoot`，不新建第二套 UI。新增事务式 `AddSC023Seclusion`，仅添加标题入口 `SC023SeclusionDemoButton` 并绑定 `TitleScreenController.seclusionDemoButton`；复用单 Undo 组、保存前验证、Undo 回滚、不重载场景。`AddM6TitleScreen`/`AddSC013TitleScenarioButtons` 的标题子节点计数已接受该可选入口，`FoundationSceneValidator` 已接入 SC-023 行。
+- 验证边界：本 worker **未修改 `FoundationScene`**，未运行场景生成器、Validator、Unity 编译、EditMode、Console 或 Play Mode；仅完成静态源码检查。后续 P2/P3 修正加入「编年史证明前任家主」资格与 SC-013 恢复路径的 SC-023 计数；所有编译/测试/场景/Play Mode 证据仍 pending。SC-023 标题入口和 Validator 行在场景生成前预期失败。用户 Play Test 与验收 pending。详见 `SC023_DEMO.md` 与 `docs/reports/sc023-implementation.md`。
+- 工作区：`SampleScene.unity`、`Assets/1.unity`、`Assets/1.unity.meta`、`ProjectSettings/SceneTemplateSettings.json`、`graphify-out/`、`nul` 保留为本地用户 WIP；未合并、未提交、未推送、未打 tag。
+
 ## SC-004–SC-009 已接受 checkpoint
 
 - 提交：`c29d24a387ef73c5d3c5d80ea9148d7a6b45af54`。

@@ -67,7 +67,8 @@ namespace SengokuChronicle.Persistence
             if (data.development == null)
                 return Invalid("存档缺少人物成长状态（development）。");
             SaveOperationResult development = data.development.ValidateForSave(
-                new GameDate(data.year, data.month, data.day), data.succession);
+                new GameDate(data.year, data.month, data.day), data.succession,
+                FormerHeadIds(data.chronicle));
             if (!development.Succeeded)
                 return development;
 
@@ -456,7 +457,29 @@ namespace SengokuChronicle.Persistence
             if (data.development == null)
                 return Invalid("存档缺少人物成长状态（development）。");
             return data.development.ValidateForSave(
-                new GameDate(data.year, data.month, data.day), data.succession);
+                new GameDate(data.year, data.month, data.day), data.succession,
+                FormerHeadIds(data.chronicle));
+        }
+
+        /// <summary>
+        /// Stable former-head IDs proven by real handoff records in the saved chronicle.
+        /// This reuses the fields already written by <c>RecordSuccession</c>; it adds no
+        /// save field and does not infer a head role from retirement alone.
+        /// </summary>
+        internal static HashSet<string> FormerHeadIds(ChronicleSaveEntry[] entries)
+        {
+            var ids = new HashSet<string>(StringComparer.Ordinal);
+            if (entries == null)
+                return ids;
+            foreach (ChronicleSaveEntry entry in entries)
+            {
+                if (entry == null || entry.category != (int)ChronicleCategory.Succession)
+                    continue;
+                if (!SuccessionHistory.IsRealHeadHandoff(entry.fromHeadId, entry.toHeadId))
+                    continue;
+                ids.Add(entry.fromHeadId);
+            }
+            return ids;
         }
 
         /// <summary>
