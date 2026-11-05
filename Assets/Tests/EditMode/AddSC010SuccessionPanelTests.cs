@@ -219,6 +219,9 @@ namespace SengokuChronicle.Tests.EditMode
 
             Assert.That(panel.HeadSummary, Does.Contain("明智 正綱"));
             Assert.That(panel.StatusMessage, Does.Contain("上次继承"));
+            Assert.That(panel.StatusMessage, Does.Contain("明智 正綱"));
+            Assert.That(panel.StatusMessage, Does.Not.Contain("succession."),
+                "the status line must use the human-readable head label, not the raw result ID.");
             Assert.That(panel.IsModalVisible, Is.False);
             Assert.That(panel.RetireInteractable, Is.True,
                 "A completed handoff must leave retirement available for a new, distinct cycle.");

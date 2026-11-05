@@ -126,6 +126,9 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(panel.CostLine, Does.Not.Contain("每月消耗"));
             Assert.That(panel.TechniqueLine, Does.Contain("已记录"));
             Assert.That(panel.ProgressLine, Does.Contain("已完成"));
+            Assert.That(panel.ReportLine, Does.Contain("研究完成"));
+            Assert.That(panel.MessageVisible, Is.False,
+                "the completed settlement summary must not be rendered twice");
         }
 
         [Test]
