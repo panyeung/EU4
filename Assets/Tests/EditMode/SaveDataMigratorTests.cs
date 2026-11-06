@@ -68,8 +68,8 @@ namespace SengokuChronicle.Tests.EditMode
                 Assert.That(SaveDataMigrator.TryMigrate(parsed, json, out SaveData current,
                     out SaveOperationResult result), Is.True, result.Message);
 
-                Assert.That(current.saveFormatVersion, Is.EqualTo(8));
-                Assert.That(current.rulesVersion, Is.EqualTo(4));
+                Assert.That(current.saveFormatVersion, Is.EqualTo(SaveDataValidator.CurrentVersion));
+                Assert.That(current.rulesVersion, Is.EqualTo(SaveData.CurrentRulesVersion));
                 Assert.That(current.research, Is.Not.Null);
                 Assert.That(current.research.researchId, Is.Empty);
                 Assert.That(current.research.researcherPersonId, Is.Empty);
