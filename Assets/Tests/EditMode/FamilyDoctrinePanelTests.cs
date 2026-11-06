@@ -5,6 +5,7 @@ using NUnit.Framework;
 using SengokuChronicle.Application;
 using SengokuChronicle.Domain;
 using SengokuChronicle.Editor;
+using SengokuChronicle.Events;
 using SengokuChronicle.Persistence;
 using SengokuChronicle.Presentation;
 using UnityEditor.SceneManagement;
@@ -316,6 +317,90 @@ namespace SengokuChronicle.Tests.EditMode
 
             _session.InitFamilyDoctrineDemoScenario();
             Assert.That(panel.IsOpen, Is.False);
+        }
+
+        [Test]
+        public void Panel_NewHeadDoesNotInheritPreviousHeadsAmbitionFeedback()
+        {
+            FamilyDoctrinePanel panel = Panel();
+            panel.Open();
+            Assert.That(panel.MessageLine, Does.Contain("家主已选定抱负"),
+                "the opening head's own selection feedback must be visible first");
+
+            AdvanceToFirstSuccession();
+
+            Assert.That(_session.Succession.HeadPersonId, Is.EqualTo(M2FixedScenario.MasatsunaId));
+            Assert.That(_session.CurrentHeadAmbition, Is.Null,
+                "a new head must start without an inherited ambition");
+
+            panel.Open();
+            Assert.That(panel.HeadLine, Does.Contain("明智 正綱"));
+            Assert.That(panel.AmbitionLine, Does.Contain("尚未选定"));
+            for (int i = 0; i < panel.AmbitionChoiceCountValue; i++)
+                Assert.That(panel.AmbitionInteractable(i), Is.True);
+            Assert.That(panel.MessageVisible, Is.False,
+                "the previous head's selection feedback must not be shown under the new head");
+
+            panel.ClickPassDownTechnique();
+
+            Assert.That(panel.AmbitionCommitCount, Is.EqualTo(1));
+            Assert.That(_session.CurrentHeadAmbition, Is.Not.Null);
+            Assert.That(_session.CurrentHeadAmbition.Kind,
+                Is.EqualTo(FamilyAmbitionKind.PassDownTechnique));
+            Assert.That(panel.AmbitionLine, Does.Contain("传承家技"));
+            Assert.That(panel.AmbitionLine, Does.Contain("0/1"));
+            Assert.That(panel.MessageVisible, Is.True,
+                "the new head's own confirmation must be visible");
+            Assert.That(panel.MessageLine, Does.Contain("传承家技"));
+            for (int i = 0; i < panel.AmbitionChoiceCountValue; i++)
+                Assert.That(panel.AmbitionInteractable(i), Is.False);
+        }
+
+        [Test]
+        public void Panel_FirstOpenAfterSuccessionHidesPreviousHeadsFeedback()
+        {
+            FamilyDoctrinePanel panel = Panel();
+            Assert.That(panel.IsOpen, Is.False);
+
+            AdvanceToFirstSuccession();
+            Assert.That(_session.CurrentHeadAmbition, Is.Null);
+
+            panel.Open();
+            Assert.That(panel.HeadLine, Does.Contain("明智 正綱"));
+            Assert.That(panel.AmbitionLine, Does.Contain("尚未选定"));
+            Assert.That(panel.AmbitionInteractable(0), Is.True);
+            Assert.That(panel.MessageVisible, Is.False,
+                "feedback produced for the previous head must stay hidden on the first open");
+        }
+
+        private void AdvanceToFirstSuccession()
+        {
+            Assert.That(_session.TryAdvanceToNextMonth(), Is.True, _session.LastEventMessage);
+            Assert.That(_session.PendingEventId,
+                Is.EqualTo(SC024EventIds.RighteousnessCouncilEventId));
+            Choose(_session, SC024EventIds.RighteousnessKeepOptionId);
+
+            Assert.That(_session.TryAdvanceToNextMonth(), Is.True, _session.LastEventMessage);
+            Assert.That(_session.PendingEventId, Is.EqualTo(SC024EventIds.PledgeEventId));
+            Choose(_session, SC024EventIds.KeepPromiseOptionId);
+
+            Assert.That(_session.TryAdvanceToNextMonth(), Is.True, _session.LastEventMessage);
+            Assert.That(_session.PendingEventId, Is.EqualTo(SampleEventIds.EventId));
+            Choose(_session, SampleEventIds.OfferRestOptionId);
+
+            Assert.That(_session.CanBeginSuccessionRetirement, Is.True,
+                _session.SuccessionRetirementBlockReason);
+            SuccessionResult result = _session.BeginSuccessionRetirement();
+            Assert.That(result.Succeeded, Is.True, result.Message);
+        }
+
+        private static void Choose(GameSession session, string optionId)
+        {
+            string pending = session.PendingEventId;
+            Assert.That(pending, Is.Not.Empty);
+            EventChoiceResult result = session.TryChooseEventOption(pending, optionId,
+                session.CreateEventResultId(pending, optionId));
+            Assert.That(result.Succeeded, Is.True, result.Message);
         }
 
         private static readonly string[] AmbitionButtonNames =

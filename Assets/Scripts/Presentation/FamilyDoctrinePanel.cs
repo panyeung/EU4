@@ -40,6 +40,8 @@ namespace SengokuChronicle.Presentation
         private UnityAction _openListener;
         private UnityAction _closeListener;
         private int _ambitionButtonBindings;
+        private string _lastSessionMessage = string.Empty;
+        private PersonId _messageOwnerHeadId;
 
         public bool IsBound =>
             gameSession != null && panelRoot != null && openButton != null && closeButton != null &&
@@ -98,6 +100,8 @@ namespace SengokuChronicle.Presentation
             Button educateHeir)
         {
             Unsubscribe();
+            _lastSessionMessage = string.Empty;
+            _messageOwnerHeadId = default;
             gameSession = session;
             panelRoot = root;
             openButton = open;
@@ -158,8 +162,7 @@ namespace SengokuChronicle.Presentation
             ambitionText.text = view.AmbitionProgressLine;
             blockReasonText.text = view.BlockReason;
             blockReasonText.gameObject.SetActive(!string.IsNullOrWhiteSpace(view.BlockReason));
-            messageText.text = view.LastMessage;
-            messageText.gameObject.SetActive(!string.IsNullOrWhiteSpace(view.LastMessage));
+            RenderMessage(view);
 
             for (int i = 0; i < _ambitionButtons.Length && i < view.Ambitions.Count; i++)
             {
@@ -174,6 +177,44 @@ namespace SengokuChronicle.Presentation
             }
         }
 
+        /// <summary>
+        /// Projects the session's doctrine feedback only for the head that produced it.
+        /// The session keeps one transient message for the whole family, so without this
+        /// check the previous head's selection confirmation would still be shown after a
+        /// succession while the new head's own ambition is still unselected.
+        /// </summary>
+        private void RenderMessage(FamilyDoctrineView view)
+        {
+            TrackMessage(view.HeadId, view.LastMessage);
+            string visible = view.LastMessage ?? string.Empty;
+            if (visible.Length > 0 && !_messageOwnerHeadId.IsEmpty &&
+                !_messageOwnerHeadId.Equals(view.HeadId))
+                visible = string.Empty;
+
+            messageText.text = visible;
+            messageText.gameObject.SetActive(!string.IsNullOrWhiteSpace(visible));
+        }
+
+        /// <summary>
+        /// Remembers which head produced the current session message. It runs on every
+        /// session change, even while the panel is closed, so a confirmation raised before
+        /// the new head took over is still attributed to the old head when it is finally
+        /// projected.
+        /// </summary>
+        private void TrackMessage(PersonId headId, string message)
+        {
+            message = message ?? string.Empty;
+            if (string.Equals(message, _lastSessionMessage, StringComparison.Ordinal))
+                return;
+            _lastSessionMessage = message;
+            _messageOwnerHeadId = message.Length > 0 ? headId : default;
+        }
+
+        private PersonId CurrentHeadId() =>
+            gameSession != null && gameSession.Succession != null
+                ? gameSession.Succession.HeadPersonId
+                : default;
+
         public void ClickAmbition(int index)
         {
             EnsureButtons();
@@ -184,7 +225,8 @@ namespace SengokuChronicle.Presentation
                 return;
 
             AmbitionCommitCount++;
-            gameSession.TryStartCurrentHeadAmbition(view.Ambitions[index].Kind);
+            if (gameSession.TryStartCurrentHeadAmbition(view.Ambitions[index].Kind))
+                _messageOwnerHeadId = view.HeadId;
             if (IsOpen)
                 Refresh();
         }
@@ -299,6 +341,8 @@ namespace SengokuChronicle.Presentation
 
         private void OnSessionStateChanged()
         {
+            if (gameSession != null)
+                TrackMessage(CurrentHeadId(), gameSession.LastFamilyDoctrineMessage);
             // Entering SC-024 must not steal focus; the title entry only starts the route.
             if (IsOpen)
                 Refresh();
@@ -308,7 +352,11 @@ namespace SengokuChronicle.Presentation
         {
             Subscribe();
             if (UnityEngine.Application.isPlaying)
+            {
+                if (gameSession != null)
+                    TrackMessage(CurrentHeadId(), gameSession.LastFamilyDoctrineMessage);
                 Refresh();
+            }
         }
 
         private void OnDisable()
