@@ -706,13 +706,22 @@ namespace SengokuChronicle.Events
 
         /// <summary>
         /// Scenario-neutral rows are always eligible. A tagged row is eligible only in
-        /// exactly that scenario, so SC-013 events never leak into the SC-010 samples.
+        /// exactly that scenario, or in a scenario it explicitly shares through
+        /// <see cref="EventDefinitionData.sharedScenarios"/>. Sharing stays per-row, so
+        /// SC-013 events never leak wholesale into another route.
         /// </summary>
         private static bool ScenarioMatches(EventDefinitionData definition, EventRuleContext context)
         {
             if (string.IsNullOrWhiteSpace(definition.scenario))
                 return true;
-            return string.Equals(definition.scenario, context.ScenarioId, StringComparison.Ordinal);
+            if (string.Equals(definition.scenario, context.ScenarioId, StringComparison.Ordinal))
+                return true;
+            if (definition.sharedScenarios != null)
+                for (int i = 0; i < definition.sharedScenarios.Length; i++)
+                    if (string.Equals(definition.sharedScenarios[i], context.ScenarioId,
+                            StringComparison.Ordinal))
+                        return true;
+            return false;
         }
 
         private static bool TryNpc(string characterId, out CharacterId id)

@@ -16,6 +16,11 @@ namespace SengokuChronicle.Events
         public string eventId;
         /// <summary>Optional scenario gate; empty means the event is scenario-neutral.</summary>
         public string scenario;
+        /// <summary>
+        /// Additional scenarios that may schedule this row. Used sparingly for a row that
+        /// belongs to more than one route; it never makes the row scenario-neutral.
+        /// </summary>
+        public string[] sharedScenarios;
         public string trigger;
         public EventConditionData[] conditions;
         public int weight;

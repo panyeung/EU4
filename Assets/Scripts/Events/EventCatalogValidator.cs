@@ -76,6 +76,24 @@ namespace SengokuChronicle.Events
                     !string.Equals(definition.scenario, EventScenarioIds.Sc013, StringComparison.Ordinal) &&
                     !string.Equals(definition.scenario, EventScenarioIds.Sc024, StringComparison.Ordinal))
                     errors.Add($"Event {definition.eventId} has an unsupported scenario gate.");
+                if (definition.sharedScenarios != null)
+                {
+                    var sharedScenarios = new HashSet<string>(StringComparer.Ordinal);
+                    foreach (string sharedScenario in definition.sharedScenarios)
+                    {
+                        if (string.IsNullOrWhiteSpace(sharedScenario) ||
+                            (!string.Equals(sharedScenario, EventScenarioIds.Sc013, StringComparison.Ordinal) &&
+                             !string.Equals(sharedScenario, EventScenarioIds.Sc024, StringComparison.Ordinal)))
+                        {
+                            errors.Add($"Event {definition.eventId} has an unsupported shared scenario gate.");
+                            continue;
+                        }
+                        if (string.Equals(sharedScenario, definition.scenario, StringComparison.Ordinal))
+                            errors.Add($"Event {definition.eventId} repeats its primary scenario in sharedScenarios.");
+                        else if (!sharedScenarios.Add(sharedScenario))
+                            errors.Add($"Event {definition.eventId} repeats shared scenario {sharedScenario}.");
+                    }
+                }
                 RequireText(textById, definition.textId, $"event {definition.eventId}", errors);
 
                 if (definition.conditions != null)

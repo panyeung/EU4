@@ -243,6 +243,7 @@
     {
       "eventId": "event.sc013.finale",
       "scenario": "sc013",
+      "sharedScenarios": ["sc024"],
       "trigger": "Monthly",
       "conditions": [
         { "type": "SettledSuccessionCountAtLeast", "threshold": 2 }

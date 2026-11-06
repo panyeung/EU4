@@ -38,8 +38,9 @@ namespace SengokuChronicle.Events
         public int SuccessionCount { get; }
 
         /// <summary>
-        /// Active scenario ID. Scenario-tagged catalog rows are eligible only when this
-        /// matches their <c>scenario</c> field; empty keeps every scenario-neutral row.
+        /// Active scenario ID. Scenario-tagged catalog rows are eligible when this
+        /// matches their <c>scenario</c> field or one of their explicit
+        /// <c>sharedScenarios</c>; empty keeps every scenario-neutral row.
         /// </summary>
         public string ScenarioId { get; }
 
