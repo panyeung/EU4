@@ -43,6 +43,7 @@ namespace SengokuChronicle.Editor
             CharacterEducationPanel educationPanel = FindComponent<CharacterEducationPanel>(scene);
             FamilyResearchPanel researchPanel = FindComponent<FamilyResearchPanel>(scene);
             FamilyFormationPanel formationPanel = FindComponent<FamilyFormationPanel>(scene);
+            FamilyDoctrinePanel doctrinePanel = FindComponent<FamilyDoctrinePanel>(scene);
 
             CheckFound(report, ref errors, "Canvas", canvas);
             CheckFound(report, ref errors, "Canvas/M2WorldMapRoot", mapRoot);
@@ -62,6 +63,7 @@ namespace SengokuChronicle.Editor
             CheckFound(report, ref errors, "CharacterEducationPanel", educationPanel);
             CheckFound(report, ref errors, "FamilyResearchPanel", researchPanel);
             CheckFound(report, ref errors, "FamilyFormationPanel", formationPanel);
+            CheckFound(report, ref errors, "FamilyDoctrinePanel", doctrinePanel);
             if (!AddM4SupplyShortageMissionPanel.Validate(scene, out string missionError))
                 AddError(report, ref errors, missionError);
             else
@@ -126,6 +128,10 @@ namespace SengokuChronicle.Editor
                 AddError(report, ref errors, sc023Error);
             else
                 report.AppendLine("PASS SC-023 seclusion title entry, education-panel dependency, bindings, and layout.");
+            if (!AddSC024FamilyDoctrine.Validate(scene, out string sc024Error))
+                AddError(report, ref errors, sc024Error);
+            else
+                report.AppendLine("PASS SC-024 family-doctrine panel, title entry, bindings, containment, and layout.");
 
             if (controller != null)
             {
@@ -265,6 +271,16 @@ namespace SengokuChronicle.Editor
                     "adoptionMemberContainer", "adoptionMemberTemplate", "adoptionCandidateInfo",
                     "adoptionCandidateContainer", "adoptionCandidateTemplate",
                     "adoptionConfirmButton", "adoptionMessage");
+            }
+
+            if (doctrinePanel != null)
+            {
+                report.AppendLine("\nFAMILY DOCTRINE PANEL REFERENCES:");
+                CheckReferences(report, ref errors, doctrinePanel,
+                    "gameSession", "panelRoot", "openButton", "closeButton", "titleText",
+                    "creedText", "creedChoicesText", "effectText", "headText", "ambitionText",
+                    "blockReasonText", "messageText", "developHouseholdButton",
+                    "passDownTechniqueButton", "educateHeirButton");
             }
 
             report.AppendLine("\nHIERARCHY AND RECTTRANSFORMS:");

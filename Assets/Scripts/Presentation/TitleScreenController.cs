@@ -53,6 +53,10 @@ namespace SengokuChronicle.Presentation
         [SerializeField]
         private Button seclusionDemoButton;
 
+        [Header("SC-024 family doctrine entry")]
+        [SerializeField]
+        private Button familyDoctrineDemoButton;
+
         [SerializeField]
         private Text statusText;
 
@@ -85,6 +89,9 @@ namespace SengokuChronicle.Presentation
 
         /// <summary>True when the separate SC-023 seclusion entry is wired.</summary>
         public bool SeclusionScenarioBound => seclusionDemoButton != null;
+
+        /// <summary>True when the separate SC-024 family-doctrine entry is wired.</summary>
+        public bool FamilyDoctrineScenarioBound => familyDoctrineDemoButton != null;
 
         public void Bind(
             GameSession session,
@@ -139,6 +146,13 @@ namespace SengokuChronicle.Presentation
         public void BindSeclusionScenarioButton(Button seclusionDemo)
         {
             seclusionDemoButton = seclusionDemo;
+            BindButtons(isActiveAndEnabled);
+        }
+
+        /// <summary>Binds the separate SC-024 family-doctrine title entry.</summary>
+        public void BindFamilyDoctrineScenarioButton(Button familyDoctrineDemo)
+        {
+            familyDoctrineDemoButton = familyDoctrineDemo;
             BindButtons(isActiveAndEnabled);
         }
 
@@ -235,6 +249,13 @@ namespace SengokuChronicle.Presentation
                 if (add)
                     seclusionDemoButton.onClick.AddListener(OnSeclusionDemoButton);
             }
+
+            if (familyDoctrineDemoButton != null)
+            {
+                familyDoctrineDemoButton.onClick.RemoveListener(OnFamilyDoctrineDemoButton);
+                if (add)
+                    familyDoctrineDemoButton.onClick.AddListener(OnFamilyDoctrineDemoButton);
+            }
         }
 
         private void OnNewGameButton()
@@ -275,6 +296,11 @@ namespace SengokuChronicle.Presentation
         private void OnSeclusionDemoButton()
         {
             StartSeclusionDemo();
+        }
+
+        private void OnFamilyDoctrineDemoButton()
+        {
+            StartFamilyDoctrineDemo();
         }
 
         /// <summary>显示标题覆盖层。</summary>
@@ -458,6 +484,25 @@ namespace SengokuChronicle.Presentation
             HideTitle();
             LastOperationSucceeded = true;
             SetStatus("已开始 SC-023 隐居与后见人示范。");
+            return true;
+        }
+
+        /// <summary>Starts the separate fixed SC-024 family-creed and ambition demonstration.</summary>
+        public bool StartFamilyDoctrineDemo()
+        {
+            if (gameSession == null)
+            {
+                LastOperationSucceeded = false;
+                SetStatus("缺少 GameSession，无法进入家训与抱负示范。");
+                return false;
+            }
+
+            gameSession.InitFamilyDoctrineDemoScenario();
+            if (worldMapController != null)
+                worldMapController.ReturnToMap();
+            HideTitle();
+            LastOperationSucceeded = true;
+            SetStatus("已开始 SC-024 家训与抱负示范。");
             return true;
         }
 

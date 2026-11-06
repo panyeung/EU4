@@ -27,6 +27,7 @@ namespace SengokuChronicle.Editor
         public const string ResearchButtonName = "SC021ResearchDemoButton";
         public const string FamilyFormationButtonName = "SC022FamilyFormationDemoButton";
         public const string SeclusionButtonName = "SC023SeclusionDemoButton";
+        public const string FamilyDoctrineButtonName = "SC024FamilyDoctrineDemoButton";
         public const string MenuPath = "Tools/Sengoku Chronicle/Add SC-013 Title Scenario Buttons";
 
         private const string UndoName = "Add SC-013 Title Scenario Buttons";
@@ -100,10 +101,11 @@ namespace SengokuChronicle.Editor
             int optionalEntries = (Named(scene, EducationButtonName).Any() ? 1 : 0) +
                                   (Named(scene, ResearchButtonName).Any() ? 1 : 0) +
                                   (Named(scene, FamilyFormationButtonName).Any() ? 1 : 0) +
-                                  (Named(scene, SeclusionButtonName).Any() ? 1 : 0);
+                                  (Named(scene, SeclusionButtonName).Any() ? 1 : 0) +
+                                  (Named(scene, FamilyDoctrineButtonName).Any() ? 1 : 0);
             if (root.childCount != CompleteChildCount + optionalEntries)
                 return Invalid(out error,
-                    "M6TitleRoot must contain the four base controls, two SC-013 entries and at most one each of the SC-020/021/022/023 entries.");
+                    "M6TitleRoot must contain the four base controls, two SC-013 entries and at most one each of the SC-020/021/022/023/024 entries.");
             if (standard.parent != root || crisis.parent != root || status.parent != root)
                 return Invalid(out error, "SC-013 title entries and status text must be direct title-root children.");
             if (!standard.gameObject.activeSelf || !crisis.gameObject.activeSelf)
@@ -128,6 +130,33 @@ namespace SengokuChronicle.Editor
                 Overlaps(standardRect, crisisRect, rootRect) ||
                 Overlaps(crisisRect, statusRect, rootRect))
                 return Invalid(out error, "SC-013 title controls overlap or lie outside the title bounds.");
+
+            Transform familyDoctrine = Require(scene, FamilyDoctrineButtonName);
+            if (familyDoctrine != null)
+            {
+                if (familyDoctrine.parent != root || !familyDoctrine.gameObject.activeSelf)
+                    return Invalid(out error,
+                        "The SC-024 title entry must be active under M6TitleRoot.");
+                if (!ValidButton(familyDoctrine))
+                    return Invalid(out error, "The SC-024 title entry button is invalid.");
+                if (!Bound(controller, "familyDoctrineDemoButton",
+                        familyDoctrine.GetComponent<Button>()))
+                    return Invalid(out error,
+                        "TitleScreenController SC-024 reference is not bound.");
+                RectTransform doctrineRect = familyDoctrine as RectTransform;
+                if (doctrineRect == null || !Contained(doctrineRect, rootRect))
+                    return Invalid(out error,
+                        "The SC-024 title entry lies outside M6TitleRoot.");
+                if (Overlaps(doctrineRect, standardRect, rootRect) ||
+                    Overlaps(doctrineRect, crisisRect, rootRect) ||
+                    Overlaps(doctrineRect, statusRect, rootRect) ||
+                    OverlapsNamed(scene, doctrineRect, EducationButtonName, rootRect) ||
+                    OverlapsNamed(scene, doctrineRect, ResearchButtonName, rootRect) ||
+                    OverlapsNamed(scene, doctrineRect, FamilyFormationButtonName, rootRect) ||
+                    OverlapsNamed(scene, doctrineRect, SeclusionButtonName, rootRect))
+                    return Invalid(out error,
+                        "The SC-024 title entry overlaps another title control.");
+            }
             return true;
         }
 
@@ -157,7 +186,8 @@ namespace SengokuChronicle.Editor
             int optionalEntries = (Named(scene, EducationButtonName).Any() ? 1 : 0) +
                                   (Named(scene, ResearchButtonName).Any() ? 1 : 0) +
                                   (Named(scene, FamilyFormationButtonName).Any() ? 1 : 0) +
-                                  (Named(scene, SeclusionButtonName).Any() ? 1 : 0);
+                                  (Named(scene, SeclusionButtonName).Any() ? 1 : 0) +
+                                  (Named(scene, FamilyDoctrineButtonName).Any() ? 1 : 0);
             if (root.childCount != BaseChildCount + optionalEntries)
                 return UpdateResult.InvalidHierarchyOrBindings;
 
@@ -188,7 +218,8 @@ namespace SengokuChronicle.Editor
                 // below it, which would leave the title bounds and fail validation.
                 bool hasLowerScenarioEntry = Named(scene, EducationButtonName).Any() ||
                                              Named(scene, ResearchButtonName).Any() ||
-                                             Named(scene, SeclusionButtonName).Any();
+                                             Named(scene, SeclusionButtonName).Any() ||
+                                             Named(scene, FamilyDoctrineButtonName).Any();
                 statusRect.anchoredPosition = new Vector2(0f, hasLowerScenarioEntry ? -330f : -260f);
                 EditorUtility.SetDirty(statusRect);
 
@@ -317,6 +348,14 @@ namespace SengokuChronicle.Editor
                 Vector3 point = parent.InverseTransformPoint(corner);
                 return bounds.Contains(new Vector2(point.x, point.y));
             });
+        }
+
+        private static bool OverlapsNamed(Scene scene, RectTransform first, string secondName,
+            RectTransform coordinateRoot)
+        {
+            Transform second = Require(scene, secondName);
+            return second is RectTransform secondRect && first != null &&
+                   Overlaps(first, secondRect, coordinateRoot);
         }
 
         private static bool Overlaps(RectTransform first, RectTransform second, RectTransform coordinateRoot)

@@ -30,6 +30,7 @@ namespace SengokuChronicle.Editor
         public const string ResearchDemoButtonName = "SC021ResearchDemoButton";
         public const string FamilyFormationDemoButtonName = "SC022FamilyFormationDemoButton";
         public const string SeclusionDemoButtonName = "SC023SeclusionDemoButton";
+        public const string FamilyDoctrineDemoButtonName = "SC024FamilyDoctrineDemoButton";
 
         private const string MapRootName = "M2WorldMapRoot";
         private const string TownRootName = "TownMenuRoot";
@@ -143,11 +144,12 @@ namespace SengokuChronicle.Editor
             bool hasResearchDemo = root.Find(ResearchDemoButtonName) != null;
             bool hasFamilyFormationDemo = root.Find(FamilyFormationDemoButtonName) != null;
             bool hasSeclusionDemo = root.Find(SeclusionDemoButtonName) != null;
+            bool hasFamilyDoctrineDemo = root.Find(FamilyDoctrineDemoButtonName) != null;
             if (hasStandardSample != hasCrisisDemo)
                 return Invalid(out error, "SC-013 title scenario buttons must be added as a pair.");
             int expectedChildren = 4 + (hasStandardSample ? 2 : 0) + (hasEducationDemo ? 1 : 0) +
                                    (hasResearchDemo ? 1 : 0) + (hasFamilyFormationDemo ? 1 : 0) +
-                                   (hasSeclusionDemo ? 1 : 0);
+                                   (hasSeclusionDemo ? 1 : 0) + (hasFamilyDoctrineDemo ? 1 : 0);
             if (root.childCount != expectedChildren)
                 return Invalid(out error,
                     "M6 title root must have the four base controls plus any added scenario entries.");
