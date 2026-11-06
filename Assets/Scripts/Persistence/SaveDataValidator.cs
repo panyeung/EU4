@@ -10,7 +10,7 @@ namespace SengokuChronicle.Persistence
     /// </summary>
     public static class SaveDataValidator
     {
-        public const int CurrentVersion = 8;
+        public const int CurrentVersion = 9;
 
         public static SaveOperationResult Validate(SaveData data)
         {
@@ -79,6 +79,17 @@ namespace SengokuChronicle.Persistence
             if (!research.Succeeded)
                 return research;
 
+            if (data.familyDoctrine == null)
+                return Invalid("存档缺少家训与抱负状态（familyDoctrine）。");
+            SaveOperationResult doctrine = data.familyDoctrine.ValidateForSave(data.succession,
+                data.research.knownTechniqueIds);
+            if (!doctrine.Succeeded)
+                return doctrine;
+
+            SaveOperationResult route = ValidateEventScenarioRoute(data.activeEventScenarioId);
+            if (!route.Succeeded)
+                return route;
+
             SaveOperationResult chronicle = ValidateChronicle(data.chronicle);
             if (!chronicle.Succeeded)
                 return chronicle;
@@ -114,7 +125,7 @@ namespace SengokuChronicle.Persistence
             if (probe.saveFormatVersion != 2 && probe.saveFormatVersion != 3 &&
                 probe.saveFormatVersion != 4 && probe.saveFormatVersion != 5 &&
                 probe.saveFormatVersion != 6 && probe.saveFormatVersion != 7 &&
-                probe.saveFormatVersion != CurrentVersion)
+                probe.saveFormatVersion != 8 && probe.saveFormatVersion != CurrentVersion)
                 return SaveOperationResult.Failure(
                     SaveErrorCode.UnsupportedVersion,
                     $"不支持的存档版本：{probe.saveFormatVersion}（当前版本 {CurrentVersion}）。");
@@ -133,11 +144,17 @@ namespace SengokuChronicle.Persistence
                 HasRootProperty(json, "industry"))
                 return Invalid("旧版存档包含产业状态（industry）；迁移不会静默替换该数据。");
             if (probe.saveFormatVersion >= 2 && probe.saveFormatVersion < CurrentVersion &&
-                HasNonNullRootProperty(json, "development"))
+                HasNonNullRootProperty(json, "development") && probe.saveFormatVersion < 7)
                 return Invalid("旧版存档包含人物成长状态（development）；迁移不会静默替换该数据。");
             if (probe.saveFormatVersion >= 2 && probe.saveFormatVersion < CurrentVersion &&
-                HasRootProperty(json, "research"))
+                HasRootProperty(json, "research") && probe.saveFormatVersion < 8)
                 return Invalid("旧版存档包含家族研究状态（research）；迁移不会静默替换该数据。");
+            if (probe.saveFormatVersion >= 2 && probe.saveFormatVersion < CurrentVersion &&
+                HasRootProperty(json, "familyDoctrine"))
+                return Invalid("旧版存档包含 v9 家训与抱负状态（familyDoctrine）；迁移不会静默替换该数据。");
+            if (probe.saveFormatVersion >= 2 && probe.saveFormatVersion < CurrentVersion &&
+                HasRootProperty(json, "activeEventScenarioId"))
+                return Invalid("旧版存档包含 v9 活动事件路线（activeEventScenarioId）；迁移不会静默替换该数据。");
 
             if (string.IsNullOrWhiteSpace(probe.gameVersion) || probe.rulesVersion <= 0 ||
                 probe.eventContentVersion <= 0)
@@ -166,10 +183,17 @@ namespace SengokuChronicle.Persistence
                 (probe.development == null ||
                  (!string.IsNullOrEmpty(json) && !HasNonNullRootProperty(json, "development"))))
                 return Invalid("存档缺少人物成长状态（development）。");
-            if (probe.saveFormatVersion == CurrentVersion &&
+            if (probe.saveFormatVersion >= 8 &&
                 (probe.research == null ||
                  (!string.IsNullOrEmpty(json) && !HasNonNullRootProperty(json, "research"))))
                 return Invalid("存档缺少家族研究状态（research）。");
+            if (probe.saveFormatVersion == CurrentVersion &&
+                (probe.familyDoctrine == null ||
+                 (!string.IsNullOrEmpty(json) && !HasNonNullRootProperty(json, "familyDoctrine"))))
+                return Invalid("存档缺少家训与抱负状态（familyDoctrine）。");
+            if (probe.saveFormatVersion == CurrentVersion &&
+                (!string.IsNullOrEmpty(json) && !HasNonNullRootProperty(json, "activeEventScenarioId")))
+                return Invalid("存档缺少活动事件路线（activeEventScenarioId）。");
 
             return SaveOperationResult.Success();
         }
@@ -459,6 +483,39 @@ namespace SengokuChronicle.Persistence
             return data.development.ValidateForSave(
                 new GameDate(data.year, data.month, data.day), data.succession,
                 FormerHeadIds(data.chronicle));
+        }
+
+        /// <summary>
+        /// v8 owns every block except the SC-024 doctrine and active event route. The
+        /// migrator keeps the research snapshot and adds the documented doctrine default
+        /// without replaying any month.
+        /// </summary>
+        internal static SaveOperationResult ValidateLegacyV8Fields(SaveData data)
+        {
+            SaveOperationResult legacy = ValidateLegacyV7Fields(data);
+            if (!legacy.Succeeded)
+                return legacy;
+            if (data.research == null)
+                return Invalid("存档缺少家族研究状态（research）。");
+            return data.research.ValidateForSave(
+                new GameDate(data.year, data.month, data.day), data.succession);
+        }
+
+        /// <summary>
+        /// Only the two known scenario gates and the empty SC-010/no-route value are
+        /// accepted. An unknown route would silently alter which saved event history can
+        /// be restored, so it is rejected instead of normalized.
+        /// </summary>
+        internal static SaveOperationResult ValidateEventScenarioRoute(string route)
+        {
+            if (route == null)
+                return Invalid("存档缺少活动事件路线（activeEventScenarioId）。");
+            if (route.Length == 0 ||
+                string.Equals(route, SaveData.Sc013EventScenarioId, StringComparison.Ordinal) ||
+                string.Equals(route, SaveData.Sc024EventScenarioId, StringComparison.Ordinal))
+                return SaveOperationResult.Success();
+
+            return Invalid("存档活动事件路线 ID 未知：" + route + "。");
         }
 
         /// <summary>

@@ -53,21 +53,85 @@ namespace SengokuChronicle.Persistence
                         "v6 存档缺少产业状态（industry）；迁移不会用初始状态静默替换。");
                     return false;
                 }
-                if (SaveDataValidator.HasNonNullRootProperty(rawJson, "development"))
+                if (legacy.saveFormatVersion < 7 &&
+                    SaveDataValidator.HasNonNullRootProperty(rawJson, "development"))
                 {
                     result = SaveOperationResult.Failure(SaveErrorCode.InvalidData,
                         "旧版存档包含人物成长状态（development）；迁移不会静默替换该数据。");
                     return false;
                 }
-                if (SaveDataValidator.HasRootProperty(rawJson, "research"))
+                if (legacy.saveFormatVersion < 8 &&
+                    SaveDataValidator.HasRootProperty(rawJson, "research"))
                 {
                     result = SaveOperationResult.Failure(SaveErrorCode.InvalidData,
                         "旧版存档包含家族研究状态（research）；迁移不会静默替换该数据。");
                     return false;
                 }
+                if (SaveDataValidator.HasRootProperty(rawJson, "familyDoctrine"))
+                {
+                    result = SaveOperationResult.Failure(SaveErrorCode.InvalidData,
+                        "旧版存档包含 v9 家训与抱负状态（familyDoctrine）；迁移不会静默替换该数据。");
+                    return false;
+                }
+                if (SaveDataValidator.HasRootProperty(rawJson, "activeEventScenarioId"))
+                {
+                    result = SaveOperationResult.Failure(SaveErrorCode.InvalidData,
+                        "旧版存档包含 v9 活动事件路线（activeEventScenarioId）；迁移不会静默替换该数据。");
+                    return false;
+                }
             }
 
             if (legacy.saveFormatVersion == SaveDataValidator.CurrentVersion)
+            {
+                if (legacy.industry == null ||
+                    (!string.IsNullOrEmpty(rawJson) &&
+                     !SaveDataValidator.HasNonNullRootProperty(rawJson, "industry")))
+                {
+                    result = SaveOperationResult.Failure(SaveErrorCode.InvalidData,
+                        "v9 存档缺少产业状态（industry）；不会用初始状态静默替换。");
+                    return false;
+                }
+                if (legacy.development == null ||
+                    (!string.IsNullOrEmpty(rawJson) &&
+                     !SaveDataValidator.HasNonNullRootProperty(rawJson, "development")))
+                {
+                    result = SaveOperationResult.Failure(SaveErrorCode.InvalidData,
+                        "v9 存档缺少人物成长状态（development）；不会用空记录静默替换。");
+                    return false;
+                }
+                if (legacy.research == null ||
+                    (!string.IsNullOrEmpty(rawJson) &&
+                     !SaveDataValidator.HasNonNullRootProperty(rawJson, "research")))
+                {
+                    result = SaveOperationResult.Failure(SaveErrorCode.InvalidData,
+                        "v9 存档缺少家族研究状态（research）；不会用空记录静默替换。");
+                    return false;
+                }
+                if (legacy.familyDoctrine == null ||
+                    (!string.IsNullOrEmpty(rawJson) &&
+                     !SaveDataValidator.HasNonNullRootProperty(rawJson, "familyDoctrine")))
+                {
+                    result = SaveOperationResult.Failure(SaveErrorCode.InvalidData,
+                        "v9 存档缺少家训与抱负状态（familyDoctrine）；不会用默认家训静默替换。");
+                    return false;
+                }
+                if (legacy.activeEventScenarioId == null ||
+                    (!string.IsNullOrEmpty(rawJson) &&
+                     !SaveDataValidator.HasRootProperty(rawJson, "activeEventScenarioId")))
+                {
+                    result = SaveOperationResult.Failure(SaveErrorCode.InvalidData,
+                        "v9 存档缺少活动事件路线（activeEventScenarioId）；不会用空路线静默替换。");
+                    return false;
+                }
+
+                current = Clone(legacy);
+                result = SaveDataValidator.Validate(current);
+                if (!result.Succeeded)
+                    current = null;
+                return result.Succeeded;
+            }
+
+            if (legacy.saveFormatVersion == 8)
             {
                 if (legacy.industry == null ||
                     (!string.IsNullOrEmpty(rawJson) &&
@@ -94,7 +158,17 @@ namespace SengokuChronicle.Persistence
                     return false;
                 }
 
+                result = SaveDataValidator.ValidateLegacyV8Fields(legacy);
+                if (!result.Succeeded)
+                    return false;
+
                 current = Clone(legacy);
+                current.saveFormatVersion = SaveDataValidator.CurrentVersion;
+                current.rulesVersion = SaveData.CurrentRulesVersion;
+                // v8 predates SC-024. Migration adds only the approved default creed,
+                // no ambitions and no active SC-024 route; no month is replayed.
+                current.familyDoctrine = FamilyDoctrineSaveData.CreateDefault();
+                current.activeEventScenarioId = string.Empty;
                 result = SaveDataValidator.Validate(current);
                 if (!result.Succeeded)
                     current = null;
@@ -138,6 +212,8 @@ namespace SengokuChronicle.Persistence
                 // historical research month or writes a chronicle record.
                 current.research = FamilyResearchSaveData.CreateInitial(
                     new GameDate(legacy.year, legacy.month, legacy.day));
+                current.familyDoctrine = FamilyDoctrineSaveData.CreateDefault();
+                current.activeEventScenarioId = string.Empty;
                 result = SaveDataValidator.Validate(current);
                 if (!result.Succeeded)
                     current = null;
@@ -173,6 +249,8 @@ namespace SengokuChronicle.Persistence
                 current.development = CharacterDevelopmentSaveData.CreateEmpty(legacy.succession);
                 current.research = FamilyResearchSaveData.CreateInitial(
                     new GameDate(legacy.year, legacy.month, legacy.day));
+                current.familyDoctrine = FamilyDoctrineSaveData.CreateDefault();
+                current.activeEventScenarioId = string.Empty;
                 result = SaveDataValidator.Validate(current);
                 if (!result.Succeeded)
                     current = null;
@@ -203,6 +281,8 @@ namespace SengokuChronicle.Persistence
                 current.development = CharacterDevelopmentSaveData.CreateEmpty(current.succession);
                 current.research = FamilyResearchSaveData.CreateInitial(
                     new GameDate(legacy.year, legacy.month, legacy.day));
+                current.familyDoctrine = FamilyDoctrineSaveData.CreateDefault();
+                current.activeEventScenarioId = string.Empty;
                 result = SaveDataValidator.Validate(current);
                 if (!result.Succeeded)
                     current = null;
@@ -234,6 +314,8 @@ namespace SengokuChronicle.Persistence
                 current.development = CharacterDevelopmentSaveData.CreateEmpty(current.succession);
                 current.research = FamilyResearchSaveData.CreateInitial(
                     new GameDate(legacy.year, legacy.month, legacy.day));
+                current.familyDoctrine = FamilyDoctrineSaveData.CreateDefault();
+                current.activeEventScenarioId = string.Empty;
                 result = SaveDataValidator.Validate(current);
                 if (!result.Succeeded)
                     current = null;
@@ -294,7 +376,9 @@ namespace SengokuChronicle.Persistence
                     development = CharacterDevelopmentSaveData.CreateEmpty(
                         legacy.succession != null ? legacy.succession : SuccessionSaveData.CreateDefault()),
                     research = FamilyResearchSaveData.CreateInitial(
-                        new GameDate(legacy.year, legacy.month, legacy.day))
+                        new GameDate(legacy.year, legacy.month, legacy.day)),
+                    familyDoctrine = FamilyDoctrineSaveData.CreateDefault(),
+                    activeEventScenarioId = string.Empty
                 };
 
                 result = SaveDataValidator.Validate(current);
@@ -370,7 +454,9 @@ namespace SengokuChronicle.Persistence
                     development = CharacterDevelopmentSaveData.CreateEmpty(
                         SuccessionSaveData.CreateDefault()),
                     research = FamilyResearchSaveData.CreateInitial(
-                        new GameDate(legacy.year, legacy.month, legacy.day))
+                        new GameDate(legacy.year, legacy.month, legacy.day)),
+                    familyDoctrine = FamilyDoctrineSaveData.CreateDefault(),
+                    activeEventScenarioId = string.Empty
                 };
 
                 result = SaveDataValidator.Validate(current);
@@ -383,7 +469,7 @@ namespace SengokuChronicle.Persistence
             {
                 result = SaveOperationResult.Failure(
                     SaveErrorCode.UnsupportedVersion,
-                    $"不支持的存档版本：{legacy.saveFormatVersion}（仅支持 v1–v7 迁移到 v{SaveDataValidator.CurrentVersion}）。");
+                    $"不支持的存档版本：{legacy.saveFormatVersion}（仅支持 v1–v8 迁移到 v{SaveDataValidator.CurrentVersion}）。");
                 return false;
             }
 
@@ -420,7 +506,9 @@ namespace SengokuChronicle.Persistence
                     new GameDate(legacy.year, legacy.month, legacy.day)),
                 development = CharacterDevelopmentSaveData.CreateEmpty(SuccessionSaveData.CreateDefault()),
                 research = FamilyResearchSaveData.CreateInitial(
-                    new GameDate(legacy.year, legacy.month, legacy.day))
+                    new GameDate(legacy.year, legacy.month, legacy.day)),
+                familyDoctrine = FamilyDoctrineSaveData.CreateDefault(),
+                activeEventScenarioId = string.Empty
             };
 
             result = SaveDataValidator.Validate(current);
@@ -456,7 +544,9 @@ namespace SengokuChronicle.Persistence
                 // payload instead of silently repairing it with opening values.
                 industry = source.industry != null ? source.industry.Clone() : null,
                 development = source.development != null ? source.development.Clone() : null,
-                research = source.research != null ? source.research.Clone() : null
+                research = source.research != null ? source.research.Clone() : null,
+                familyDoctrine = source.familyDoctrine != null ? source.familyDoctrine.Clone() : null,
+                activeEventScenarioId = source.activeEventScenarioId
             };
             return clone;
         }

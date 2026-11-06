@@ -31,7 +31,7 @@ namespace SengokuChronicle.Tests.EditMode
         {
             SaveData data = _session.CaptureSave();
 
-            Assert.That(data.saveFormatVersion, Is.EqualTo(8),
+            Assert.That(data.saveFormatVersion, Is.EqualTo(SaveDataValidator.CurrentVersion),
                 "SC-022 reuses the existing save schema");
             Assert.That(data.succession.persons.Any(person =>
                 person.personId == SC022FamilyFormationScenario.MarriageCandidateOneId.Value),

@@ -1730,8 +1730,21 @@ namespace SengokuChronicle.Application
                 chronicle = ChronicleSaveCodec.Capture(EnsureHistoryLedger()),
                 industry = IndustryStateSaveData.Capture(EnsureIndustryState()),
                 development = CharacterDevelopmentSaveData.Capture(EnsureDevelopment()),
-                research = FamilyResearchSaveData.Capture(EnsureResearch())
+                research = FamilyResearchSaveData.Capture(EnsureResearch()),
+                familyDoctrine = FamilyDoctrineSaveData.Capture(EnsureFamilyDoctrine()),
+                activeEventScenarioId = _eventScenarioId ?? string.Empty
             };
+        }
+
+        /// <summary>
+        /// Accepts the active content version and older additive versions. Future
+        /// versions are rejected because this build cannot know their extra events.
+        /// </summary>
+        private bool IsCompatibleEventContentVersion(int savedVersion)
+        {
+            if (_eventCatalog == null || savedVersion <= 0)
+                return false;
+            return savedVersion <= _eventCatalog.contentVersion;
         }
 
         /// <summary>
@@ -1750,9 +1763,7 @@ namespace SengokuChronicle.Application
                 return InvalidSave("存档日期无效。");
             if (_eventEngine == null)
                 return InvalidSave(string.IsNullOrEmpty(LastEventMessage) ? "事件目录不可用。" : LastEventMessage);
-            if (_eventCatalog == null ||
-                (data.eventContentVersion != _eventCatalog.contentVersion &&
-                 !(data.eventContentVersion == 1 && _eventCatalog.contentVersion == 2)))
+            if (_eventCatalog == null || !IsCompatibleEventContentVersion(data.eventContentVersion))
                 return InvalidSave("存档事件内容版本与当前目录不匹配。");
             if (!SuccessionSaveData.TryRestore(data.succession, date,
                     out SuccessionState succession, out string successionError))
@@ -1770,7 +1781,22 @@ namespace SengokuChronicle.Application
                 return InvalidSave(string.IsNullOrEmpty(researchError)
                     ? "存档家族研究状态无效。"
                     : researchError);
-            if (!_eventEngine.TryRestoreState(data.eventRuntime, date, BuildEventRuleContext(succession),
+            if (!FamilyDoctrineSaveData.TryRestore(data.familyDoctrine, data.succession,
+                    data.research.knownTechniqueIds,
+                    out FamilyDoctrineState familyDoctrine, out string doctrineError))
+                return InvalidSave(string.IsNullOrEmpty(doctrineError)
+                    ? "存档家训与抱负状态无效。"
+                    : doctrineError);
+
+            // Resolve and validate the saved route before the event runtime, so SC-024
+            // history is accepted only in the matching sc024 route. SC-024 reuses the
+            // M2 roster, so a tagged route is valid only for that fixed family.
+            string eventScenarioId = data.activeEventScenarioId ?? string.Empty;
+            if (eventScenarioId.Length > 0 && !M2FixedScenario.IsActive(succession))
+                return InvalidSave("存档活动事件路线与当前家族不符。");
+
+            if (!_eventEngine.TryRestoreState(data.eventRuntime, date,
+                    BuildEventRuleContext(succession, eventScenarioId),
                     out EventRuntimeState eventRuntime, out string eventError))
                 return InvalidSave(string.IsNullOrEmpty(eventError) ? "存档事件状态无效。" : eventError);
             if (!ChronicleSaveCodec.TryRestore(data.chronicle,
@@ -1841,10 +1867,8 @@ namespace SengokuChronicle.Application
             _industryState = industry;
             _development = development;
             _researchState = research;
-            // Until the v9 doctrine block exists, a loaded v8 or earlier save starts
-            // with the documented default doctrine and no SC-024 scenario route.
-            _familyDoctrine = new FamilyDoctrineState();
-            _eventScenarioId = string.Empty;
+            _familyDoctrine = familyDoctrine;
+            _eventScenarioId = eventScenarioId;
             LastFamilyDoctrineMessage = string.Empty;
             LastIndustryReport = null;
             LastIndustryMessage = string.Empty;

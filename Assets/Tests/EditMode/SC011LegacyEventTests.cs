@@ -357,7 +357,7 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
-        public void ContentOneSaveLoadsAdditivelyAndIsRewrittenAsTwo()
+        public void ContentOneSaveLoadsAdditivelyAndIsRewrittenAsCurrent()
         {
             CompleteRoot(SampleEventIds.OfferRestOptionId);
             HandOffToMasatsuna();
@@ -369,7 +369,7 @@ namespace SengokuChronicle.Tests.EditMode
 
             Assert.That(loaded.Succeeded, Is.True, loaded.Message);
             Assert.That(_session.PendingEventId, Is.EqualTo(SC011EventIds.LegacyHonoredEventId));
-            Assert.That(_session.CaptureSave().eventContentVersion, Is.EqualTo(2));
+            Assert.That(_session.CaptureSave().eventContentVersion, Is.EqualTo(3));
         }
 
         [Test]
@@ -390,11 +390,11 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
-        public void UnknownContentVersionThreeRejectsWithoutChangingTheSession()
+        public void UnknownFutureContentVersionRejectsWithoutChangingTheSession()
         {
             HandOffToMasatsuna();
             SaveData future = _session.CaptureSave();
-            future.eventContentVersion = 3;
+            future.eventContentVersion = SaveData.CurrentEventContentVersion + 1;
             GameDate date = _session.WorldClock.CurrentDate;
 
             SaveOperationResult loaded = _session.TryApplySave(future);

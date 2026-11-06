@@ -228,8 +228,8 @@ namespace SengokuChronicle.Tests.EditMode
             EventCatalogData catalog = LoadCatalog();
             EventTextCatalog text = LoadText();
 
-            Assert.That(catalog.contentVersion, Is.EqualTo(2));
-            Assert.That(text.contentVersion, Is.EqualTo(2));
+            Assert.That(catalog.contentVersion, Is.EqualTo(3));
+            Assert.That(text.contentVersion, Is.EqualTo(3));
             EventCatalogValidationResult result = EventCatalogValidator.Validate(catalog, text);
             Assert.That(result.Succeeded, Is.True, result.Message);
 

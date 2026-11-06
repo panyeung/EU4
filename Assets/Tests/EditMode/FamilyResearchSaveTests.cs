@@ -36,8 +36,8 @@ namespace SengokuChronicle.Tests.EditMode
             ResolvePending(_session);
             SaveData data = _session.CaptureSave();
 
-            Assert.That(data.saveFormatVersion, Is.EqualTo(8));
-            Assert.That(data.rulesVersion, Is.EqualTo(4));
+            Assert.That(data.saveFormatVersion, Is.EqualTo(SaveDataValidator.CurrentVersion));
+            Assert.That(data.rulesVersion, Is.EqualTo(SaveData.CurrentRulesVersion));
             Assert.That(SaveDataValidator.Validate(data).Succeeded, Is.True);
             Assert.That(data.research.researchId,
                 Is.EqualTo(FamilyResearchCatalog.SmokeMixingResearchId));
@@ -167,8 +167,8 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(SaveDataMigrator.TryMigrate(legacy, null, out SaveData current,
                 out SaveOperationResult result), Is.True, result.Message);
 
-            Assert.That(current.saveFormatVersion, Is.EqualTo(8));
-            Assert.That(current.rulesVersion, Is.EqualTo(4));
+            Assert.That(current.saveFormatVersion, Is.EqualTo(SaveDataValidator.CurrentVersion));
+            Assert.That(current.rulesVersion, Is.EqualTo(SaveData.CurrentRulesVersion));
             Assert.That(current.research, Is.Not.Null);
             Assert.That(current.research.researchId, Is.Empty);
             Assert.That(current.research.knownTechniqueIds, Is.Empty);

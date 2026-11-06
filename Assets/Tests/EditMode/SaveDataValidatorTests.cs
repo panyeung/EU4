@@ -250,7 +250,7 @@ namespace SengokuChronicle.Tests.EditMode
                 legacy, out SaveData migrated, out SaveOperationResult result);
 
             Assert.That(succeeded, Is.True, result.Message);
-            Assert.That(SaveData.CurrentEventContentVersion, Is.EqualTo(2));
+            Assert.That(SaveData.CurrentEventContentVersion, Is.EqualTo(3));
             Assert.That(migrated.eventContentVersion, Is.EqualTo(SaveData.CurrentEventContentVersion));
         }
 

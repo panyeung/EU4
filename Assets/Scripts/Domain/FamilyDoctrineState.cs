@@ -379,6 +379,29 @@ namespace SengokuChronicle.Domain
             return clone;
         }
 
+        /// <summary>
+        /// Rebuilds state from save rows that the persistence layer has already validated.
+        /// The applied-settlement sets start empty: historical months, techniques and
+        /// education years are never replayed by a load.
+        /// </summary>
+        internal static FamilyDoctrineState CreateRestored(FamilyCreedKind creed,
+            IReadOnlyList<FamilyAmbitionRecord> records)
+        {
+            var state = new FamilyDoctrineState { Creed = creed };
+            if (records == null)
+                return state;
+
+            for (int i = 0; i < records.Count; i++)
+            {
+                FamilyAmbitionRecord record = records[i];
+                if (record == null || record.HeadId.IsEmpty ||
+                    state._ambitions.ContainsKey(record.HeadId))
+                    continue;
+                state._ambitions.Add(record.HeadId, new AmbitionEntry { Record = record });
+            }
+            return state;
+        }
+
         private static int TargetFor(FamilyAmbitionKind kind)
         {
             switch (kind)

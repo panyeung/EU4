@@ -195,20 +195,22 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
-        public void ExistingSaveLoad_UsesDefaultDoctrineAndDoesNotKeepTheSc024Route()
+        public void ExistingSaveLoad_RestoresDoctrineAndSc024Route()
         {
             GameSession sc024 = NewSession();
             sc024.InitFamilyDoctrineDemoScenario();
             SaveData existing = sc024.CaptureSave();
+            Assert.That(existing.activeEventScenarioId, Is.EqualTo("sc024"));
 
             GameSession loaded = NewSession();
             loaded.InitNewGame();
             Assert.That(loaded.TryApplySave(existing).Succeeded, Is.True);
 
             Assert.That(loaded.CurrentFamilyCreed, Is.EqualTo(FamilyCreedKind.RighteousnessFirst));
-            Assert.That(loaded.CurrentHeadAmbition, Is.Null);
+            Assert.That(loaded.CurrentHeadAmbition, Is.Not.Null);
+            Assert.That(loaded.CaptureSave().activeEventScenarioId, Is.EqualTo("sc024"));
             Assert.That(loaded.TryAdvanceToNextMonth(), Is.True, loaded.LastEventMessage);
-            Assert.That(loaded.PendingEventId, Is.EqualTo(SC013EventIds.PledgeEventId));
+            Assert.That(loaded.PendingEventId, Is.EqualTo(SC024EventIds.RighteousnessCouncilEventId));
         }
 
         [Test]

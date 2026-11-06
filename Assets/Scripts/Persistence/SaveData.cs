@@ -15,16 +15,24 @@ namespace SengokuChronicle.Persistence
         public const int CurrentGameSchemaVersion = SaveDataValidator.CurrentVersion;
 
         /// <summary>Rules contract version shared by capture, validation and migration.</summary>
-        public const int CurrentRulesVersion = 4;
+        public const int CurrentRulesVersion = 5;
 
         /// <summary>
         /// Fallback event-content version used only when no catalog is loaded. The
         /// active catalog's <c>contentVersion</c> is authoritative for capture/load.
         /// </summary>
-        public const int CurrentEventContentVersion = 2;
+        public const int CurrentEventContentVersion = 3;
 
         /// <summary>Displayed game build version. Older values are not rejected on load.</summary>
         public const string CurrentGameVersion = "0.1.0";
+
+        /// <summary>
+        /// Stable active-event-route IDs persisted by v9. Persistence cannot reference
+        /// the Events assembly, so these mirror <c>EventScenarioIds</c> intentionally;
+        /// unknown values are rejected instead of being normalized.
+        /// </summary>
+        public const string Sc013EventScenarioId = "sc013";
+        public const string Sc024EventScenarioId = "sc024";
 
         public int saveFormatVersion;
         public string gameVersion;
@@ -46,6 +54,8 @@ namespace SengokuChronicle.Persistence
         public IndustryStateSaveData industry;
         public CharacterDevelopmentSaveData development;
         public FamilyResearchSaveData research;
+        public FamilyDoctrineSaveData familyDoctrine;
+        public string activeEventScenarioId;
 
         public SaveData()
         {
@@ -65,6 +75,8 @@ namespace SengokuChronicle.Persistence
             // callers that replace the succession snapshot must supply matching rows.
             development = CharacterDevelopmentSaveData.CreateEmpty(succession);
             research = FamilyResearchSaveData.CreateInitial(WorldClock.NewGameDate);
+            familyDoctrine = FamilyDoctrineSaveData.CreateDefault();
+            activeEventScenarioId = string.Empty;
         }
     }
 
@@ -92,6 +104,8 @@ namespace SengokuChronicle.Persistence
         public IndustryStateSaveData industry;
         public CharacterDevelopmentSaveData development;
         public FamilyResearchSaveData research;
+        public FamilyDoctrineSaveData familyDoctrine;
+        public string activeEventScenarioId;
     }
 
     /// <summary>One player-to-NPC relationship value, keyed by stable character ID.</summary>
@@ -1068,6 +1082,272 @@ namespace SengokuChronicle.Persistence
 
         private static SaveOperationResult Invalid(string message) =>
             SaveOperationResult.Failure(SaveErrorCode.InvalidData, message);
+    }
+
+    /// <summary>
+    /// Plain-data v9 SC-024 snapshot. It stores the persistent family creed by stable
+    /// enum-name ID and one ambition row per head. Rows are ordered by ordinal head ID
+    /// and each row keeps the selection-time technique snapshot so a known technique is
+    /// never counted as a new research result after a load. Progress, target and the
+    /// completion flag are stored together and must agree on validation.
+    /// </summary>
+    [Serializable]
+    public sealed class FamilyDoctrineSaveData
+    {
+        public string creedId;
+        public FamilyAmbitionSaveEntry[] ambitions;
+
+        public static FamilyDoctrineSaveData CreateDefault() =>
+            new FamilyDoctrineSaveData
+            {
+                creedId = nameof(FamilyCreedKind.RighteousnessFirst),
+                ambitions = new FamilyAmbitionSaveEntry[0]
+            };
+
+        public static FamilyDoctrineSaveData Capture(FamilyDoctrineState state)
+        {
+            if (state == null)
+                return CreateDefault();
+
+            IReadOnlyList<PersonId> headIds = state.HeadIds;
+            var entries = new List<FamilyAmbitionSaveEntry>(headIds.Count);
+            for (int i = 0; i < headIds.Count; i++)
+            {
+                PersonId headId = headIds[i];
+                if (!state.TryGetAmbition(headId, out FamilyAmbitionRecord record) || record == null)
+                    continue;
+
+                var known = new string[record.KnownTechniqueIds.Count];
+                for (int k = 0; k < known.Length; k++)
+                    known[k] = record.KnownTechniqueIds[k];
+
+                entries.Add(new FamilyAmbitionSaveEntry
+                {
+                    headPersonId = record.HeadId.Value,
+                    ambitionId = record.Kind.ToString(),
+                    progress = record.Progress,
+                    target = record.Target,
+                    isComplete = record.IsComplete,
+                    knownTechniqueIds = known
+                });
+            }
+
+            return new FamilyDoctrineSaveData
+            {
+                creedId = state.Creed.ToString(),
+                ambitions = entries.ToArray()
+            };
+        }
+
+        public FamilyDoctrineSaveData Clone() => new FamilyDoctrineSaveData
+        {
+            creedId = creedId,
+            ambitions = CloneAmbitions(ambitions)
+        };
+
+        /// <summary>Structural and cross-reference validation; never throws.</summary>
+        public SaveOperationResult ValidateForSave(SuccessionSaveData succession,
+            IReadOnlyCollection<string> savedKnownTechniqueIds)
+        {
+            if (!TryParseCreed(creedId, out FamilyCreedKind _))
+                return Invalid("存档家训 ID 未知：" + (creedId ?? "(null)") + "。");
+            if (ambitions == null)
+                return Invalid("存档缺少家主抱负列表（familyDoctrine.ambitions）。");
+            if (succession == null || succession.persons == null)
+                return Invalid("存档家训与抱负缺少继承人物名册。");
+            if (savedKnownTechniqueIds == null)
+                return Invalid("存档缺少家族研究知识，无法验证抱负技艺基线。");
+
+            var persons = new HashSet<string>(StringComparer.Ordinal);
+            foreach (SuccessionPersonSaveEntry person in succession.persons)
+                if (person != null && !string.IsNullOrWhiteSpace(person.personId))
+                    persons.Add(person.personId);
+            var knownTechniques = new HashSet<string>(savedKnownTechniqueIds, StringComparer.Ordinal);
+
+            var seenHeads = new HashSet<PersonId>();
+            string previousHead = null;
+            foreach (FamilyAmbitionSaveEntry entry in ambitions)
+            {
+                if (entry == null)
+                    return Invalid("存档家主抱负记录为空。");
+
+                if (!PersonId.TryParse(entry.headPersonId, out PersonId headId) || headId.IsEmpty)
+                    return Invalid("存档家主抱负记录的人物 ID 无效：" +
+                                   (entry.headPersonId ?? "(null)") + "。");
+                if (!persons.Contains(headId.Value))
+                    return Invalid("存档家主抱负记录引用了未知人物：" + headId.Value + "。");
+                if (!seenHeads.Add(headId))
+                    return Invalid("存档家主抱负记录重复：" + headId.Value + "。");
+                if (previousHead != null && string.CompareOrdinal(previousHead, headId.Value) > 0)
+                    return Invalid("存档家主抱负记录顺序不稳定。");
+                previousHead = headId.Value;
+
+                if (!TryParseAmbition(entry.ambitionId, out FamilyAmbitionKind kind))
+                    return Invalid("存档抱负 ID 未知：" + (entry.ambitionId ?? "(null)") + "。");
+                int expectedTarget = TargetFor(kind);
+                if (entry.target != expectedTarget)
+                    return Invalid("存档抱负目标无效：" + headId.Value + "=" + entry.target +
+                                   "（应为 " + expectedTarget + "）。");
+                if (entry.progress < 0 || entry.progress > entry.target)
+                    return Invalid("存档抱负进度必须在 0.." + entry.target + " 之间：" +
+                                   headId.Value + "=" + entry.progress + "。");
+                if (entry.isComplete != (entry.progress >= entry.target))
+                    return Invalid("存档抱负完成状态与进度不一致：" + headId.Value + "。");
+
+                SaveOperationResult baseline = ValidateTechniqueBaseline(entry.knownTechniqueIds,
+                    headId.Value);
+                if (!baseline.Succeeded)
+                    return baseline;
+                if (kind == FamilyAmbitionKind.PassDownTechnique)
+                {
+                    foreach (string techniqueId in entry.knownTechniqueIds)
+                        if (!knownTechniques.Contains(techniqueId))
+                            return Invalid("存档抱负技艺基线不在当前家族研究知识中：" +
+                                           techniqueId + "。");
+                }
+            }
+
+            return SaveOperationResult.Success();
+        }
+
+        /// <summary>Rebuilds a validated runtime state; the caller must not assign it on failure.</summary>
+        public static bool TryRestore(FamilyDoctrineSaveData data, SuccessionSaveData succession,
+            IReadOnlyCollection<string> savedKnownTechniqueIds, out FamilyDoctrineState state,
+            out string error)
+        {
+            state = null;
+            if (data == null)
+            {
+                error = "存档缺少家训与抱负状态（familyDoctrine）。";
+                return false;
+            }
+
+            SaveOperationResult validation = data.ValidateForSave(succession, savedKnownTechniqueIds);
+            if (!validation.Succeeded)
+            {
+                error = validation.Message;
+                return false;
+            }
+
+            TryParseCreed(data.creedId, out FamilyCreedKind creed);
+            var records = new List<FamilyAmbitionRecord>(data.ambitions.Length);
+            foreach (FamilyAmbitionSaveEntry entry in data.ambitions)
+            {
+                TryParseAmbition(entry.ambitionId, out FamilyAmbitionKind kind);
+                var known = new string[entry.knownTechniqueIds.Length];
+                Array.Copy(entry.knownTechniqueIds, known, known.Length);
+                records.Add(new FamilyAmbitionRecord(new PersonId(entry.headPersonId), kind,
+                    entry.progress, entry.target, Array.AsReadOnly(known)));
+            }
+
+            state = FamilyDoctrineState.CreateRestored(creed, records);
+            error = string.Empty;
+            return true;
+        }
+
+        private static SaveOperationResult ValidateTechniqueBaseline(string[] techniqueIds,
+            string headPersonId)
+        {
+            if (techniqueIds == null)
+                return Invalid("存档抱负缺少已知技艺基线（knownTechniqueIds）：" +
+                               headPersonId + "。");
+
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            string previous = null;
+            foreach (string techniqueId in techniqueIds)
+            {
+                if (string.IsNullOrWhiteSpace(techniqueId) ||
+                    !FamilyResearchCatalog.IsKnownTechniqueId(techniqueId))
+                    return Invalid("存档抱负包含未知技艺 ID：" +
+                                   (techniqueId ?? "(null)") + "。");
+                if (!seen.Add(techniqueId))
+                    return Invalid("存档抱负技艺基线重复：" + techniqueId + "。");
+                if (previous != null && string.CompareOrdinal(previous, techniqueId) > 0)
+                    return Invalid("存档抱负技艺基线顺序不稳定。");
+                previous = techniqueId;
+            }
+
+            return SaveOperationResult.Success();
+        }
+
+        private static FamilyAmbitionSaveEntry[] CloneAmbitions(FamilyAmbitionSaveEntry[] source)
+        {
+            if (source == null)
+                return null;
+
+            var clone = new FamilyAmbitionSaveEntry[source.Length];
+            for (int i = 0; i < source.Length; i++)
+            {
+                FamilyAmbitionSaveEntry entry = source[i];
+                clone[i] = entry == null ? null : new FamilyAmbitionSaveEntry
+                {
+                    headPersonId = entry.headPersonId,
+                    ambitionId = entry.ambitionId,
+                    progress = entry.progress,
+                    target = entry.target,
+                    isComplete = entry.isComplete,
+                    knownTechniqueIds = entry.knownTechniqueIds != null
+                        ? (string[])entry.knownTechniqueIds.Clone()
+                        : null
+                };
+            }
+            return clone;
+        }
+
+        private static bool TryParseCreed(string value, out FamilyCreedKind creed)
+        {
+            if (!string.IsNullOrEmpty(value) &&
+                Enum.TryParse(value, false, out creed) &&
+                Enum.IsDefined(typeof(FamilyCreedKind), creed) &&
+                string.Equals(Enum.GetName(typeof(FamilyCreedKind), creed), value,
+                    StringComparison.Ordinal))
+                return true;
+
+            creed = default;
+            return false;
+        }
+
+        private static bool TryParseAmbition(string value, out FamilyAmbitionKind kind)
+        {
+            if (!string.IsNullOrEmpty(value) &&
+                Enum.TryParse(value, false, out kind) &&
+                Enum.IsDefined(typeof(FamilyAmbitionKind), kind) &&
+                string.Equals(Enum.GetName(typeof(FamilyAmbitionKind), kind), value,
+                    StringComparison.Ordinal))
+                return true;
+
+            kind = default;
+            return false;
+        }
+
+        private static int TargetFor(FamilyAmbitionKind kind)
+        {
+            switch (kind)
+            {
+                case FamilyAmbitionKind.DevelopHousehold:
+                    return FamilyDoctrineState.DevelopHouseholdTarget;
+                case FamilyAmbitionKind.PassDownTechnique:
+                    return FamilyDoctrineState.PassDownTechniqueTarget;
+                case FamilyAmbitionKind.EducateHeir:
+                    return FamilyDoctrineState.EducateHeirTarget;
+                default:
+                    return 0;
+            }
+        }
+
+        private static SaveOperationResult Invalid(string message) =>
+            SaveOperationResult.Failure(SaveErrorCode.InvalidData, message);
+    }
+
+    [Serializable]
+    public sealed class FamilyAmbitionSaveEntry
+    {
+        public string headPersonId;
+        public string ambitionId;
+        public int progress;
+        public int target;
+        public bool isComplete;
+        public string[] knownTechniqueIds;
     }
 
     /// <summary>Stable phases in which a save is allowed.</summary>
