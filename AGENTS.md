@@ -252,7 +252,7 @@ avoid unnecessary external research.
 
 The current lead prompt governs process. Keep the GDD authoritative for game design. Preserve existing branches and checkpoint commits. Work on feature or integration branches; merge to `main` and tag a milestone only after the user accepts its demo. Never force-push, rewrite history, or delete a branch containing unmerged work. After every checkpoint commit, milestone merge, or tag, push it to GitHub (`origin`) immediately — branch, `main`, and tag — and report the resulting remote refs.
 
-After each applicable verification gate passes, automatically commit only the verified files for that task and push the commit to `origin` on the current branch. Keep unrelated local changes out of the commit. When a milestone still requires user Play Mode acceptance, push permitted verified work on its feature branch, but wait for that acceptance before creating the final milestone checkpoint, merging to `main`, or tagging.
+After each applicable verification gate passes, automatically commit only the verified files for that task and push the commit to `origin` on the current branch. Keep unrelated local changes out of the commit. The user has granted Mochi standing authorization to run and accept Unity Play Mode tests, including using Computer Use and screenshots when useful; push permitted verified work on its feature branch, but wait for the Play Mode gate and the user's explicit final milestone acceptance before creating the final milestone checkpoint, merging to `main`, or tagging.
 
 Stay in this repository. Use no paid services, subscriptions, assets, or APIs. Do not change OpenCode providers, API keys, or plans. Do not copy material from Taiko Risshiden or another commercial game. Use original, CC0, or permissively licensed content and list every source and license in `ASSETS.md`. Record new Unity packages and their reason in `DECISIONS.md`. Preserve `.meta` files and GUIDs; leave `Library` and `Temp` untouched.
 
@@ -260,7 +260,7 @@ Before Unity work, check the running Editor process and its `-projectPath`. Keep
 
 Only the lead or one designated integration worker edits scenes, prefabs, or `ProjectSettings`. Parallel workers in separate worktrees may edit C# logic, text data, tests, docs, and research. Keep gameplay rules in plain C# where practical, use asmdefs, and preserve `PlayerMovement2D` behavior. Editor scene generators use one Undo group, validate before saving, roll back with Undo on exceptions, and never reload a scene for rollback. Place generated UI beneath one fixed root.
 
-End each milestone with a playable demo. Require successful compilation, zero Console errors, the intended scene, and a playable headline loop; verify save/load when it is in scope. Freeze the demo worktree while the user evaluates it. User Play Mode acceptance is required before marking the demo accepted, merging to `main`, or tagging it.
+End each milestone with a playable demo. Require successful compilation, zero Console errors, the intended scene, and a playable headline loop; verify save/load when it is in scope. Mochi runs and signs off the Play Mode gate under the user's standing authorization, recording the exact runtime path and evidence. The user retains final milestone acceptance and must explicitly approve before merging to `main` or tagging.
 
 ## Orca and OpenCode workflow
 
@@ -274,13 +274,13 @@ For Unity coding tasks, UnityCoder implements the requested changes on the exist
 
 Count review attempts on the same task. After ten unsuccessful QA reviews, do not request another automatic correction cycle: block the task for human attention and list remaining defects. This is agent-enforced; do not claim the Kanban system itself imposes this ten-review cap unless verified.
 
-For each substantial feature, Mochi creates one dependent final sign-off task linked to the implementation task. It becomes eligible only when the reviewed implementation task is done after QA approval. Mochi inspects the review verdict and evidence, reports changed files, unresolved issues, and actual test results, and distinguishes compilation from Play Mode verification. Never claim runtime behavior without runtime evidence. QA approval does not replace required manual Play Mode acceptance; do not mark that behavior accepted or create the final checkpoint commit until the user explicitly accepts it. Report genuine blockers to the user rather than spawning endless follow-up tasks. Send the final sign-off outcome to the user via WhatsApp when a configured messaging route and recipient are available; if not, state that clearly and use the Kanban handoff instead.
+For each substantial feature, Mochi creates one dependent final sign-off task linked to the implementation task. It becomes eligible only when the reviewed implementation task is done after QA approval. Mochi inspects the review verdict and evidence, reports changed files, unresolved issues, and actual test results, and distinguishes compilation from Play Mode verification. Never claim runtime behavior without runtime evidence. QA approval does not replace Play Mode acceptance; Mochi performs and signs off the Play Mode gate under the standing authorization. The user must still explicitly accept the final milestone before its final checkpoint, merge to `main`, or tag. Report genuine blockers to the user rather than spawning endless follow-up tasks. Send the final sign-off outcome to the user via WhatsApp when a configured messaging route and recipient are available; if not, state that clearly and use the Kanban handoff instead.
 
 ## User collaboration boundaries
 
 - OpenCode2 implements all code changes for this project; Mochi coordinates scope, review, and integration.
-- The user performs Play Tests and reports the results. Do not operate Unity to perform Play Tests on the user's behalf.
-- While the user is awake, do not use screenshots or Computer Use to interact with Unity.
+- Mochi performs and signs off Unity Play Mode acceptance under the user's standing authorization; the user may still run separate tests and report them.
+- Computer Use and screenshots are authorized for Unity Play Mode validation, including while the user is awake. Before each Unity session, inspect the running Editor process and verify its `-projectPath`; operate only the existing Editor for this project.
 
 
 
