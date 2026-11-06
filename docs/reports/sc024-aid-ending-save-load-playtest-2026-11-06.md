@@ -1,6 +1,6 @@
-﻿# SC-024 Play Mode 补充验收：伊织援助结局与存档往返
+# SC-024 Play Mode 补充验收：伊织援助结局与存档往返
 
-日期：2026-11-06  
+日期：2026-11-06
 Unity：6000.6.6f1，窗口标题 `My project - FoundationScene`，项目路径 `C:\Users\panye\My project`。运行于当前工作区的未提交 SC-024 场景集成状态；这不是 `origin/main` 场景集成验证。
 
 ## 运行结果
