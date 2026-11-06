@@ -260,7 +260,11 @@ namespace SengokuChronicle.Presentation
                 case SuccessionPhase.CrisisDecision:
                     return "无合法继承人：可进行一次危机收养/重建，或放弃并结束家族。";
                 case SuccessionPhase.Extinct:
-                    return "家族灭亡：" + (state.CompletedResultId ?? string.Empty);
+                    // CompletedResultId is an internal save-stable key such as
+                    // "extinction.family.sc010"; never render it in player text.
+                    // The decline path can leave living relatives behind, so this
+                    // must describe the missing eligible heir, not a dead bloodline.
+                    return "家族灭亡：已无符合资格的继承人，家业无人继承。";
                 default:
                     if (gameSession.IsM2ScenarioActive)
                     {
@@ -271,9 +275,16 @@ namespace SengokuChronicle.Presentation
                             return heir + "\n主线条件已满足；点击「退休并安排继承」执行本次固定交接。";
                         return heir + "\n" + gameSession.SuccessionRetirementBlockReason;
                     }
-                    return state.SuccessionCount > 0
-                        ? "家主在位。上次继承记录：" + (state.CompletedResultId ?? string.Empty)
-                        : "家主在位。可退休并安排继承。";
+                    if (state.SuccessionCount > 0)
+                    {
+                        // CompletedResultId is an internal, save-stable identifier such as
+                        // "succession.1.person.sc021.heir"; never show it to the player.
+                        string headName = gameSession.SuccessionHeadName;
+                        return string.IsNullOrEmpty(headName)
+                            ? "家主在位。上次继承已完成。"
+                            : "家主在位。上次继承：" + headName + " 接任。";
+                    }
+                    return "家主在位。可退休并安排继承。";
             }
         }
 

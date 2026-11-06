@@ -23,8 +23,12 @@ namespace SengokuChronicle.Tests.EditMode
 
             Assert.That(view.HasPlan, Is.False);
             Assert.That(view.ProgressLine, Does.Contain("0/2"));
+            Assert.That(view.ProgressLine, Does.Contain("每次月结推进 1 点"),
+                "the initial view must show the monthly rate once, before a plan starts");
             Assert.That(view.ResourceLine, Does.Contain("资金 2").And.Contain("物资 2"));
             Assert.That(view.CostLine, Does.Contain("1 资金").And.Contain("1 物资"));
+            Assert.That(view.CostLine, Does.Not.Contain("推进"),
+                "the rate belongs to the progress line, not the monthly cost line");
             Assert.That(view.EligibleResearchers, Has.Count.EqualTo(3));
             Assert.That(view.CanStartPlan, Is.True);
             Assert.That(view.EligibleResearchers[0].DisplayName, Is.EqualTo(SC021FamilyResearchScenario.HeadName));
@@ -97,14 +101,24 @@ namespace SengokuChronicle.Tests.EditMode
             FamilyResearchSettlementResult result = FamilyResearchSettlement.Plan(
                 state, default, SC021FamilyResearchScenario.CreateSuccession(), Start);
 
+            // Project the same resource shortfall that produced the paused report so the
+            // live pause gate and the settled result agree.
+            Assert.That(IndustryResources.TryCreate(0, 2, 0, out IndustryResources resources,
+                out string error), Is.True, error);
+            IndustryState industry = IndustryState.CreateInitial(Start, resources);
             FamilyResearchView view = FamilyResearchView.Build(state,
-                SC021FamilyResearchScenario.CreateSuccession(),
-                SC021FamilyResearchScenario.CreateIndustryState(), Start, true, string.Empty,
+                SC021FamilyResearchScenario.CreateSuccession(), industry, Start, true, string.Empty,
                 result.Report, result.Message);
 
             Assert.That(result.Paused, Is.True);
+            Assert.That(view.IsPaused, Is.True);
             Assert.That(view.ReportLine, Does.Contain("研究暂停"));
+            Assert.That(view.ReportLine, Does.Contain("资金不足 1"));
+            Assert.That(view.ReportLine, Does.Contain("进度保持 0/2"));
+            Assert.That(view.ReportLine, Does.Contain("本月不推进"));
             Assert.That(view.ProgressLine, Does.Contain("0/2"));
+            Assert.That(view.ProgressLine, Does.Not.Contain("每次月结推进"),
+                "a paused month must not promise monthly advancement");
         }
 
         [Test]
@@ -128,10 +142,15 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(view.HasPlan, Is.True);
             Assert.That(view.IsPaused, Is.True);
             Assert.That(view.PauseReason, Does.Contain("不是当前家族成员"));
-            Assert.That(view.StatusLine, Does.Contain("研究暂停"));
+            Assert.That(view.StatusLine, Does.Not.Contain("研究暂停"),
+                "the pause reason is reported once on the report line");
             Assert.That(view.ReportLine, Does.Contain("研究暂停"));
-            Assert.That(view.ReportLine, Does.Contain("资源与进度保持不变"));
+            Assert.That(view.ReportLine, Does.Contain("不是当前家族成员"));
+            Assert.That(view.ReportLine, Does.Contain("进度保持 0/2"));
+            Assert.That(view.ReportLine, Does.Contain("本月不推进"));
             Assert.That(view.ProgressLine, Does.Contain("0/2"));
+            Assert.That(view.ProgressLine, Does.Not.Contain("每次月结推进"),
+                "a paused month must not promise monthly advancement");
             Assert.That(view.Resources.Funds, Is.EqualTo(SC021FamilyResearchScenario.OpeningFunds),
                 "projecting a paused plan must not spend funds");
             Assert.That(view.Resources.Supplies, Is.EqualTo(SC021FamilyResearchScenario.OpeningSupplies),

@@ -58,7 +58,11 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(panel.TechniqueLine, Does.Contain("烟幕调制术"));
             Assert.That(panel.TechniqueLine, Does.Not.Contain("已记录"));
             Assert.That(panel.ProgressLine, Does.Contain("0/2"));
-            Assert.That(panel.CostLine, Does.Contain("1 资金"));
+            Assert.That(panel.ProgressLine, Does.Contain("每次月结推进 1 点"),
+                "the initial panel must show the monthly rate once");
+            Assert.That(panel.CostLine, Does.Contain("1 资金").And.Contain("1 物资"));
+            Assert.That(panel.CostLine, Does.Not.Contain("推进"),
+                "the rate belongs to the progress line, not the monthly cost line");
             Assert.That(panel.VisibleResearcherCount, Is.EqualTo(3));
             Assert.That(panel.ResearcherLabel(0), Is.EqualTo(SC021FamilyResearchScenario.HeadName));
         }
@@ -126,6 +130,9 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(panel.CostLine, Does.Not.Contain("每月消耗"));
             Assert.That(panel.TechniqueLine, Does.Contain("已记录"));
             Assert.That(panel.ProgressLine, Does.Contain("已完成"));
+            Assert.That(panel.ReportLine, Does.Contain("研究完成"));
+            Assert.That(panel.MessageVisible, Is.False,
+                "the completed settlement summary must not be rendered twice");
         }
 
         [Test]
@@ -158,6 +165,40 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
+        public void Panel_ActiveMonthShowsOneProgressResult()
+        {
+            FamilyResearchPanel panel = Panel();
+            panel.Open();
+            panel.ClickResearcher(0);
+
+            // The plan confirmation must not restate the researcher, monthly rate and cost
+            // that the status/progress/cost lines already show.
+            Assert.That(panel.StatusLine, Does.Contain(SC021FamilyResearchScenario.HeadName));
+            Assert.That(panel.StatusLine, Does.Not.Contain("0/2"));
+            Assert.That(panel.ProgressLine, Does.Contain("0/2"));
+            Assert.That(panel.ProgressLine, Does.Contain("每次月结推进 1 点"));
+            Assert.That(panel.CostLine, Does.Contain("1 资金").And.Contain("1 物资"));
+            Assert.That(panel.MessageLine, Does.Not.Contain(SC021FamilyResearchScenario.HeadName));
+            Assert.That(panel.MessageLine, Does.Not.Contain("资金"));
+            Assert.That(panel.MessageLine, Does.Not.Contain("推进"));
+
+            Assert.That(_session.TryAdvanceToNextMonth(), Is.True, _session.LastEventMessage);
+            ResolvePending(_session);
+            panel.Refresh();
+
+            // One settled month must yield exactly one progress summary: the status line
+            // keeps the researcher, the progress line owns "1/2", and the monthly report
+            // owns the settlement result instead of being echoed by the message line.
+            Assert.That(_session.ResearchState.Progress, Is.EqualTo(1));
+            Assert.That(panel.StatusLine, Does.Contain(SC021FamilyResearchScenario.HeadName));
+            Assert.That(panel.StatusLine, Does.Not.Contain("1/2"));
+            Assert.That(panel.ProgressLine, Does.Contain("1/2"));
+            Assert.That(panel.ReportLine, Does.Contain("0 → 1"));
+            Assert.That(panel.MessageVisible, Is.False,
+                "the settlement result must not be printed in both the report and message lines");
+        }
+
+        [Test]
         public void Panel_ShowsShortagePauseFromTheMonthlyReport()
         {
             Assert.That(_session.TrySetResearchPlan(FamilyResearchCatalog.SmokeMixingResearchId,
@@ -171,9 +212,25 @@ namespace SengokuChronicle.Tests.EditMode
             FamilyResearchPanel panel = Panel();
             panel.Open();
 
+            // The pause reason and the unchanged progress must appear once, on the
+            // report line. The status and progress lines stay neutral, the progress
+            // line makes no monthly-advance promise, and the settlement message is
+            // not echoed back as a second identical confirmation.
             Assert.That(panel.ReportLine, Does.Contain("研究暂停"));
-            Assert.That(panel.ReportLine, Does.Contain("资金不足"));
+            Assert.That(panel.ReportLine, Does.Contain("资金不足 1"));
+            Assert.That(panel.ReportLine, Does.Contain("进度保持 0/2"));
+            Assert.That(panel.ReportLine, Does.Contain("本月不推进"));
+            Assert.That(panel.StatusLine, Does.Not.Contain("研究暂停"));
             Assert.That(panel.ProgressLine, Does.Contain("0/2"));
+            Assert.That(panel.ProgressLine, Does.Not.Contain("每次月结推进"));
+            Assert.That(panel.MessageVisible, Is.False,
+                "the shortage report must not be echoed by the message line");
+            Assert.That(panel.MessageLine, Is.Empty,
+                "a hidden message row must not retain a duplicate report");
+            Assert.That(panel.BlockReasonVisible, Is.False);
+            Assert.That(panel.BlockReasonLine, Is.Empty);
+            Assert.That(CountOccurrences(VisibleText(panel), "研究暂停"), Is.EqualTo(1),
+                "exactly one visible line must own the pause reason");
         }
 
         [Test]
@@ -193,11 +250,18 @@ namespace SengokuChronicle.Tests.EditMode
             FamilyResearchPanel panel = Panel();
             panel.Open();
 
-            Assert.That(panel.StatusLine, Does.Contain("研究暂停"));
-            Assert.That(panel.StatusLine, Does.Contain("不是当前家族成员"));
+            Assert.That(panel.StatusLine, Does.Contain(SC021FamilyResearchScenario.SpouseName));
+            Assert.That(panel.StatusLine, Does.Not.Contain("研究暂停"),
+                "the pause reason is reported once on the report line");
             Assert.That(panel.ReportLine, Does.Contain("研究暂停"));
-            Assert.That(panel.ReportLine, Does.Contain("资源与进度保持不变"));
+            Assert.That(panel.ReportLine, Does.Contain("不是当前家族成员"));
+            Assert.That(panel.ReportLine, Does.Contain("进度保持 0/2"));
+            Assert.That(panel.ReportLine, Does.Contain("本月不推进"));
             Assert.That(panel.ProgressLine, Does.Contain("0/2"));
+            Assert.That(panel.ProgressLine, Does.Not.Contain("每次月结推进"));
+            Assert.That(panel.MessageVisible, Is.False);
+            Assert.That(panel.MessageLine, Is.Empty);
+            Assert.That(CountOccurrences(VisibleText(panel), "研究暂停"), Is.EqualTo(1));
             Assert.That(_session.ResearchState.HasPlan, Is.True);
             Assert.That(_session.ResearchState.Progress, Is.Zero);
             Assert.That(_session.Industry.Resources.Funds,
@@ -206,6 +270,28 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(_session.Industry.Resources.Supplies,
                 Is.EqualTo(SC021FamilyResearchScenario.OpeningSupplies),
                 "loading a paused plan must not spend supplies");
+        }
+
+        private static string VisibleText(FamilyResearchPanel panel)
+        {
+            string text = panel.StatusLine + "\n" + panel.ProgressLine + "\n" + panel.ReportLine;
+            if (panel.MessageVisible)
+                text += "\n" + panel.MessageLine;
+            if (panel.BlockReasonVisible)
+                text += "\n" + panel.BlockReasonLine;
+            return text;
+        }
+
+        private static int CountOccurrences(string text, string value)
+        {
+            int count = 0;
+            int index = 0;
+            while ((index = text.IndexOf(value, index, System.StringComparison.Ordinal)) >= 0)
+            {
+                count++;
+                index += value.Length;
+            }
+            return count;
         }
 
         private GameObject Create(string name, Transform parent, params System.Type[] components)

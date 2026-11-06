@@ -281,6 +281,7 @@ For each substantial feature, Mochi creates one dependent final sign-off task li
 - OpenCode2 implements all code changes for this project; Mochi coordinates scope, review, and integration.
 - Mochi performs and signs off Unity Play Mode acceptance under the user's standing authorization; the user may still run separate tests and report them.
 - Computer Use and screenshots are authorized for Unity Play Mode validation, including while the user is awake. Before each Unity session, inspect the running Editor process and verify its `-projectPath`; operate only the existing Editor for this project.
+- Delete every Computer Use screenshot immediately after visual inspection. Do not retain screenshots in the project or backups; remove any remaining screenshot images from the dedicated Computer Use temporary cache at the end of the task.
 
 
 

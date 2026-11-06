@@ -140,7 +140,17 @@ namespace SengokuChronicle.Presentation
             blockReasonText.gameObject.SetActive(showBlock);
 
             bool showMessage = !string.IsNullOrWhiteSpace(view.LastMessage);
-            messageText.text = view.LastMessage;
+            // The settlement reuses its report summary as the last message, so the same
+            // result would otherwise print in both the message and report lines. Keep the
+            // dedicated report line and suppress only the verbatim duplicate; distinct
+            // plan errors still show. The hidden row itself is cleared so no stale text
+            // remains behind it.
+            if (showMessage &&
+                (string.Equals(view.LastMessage, view.ReportLine, StringComparison.Ordinal) ||
+                 (view.LastReport != null &&
+                  string.Equals(view.LastMessage, view.LastReport.Summary, StringComparison.Ordinal))))
+                showMessage = false;
+            messageText.text = showMessage ? view.LastMessage : string.Empty;
             messageText.gameObject.SetActive(showMessage);
 
             BuildResearchers(view);

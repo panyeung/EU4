@@ -4,7 +4,7 @@
 
 **Goal:** Build a deterministic, saveable family research plan that records one completed technique as inheritable family knowledge without granting personal mastery.
 
-**Architecture:** Keep research rules and state in plain C# Domain types. `GameSession.TryAdvanceToNextMonth` plans research after industry settlement and before education/event scheduling, commits all state as one transaction, and restores research/resources/history with the existing rollback path. SaveData stores stable IDs and migrates v7 saves to empty research state; the FoundationScene panel is generated through one Undo transaction and adds an SC-021 entry to the existing title UI for a separate fixed Kageyama family/scenario (`family.kageyama.sc021`), without presenting or changing another family's scenario.
+**Architecture:** Keep research rules and state in plain C# Domain types. `GameSession.TryAdvanceToNextMonth` plans research after industry settlement and before education/event scheduling, commits all state as one transaction, and restores research/resources/history with the existing rollback path. SaveData stores stable IDs and migrates v7 saves to empty research state; the FoundationScene panel is generated through one Undo transaction and adds a standalone SC-021 demo button to the existing title UI for a separate fixed Kageyama family/scenario (`family.kageyama.sc021`); it is not part of the SC-013 standard/crisis button pair and does not present or change another family's scenario.
 
 **Tech Stack:** Unity 6.6.6f1, C#, existing asmdefs, Unity Test Framework/NUnit EditMode tests, uGUI, `JsonUtility`, existing editor-generator and scene-validator patterns. No package or external code.
 
@@ -12,14 +12,14 @@
 
 ## Global Constraints
 
-- Implement code through OpenCode2 on the current task worktree `feature/sc018-independent-core-events`; preserve every pre-existing dirty or untracked path and do not stage unrelated files.
-- Use the existing Unity project and its already-open Editor; first verify the Editor PID and `-projectPath`. Never run batchmode against this project folder or open a second Editor for it.
+- Implement code through OpenCode2 on the current task worktree `panyeung/sc021-scene-integration`; preserve every pre-existing dirty or untracked path and do not stage unrelated files.
+- Use the existing Unity project. Before any Unity work, inspect every running Unity PID and its exact `-projectPath`; never target the user's open `C:\Users\panye\My project` Editor. Verify with that worktree's own Editor when one is open; otherwise a temporary batchmode run against this worktree is allowed only when no Editor holds this folder, and never against a folder held by an Editor.
 - Keep all rule/state code in pure C# where practical; do not create a new Unity project or Scene, install packages, or copy external code.
 - Preserve existing `.meta` files and GUIDs; do not modify `Library` or `Temp`.
 - Only the designated integration worker edits `FoundationScene`, prefabs, or `ProjectSettings`. The generator uses one Undo group, validates before saving, reverts through Undo on exceptions, does not reload a scene for rollback, and places all new UI under one fixed root.
 - Keep SC-010, SC-013, SC-019, and SC-020 scenario behavior intact. New research does not grant character mastery or consume random streams.
 - Use Unity Editor Test Runner and fresh project-specific logs/XML for verification. Report compilation, EditMode totals, Console counts, validator results, Play Mode evidence, and user acceptance separately.
-- Do not commit, push, merge, or tag before the user accepts the demo. The user executes Play Test; do not use screenshots or Computer Use to interact with Unity while the user is awake.
+- After each verification gate passes, commit only the verified task files and push them to the feature branch (`panyeung/sc021-scene-integration`). Do not merge to `main` or tag before the user accepts the demo. The user executes Play Test; do not use screenshots or Computer Use to interact with Unity while the user is awake.
 
 ## Review Focus
 
@@ -147,14 +147,14 @@
 - Consumes: new research state/default resources, existing scenario-entry routing, and persistent scenario selection behavior.
 - Produces: a repeatable SC-021 entry in the existing title UI that supplies enough resources for two successful research months without changing SC-010/013/019/020 scenario state.
 
-- [ ] **Step 1: Write scenario routing tests** proving the new entry opens SC-021 in the existing project/scene, supplies exactly the two-month research costs, and leaves the five existing title entries (新游戏、继续、SC-010 标准样例、SC-010 危机示范、SC-020 子女培养示范) and their deterministic starting snapshots unchanged; run and confirm failure.
+- [ ] **Step 1: Write scenario routing tests** proving the new entry opens SC-021 in the existing project/scene, supplies exactly the two-month research costs, and leaves the existing title entries (新游戏、继续、SC-010 标准样例、SC-010 危机示范、SC-020 子女培养示范、SC-022 婚姻与收养示范) and their deterministic starting snapshots unchanged; run and confirm failure.
 - [ ] **Step 2: Implement `SC021FamilyResearchScenario`** using original content and stable IDs; do not create a second Unity project, Scene, or package.
 - [ ] **Step 3: Write `SC021_DEMO.md`** with setup, the SC-021 entry, plan assignment/replacement, two month endings, shortfall pause, completion/chronicle, save-load, inheritance retention, stop conditions, and a results checklist. Clearly state Play Test is user-run.
 - [ ] **Step 4: Update `PROJECT_STATE.md` and `DECISIONS.md`** with scope, schema/rules version, research result, current verification status, and pending user acceptance; do not mark M3 complete.
 - [ ] **Step 5: Write the implementation report template/results** with changed files, Editor/project path, compile/Test Runner/Console/validator outcomes, Play Mode owner, unverified branches, and known issues. Do not infer runtime behavior from static checks.
 - [ ] **Step 6: Run `SC021FamilyResearchScenarioTests` and the full EditMode suite in the existing Unity Editor**; export fresh XML and confirm no failed/skipped tests.
 - [ ] **Step 7: Run the existing `FoundationSceneValidator` from that Editor**; record the exact fresh report and zero/error totals, or stop and route corrections to OpenCode2.
-- [ ] **Step 8: Stop at the user Play Test handoff** with project still on the current worktree and no checkpoint commit. Ask the user to follow `SC021_DEMO.md`; only explicit acceptance unlocks commit/merge/tag/push.
+- [ ] **Step 8: Stop at the user Play Test handoff** with the project on the current feature worktree. Commit and push only the verified task files; ask the user to follow `SC021_DEMO.md`. Only explicit acceptance unlocks merge to `main` and tagging.
 
 ## OpenCode2 implementation handoff
 

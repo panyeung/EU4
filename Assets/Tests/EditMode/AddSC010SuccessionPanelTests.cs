@@ -219,6 +219,9 @@ namespace SengokuChronicle.Tests.EditMode
 
             Assert.That(panel.HeadSummary, Does.Contain("明智 正綱"));
             Assert.That(panel.StatusMessage, Does.Contain("上次继承"));
+            Assert.That(panel.StatusMessage, Does.Contain("明智 正綱"));
+            Assert.That(panel.StatusMessage, Does.Not.Contain("succession."),
+                "the status line must use the human-readable head label, not the raw result ID.");
             Assert.That(panel.IsModalVisible, Is.False);
             Assert.That(panel.RetireInteractable, Is.True,
                 "A completed handoff must leave retirement available for a new, distinct cycle.");
@@ -285,6 +288,30 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(panel.IsTerminalExtinctionVisible, Is.True,
                 "Refreshing must not clear the extinction overlay.");
             Assert.That(panel.ConfirmVisible, Is.False);
+        }
+
+        [Test]
+        public void PanelExtinctionStatusUsesReadableTextWithoutTheRawResultId()
+        {
+            Assert.That(AddSC010SuccessionPanel.Update(_scene),
+                Is.EqualTo(AddSC010SuccessionPanel.UpdateResult.Success));
+            SuccessionPanel panel = Find(AddSC010SuccessionPanel.RootName).GetComponent<SuccessionPanel>();
+            panel.StartCrisisDemo();
+            panel.BeginRetirement();
+            panel.DeclineCrisis();
+
+            Assert.That(_session.Succession.Phase, Is.EqualTo(SuccessionPhase.Extinct));
+            Assert.That(panel.StatusMessage, Does.Contain("家族灭亡"));
+            Assert.That(panel.StatusMessage, Does.Contain("无符合资格的继承人"),
+                "the decline path can leave living relatives, so the status must describe the missing heir");
+            Assert.That(panel.StatusMessage, Does.Not.Contain("血脉"),
+                "the status must not claim every family member died");
+            Assert.That(panel.StatusMessage, Does.Not.Contain("extinction."),
+                "the player-facing status must not render the raw completed-result id");
+            Assert.That(panel.StatusMessage, Does.Not.Contain(_session.Succession.CompletedResultId),
+                "the save-stable result id must stay internal");
+            Assert.That(_session.Succession.CompletedResultId, Does.StartWith("extinction."),
+                "presentation must not alter the save-stable extinction result");
         }
 
         [Test]

@@ -37,7 +37,8 @@ namespace SengokuChronicle.Persistence
                 // Version-specific blocks take precedence over the generic development
                 // rule. A legacy payload that wrongly carries a later block must report
                 // the earliest field that its own version cannot own, matching
-                // ValidatePresence's order (industry before development).
+                // ValidatePresence's order (industry before development). v7 owns
+                // development, so only v2-v6 may be rejected for carrying it.
                 if (legacy.saveFormatVersion >= 2 && legacy.saveFormatVersion <= 5 &&
                     SaveDataValidator.HasRootProperty(rawJson, "industry"))
                 {
@@ -53,7 +54,7 @@ namespace SengokuChronicle.Persistence
                         "v6 存档缺少产业状态（industry）；迁移不会用初始状态静默替换。");
                     return false;
                 }
-                if (legacy.saveFormatVersion < 7 &&
+                if (legacy.saveFormatVersion >= 2 && legacy.saveFormatVersion <= 6 &&
                     SaveDataValidator.HasNonNullRootProperty(rawJson, "development"))
                 {
                     result = SaveOperationResult.Failure(SaveErrorCode.InvalidData,

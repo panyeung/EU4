@@ -11,7 +11,7 @@
 
 - SC-019 已有产业任命、资金/物资/情报及事务式月结。
 - SC-020 已有成年判断、人物能力、年度培养、存档迁移与教育编年史。
-- 月结入口 `GameSession.TryAdvanceToNextMonth` 按“产业→教育→事件排程→日期/提交”执行，并显式回滚产业、成长、事件态、随机态和编年史。
+- 月结入口 `GameSession.TryAdvanceToNextMonth` 按“产业→研究→教育→事件排程→日期/提交”执行，并显式回滚产业、研究、成长、事件态、随机态和编年史。
 - 存档以纯数据与稳定 ID 表示 `industry`、`development`；UI 和 FoundationScene 通过事务式 Editor 生成器接入。
 - 当前没有家族研究、已记录技艺或个人技艺掌握领域模型。
 
@@ -63,7 +63,7 @@ MIT 且支持 Unity 6 的仓库提供节点前置关系、图编辑器或 Script
 - GameSession 测试证明研究与产业、教育、事件排程处于同一月结事务；注入结算异常后可完整回滚并重试。
 - Save/Load 测试验证新状态与旧版空状态迁移，稳定 ID、研究进度和完成知识往返一致。
 - EditMode 测试和 `FoundationSceneValidator` 验证面板绑定与布局；Unity 编译、测试、Console、Play Mode 分开报告。
-- SC-021 DEMO 给出纯文本逐步 Play Test；由用户执行并报告。用户正式验收前不提交、合并、打 tag 或 push。
+- SC-021 DEMO 给出纯文本逐步 Play Test；由用户执行并报告。验证通过的切片按项目规则提交并推送到 feature 分支；用户正式验收前不合并 `main`、不打 tag。
 
 ## 项目约束
 
