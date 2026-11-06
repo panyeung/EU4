@@ -35,9 +35,11 @@ namespace SengokuChronicle.Presentation
         [SerializeField] private Button educateHeirButton;
 
         private readonly Button[] _ambitionButtons = new Button[AmbitionChoiceCount];
+        private readonly UnityAction[] _ambitionListeners = new UnityAction[AmbitionChoiceCount];
         private bool _subscribed;
         private UnityAction _openListener;
         private UnityAction _closeListener;
+        private int _ambitionButtonBindings;
 
         public bool IsBound =>
             gameSession != null && panelRoot != null && openButton != null && closeButton != null &&
@@ -66,6 +68,13 @@ namespace SengokuChronicle.Presentation
         public bool MessageVisible => messageText != null && messageText.gameObject.activeSelf;
 
         public int AmbitionChoiceCountValue => AmbitionChoiceCount;
+
+        /// <summary>
+        /// Number of ambition scene buttons currently wired to this panel. Exposed so
+        /// EditMode regressions can prove each choice is bound exactly once.
+        /// </summary>
+        public int AmbitionButtonBindingCount => _ambitionButtonBindings;
+        public bool AmbitionButtonsWired => _ambitionButtonBindings == AmbitionChoiceCount;
 
         public string AmbitionLabel(int index)
         {
@@ -238,6 +247,7 @@ namespace SengokuChronicle.Presentation
                 _closeListener = Close;
                 closeButton.onClick.AddListener(_closeListener);
             }
+            WireAmbitionButtons();
         }
 
         private void Unsubscribe()
@@ -251,6 +261,40 @@ namespace SengokuChronicle.Presentation
             if (closeButton != null && _closeListener != null)
                 closeButton.onClick.RemoveListener(_closeListener);
             _closeListener = null;
+            UnwireAmbitionButtons();
+        }
+
+        /// <summary>Wires the three static scene buttons exactly once.</summary>
+        private void WireAmbitionButtons()
+        {
+            EnsureButtons();
+            for (int i = 0; i < AmbitionChoiceCount; i++)
+            {
+                Button button = _ambitionButtons[i];
+                if (button == null || _ambitionListeners[i] != null)
+                    continue;
+                int index = i;
+                UnityAction listener = () => ClickAmbition(index);
+                _ambitionListeners[i] = listener;
+                button.onClick.AddListener(listener);
+                _ambitionButtonBindings++;
+            }
+        }
+
+        private void UnwireAmbitionButtons()
+        {
+            EnsureButtons();
+            for (int i = 0; i < AmbitionChoiceCount; i++)
+            {
+                if (_ambitionListeners[i] == null)
+                    continue;
+                if (_ambitionButtons[i] != null)
+                    _ambitionButtons[i].onClick.RemoveListener(_ambitionListeners[i]);
+                _ambitionListeners[i] = null;
+                _ambitionButtonBindings--;
+            }
+            if (_ambitionButtonBindings < 0)
+                _ambitionButtonBindings = 0;
         }
 
         private void OnSessionStateChanged()

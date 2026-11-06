@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Reflection;
 using NUnit.Framework;
 using SengokuChronicle.Application;
 using SengokuChronicle.Domain;
@@ -208,6 +209,102 @@ namespace SengokuChronicle.Tests.EditMode
                 Is.EqualTo(FamilyAmbitionKind.PassDownTechnique));
         }
 
+        [TestCase(0, FamilyAmbitionKind.DevelopHousehold, "发展家业", 3)]
+        [TestCase(1, FamilyAmbitionKind.PassDownTechnique, "传承家技", 1)]
+        [TestCase(2, FamilyAmbitionKind.EducateHeir, "培养继承人", 5)]
+        public void Panel_EachAmbitionButtonSubmitsItsChoiceThroughOnClick(int index,
+            FamilyAmbitionKind expectedKind, string expectedLabel, int expectedTarget)
+        {
+            ClearHeadAmbition();
+            FamilyDoctrinePanel panel = Panel();
+            panel.Open();
+            Assert.That(panel.BlockReasonVisible, Is.False);
+            Assert.That(panel.AmbitionButtonBindingCount, Is.EqualTo(3));
+            Assert.That(panel.AmbitionButtonsWired, Is.True);
+            Assert.That(panel.AmbitionInteractable(index), Is.True);
+
+            Button button = AmbitionButton(index);
+            button.onClick.Invoke();
+
+            Assert.That(panel.AmbitionCommitCount, Is.EqualTo(1));
+            Assert.That(_session.CurrentHeadAmbition, Is.Not.Null);
+            Assert.That(_session.CurrentHeadAmbition.Kind, Is.EqualTo(expectedKind));
+            Assert.That(_session.CurrentHeadAmbition.Progress, Is.Zero);
+            Assert.That(_session.CurrentHeadAmbition.Target, Is.EqualTo(expectedTarget));
+            Assert.That(panel.AmbitionLine, Does.Contain(expectedLabel));
+            Assert.That(panel.AmbitionLine, Does.Contain("0/" + expectedTarget));
+            Assert.That(panel.BlockReasonLine, Does.Contain("已选定"));
+            for (int i = 0; i < panel.AmbitionChoiceCountValue; i++)
+                Assert.That(panel.AmbitionInteractable(i), Is.False);
+
+            button.onClick.Invoke();
+            Assert.That(panel.AmbitionCommitCount, Is.EqualTo(1),
+                "a repeated onClick after the choice is selected must not submit again");
+            Assert.That(_session.CurrentHeadAmbition.Kind, Is.EqualTo(expectedKind));
+        }
+
+        [Test]
+        public void Panel_AmbitionButtonsStayWiredExactlyOnceAcrossRefreshDisableAndRebind()
+        {
+            FamilyDoctrinePanel panel = Panel();
+            panel.Open();
+            Assert.That(panel.AmbitionButtonBindingCount, Is.EqualTo(3));
+            Assert.That(panel.AmbitionButtonsWired, Is.True);
+
+            panel.Refresh();
+            panel.Refresh();
+            Assert.That(panel.AmbitionButtonBindingCount, Is.EqualTo(3),
+                "refreshing must not add ambition listeners");
+
+            panel.enabled = false;
+            InvokeLifecycle(panel, "OnDisable");
+            Assert.That(panel.AmbitionButtonBindingCount, Is.Zero,
+                "disable must release every ambition listener");
+            ClearHeadAmbition();
+            AmbitionButton(0).onClick.Invoke();
+            Assert.That(panel.AmbitionCommitCount, Is.Zero);
+            Assert.That(_session.CurrentHeadAmbition, Is.Null,
+                "a disabled panel must not submit through a stale listener");
+
+            panel.enabled = true;
+            InvokeLifecycle(panel, "OnEnable");
+            Assert.That(panel.AmbitionButtonBindingCount, Is.EqualTo(3),
+                "re-enable must restore each ambition listener exactly once");
+
+            var serialized = new UnityEditor.SerializedObject(panel);
+            panel.BindReferences(
+                serialized.FindProperty("gameSession").objectReferenceValue as GameSession,
+                serialized.FindProperty("panelRoot").objectReferenceValue as GameObject,
+                serialized.FindProperty("openButton").objectReferenceValue as Button,
+                serialized.FindProperty("closeButton").objectReferenceValue as Button,
+                serialized.FindProperty("titleText").objectReferenceValue as Text,
+                serialized.FindProperty("creedText").objectReferenceValue as Text,
+                serialized.FindProperty("creedChoicesText").objectReferenceValue as Text,
+                serialized.FindProperty("effectText").objectReferenceValue as Text,
+                serialized.FindProperty("headText").objectReferenceValue as Text,
+                serialized.FindProperty("ambitionText").objectReferenceValue as Text,
+                serialized.FindProperty("blockReasonText").objectReferenceValue as Text,
+                serialized.FindProperty("messageText").objectReferenceValue as Text,
+                serialized.FindProperty("developHouseholdButton").objectReferenceValue as Button,
+                serialized.FindProperty("passDownTechniqueButton").objectReferenceValue as Button,
+                serialized.FindProperty("educateHeirButton").objectReferenceValue as Button);
+            Assert.That(panel.AmbitionButtonBindingCount, Is.EqualTo(3),
+                "a repeated BindReferences call must replace, not stack, ambition listeners");
+            Assert.That(panel.AmbitionButtonsWired, Is.True);
+
+            panel.Open();
+            for (int i = 0; i < panel.AmbitionChoiceCountValue; i++)
+            {
+                ClearHeadAmbition();
+                AmbitionButton(i).onClick.Invoke();
+                Assert.That(_session.CurrentHeadAmbition, Is.Not.Null);
+                Assert.That(_session.CurrentHeadAmbition.Kind,
+                    Is.EqualTo(ExpectedAmbitionKind(i)));
+            }
+            Assert.That(panel.AmbitionCommitCount, Is.EqualTo(3),
+                "each rebound button must submit its choice exactly once");
+        }
+
         [Test]
         public void Panel_DoesNotAutoOpenWhenEnteringTheScenario()
         {
@@ -219,6 +316,46 @@ namespace SengokuChronicle.Tests.EditMode
 
             _session.InitFamilyDoctrineDemoScenario();
             Assert.That(panel.IsOpen, Is.False);
+        }
+
+        private static readonly string[] AmbitionButtonNames =
+        {
+            AddSC024FamilyDoctrine.DevelopButtonName,
+            AddSC024FamilyDoctrine.TechniqueButtonName,
+            AddSC024FamilyDoctrine.EducateButtonName
+        };
+
+        private Button AmbitionButton(int index) =>
+            Find(AmbitionButtonNames[index]).GetComponent<Button>();
+
+        private void ClearHeadAmbition()
+        {
+            SaveData data = _session.CaptureSave();
+            data.familyDoctrine.ambitions = Array.Empty<FamilyAmbitionSaveEntry>();
+            SaveOperationResult applied = _session.TryApplySave(data);
+            Assert.That(applied.Succeeded, Is.True, applied.Message);
+            Assert.That(_session.CurrentHeadAmbition, Is.Null);
+        }
+
+        private static FamilyAmbitionKind ExpectedAmbitionKind(int index)
+        {
+            switch (index)
+            {
+                case 0: return FamilyAmbitionKind.DevelopHousehold;
+                case 1: return FamilyAmbitionKind.PassDownTechnique;
+                case 2: return FamilyAmbitionKind.EducateHeir;
+                default: throw new ArgumentOutOfRangeException(nameof(index));
+            }
+        }
+
+        private static void InvokeLifecycle(FamilyDoctrinePanel panel, string methodName)
+        {
+            // Plain MonoBehaviours do not receive EditMode lifecycle dispatch, so invoke the
+            // same callback Play Mode enable/disable runs.
+            MethodInfo method = typeof(FamilyDoctrinePanel).GetMethod(
+                methodName, BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(method, Is.Not.Null, "FamilyDoctrinePanel." + methodName + " is missing");
+            method.Invoke(panel, null);
         }
 
         private GameObject Create(string name, Transform parent, params Type[] components)
