@@ -135,4 +135,4 @@ New review-correction test names (all passed):
 
 ## 5. Commit state
 
-The verified M03 review-correction files are committed to the current `main` worktree and pushed to `origin/main` as a review-correction commit after the focused/full EditMode and Validator gates passed. The unrelated untracked `nul` file was preserved and not staged. No branch, worktree, merge, or tag was created, and this is not a claim of milestone acceptance.
+The verified M03 review-correction files were committed to the current `main` worktree as `b7c51ba` (`fix(m03): address autonomy review findings`) and pushed to `origin/main` after the focused/full EditMode and Validator gates passed. The unrelated untracked `nul` file was preserved and not staged. No branch, worktree, merge, or tag was created, and this is not a claim of milestone acceptance.
