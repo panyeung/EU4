@@ -30,6 +30,8 @@ namespace SengokuChronicle.Presentation
         [SerializeField] private Text statusText;
         [SerializeField] private Text candidatesText;
         [SerializeField] private Text logText;
+        [SerializeField] private ScrollRect diagnosticsScroll;
+        [SerializeField] private RectTransform diagnosticsContent;
 
         private bool _subscribed;
         private UnityAction _openListener;
@@ -43,7 +45,8 @@ namespace SengokuChronicle.Presentation
             gameSession != null && panelRoot != null && openButton != null &&
             closeButton != null && masatsunaButton != null && nobumasaButton != null &&
             titleText != null && summaryText != null && needsText != null &&
-            statusText != null && candidatesText != null && logText != null;
+            statusText != null && candidatesText != null && logText != null &&
+            diagnosticsScroll != null && diagnosticsContent != null;
 
         public bool IsOpen => panelRoot != null && panelRoot.activeSelf;
         public int StaticButtonBindingCount => _staticButtonBindings;
@@ -68,7 +71,7 @@ namespace SengokuChronicle.Presentation
         /// <summary>Editor/test binding seam; wires every serialized reference.</summary>
         public void BindReferences(GameSession session, GameObject root, Button open, Button close,
             Button masatsuna, Button nobumasa, Text title, Text summary, Text needs,
-            Text status, Text candidates, Text log)
+            Text status, Text candidates, Text log, ScrollRect scroll, RectTransform content)
         {
             Unsubscribe();
             _selectedPersonId = default;
@@ -84,6 +87,8 @@ namespace SengokuChronicle.Presentation
             statusText = status;
             candidatesText = candidates;
             logText = log;
+            diagnosticsScroll = scroll;
+            diagnosticsContent = content;
             Subscribe();
             if (UnityEngine.Application.isPlaying && IsOpen)
                 Refresh();
@@ -157,6 +162,7 @@ namespace SengokuChronicle.Presentation
                 statusText.text = "状态：空闲";
                 candidatesText.text = "暂无候选。";
                 logText.text = "暂无决策记录。";
+                ResetDiagnosticsScroll();
                 return;
             }
 
@@ -165,6 +171,13 @@ namespace SengokuChronicle.Presentation
             statusText.text = BuildStatus(selected);
             candidatesText.text = BuildCandidates(selected);
             logText.text = BuildLog(selected);
+            ResetDiagnosticsScroll();
+        }
+
+        private void ResetDiagnosticsScroll()
+        {
+            if (diagnosticsScroll != null)
+                diagnosticsScroll.verticalNormalizedPosition = 1f;
         }
 
         private string BuildStatus(NpcAutonomySnapshot snapshot)
@@ -190,26 +203,49 @@ namespace SengokuChronicle.Presentation
             {
                 builder.Append("　｜　当前行动：无");
             }
+            if (snapshot.HasLastOutcome)
+            {
+                builder.Append("　｜　最近结果：")
+                    .Append(snapshot.LastOutcome.StatusName)
+                    .Append(' ')
+                    .Append(snapshot.LastOutcome.ActionName)
+                    .Append("（")
+                    .Append(snapshot.LastOutcome.Date.ToString())
+                    .Append('）');
+            }
             return builder.ToString();
         }
 
         private static string BuildCandidates(NpcAutonomySnapshot snapshot)
         {
-            NpcAutonomyEvaluation evaluation = snapshot.LatestEvaluation;
-            if (evaluation == null)
+            NpcAutonomyEvaluation latest = snapshot.LatestEvaluation;
+            NpcAutonomyEvaluation current = snapshot.CurrentEvaluation ?? latest;
+            if (latest == null && current == null)
                 return "尚无评估。";
-            var builder = new StringBuilder(256);
-            builder.Append("最近一次评估：").Append(evaluation.Summary);
-            foreach (NpcActionCandidate candidate in evaluation.Candidates)
+
+            var builder = new StringBuilder(420);
+            if (latest != null)
+            {
+                builder.Append("最近目标评估：").Append(latest.Summary);
+                if (latest.HasSelection)
+                    builder.Append("　已选中 ").Append(latest.Selected.KindName)
+                        .Append("（分数 ").Append(latest.Selected.Score).Append("）。");
+                builder.Append('\n');
+            }
+            builder.Append("当前诊断：")
+                .Append(current != null ? current.Summary : "尚无评估。");
+            if (current == null)
+                return builder.ToString();
+            foreach (NpcActionCandidate candidate in current.Candidates)
             {
                 builder.Append('\n').Append("- ").Append(candidate.KindName).Append("：");
                 if (candidate.IsEligible)
                 {
                     builder.Append("分数 ").Append(candidate.Score).Append("（")
                         .Append(candidate.Explanation).Append('）');
-                    if (evaluation.HasSelection &&
-                        evaluation.Selected.Kind == candidate.Kind)
-                        builder.Append("　→ 已选中");
+                    if (current.HasSelection &&
+                        current.Selected.Kind == candidate.Kind)
+                        builder.Append("　→ 当前选中");
                 }
                 else
                 {

@@ -18,7 +18,7 @@
 | M00 | 现有工程基线与验收收敛 | 进行中：核验未验收切片、工作树和场景证据 |
 | M01 | 固定三代家族可玩原型 | 进行中：SC-024 工作区场景通过当前 Validator，代理 Play Mode 已验证两次交接与存读档关键路径；HEAD 场景仍未接入；最终里程碑验收待办 |
 | M02 | 每日行动与旅行基础 | 进行中：每日行动领域、存档与事务式 UI 已实现；工作区场景已接入并通过当前 Validator；每日行动切片已通过 lead Play Mode gate，用户验收待办 |
-| M03 | 高自主 NPC 与只读 Inspector | 实现与复审修正完成，待 lead Play Mode 与用户验收：纯 C# 规则、v11 存档/迁移、两名试点、只读 Inspector 与事务式场景接入；复审修正后 EditMode 1260/1260，Validator PASS；2026-11-07 独立派发复跑同样 1260/1260 与 Validator PASS |
+| M03 | 高自主 NPC 与只读 Inspector | 实现与两轮复审修正完成，待 lead Play Mode 与用户验收：纯 C# 规则、v11 存档/迁移、两名试点、逐日自主推进、只读可滚动 Inspector 与事务式场景接入；第二轮修正后 EditMode 1274/1274，Validator PASS；2026-11-07 独立派发复跑前一轮为 1260/1260 |
 | M04 | 人物记忆与动态家族 | 计划中 |
 | M05 | 经营与委托纵向切片 | 计划中 |
 | M06 | 回合制潜入原型 | 计划中 |
@@ -56,8 +56,9 @@ M01 尚未完成。SC-024 代码、事件内容、存档 v9、面板与事务式
 - 存档：schema 从 v10 升为 v11（rules 7），新增只包含两名试点需求的 `npcAutonomy`；v10 迁移初始化默认需求并逐字段保留 `dailyActions`；校验拒绝未知/重复/越界/缺失/非名册试点。v11 读档不重新排程，活动任务保持权威；空闲试点在下一次模拟日恢复检查。
 - 只读 Inspector：`NpcAiInspectorPanel` 只订阅并展示需求、偏好、执行状态、当前行动、三个候选的分数或排除原因、最近决策；控件仅选择人物、打开/关闭/刷新视图，不调用排程、中断或重新规划 API。
 - 复审修正：v10 原始 JSON 迁移按 v9 字段引入版本放行 `familyDoctrine`/`activeEventScenarioId`，并保留完整 `dailyActions`；成功推进即使无行动完成也刷新需求与 Inspector；自主行动完成恢复可读消息；活动任务期间候选保留诊断分数但不可重新排程；四种命令结果均有触发原因/状态测试。
-- 场景：`AddM03NpcAiInspector` 通过单个 Undo 组创建/修复 `Canvas/M03NpcAiInspectorRoot`，保存前校验；`FoundationScene` 已接入一个根与一个打开按钮，`FoundationSceneValidator` 为 `RESULT: PASS; Errors: 0`。
-- 证据（2026-11-07 复审修正轮，Unity `6000.6.6f1`，Editor PID `90052`，项目路径 `C:\Users\panye\My project`）：最终 Tundra 编译成功且 `error CS` 0；聚焦 EditMode `126/126` 通过、全量 EditMode `1260/1260` 通过、0 失败/跳过/不确定（`Logs/m03-review-focused.txt` 与 `Logs/m03-review-full.txt` / `.xml`）；`FoundationSceneValidator` 重跑为 `RESULT: PASS; Errors: 0`（`Logs/m03-review-validator.txt`）。复审修正覆盖 v10 原始 JSON 迁移、需求增长后的 Inspector/会话刷新、自主行动完成消息、以及 Accepted/Deferred/Rejected/Interrupted 的日志与无状态变更断言。运行前 Console 为 0 errors / 0 warnings / 6 logs；全量 EditMode 后为 2 errors / 25 warnings，两条 error 均为通过的 `FamilyFormationSessionTests` 故障注入日志。2026-11-07 独立派发在同一 Editor 复跑并更正证据：全量 EditMode 1260/1260（`Logs/m03-rerun-full.txt`）、聚焦 126/126（`Logs/m03-rerun-focused.txt`）、`FoundationSceneValidator` `RESULT: PASS; Errors: 0` 且 M03 根节点恰好 1 个（`Logs/m03-rerun-validate.txt`）；先前 `m03-verify-full` 实际只有 126 条聚焦用例，其“全量 1260”说法已更正，未修改实现代码。未运行 Play Mode；用户最终验收仍待办。
+- 第二轮独立复审修正（目标 `12b52f3`）：`AdvanceDays`/月结按每个模拟日依次推进需求、行动与决策，月结仍只有一次事务；完成与每日检查分区，阻断的重规划每日只记一条；活动日刷新不再覆盖目标选择 `LatestEvaluation`，Inspector 同时显示纯诊断 `CurrentEvaluation`；继承/名册与 `ConfirmTravel` 触发 `EligibilityChanged` 并补上未登记试点拒绝路径；完成/中断保留 `LastOutcome`；诊断区改为 `ScrollRect` + 遮罩视口 + 垂直布局/内容自适应；Inspector 读取不再调用 `Ensure`/`Reconcile`；延期记录补充下次检查时机；v11 `rulesVersion` 不匹配拒绝而非静默归一，v10 迁移仍按预期升级。
+- 场景：`AddM03NpcAiInspector` 通过单个 Undo 组创建/修复 `Canvas/M03NpcAiInspectorRoot`，保存前校验，并可替换既有生成子树；`FoundationScene` 已接入一个根、一个打开按钮与滚动诊断区，`FoundationSceneValidator` 为 `RESULT: PASS; Errors: 0`。
+- 证据（2026-11-07 第二轮复审修正，Unity `6000.6.6f1`，Editor PID `90052`，项目路径 `C:\Users\panye\My project`）：删除临时自动运行脚本后最终 Tundra 编译成功且 `error CS` 0；聚焦 EditMode `140/140` 通过、全量 EditMode `1274/1274` 通过、0 失败/跳过/不确定（`Logs/m03-fix-focused.txt` 与 `Logs/m03-fix-full.txt`）；`FoundationSceneValidator` 为 `RESULT: PASS; Errors: 0`，M03 根节点恰好 1 个（`Logs/m03-fix-scene.txt`、`Logs/SceneValidationReport.txt`）。全量后 Console 为 2 errors / 25 warnings / 16 logs，两条 error 均为通过的 `FamilyFormationSessionTests` 故障注入日志。未运行 Play Mode；用户最终验收仍待办。
 
 ## SC-011 当前实现状态（2026-11-02）
 

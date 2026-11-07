@@ -426,9 +426,11 @@ namespace SengokuChronicle.Application
 
         /// <summary>Session-only newest-first decision log for the two pilots.</summary>
         public IReadOnlyList<NpcAutonomyDecisionRecord> NpcAutonomyDecisions =>
-            EnsureNpcAutonomy().Decisions;
+            _npcAutonomy != null
+                ? _npcAutonomy.Decisions
+                : (IReadOnlyList<NpcAutonomyDecisionRecord>)Array.Empty<NpcAutonomyDecisionRecord>();
 
-        /// <summary>Read-only snapshots in stable ordinal pilot order.</summary>
+        /// <summary>Read-only snapshots in stable ordinal pilot order; never mutates state.</summary>
         public IReadOnlyList<NpcAutonomySnapshot> NpcAutonomySnapshots
         {
             get
@@ -444,29 +446,37 @@ namespace SengokuChronicle.Application
         }
 
         /// <summary>
-        /// Read-only projection for the Inspector. It never schedules, interrupts or
-        /// replans; it only reads durable needs plus the current task and recent log.
+        /// Read-only projection for the Inspector. It never schedules, interrupts,
+        /// replans, reconciles or creates autonomy state; lifecycle commands own those
+        /// mutations. A missing session state therefore yields no snapshot instead of
+        /// scheduling a side effect during a read.
         /// </summary>
         public bool TryGetNpcAutonomy(PersonId personId, out NpcAutonomySnapshot snapshot)
         {
             snapshot = null;
-            if (!NpcAutonomyRules.IsPilot(personId))
+            if (!NpcAutonomyRules.IsPilot(personId) || _npcAutonomy == null)
                 return false;
-            NpcAutonomyState state = EnsureNpcAutonomy();
-            if (!state.TryGetPerson(personId, out NpcAutonomyPersonState person))
+            if (!_npcAutonomy.TryGetPerson(personId, out NpcAutonomyPersonState person))
                 return false;
 
             NpcAutonomyRules.TryGetProfile(personId, out NpcAutonomyProfile profile);
-            EnsureDailyActions().TryGetActive(personId, out DailyActionTask task);
-            NpcAutonomyEvaluation evaluation = person.LatestEvaluation ??
-                BuildNpcEvaluation(personId, person.Needs);
+            DailyActionTask task = null;
+            if (_dailyActions != null)
+                _dailyActions.TryGetActive(personId, out task);
+            bool hasActiveAction = task != null;
+            bool hasKnownLocation = _dailyActions != null &&
+                _dailyActions.TryGetLocation(personId, out _);
+            NpcAutonomyEvaluation current = NpcAutonomyRules.Evaluate(personId, person.Needs,
+                true, hasKnownLocation, hasActiveAction);
+            NpcAutonomyEvaluation latest = person.LatestEvaluation ?? current;
             string displayName = profile.DisplayName;
-            if (Succession != null && Succession.World != null &&
-                Succession.World.TryGetPerson(personId, out PersonState personState) &&
+            if (_succession != null && _succession.World != null &&
+                _succession.World.TryGetPerson(personId, out PersonState personState) &&
                 !string.IsNullOrWhiteSpace(personState.DisplayName))
                 displayName = personState.DisplayName;
             snapshot = new NpcAutonomySnapshot(personId, displayName, person.Needs, profile,
-                person.Status, task, evaluation, state.RecentDecisionsFor(personId, 8));
+                person.Status, task, latest, current, person.LastOutcome, person.HasLastOutcome,
+                _npcAutonomy.RecentDecisionsFor(personId, 8));
             return true;
         }
 
@@ -954,6 +964,7 @@ namespace SengokuChronicle.Application
                     "家主交接：上一代家主的未完成行动已取消。");
             ReconcileDailyActions();
             EnsureNpcAutonomy();
+            PlanNpcEligibilityChange();
             ReconcileDevelopmentRoster();
             if (before.DiffersFrom(_succession))
                 RecordSuccession(before, result);
@@ -1767,15 +1778,49 @@ namespace SengokuChronicle.Application
                 if (outcome.Outcome != DailyActionOutcomeKind.Completed ||
                     !NpcAutonomyRules.IsPilot(outcome.PersonId))
                     continue;
-                _npcAutonomy.ApplyCompletedAction(outcome.PersonId, outcome.Kind);
+                _npcAutonomy.ApplyCompletedAction(outcome.PersonId, outcome.Kind,
+                    outcome.Date, outcome.Reason);
             }
         }
 
         /// <summary>
-        /// Replans only pilots whose action completed on this advance. Active pilots are
-        /// never re-evaluated, so an ordinary day cannot replace a scheduled action.
+        /// Explicit eligibility-change pass used by succession/roster and manual-travel
+        /// flows. It evaluates every authored pilot, so a pilot missing from the roster
+        /// produces an observable Rejected decision instead of silently doing nothing.
         /// </summary>
-        private bool PlanNpcAfterAdvance(IReadOnlyList<DailyActionResult> outcomes)
+        private bool PlanNpcEligibilityChange()
+        {
+            NpcAutonomyState state = EnsureNpcAutonomy();
+            int suppression = _dailyActionNotificationSuppression;
+            _dailyActionNotificationSuppression++;
+            try
+            {
+                bool changed = false;
+                foreach (NpcAutonomyProfile profile in NpcAutonomyRules.Profiles)
+                {
+                    if (state.Contains(profile.PersonId))
+                        continue;
+                    PlanOnePilot(profile.PersonId, NpcAutonomyTrigger.EligibilityChanged,
+                        out _);
+                    changed = true;
+                }
+                changed |= PlanIdlePilots(NpcAutonomyTrigger.EligibilityChanged, null);
+                return changed;
+            }
+            finally
+            {
+                _dailyActionNotificationSuppression = suppression;
+            }
+        }
+
+        /// <summary>
+        /// Replans pilots whose action completed on this advance, then checks the
+        /// remaining pilots with the supplied idle trigger. A pilot handled by the
+        /// completion pass is excluded from the idle pass so one blocked replan cannot
+        /// append the same Deferred/Rejected decision twice in one day.
+        /// </summary>
+        private bool PlanNpcAfterAdvance(IReadOnlyList<DailyActionResult> outcomes,
+            NpcAutonomyTrigger idleTrigger = NpcAutonomyTrigger.DailyCheck)
         {
             if (_npcAutonomy == null || _npcAutonomy.Persons.Count == 0)
                 return false;
@@ -1795,10 +1840,16 @@ namespace SengokuChronicle.Application
                 bool changed = false;
                 if (completed.Count > 0)
                     changed |= PlanIdlePilots(NpcAutonomyTrigger.ActionCompleted, completed);
+
+                var idleOnly = new HashSet<PersonId>();
+                foreach (NpcAutonomyPersonState person in _npcAutonomy.Persons)
+                    if (!completed.Contains(person.PersonId))
+                        idleOnly.Add(person.PersonId);
                 // An idle pilot is checked again on the next simulated day. This also
                 // resumes autonomy after a load or a cleared short-term block, while an
                 // active pilot is always skipped and never replaced.
-                changed |= PlanIdlePilots(NpcAutonomyTrigger.DailyCheck, null);
+                if (idleOnly.Count > 0)
+                    changed |= PlanIdlePilots(idleTrigger, idleOnly);
                 return changed;
             }
             finally
@@ -1822,11 +1873,9 @@ namespace SengokuChronicle.Application
                 if (EnsureDailyActions().HasActiveAction(person.PersonId))
                 {
                     state.SetStatus(person.PersonId, NpcAutonomyStatus.Executing);
-                    // Active pilots are never re-scored for scheduling, but the
-                    // read-only Inspector still needs current needs and integer
-                    // scores. Evaluate with the active exclusion so no replan occurs.
-                    state.SetLatestEvaluation(person.PersonId, BuildNpcEvaluation(
-                        person.PersonId, person.Needs, true));
+                    // Active pilots are never re-scored for scheduling. The Inspector
+                    // derives current diagnostic scores from live needs on read, while
+                    // LatestEvaluation keeps the explanation that selected this action.
                     changed = true;
                     continue;
                 }
@@ -1854,6 +1903,9 @@ namespace SengokuChronicle.Application
             if (!state.TryGetPerson(personId, out NpcAutonomyPersonState person))
             {
                 reason = "人物未登记为自主 NPC。";
+                state.RecordDecision(new NpcAutonomyDecisionRecord(CurrentGameDate, personId,
+                    NpcAutonomyCommandOutcomeKind.Rejected, DailyActionKind.Rest, false, trigger,
+                    reason));
                 return NpcAutonomyCommandOutcomeKind.Rejected;
             }
 
@@ -1886,10 +1938,18 @@ namespace SengokuChronicle.Application
             }
 
             state.SetStatus(personId, NpcAutonomyStatus.Idle);
+            string deferredReason = reason + (HasPendingEventForPlanning()
+                ? "下次检查：事件处理后的下一个模拟日。"
+                : "下次检查：下一个模拟日。");
             state.RecordDecision(new NpcAutonomyDecisionRecord(CurrentGameDate, personId,
-                NpcAutonomyCommandOutcomeKind.Deferred, selected.Kind, true, trigger, reason));
+                NpcAutonomyCommandOutcomeKind.Deferred, selected.Kind, true, trigger,
+                deferredReason));
+            reason = deferredReason;
             return NpcAutonomyCommandOutcomeKind.Deferred;
         }
+
+        private bool HasPendingEventForPlanning() =>
+            _eventRuntimeState != null && _eventRuntimeState.HasPendingEvents;
 
         /// <summary>Refreshes only missing diagnostics; never overwrites a stored plan rationale.</summary>
         private void RefreshNpcAutonomyDiagnostics()
@@ -3030,6 +3090,8 @@ namespace SengokuChronicle.Application
                     personId, NpcAutonomyCommandOutcomeKind.Interrupted, result.Kind, true,
                     NpcAutonomyTrigger.ActionInterrupted, result.Reason));
                 _npcAutonomy.SetStatus(personId, NpcAutonomyStatus.Interrupted);
+                _npcAutonomy.SetLastOutcome(personId, new NpcAutonomyOutcomeRecord(
+                    NpcAutonomyStatus.Interrupted, result.Kind, result.Date, result.Reason));
 
                 if (_autonomyInterruptionSuppression == 0)
                 {
@@ -3180,13 +3242,12 @@ namespace SengokuChronicle.Application
                 LastMonthTurnOutcome = MonthTurnOutcome.DateOutOfRange;
                 return false;
             }
-            bool needsGrown = GrowNpcNeeds(1);
-            IReadOnlyList<DailyActionResult> outcomes = ApplyDailyActionAdvance(previousDate, 1);
-            ApplyNpcActionCompletions(outcomes);
-            bool autonomyChanged = PlanNpcAfterAdvance(outcomes);
+            bool autonomyChanged = AdvanceAutonomyDay(previousDate,
+                out IReadOnlyList<DailyActionResult> outcomes);
+            PublishDailyActionReport(outcomes);
             SyncCurrentLocationFromDailyActions();
             LastMonthTurnOutcome = MonthTurnOutcome.Succeeded;
-            if (NoticeRegencyHandoffIfDue() || autonomyChanged || needsGrown)
+            if (NoticeRegencyHandoffIfDue() || autonomyChanged)
                 SessionStateChanged?.Invoke();
             return true;
         }
@@ -3232,18 +3293,35 @@ namespace SengokuChronicle.Application
                 LastEventMessage = "日期将跨月：请使用「结束本月」完成月度结算。";
                 return false;
             }
-            if (!WorldClock.AdvanceDays(count))
+            int suppression = _dailyActionNotificationSuppression;
+            _dailyActionNotificationSuppression++;
+            var allOutcomes = new List<DailyActionResult>();
+            bool autonomyChanged = false;
+            GameDate cursor = previousDate;
+            try
             {
-                LastMonthTurnOutcome = MonthTurnOutcome.DateOutOfRange;
-                return false;
+                for (int day = 0; day < count; day++)
+                {
+                    if (!WorldClock.AdvanceOneDay())
+                    {
+                        LastMonthTurnOutcome = MonthTurnOutcome.DateOutOfRange;
+                        return false;
+                    }
+                    autonomyChanged |= AdvanceAutonomyDay(cursor,
+                        out IReadOnlyList<DailyActionResult> dayOutcomes);
+                    allOutcomes.AddRange(dayOutcomes);
+                    cursor = WorldClock.CurrentDate;
+                }
             }
-            bool needsGrown = GrowNpcNeeds(count);
-            IReadOnlyList<DailyActionResult> outcomes = ApplyDailyActionAdvance(previousDate, count);
-            ApplyNpcActionCompletions(outcomes);
-            bool autonomyChanged = PlanNpcAfterAdvance(outcomes);
+            finally
+            {
+                _dailyActionNotificationSuppression = suppression;
+            }
+
+            PublishDailyActionReport(allOutcomes);
             SyncCurrentLocationFromDailyActions();
             LastMonthTurnOutcome = MonthTurnOutcome.Succeeded;
-            if (NoticeRegencyHandoffIfDue() || autonomyChanged || needsGrown)
+            if (NoticeRegencyHandoffIfDue() || autonomyChanged)
                 SessionStateChanged?.Invoke();
             return true;
         }
@@ -3633,38 +3711,59 @@ namespace SengokuChronicle.Application
                     return false;
                 }
 
-                if (!WorldClock.TryAdvanceToNextMonth())
-                {
-                    RandomStateManager.TryRestore(rngBefore, out _randomStateManager);
-                    HistoryLedger.TryRestore(chronicleBefore, out _historyLedger, out _);
-                    _industryState = industryBefore;
-                    LastMonthTurnOutcome = MonthTurnOutcome.DateOutOfRange;
-                    return false;
-                }
-
                 // The monthly jump consumes calendar days for in-flight actions exactly
-                // once, before the fault seam so the transaction owns the result too.
+                // once. Each simulated day resolves autonomy independently so a pilot
+                // that completes early in the month is not stranded until the end.
                 int elapsedDays = CountCalendarDays(previousDate, nextDate);
-                IReadOnlyList<DailyActionResult> dailyOutcomes = null;
-                if (elapsedDays > 0)
+                var allOutcomes = new List<DailyActionResult>();
+                int suppression = _dailyActionNotificationSuppression;
+                _dailyActionNotificationSuppression++;
+                try
                 {
-                    GrowNpcNeeds(elapsedDays);
-                    dailyOutcomes = ApplyDailyActionAdvance(previousDate, elapsedDays);
-                    ApplyNpcActionCompletions(dailyOutcomes);
+                    GameDate cursor = previousDate;
+                    if (elapsedDays <= 0)
+                    {
+                        _industryState = nextIndustry;
+                        _eventRuntimeState = nextRuntime;
+                        _development = nextDevelopment;
+                        _researchState = researchSettlement.NextState ?? researchBefore;
+                        _familyDoctrine = nextDoctrine;
+                        AdvanceAutonomyDay(cursor, out IReadOnlyList<DailyActionResult> none);
+                        allOutcomes.AddRange(none);
+                    }
+                    for (int day = 0; day < elapsedDays; day++)
+                    {
+                        if (!WorldClock.AdvanceOneDay())
+                            throw new InvalidOperationException(
+                                "月度结算无法逐日推进到目标日期。");
+                        if (day == elapsedDays - 1)
+                        {
+                            // Commit the monthly state before the final day's
+                            // planning so the industry gate and the newly scheduled
+                            // event runtime see the settled month exactly as the
+                            // equivalent daily path would.
+                            _industryState = nextIndustry;
+                            _eventRuntimeState = nextRuntime;
+                            _development = nextDevelopment;
+                            _researchState = researchSettlement.NextState ?? researchBefore;
+                            _familyDoctrine = nextDoctrine;
+                        }
+                        AdvanceAutonomyDay(cursor,
+                            out IReadOnlyList<DailyActionResult> dayOutcomes);
+                        allOutcomes.AddRange(dayOutcomes);
+                        cursor = WorldClock.CurrentDate;
+                    }
+                }
+                finally
+                {
+                    _dailyActionNotificationSuppression = suppression;
                 }
 
                 // Fault-injection seam: the date has already crossed, so any exception
                 // below must restore the clock as well as resources/history/RNG.
                 MonthSettlementFaultInjection?.Invoke();
 
-                _industryState = nextIndustry;
-                _eventRuntimeState = nextRuntime;
-                _development = nextDevelopment;
-                _researchState = researchSettlement.NextState ?? researchBefore;
-                _familyDoctrine = nextDoctrine;
-                // Planning runs after the monthly state commit so the industry
-                // consistency gate sees the new settled month, not the previous one.
-                PlanNpcAfterAdvance(dailyOutcomes);
+                PublishDailyActionReport(allOutcomes);
                 SyncCurrentLocationFromDailyActions();
                 LastIndustryReport = settlement.Report;
                 if (settlement.Report != null)
@@ -3814,12 +3913,42 @@ namespace SengokuChronicle.Application
                 return false;
             }
 
-            if (!WorldClock.AdvanceDays(days))
-                return false;
-            CurrentLocation = preview.Destination;
-            EnsureDailyActions().TrySetLocation(_succession.HeadPersonId, preview.Destination);
+            GameDate previousDate = WorldClock.CurrentDate;
+            int suppression = _dailyActionNotificationSuppression;
+            _dailyActionNotificationSuppression++;
+            var allOutcomes = new List<DailyActionResult>();
+            bool needsGrown = false;
+            GameDate cursor = previousDate;
+            try
+            {
+                for (int day = 0; day < days; day++)
+                {
+                    if (!WorldClock.AdvanceOneDay())
+                        return false;
+                    needsGrown |= GrowNpcNeeds(1);
+                    IReadOnlyList<DailyActionResult> outcomes =
+                        EnsureDailyActions().AdvanceDays(cursor, 1);
+                    allOutcomes.AddRange(outcomes);
+                    ApplyNpcActionCompletions(outcomes);
+                    cursor = WorldClock.CurrentDate;
+                }
+
+                CurrentLocation = preview.Destination;
+                EnsureDailyActions().TrySetLocation(_succession.HeadPersonId,
+                    preview.Destination);
+                // Direct travel bypasses the day loop's planner, so explicitly run the
+                // eligibility pass after the new location is authoritative.
+                PlanNpcAfterAdvance(allOutcomes, NpcAutonomyTrigger.EligibilityChanged);
+            }
+            finally
+            {
+                _dailyActionNotificationSuppression = suppression;
+            }
+
+            PublishDailyActionReport(allOutcomes);
+            SyncCurrentLocationFromDailyActions();
             LastTravelBlockReason = string.Empty;
-            if (NoticeRegencyHandoffIfDue())
+            if (NoticeRegencyHandoffIfDue() || allOutcomes.Count > 0 || needsGrown)
                 SessionStateChanged?.Invoke();
             return true;
         }
@@ -3871,23 +4000,35 @@ namespace SengokuChronicle.Application
         }
 
         /// <summary>
-        /// Advances in-flight actions by explicit calendar days and records outcomes.
-        /// The shared M02 outcome list keeps its player-issued contract, while the
-        /// readable message also explains autonomous pilot completions so the panel
-        /// never hides why a pilot's action ended.
+        /// One simulated day: needs grow, in-flight actions advance, completed pilot
+        /// needs are reduced, then only idle/completed pilots may be replanned. Callers
+        /// that advance several days must call this once per simulated day so a pilot
+        /// that finishes early is not stranded until the end of a bulk range.
         /// </summary>
-        private IReadOnlyList<DailyActionResult> ApplyDailyActionAdvance(GameDate previousDate,
-            int days)
+        private bool AdvanceAutonomyDay(GameDate previousDate,
+            out IReadOnlyList<DailyActionResult> outcomes)
         {
-            IReadOnlyList<DailyActionResult> outcomes = EnsureDailyActions().AdvanceDays(
-                previousDate, days);
+            bool needsGrown = GrowNpcNeeds(1);
+            outcomes = EnsureDailyActions().AdvanceDays(previousDate, 1);
+            ApplyNpcActionCompletions(outcomes);
+            bool autonomyChanged = PlanNpcAfterAdvance(outcomes);
+            return needsGrown || autonomyChanged;
+        }
+
+        /// <summary>
+        /// Publishes the aggregated M02 outcome/message channel after one or more
+        /// simulated days. Autonomous pilot outcomes stay in the Inspector decision log
+        /// and readable message but not in the player-issued outcome list.
+        /// </summary>
+        private void PublishDailyActionReport(IReadOnlyList<DailyActionResult> outcomes)
+        {
             var playerOutcomes = new List<DailyActionResult>(outcomes.Count);
             foreach (DailyActionResult outcome in outcomes)
                 if (!NpcAutonomyRules.IsPilot(outcome.PersonId))
                     playerOutcomes.Add(outcome);
             LastDailyActionOutcomes = playerOutcomes.AsReadOnly();
             if (outcomes.Count == 0)
-                return outcomes;
+                return;
 
             var builder = new StringBuilder();
             for (int i = 0; i < outcomes.Count; i++)
@@ -3899,7 +4040,6 @@ namespace SengokuChronicle.Application
                 builder.Append(outcome.Reason);
             }
             LastDailyActionMessage = builder.ToString();
-            return outcomes;
         }
 
         /// <summary>

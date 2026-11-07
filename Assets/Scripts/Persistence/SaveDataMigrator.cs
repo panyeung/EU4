@@ -161,6 +161,13 @@ namespace SengokuChronicle.Persistence
                         "v11 存档缺少 NPC 自主状态（npcAutonomy）；不会用初始需求静默替换。");
                     return false;
                 }
+                if (currentVersion && legacy.rulesVersion != SaveData.CurrentRulesVersion)
+                {
+                    result = SaveOperationResult.Failure(SaveErrorCode.UnsupportedVersion,
+                        "v11 存档规则版本不受支持：" + legacy.rulesVersion +
+                        "（当前规则版本 " + SaveData.CurrentRulesVersion + "）。");
+                    return false;
+                }
 
                 current = Clone(legacy);
                 current.saveFormatVersion = SaveDataValidator.CurrentVersion;

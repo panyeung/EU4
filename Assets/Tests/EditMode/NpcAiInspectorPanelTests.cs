@@ -9,6 +9,7 @@ using SengokuChronicle.Presentation;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityEngine.UI;
 
 namespace SengokuChronicle.Tests.EditMode
 {
@@ -122,8 +123,9 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(panel.CandidatesLine, Does.Contain("工作"));
             Assert.That(panel.CandidatesLine, Does.Contain("分数"));
             Assert.That(panel.CandidatesLine, Does.Contain("已选中"));
-            Assert.That(panel.CandidatesLine, Does.Not.Contain("排除"),
-                "an idle pilot evaluates all three candidates");
+            Assert.That(panel.CandidatesLine, Does.Contain("当前诊断"));
+            Assert.That(panel.CandidatesLine, Does.Contain("排除"),
+                "the active pilot's current diagnostics explain why it is not replanned");
 
             Assert.That(panel.SelectPilot(M2FixedScenario.NobumasaId), Is.True);
             Assert.That(panel.NeedsLine, Does.Contain("休息 45"));
@@ -218,6 +220,110 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(after.year, Is.EqualTo(before.year));
             Assert.That(after.month, Is.EqualTo(before.month));
             Assert.That(after.day, Is.EqualTo(before.day));
+        }
+
+        [Test]
+        public void Panel_KeepsSelectionExplanationAndShowsCurrentDiagnosticsOnActiveDay()
+        {
+            NpcAiInspectorPanel panel = Panel();
+            panel.Open();
+            Assert.That(panel.CandidatesLine, Does.Contain("最近目标评估"));
+            Assert.That(panel.CandidatesLine, Does.Contain("已选中"));
+            Assert.That(_session.TryGetNpcAutonomy(M2FixedScenario.MasatsunaId,
+                out NpcAutonomySnapshot before), Is.True);
+            Assert.That(before.LatestEvaluation.HasSelection, Is.True);
+
+            Assert.That(_session.AdvanceOneDay(), Is.True);
+
+            Assert.That(panel.CandidatesLine, Does.Contain("最近目标评估"),
+                "daily need growth must not erase the last goal-selection explanation");
+            Assert.That(panel.CandidatesLine, Does.Contain("当前诊断"));
+            Assert.That(panel.CandidatesLine, Does.Contain("分数 156"),
+                "current diagnostics follow the grown needs");
+            Assert.That(panel.CandidatesLine, Does.Contain("进行中"),
+                "current diagnostics explain why an active pilot is not replanned");
+
+            Assert.That(_session.TryGetNpcAutonomy(M2FixedScenario.MasatsunaId,
+                out NpcAutonomySnapshot after), Is.True);
+            Assert.That(after.LatestEvaluation.HasSelection, Is.True,
+                "LatestEvaluation keeps the selection that started the active action");
+            Assert.That(after.CurrentEvaluation.HasSelection, Is.False,
+                "CurrentEvaluation is the pure active-day diagnostic projection");
+            Assert.That(after.CurrentEvaluation.Needs, Is.EqualTo(after.Needs));
+        }
+
+        [Test]
+        public void Panel_ShowsCurrentExecutionAndLastCompletedOutcome()
+        {
+            Assert.That(_session.AdvanceOneDay(), Is.True);
+            Assert.That(_session.AdvanceOneDay(), Is.True);
+
+            NpcAiInspectorPanel panel = Panel();
+            panel.Open();
+            Assert.That(panel.StatusLine, Does.Contain("状态：执行中"));
+            Assert.That(panel.StatusLine, Does.Contain("最近结果：已完成 训练"));
+            Assert.That(panel.StatusLine, Does.Contain("当前行动：训练"));
+        }
+
+        [Test]
+        public void Panel_ShowsLastInterruptedOutcomeAfterImmediateReplan()
+        {
+            Assert.That(_session.TryInterruptDailyAction(M2FixedScenario.MasatsunaId,
+                "面板结果测试。"), Is.True);
+
+            NpcAiInspectorPanel panel = Panel();
+            panel.Open();
+            Assert.That(panel.StatusLine, Does.Contain("状态：执行中"),
+                "the immediate replan owns the current execution state");
+            Assert.That(panel.StatusLine, Does.Contain("最近结果：被中断 训练"),
+                "the interrupted outcome remains visible after the replan");
+        }
+
+        [Test]
+        public void Generator_ProducesScrollableDiagnosticsForCandidatesAndLog()
+        {
+            Transform scrollTransform = Find(AddM03NpcAiInspector.ScrollName);
+            Transform viewport = Find(AddM03NpcAiInspector.ViewportName);
+            Transform content = Find(AddM03NpcAiInspector.ContentName);
+            Transform candidates = Find(AddM03NpcAiInspector.CandidatesName);
+            Transform log = Find(AddM03NpcAiInspector.LogName);
+            Assert.That(scrollTransform, Is.Not.Null);
+            Assert.That(viewport, Is.Not.Null);
+            Assert.That(content, Is.Not.Null);
+            Assert.That(candidates, Is.Not.Null);
+            Assert.That(log, Is.Not.Null);
+
+            ScrollRect scroll = scrollTransform.GetComponent<ScrollRect>();
+            Assert.That(scroll, Is.Not.Null);
+            Assert.That(scroll.vertical, Is.True);
+            Assert.That(scroll.horizontal, Is.False);
+            Assert.That(scroll.viewport, Is.EqualTo((RectTransform)viewport));
+            Assert.That(scroll.content, Is.EqualTo((RectTransform)content));
+            Assert.That(viewport.GetComponent<RectMask2D>(), Is.Not.Null);
+            Assert.That(content.GetComponent<VerticalLayoutGroup>(), Is.Not.Null);
+            ContentSizeFitter fitter = content.GetComponent<ContentSizeFitter>();
+            Assert.That(fitter, Is.Not.Null);
+            Assert.That(fitter.verticalFit,
+                Is.EqualTo(ContentSizeFitter.FitMode.PreferredSize));
+            Assert.That(candidates.IsChildOf(content), Is.True);
+            Assert.That(log.IsChildOf(content), Is.True);
+            Assert.That(AddM03NpcAiInspector.Validate(_scene, out string error), Is.True, error);
+        }
+
+        [Test]
+        public void Generator_ReplacesAnExistingGeneratedHierarchyWithoutDuplicates()
+        {
+            Assert.That(FindAll(AddM03NpcAiInspector.ScrollName).Length, Is.EqualTo(1));
+            UnityEngine.Object.DestroyImmediate(
+                Find(AddM03NpcAiInspector.ScrollName).gameObject);
+
+            Assert.That(AddM03NpcAiInspector.Update(_scene),
+                Is.EqualTo(AddM03NpcAiInspector.UpdateResult.Success));
+            Assert.That(FindAll(AddM03NpcAiInspector.RootName).Length, Is.EqualTo(1));
+            Assert.That(FindAll(AddM03NpcAiInspector.ScrollName).Length, Is.EqualTo(1));
+            Assert.That(FindAll(AddM03NpcAiInspector.CandidatesName).Length, Is.EqualTo(1));
+            Assert.That(FindAll(AddM03NpcAiInspector.LogName).Length, Is.EqualTo(1));
+            Assert.That(AddM03NpcAiInspector.Validate(_scene, out string error), Is.True, error);
         }
 
         private GameObject Create(string name, Transform parent, params Type[] components) =>

@@ -204,6 +204,30 @@ namespace SengokuChronicle.Domain
         public string Summary { get; }
     }
 
+    /// <summary>
+    /// Session-only terminal outcome of the most recently finished autonomous action.
+    /// A new plan can begin immediately afterwards, so the Inspector needs this value
+    /// alongside the current execution state.
+    /// </summary>
+    public readonly struct NpcAutonomyOutcomeRecord
+    {
+        public NpcAutonomyOutcomeRecord(NpcAutonomyStatus status, DailyActionKind action,
+            GameDate date, string reason)
+        {
+            Status = status;
+            Action = action;
+            Date = date;
+            Reason = reason ?? string.Empty;
+        }
+
+        public NpcAutonomyStatus Status { get; }
+        public DailyActionKind Action { get; }
+        public GameDate Date { get; }
+        public string Reason { get; }
+        public string StatusName => NpcAutonomyRules.StatusName(Status);
+        public string ActionName => DailyActionState.KindName(Action);
+    }
+
     /// <summary>One bounded, session-only decision log entry.</summary>
     public readonly struct NpcAutonomyDecisionRecord
     {
@@ -256,13 +280,25 @@ namespace SengokuChronicle.Domain
         public PersonId PersonId { get; }
         public NpcNeedValues Needs { get; internal set; }
         public NpcAutonomyStatus Status { get; internal set; }
+
+        /// <summary>
+        /// Last evaluation used for goal selection (or the last rejection reason when
+        /// no candidate was eligible). Ordinary day growth never overwrites it.
+        /// </summary>
         public NpcAutonomyEvaluation LatestEvaluation { get; internal set; }
+
+        /// <summary>Most recent completed or interrupted action, if any.</summary>
+        public NpcAutonomyOutcomeRecord LastOutcome { get; internal set; }
+
+        public bool HasLastOutcome { get; internal set; }
 
         internal NpcAutonomyPersonState Clone() =>
             new NpcAutonomyPersonState(PersonId, Needs)
             {
                 Status = Status,
-                LatestEvaluation = LatestEvaluation
+                LatestEvaluation = LatestEvaluation,
+                LastOutcome = LastOutcome,
+                HasLastOutcome = HasLastOutcome
             };
     }
 
@@ -369,12 +405,25 @@ namespace SengokuChronicle.Domain
                 person.Needs = person.Needs.WithDailyGrowth(days);
         }
 
-        public bool ApplyCompletedAction(PersonId personId, DailyActionKind kind)
+        public bool ApplyCompletedAction(PersonId personId, DailyActionKind kind,
+            GameDate date, string reason)
         {
             if (!_persons.TryGetValue(personId.Value ?? string.Empty, out NpcAutonomyPersonState person))
                 return false;
             person.Needs = person.Needs.WithCompletedAction(kind);
             person.Status = NpcAutonomyStatus.Completed;
+            person.LastOutcome = new NpcAutonomyOutcomeRecord(NpcAutonomyStatus.Completed,
+                kind, date, reason);
+            person.HasLastOutcome = true;
+            return true;
+        }
+
+        public bool SetLastOutcome(PersonId personId, NpcAutonomyOutcomeRecord outcome)
+        {
+            if (!_persons.TryGetValue(personId.Value ?? string.Empty, out NpcAutonomyPersonState person))
+                return false;
+            person.LastOutcome = outcome;
+            person.HasLastOutcome = true;
             return true;
         }
 
@@ -440,7 +489,8 @@ namespace SengokuChronicle.Domain
     {
         public NpcAutonomySnapshot(PersonId personId, string displayName, NpcNeedValues needs,
             NpcAutonomyProfile profile, NpcAutonomyStatus status, DailyActionTask activeAction,
-            NpcAutonomyEvaluation latestEvaluation,
+            NpcAutonomyEvaluation latestEvaluation, NpcAutonomyEvaluation currentEvaluation,
+            NpcAutonomyOutcomeRecord lastOutcome, bool hasLastOutcome,
             IReadOnlyList<NpcAutonomyDecisionRecord> recentDecisions)
         {
             PersonId = personId;
@@ -450,6 +500,9 @@ namespace SengokuChronicle.Domain
             Status = status;
             ActiveAction = activeAction;
             LatestEvaluation = latestEvaluation;
+            CurrentEvaluation = currentEvaluation;
+            LastOutcome = lastOutcome;
+            HasLastOutcome = hasLastOutcome;
             RecentDecisions = recentDecisions ?? Array.Empty<NpcAutonomyDecisionRecord>();
         }
 
@@ -461,7 +514,20 @@ namespace SengokuChronicle.Domain
         public DailyActionTask ActiveAction { get; }
         public bool HasActiveAction => ActiveAction != null;
         public int RemainingDays => ActiveAction != null ? ActiveAction.RemainingDays : 0;
+
+        /// <summary>Evaluation that selected (or rejected) the current goal.</summary>
         public NpcAutonomyEvaluation LatestEvaluation { get; }
+
+        /// <summary>
+        /// Pure projection of the current needs and execution state. This is what the
+        /// Inspector labels as current diagnostics; it is never stored back on the state.
+        /// </summary>
+        public NpcAutonomyEvaluation CurrentEvaluation { get; }
+
+        /// <summary>Last finished action, retained across an immediate replan.</summary>
+        public NpcAutonomyOutcomeRecord LastOutcome { get; }
+
+        public bool HasLastOutcome { get; }
         public IReadOnlyList<NpcAutonomyDecisionRecord> RecentDecisions { get; }
         public string StatusName => NpcAutonomyRules.StatusName(Status);
     }

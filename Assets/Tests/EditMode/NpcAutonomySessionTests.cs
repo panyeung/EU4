@@ -4,6 +4,7 @@ using System.Linq;
 using NUnit.Framework;
 using SengokuChronicle.Application;
 using SengokuChronicle.Domain;
+using SengokuChronicle.Events;
 using SengokuChronicle.Persistence;
 using UnityEngine;
 
@@ -608,9 +609,261 @@ namespace SengokuChronicle.Tests.EditMode
                 "a rejected command must not disturb another pilot's action");
         }
 
+        [Test]
+        public void AdvanceDays_MatchesEquivalentOneDayAdvances()
+        {
+            GameSession bulk = NewSession();
+            GameSession daily = NewSession();
+
+            Assert.That(bulk.AdvanceDays(5), Is.True, bulk.LastEventMessage);
+            for (int day = 0; day < 5; day++)
+                Assert.That(daily.AdvanceOneDay(), Is.True, daily.LastEventMessage);
+
+            Assert.That(bulk.WorldClock.CurrentDate, Is.EqualTo(daily.WorldClock.CurrentDate));
+            Assert.That(AutonomySignature(bulk, M2FixedScenario.MasatsunaId),
+                Is.EqualTo(AutonomySignature(daily, M2FixedScenario.MasatsunaId)));
+            Assert.That(AutonomySignature(bulk, M2FixedScenario.NobumasaId),
+                Is.EqualTo(AutonomySignature(daily, M2FixedScenario.NobumasaId)));
+        }
+
+        [Test]
+        public void MonthlySettlement_MatchesEquivalentDailyActionDays()
+        {
+            GameSession monthly = NewSession();
+            GameSession daily = NewSession();
+
+            Assert.That(monthly.TryAdvanceToNextMonth(), Is.True, monthly.LastEventMessage);
+            int guard = 0;
+            while (daily.WorldClock.CurrentDate < monthly.WorldClock.CurrentDate)
+            {
+                Assert.That(++guard, Is.LessThan(40), "monthly equivalence loop did not converge");
+                Assert.That(daily.AdvanceActionDay(), Is.True, daily.LastEventMessage);
+            }
+
+            Assert.That(daily.WorldClock.CurrentDate, Is.EqualTo(monthly.WorldClock.CurrentDate));
+            Assert.That(AutonomySignature(monthly, M2FixedScenario.MasatsunaId),
+                Is.EqualTo(AutonomySignature(daily, M2FixedScenario.MasatsunaId)));
+            Assert.That(AutonomySignature(monthly, M2FixedScenario.NobumasaId),
+                Is.EqualTo(AutonomySignature(daily, M2FixedScenario.NobumasaId)));
+        }
+
+        [Test]
+        public void MonthlyCompletionWithPendingEvent_RecordsOneBlockedReplanDecision()
+        {
+            GameSession source = NewSession();
+            SaveData saved = IdlePilotSave(source);
+            saved.year = 1560;
+            saved.month = 4;
+            saved.day = 30;
+            DailyActionPersonSaveEntry row = ActionEntry(saved, M2FixedScenario.MasatsunaId);
+            row.hasAction = true;
+            row.actionKind = (int)DailyActionKind.Training;
+            row.actionDurationDays = 1;
+            row.actionElapsedDays = 0;
+            row.actionStartYear = saved.year;
+            row.actionStartMonth = saved.month;
+            row.actionStartDay = saved.day;
+            row.actionReason = "月末完成的训练。";
+            Assert.That(SaveDataValidator.Validate(saved).Succeeded, Is.True);
+
+            GameSession restored = NewSession(19UL);
+            Assert.That(restored.TryApplySave(saved).Succeeded, Is.True,
+                restored.LastEventMessage);
+            Assert.That(restored.TryAdvanceToNextMonth(), Is.True, restored.LastEventMessage);
+            Assert.That(restored.PendingEventId, Is.Not.Empty,
+                "the May settlement must leave the pending event used by this regression");
+
+            GameDate settlementDate = new GameDate(1560, 5, 1);
+            NpcAutonomyDecisionRecord[] blocked = restored.NpcAutonomyDecisions
+                .Where(record => record.PersonId == M2FixedScenario.MasatsunaId &&
+                                 record.Date == settlementDate &&
+                                 (record.Outcome == NpcAutonomyCommandOutcomeKind.Deferred ||
+                                  record.Outcome == NpcAutonomyCommandOutcomeKind.Rejected))
+                .ToArray();
+            Assert.That(blocked.Length, Is.EqualTo(1),
+                "completion and daily-check passes must not duplicate one blocked replan");
+            Assert.That(blocked[0].Trigger, Is.EqualTo(NpcAutonomyTrigger.ActionCompleted));
+
+            NpcAutonomySnapshot snapshot = Snapshot(restored, M2FixedScenario.MasatsunaId);
+            Assert.That(snapshot.HasLastOutcome, Is.True);
+            Assert.That(snapshot.LastOutcome.Status, Is.EqualTo(NpcAutonomyStatus.Completed));
+            Assert.That(snapshot.LastOutcome.Action, Is.EqualTo(DailyActionKind.Training));
+        }
+
+        [Test]
+        public void ConfirmTravel_TriggersEligibilityReplanAndAdvancesNeeds()
+        {
+            GameSession source = NewSession();
+            SaveData idle = IdlePilotSave(source);
+            Assert.That(SaveDataValidator.Validate(idle).Succeeded, Is.True);
+
+            GameSession restored = NewSession(23UL);
+            Assert.That(restored.TryApplySave(idle).Succeeded, Is.True,
+                restored.LastEventMessage);
+            NpcNeedValues before = Snapshot(restored, M2FixedScenario.MasatsunaId).Needs;
+
+            TravelPreview? preview = restored.PreviewTravel(LocationId.Atsuta);
+            Assert.That(preview.HasValue, Is.True, restored.LastTravelBlockReason);
+            Assert.That(restored.ConfirmTravel(preview.Value), Is.True,
+                restored.LastTravelBlockReason);
+
+            Assert.That(restored.CurrentLocation, Is.EqualTo(LocationId.Atsuta));
+            NpcAutonomySnapshot after = Snapshot(restored, M2FixedScenario.MasatsunaId);
+            Assert.That(after.Needs, Is.EqualTo(before.WithDailyGrowth()),
+                "direct travel must still advance the simulated day's needs");
+            Assert.That(after.HasActiveAction, Is.True,
+                "idle pilots must be replanned after the travel eligibility change");
+            Assert.That(after.RecentDecisions.Any(record =>
+                    record.Trigger == NpcAutonomyTrigger.EligibilityChanged),
+                Is.True, "the travel replan must carry the eligibility trigger");
+        }
+
+        [Test]
+        public void SuccessionEligibilityChange_PlansIdlePilotsWithEligibilityTrigger()
+        {
+            GameSession gates = NewSession();
+            Assert.That(gates.TryAdvanceToNextMonth(), Is.True, gates.LastEventMessage);
+            ChooseM2(gates, M2FixedScenario.PledgeEventId, M2FixedScenario.KeepPromiseOptionId);
+            Assert.That(gates.TryAdvanceToNextMonth(), Is.True, gates.LastEventMessage);
+            ChooseM2(gates, SampleEventIds.EventId, SampleEventIds.OfferRestOptionId);
+
+            SaveData idle = IdlePilotSave(gates);
+            GameSession restored = NewSession(29UL);
+            Assert.That(restored.TryApplySave(idle).Succeeded, Is.True,
+                restored.LastEventMessage);
+
+            SuccessionResult result = restored.BeginSuccessionRetirement();
+            Assert.That(result.Succeeded, Is.True, result.Message);
+
+            NpcAutonomySnapshot masatsuna = Snapshot(restored, M2FixedScenario.MasatsunaId);
+            Assert.That(masatsuna.RecentDecisions.Any(record =>
+                    record.Trigger == NpcAutonomyTrigger.EligibilityChanged),
+                Is.True, "roster/succession changes must run the eligibility pass");
+            Assert.That(masatsuna.RecentDecisions[0].Trigger,
+                Is.EqualTo(NpcAutonomyTrigger.EligibilityChanged));
+            Assert.That(masatsuna.RecentDecisions[0].Outcome,
+                Is.EqualTo(NpcAutonomyCommandOutcomeKind.Accepted)
+                    .Or.EqualTo(NpcAutonomyCommandOutcomeKind.Deferred));
+        }
+
+        [Test]
+        public void UnregisteredPilot_EligibilityChangeRecordsRejectedDecision()
+        {
+            GameSession session = NewSession();
+            session.InitResearchDemoScenario();
+
+            SuccessionResult result = session.BeginSuccessionRetirement();
+            Assert.That(result.Succeeded, Is.True, result.Message);
+
+            NpcAutonomyDecisionRecord[] rejected = session.NpcAutonomyDecisions
+                .Where(record => record.PersonId == M2FixedScenario.MasatsunaId &&
+                                 record.Outcome == NpcAutonomyCommandOutcomeKind.Rejected &&
+                                 record.Trigger == NpcAutonomyTrigger.EligibilityChanged)
+                .ToArray();
+            Assert.That(rejected.Length, Is.EqualTo(1),
+                "the unregistered-pilot rejection path must be reachable and logged once");
+            Assert.That(rejected[0].Reason, Does.Contain("未登记"));
+        }
+
+        [Test]
+        public void InspectorReads_ArePureAndLeaveDurableStateUntouched()
+        {
+            GameSession session = NewSession();
+            string saveBefore = JsonUtility.ToJson(session.CaptureSave());
+            int decisionsBefore = session.NpcAutonomyDecisions.Count;
+
+            IReadOnlyList<NpcAutonomySnapshot> snapshots = session.NpcAutonomySnapshots;
+            Assert.That(snapshots.Count, Is.EqualTo(2));
+            Assert.That(session.TryGetNpcAutonomy(M2FixedScenario.MasatsunaId, out _), Is.True);
+            Assert.That(session.TryGetNpcAutonomy(M2FixedScenario.NobumasaId, out _), Is.True);
+            Assert.That(session.NpcAutonomyDecisions.Count, Is.EqualTo(decisionsBefore));
+
+            string saveAfter = JsonUtility.ToJson(session.CaptureSave());
+            Assert.That(saveAfter, Is.EqualTo(saveBefore),
+                "read-only Inspector getters must not schedule, reconcile or grow needs");
+        }
+
+        [Test]
+        public void V11RulesVersionMismatch_IsRejectedNotNormalized()
+        {
+            GameSession session = NewSession();
+            SaveData saved = session.CaptureSave();
+            saved.rulesVersion = SaveData.CurrentRulesVersion - 1;
+
+            Assert.That(SaveDataValidator.Validate(saved).Succeeded, Is.False);
+            Assert.That(SaveDataMigrator.TryMigrate(saved, out _, out SaveOperationResult result),
+                Is.False);
+            Assert.That(result.Error, Is.EqualTo(SaveErrorCode.UnsupportedVersion));
+        }
+
+        [Test]
+        public void V10RulesVersion_IsNormalizedByIntendedMigration()
+        {
+            GameSession session = NewSession();
+            SaveData legacy = session.CaptureSave();
+            legacy.saveFormatVersion = 10;
+            legacy.rulesVersion = 6;
+            legacy.npcAutonomy = null;
+
+            Assert.That(SaveDataMigrator.TryMigrate(legacy, null, out SaveData current,
+                out SaveOperationResult result), Is.True, result.Message);
+            Assert.That(current.saveFormatVersion, Is.EqualTo(SaveDataValidator.CurrentVersion));
+            Assert.That(current.rulesVersion, Is.EqualTo(SaveData.CurrentRulesVersion));
+            Assert.That(current.npcAutonomy.persons.Length, Is.EqualTo(2));
+        }
+
+        private static void ChooseM2(GameSession session, string eventId, string optionId)
+        {
+            Assert.That(session.PendingEventId, Is.EqualTo(eventId), session.LastEventMessage);
+            EventChoiceResult result = session.TryChooseEventOption(eventId, optionId,
+                session.CreateEventResultId(eventId, optionId));
+            Assert.That(result.Succeeded, Is.True, result.Message);
+        }
+
         private static string WithVersion(string json, int version) =>
             json.Replace("\"saveFormatVersion\":11",
                 "\"saveFormatVersion\":" + version.ToString());
+
+        private static SaveData IdlePilotSave(GameSession session)
+        {
+            SaveData saved = session.CaptureSave();
+            foreach (DailyActionPersonSaveEntry row in saved.dailyActions.persons)
+            {
+                if (row.personId != M2FixedScenario.MasatsunaId.Value &&
+                    row.personId != M2FixedScenario.NobumasaId.Value)
+                    continue;
+                ClearAction(row);
+            }
+            return saved;
+        }
+
+        private static void ClearAction(DailyActionPersonSaveEntry row)
+        {
+            row.hasAction = false;
+            row.actionKind = 0;
+            row.actionDurationDays = 0;
+            row.actionElapsedDays = 0;
+            row.actionStartYear = 0;
+            row.actionStartMonth = 0;
+            row.actionStartDay = 0;
+            row.travelOriginId = string.Empty;
+            row.travelDestinationId = string.Empty;
+            row.actionReason = string.Empty;
+        }
+
+        private static string AutonomySignature(GameSession session, PersonId personId)
+        {
+            NpcAutonomySnapshot snapshot = Snapshot(session, personId);
+            DailyActionTask task = snapshot.ActiveAction;
+            string action = task == null
+                ? "none"
+                : task.Kind + "/" + task.DurationDays + "/" + task.ElapsedDays + "/" +
+                  task.StartDate;
+            return snapshot.Needs + "|" + snapshot.Status + "|" + action + "|" +
+                   string.Join(";", snapshot.RecentDecisions.Select(record =>
+                       record.Date + "/" + record.Outcome + "/" + record.Action + "/" +
+                       record.HasAction + "/" + record.Trigger + "/" + record.Reason));
+        }
 
         /// <summary>
         /// Removes the last declared root property (npcAutonomy is last in SaveData)

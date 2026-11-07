@@ -30,6 +30,9 @@ namespace SengokuChronicle.Editor
         public const string StatusName = "M03NpcAiInspectorStatusText";
         public const string CandidatesName = "M03NpcAiInspectorCandidatesText";
         public const string LogName = "M03NpcAiInspectorLogText";
+        public const string ScrollName = "M03NpcAiInspectorScroll";
+        public const string ViewportName = "M03NpcAiInspectorViewport";
+        public const string ContentName = "M03NpcAiInspectorContent";
         public const string CloseButtonName = "M03NpcAiInspectorCloseButton";
         public const string MenuPath = "Tools/Sengoku Chronicle/Add M03 NPC AI Inspector";
         public const string DirtyMenuPath =
@@ -154,10 +157,14 @@ namespace SengokuChronicle.Editor
             Transform status = Require(scene, StatusName);
             Transform candidates = Require(scene, CandidatesName);
             Transform log = Require(scene, LogName);
+            Transform scroll = Require(scene, ScrollName);
+            Transform viewport = Require(scene, ViewportName);
+            Transform content = Require(scene, ContentName);
             Transform close = Require(scene, CloseButtonName);
             if (panelRoot == null || title == null || summary == null || masatsuna == null ||
                 nobumasa == null || needs == null || status == null || candidates == null ||
-                log == null || close == null)
+                log == null || scroll == null || viewport == null || content == null ||
+                close == null)
                 return Invalid(out error, "M03 Inspector hierarchy is incomplete or ambiguous.");
 
             if (panelRoot.parent != root || panelRoot.gameObject.activeSelf)
@@ -165,12 +172,18 @@ namespace SengokuChronicle.Editor
                     "M03NpcAiInspectorPanel must be a hidden direct child of the root.");
             Transform[] panelChildren =
             {
-                title, summary, masatsuna, nobumasa, needs, status, candidates, log, close
+                title, summary, masatsuna, nobumasa, needs, status, scroll, close
             };
             foreach (Transform child in panelChildren)
                 if (child.parent != panelRoot)
                     return Invalid(out error,
                         "All M03 Inspector controls must be direct children of the panel.");
+            if (viewport.parent != scroll || content.parent != viewport)
+                return Invalid(out error,
+                    "The M03 diagnostics viewport and content must nest beneath the scroll area.");
+            if (candidates.parent != content || log.parent != content)
+                return Invalid(out error,
+                    "M03 candidate and decision-log text must live inside the scroll content.");
 
             Text titleText = title.GetComponent<Text>();
             Text summaryText = summary.GetComponent<Text>();
@@ -181,6 +194,10 @@ namespace SengokuChronicle.Editor
             Button masatsunaButton = masatsuna.GetComponent<Button>();
             Button nobumasaButton = nobumasa.GetComponent<Button>();
             Button closeButton = close.GetComponent<Button>();
+            ScrollRect scrollRect = scroll.GetComponent<ScrollRect>();
+            RectMask2D mask = viewport.GetComponent<RectMask2D>();
+            VerticalLayoutGroup layout = content.GetComponent<VerticalLayoutGroup>();
+            ContentSizeFitter fitter = content.GetComponent<ContentSizeFitter>();
             if (titleText == null || summaryText == null || needsText == null ||
                 statusText == null || candidatesText == null || logText == null ||
                 masatsunaButton == null || nobumasaButton == null || closeButton == null ||
@@ -193,6 +210,14 @@ namespace SengokuChronicle.Editor
                 !panelRoot.GetComponent<Image>().raycastTarget)
                 return Invalid(out error,
                     "M03 text, button, background, or raycast components are invalid.");
+            if (scrollRect == null || mask == null || layout == null || fitter == null ||
+                scrollRect.content != (RectTransform)content ||
+                scrollRect.viewport != (RectTransform)viewport ||
+                !scrollRect.vertical || scrollRect.horizontal ||
+                fitter.verticalFit != ContentSizeFitter.FitMode.PreferredSize)
+                return Invalid(out error,
+                    "M03 diagnostics must use a vertical ScrollRect with a masked viewport, " +
+                    "vertical layout and preferred-size content.");
             if (!titleText.text.Contains("NPC"))
                 return Invalid(out error, "The M03 title must contain NPC.");
             if (!summaryText.text.Contains("只读"))
@@ -209,7 +234,9 @@ namespace SengokuChronicle.Editor
                 !Bound(panel, "needsText", needsText) ||
                 !Bound(panel, "statusText", statusText) ||
                 !Bound(panel, "candidatesText", candidatesText) ||
-                !Bound(panel, "logText", logText))
+                !Bound(panel, "logText", logText) ||
+                !Bound(panel, "diagnosticsScroll", scrollRect) ||
+                !Bound(panel, "diagnosticsContent", (RectTransform)content))
                 return Invalid(out error, "NpcAiInspectorPanel serialized references are not bound.");
 
             RectTransform canvasRect = canvas as RectTransform;
@@ -223,12 +250,15 @@ namespace SengokuChronicle.Editor
             {
                 title as RectTransform, summary as RectTransform, masatsuna as RectTransform,
                 nobumasa as RectTransform, needs as RectTransform, status as RectTransform,
-                candidates as RectTransform, log as RectTransform, close as RectTransform
+                scroll as RectTransform, close as RectTransform
             };
             foreach (RectTransform child in children)
                 if (!Contained(child, panelRect))
                     return Invalid(out error,
                         "An M03 Inspector control lies outside the panel bounds.");
+            if (!Contained(viewport as RectTransform, scroll as RectTransform))
+                return Invalid(out error,
+                    "The M03 diagnostics viewport lies outside the scroll area.");
 
             if (!ContainedInRenderBand(canvas, root))
                 return Invalid(out error,
@@ -254,22 +284,24 @@ namespace SengokuChronicle.Editor
 
             if (Validate(scene, out _)) return UpdateResult.Success;
 
-            if (Named(scene, RootName).Any() || Named(scene, OpenButtonName).Any() ||
-                Named(scene, PanelName).Any() || Named(scene, TitleName).Any() ||
-                Named(scene, SummaryName).Any() || Named(scene, MasatsunaButtonName).Any() ||
-                Named(scene, NobumasaButtonName).Any() || Named(scene, NeedsName).Any() ||
-                Named(scene, StatusName).Any() || Named(scene, CandidatesName).Any() ||
-                Named(scene, LogName).Any() || Named(scene, CloseButtonName).Any() ||
-                Components<NpcAiInspectorPanel>(scene).Length != 0)
+            Transform[] existingRoots = Named(scene, RootName).ToArray();
+            if (existingRoots.Length > 1)
+                return UpdateResult.ExistingPartialControl;
+            Transform existingRoot = existingRoots.Length == 1 ? existingRoots[0] : null;
+            if (existingRoot != null && !IsReplaceableGeneratedRoot(scene, existingRoot))
+                return UpdateResult.ExistingPartialControl;
+            if (existingRoot == null && HasAnyM03Object(scene))
                 return UpdateResult.ExistingPartialControl;
 
-            ObjectSnapshot[] originals = Snapshot(scene);
             Undo.IncrementCurrentGroup();
             int group = Undo.GetCurrentGroup();
             Undo.SetCurrentGroupName(UndoName);
             UpdateResult failure = UpdateResult.Failed;
             try
             {
+                if (existingRoot != null)
+                    Undo.DestroyObjectImmediate(existingRoot.gameObject);
+                ObjectSnapshot[] originals = Snapshot(scene);
                 Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
                 if (font == null) throw new InvalidOperationException("Missing built-in UI font.");
 
@@ -316,12 +348,65 @@ namespace SengokuChronicle.Editor
                     TextAnchor.MiddleLeft);
                 Text status = CreateText(scene, panelRect, StatusName, font, "状态：空闲",
                     0f, 142f, 920f, 30f, 15, TextAnchor.MiddleLeft);
-                Text candidates = CreateText(scene, panelRect, CandidatesName, font,
-                    "最近一次评估：暂无。", 0f, 70f, 920f, 100f, 13,
+
+                GameObject scrollObject = Create(scene, panelRect, ScrollName,
+                    typeof(Image), typeof(ScrollRect));
+                RectTransform scrollRectTransform =
+                    scrollObject.GetComponent<RectTransform>();
+                scrollRectTransform.anchorMin = scrollRectTransform.anchorMax =
+                    scrollRectTransform.pivot = new Vector2(0.5f, 0.5f);
+                scrollRectTransform.anchoredPosition = new Vector2(0f, -42f);
+                scrollRectTransform.sizeDelta = new Vector2(920f, 330f);
+                Image scrollBackground = scrollObject.GetComponent<Image>();
+                scrollBackground.color = new Color(0.05f, 0.07f, 0.1f, 1f);
+                scrollBackground.raycastTarget = true;
+
+                GameObject viewportObject = Create(scene, scrollRectTransform, ViewportName,
+                    typeof(Image), typeof(RectMask2D));
+                RectTransform viewportRect = viewportObject.GetComponent<RectTransform>();
+                viewportRect.anchorMin = Vector2.zero;
+                viewportRect.anchorMax = Vector2.one;
+                viewportRect.offsetMin = new Vector2(6f, 6f);
+                viewportRect.offsetMax = new Vector2(-6f, -6f);
+                Image viewportImage = viewportObject.GetComponent<Image>();
+                viewportImage.color = new Color(1f, 1f, 1f, 0.01f);
+                viewportImage.raycastTarget = true;
+
+                GameObject contentObject = Create(scene, viewportRect, ContentName,
+                    typeof(VerticalLayoutGroup), typeof(ContentSizeFitter));
+                RectTransform contentRect = contentObject.GetComponent<RectTransform>();
+                contentRect.anchorMin = new Vector2(0f, 1f);
+                contentRect.anchorMax = new Vector2(1f, 1f);
+                contentRect.pivot = new Vector2(0.5f, 1f);
+                contentRect.anchoredPosition = Vector2.zero;
+                contentRect.sizeDelta = Vector2.zero;
+                VerticalLayoutGroup contentLayout =
+                    contentObject.GetComponent<VerticalLayoutGroup>();
+                contentLayout.padding = new RectOffset(8, 8, 8, 8);
+                contentLayout.spacing = 6f;
+                contentLayout.childControlWidth = true;
+                contentLayout.childControlHeight = true;
+                contentLayout.childForceExpandWidth = true;
+                contentLayout.childForceExpandHeight = false;
+                ContentSizeFitter contentFitter =
+                    contentObject.GetComponent<ContentSizeFitter>();
+                contentFitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+                contentFitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+                ScrollRect scroll = scrollObject.GetComponent<ScrollRect>();
+                scroll.content = contentRect;
+                scroll.viewport = viewportRect;
+                scroll.horizontal = false;
+                scroll.vertical = true;
+                scroll.movementType = ScrollRect.MovementType.Clamped;
+                scroll.scrollSensitivity = 24f;
+
+                Text candidates = CreateText(scene, contentRect, CandidatesName, font,
+                    "最近目标评估：暂无。\n当前诊断：暂无。", 0f, 0f, 880f, 180f, 13,
                     TextAnchor.UpperLeft);
                 candidates.verticalOverflow = VerticalWrapMode.Overflow;
-                Text log = CreateText(scene, panelRect, LogName, font, "暂无决策记录。",
-                    0f, -80f, 920f, 180f, 12, TextAnchor.UpperLeft);
+                Text log = CreateText(scene, contentRect, LogName, font, "暂无决策记录。",
+                    0f, 0f, 880f, 240f, 12, TextAnchor.UpperLeft);
                 log.verticalOverflow = VerticalWrapMode.Overflow;
                 Button close = CreateButton(scene, panelRect, CloseButtonName, font, "关闭",
                     160f, 32f, 15);
@@ -332,9 +417,10 @@ namespace SengokuChronicle.Editor
                 NpcAiInspectorPanel panel = Undo.AddComponent<NpcAiInspectorPanel>(rootObject);
                 Undo.RecordObject(panel, UndoName);
                 panel.BindReferences(session, panelObject, open, close, masatsuna, nobumasa,
-                    title, summary, needs, status, candidates, log);
+                    title, summary, needs, status, candidates, log, scroll, contentRect);
                 SetSerializedReferences(panel, session, panelObject, open, close, masatsuna,
-                    nobumasa, title, summary, needs, status, candidates, log);
+                    nobumasa, title, summary, needs, status, candidates, log, scroll,
+                    contentRect);
                 EditorUtility.SetDirty(panel);
 
                 beforeValidation?.Invoke(rootObject);
@@ -404,6 +490,53 @@ namespace SengokuChronicle.Editor
                 target.SetAsLastSibling();
         }
 
+        private static readonly string[] GeneratedNames =
+        {
+            RootName, OpenButtonName, PanelName, TitleName, SummaryName,
+            MasatsunaButtonName, NobumasaButtonName, NeedsName, StatusName,
+            CandidatesName, LogName, ScrollName, ViewportName, ContentName,
+            CloseButtonName
+        };
+
+        /// <summary>
+        /// A previously generated M03 subtree may be replaced in one Undo transaction.
+        /// All M03-named objects must live under exactly one root and the panel component
+        /// must be on that root; foreign or duplicated controls are still refused.
+        /// </summary>
+        private static bool IsReplaceableGeneratedRoot(Scene scene, Transform root)
+        {
+            NpcAiInspectorPanel[] panels = Components<NpcAiInspectorPanel>(scene);
+            if (panels.Length > 1)
+                return false;
+            if (panels.Length == 1 && panels[0].transform != root)
+                return false;
+
+            foreach (string name in GeneratedNames)
+            {
+                Transform[] matches = Named(scene, name).ToArray();
+                if (matches.Length > 1)
+                    return false;
+                foreach (Transform match in matches)
+                {
+                    if (match == root)
+                        continue;
+                    if (!match.IsChildOf(root))
+                        return false;
+                }
+            }
+            return true;
+        }
+
+        private static bool HasAnyM03Object(Scene scene)
+        {
+            if (Components<NpcAiInspectorPanel>(scene).Length != 0)
+                return true;
+            foreach (string name in GeneratedNames)
+                if (Named(scene, name).Any())
+                    return true;
+            return false;
+        }
+
         private static bool Preserved(Scene scene, ObjectSnapshot[] originals)
         {
             foreach (ObjectSnapshot original in originals)
@@ -449,7 +582,8 @@ namespace SengokuChronicle.Editor
 
         private static void SetSerializedReferences(NpcAiInspectorPanel panel, GameSession session,
             GameObject panelRoot, Button open, Button close, Button masatsuna, Button nobumasa,
-            Text title, Text summary, Text needs, Text status, Text candidates, Text log)
+            Text title, Text summary, Text needs, Text status, Text candidates, Text log,
+            ScrollRect scroll, RectTransform content)
         {
             var serialized = new SerializedObject(panel);
             serialized.FindProperty("gameSession").objectReferenceValue = session;
@@ -464,6 +598,8 @@ namespace SengokuChronicle.Editor
             serialized.FindProperty("statusText").objectReferenceValue = status;
             serialized.FindProperty("candidatesText").objectReferenceValue = candidates;
             serialized.FindProperty("logText").objectReferenceValue = log;
+            serialized.FindProperty("diagnosticsScroll").objectReferenceValue = scroll;
+            serialized.FindProperty("diagnosticsContent").objectReferenceValue = content;
             serialized.ApplyModifiedPropertiesWithoutUndo();
         }
 

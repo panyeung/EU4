@@ -14,6 +14,21 @@ This round addresses every finding from the M03 review on the same task; no new 
 - **P3 — M02 feedback:** autonomous pilot completions once again produce a readable `LastDailyActionMessage` (pilot name + completion reason), while `LastDailyActionOutcomes` keeps its existing player-issued contract. Player interruption/replan of a pilot keeps the visible interrupted + planned outcome pair and message. Inspector diagnostics remain intact.
 - **P4 — review test gaps:** added explicit coverage for Accepted, Deferred, Rejected, and Interrupted outcomes, their `StatusName`, decision-log triggers/reasons, and no-state-mutation checks for rejected and deferred commands.
 
+## 0b. Independent-review correction round 2 (target `12b52f3`, 2026-11-07)
+
+This round changes implementation and tests, not only evidence. It addresses the independent read-only review of `12b52f3`:
+
+1. **Per-day autonomy progression:** `AdvanceDays` and `TryAdvanceToNextMonth` now simulate each elapsed day through the same `AdvanceAutonomyDay` primitive (need growth → action progress → completion reduction → completion/idle replan). The month path still executes exactly one monthly transaction, but commits the settled industry/event state before the final simulated day's planning. Bulk, month, and equivalent one-day paths now agree on needs, active actions, and decision records.
+2. **No duplicate blocked decisions:** the completion pass and the idle/DailyCheck pass partition pilots, so a completed pilot whose replan is Deferred/Rejected records exactly one decision in that day, including the month-end pending-event case.
+3. **Selection explanation preserved:** active-day refresh no longer overwrites `LatestEvaluation`. The snapshot exposes `LatestEvaluation` (goal selection/rejection rationale) and a pure `CurrentEvaluation` (current needs, scores, and active exclusion); the Inspector renders both with explicit labels.
+4. **EligibilityChanged wired:** succession/roster changes and `ConfirmTravel` run an explicit eligibility pass. The formerly unreachable unregistered-pilot rejection path now records a Rejected decision with the eligibility trigger; deliberate travel also advances needs/actions before replanning from the new location.
+5. **Current state plus last outcome:** completed/interrupted actions write a session-only `LastOutcome` record; immediate replanning updates current `Status` but leaves the last terminal outcome visible in the Inspector.
+6. **Scrollable diagnostics:** the generator now builds `M03NpcAiInspectorScroll` → masked viewport → `VerticalLayoutGroup`/`ContentSizeFitter` content containing both candidate and decision-log text. Validator and tests check the ScrollRect wiring, hierarchy, and serialized references.
+7. **Pure reads:** `NpcAutonomySnapshots`, `TryGetNpcAutonomy`, and `NpcAutonomyDecisions` no longer call `Ensure`/`Reconcile`; lifecycle commands own all autonomy mutation. A regression test compares durable save JSON and decision count before/after reads.
+8. **Deferred wording:** deferred records now append the next-check timing, distinguishing a pending event (“事件处理后的下一个模拟日”) from other daily retries.
+9. **Rules version:** current-version v11 migration rejects a mismatched `rulesVersion` with `UnsupportedVersion` instead of normalizing it; intended v10 migration still upgrades rules version and initializes pilot needs.
+10. **Generator migration:** the transactional generator replaces an existing generated M03 subtree in the same Undo group while still refusing foreign or duplicated controls.
+
 ## 1. Delivered scope
 
 - Two fixed pilots only: `person.sc013.masatsuna` and `person.sc013.nobumasa`.
@@ -123,11 +138,22 @@ A separate dispatch re-ran the committed M03 code in the same open Editor on 202
 - Active scene stayed `Assets/Scenes/FoundationScene.unity`, loaded, not dirty, and not playing during the checks. Console counts were not separately re-measured in this dispatch; the review-correction counts above remain the recorded Console evidence. Play Mode was not run.
 - **Evidence correction:** the earlier `Logs/m03-verify-full.txt`/`.xml` pair actually contains only the 126-test focused set, so the previously recorded "full 1260 from m03-verify-full" claim was unsupported and is superseded by `Logs/m03-rerun-full.txt`. The earlier focused result (`Logs/m03-verify-focused.txt`, 126/126) was correct. The implementation, scene, and prior `m03-review-full` 1260/1260 result were not changed by this correction.
 
+### Independent-review correction round 2 (2026-11-07)
+
+- Editor: Unity `6000.6.6f1`, PID `90052`, `-projectPath "C:\Users\panye\My project"` reverified from the process command line before operation; no batchmode and no second Editor for this project.
+- Compilation after deleting the temporary auto-runner: `*** Tundra build success (4.74 seconds), 10 items updated, 1975 evaluated`; no `error CS` after that build.
+- Focused EditMode: **140 passed / 0 failed / 0 skipped / 0 inconclusive**, `ResultState: Passed`; evidence `Logs/m03-fix-focused.txt`.
+- Full EditMode: **1274 passed / 0 failed / 0 skipped / 0 inconclusive**, `ResultState: Passed`; evidence `Logs/m03-fix-full.txt` (1274 = prior 1260 + 14 new review-correction cases).
+- Scene validator: `M03Validate: PASS`, exactly one `M03NpcAiInspectorRoot`, `RESULT: PASS; Errors: 0`; evidence `Logs/m03-fix-scene.txt` and `Logs/SceneValidationReport.txt`.
+- Console immediately after the full run and scene validation: **2 errors / 25 warnings / 16 logs**. Both errors are the intentional chronicle-append fault-injection logs from passing `FamilyFormationSessionTests` (`Adoption_ChronicleAppendFailure_RollsBackMembershipKinshipAndState` and `Marriage_ChronicleAppendFailure_RollsBackMembershipKinshipAndState`); the warnings come from other expected rollback tests. This report does not claim a zero-error Console during negative-test execution.
+- Temporary verification runner `Assets/Tests/EditMode/M03FixAutoVerify.cs` and its `.meta` were deleted after evidence collection; the post-cleanup compile above is the recorded final compile.
+- No Play Mode was run by this worker. Play Mode acceptance remains for the lead gate.
+
 ### Scene integration
 
-- The existing transactional generator had already created exactly one `Canvas/M03NpcAiInspectorRoot` and one `M03NpcAiInspectorOpenButton`; `FoundationScene` remained clean and unchanged this round.
-- `FoundationSceneValidator` rerun in the open Editor: `RESULT: PASS; Errors: 0`; evidence `Logs/SceneValidationReport.txt` and `Logs/m03-review-validator.txt`.
-- Scene GUID/`.meta` preserved; no scene edit was made in this round.
+- The transactional generator replaced the existing generated `Canvas/M03NpcAiInspectorRoot` subtree in one Undo group and rebuilt exactly one root, open button, scroll viewport/content, candidate text, and decision-log text; `FoundationScene` was saved clean.
+- `FoundationSceneValidator` rerun in the open Editor: `RESULT: PASS; Errors: 0`; evidence `Logs/SceneValidationReport.txt` and `Logs/m03-fix-scene.txt`.
+- Scene GUID/`.meta` preserved; only the generated M03 subtree changed.
 
 ### Console and runtime boundary
 
@@ -147,4 +173,4 @@ A separate dispatch re-ran the committed M03 code in the same open Editor on 202
 
 ## 5. Commit state
 
-The verified M03 review-correction files were committed to the current `main` worktree as `b7c51ba` (`fix(m03): address autonomy review findings`) and pushed to `origin/main` after the focused/full EditMode and Validator gates passed. The unrelated untracked `nul` file was preserved and not staged. The independent re-verification addendum above changes only this report and `PROJECT_STATE.md`; it does not change the implementation commit. No branch, worktree, merge, or tag was created, and this is not a claim of milestone acceptance.
+The first M03 review-correction files were committed to the current `main` worktree as `b7c51ba` (`fix(m03): address autonomy review findings`) and pushed to `origin/main`. This second independent-review correction round commits the verified source, test, scene, and documentation changes on `main`; the exact hash is the current `HEAD` for this report. The unrelated untracked `nul` and `graphify-out/` files were preserved and not staged. No branch, worktree, merge, or tag was created, and this is not a claim of milestone acceptance.
