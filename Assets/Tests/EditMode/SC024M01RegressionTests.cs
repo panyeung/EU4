@@ -12,9 +12,10 @@ namespace SengokuChronicle.Tests.EditMode
     /// <summary>
     /// M01/SC-024 regression tests: route-specific retirement, the approved
     /// SC-024-only fourth-generation child, its education target, the save round trip,
-    /// and the shared third-generation finale.
-    /// They describe the implemented target behavior and were executed in the open
-    /// Unity Editor for the M01 finale routing repair.
+    /// the shared third-generation finale, and the rule that SC-024 family data must not
+    /// change ordinary SC-013/no-route behavior.
+    /// They were executed in the open Unity Editor for the M01 finale routing repair and
+    /// again for the M01/SC-024 route-boundary repair.
     /// </summary>
     public sealed class SC024M01RegressionTests
     {
@@ -161,6 +162,60 @@ namespace SengokuChronicle.Tests.EditMode
                 "the fourth-generation child must be linked from third-generation Nobumasa");
             Assert.That(sc024.DesignatedHeirId, Is.EqualTo(M2FixedScenario.MasatsunaId),
                 "the child must not displace the first opening designation");
+        }
+
+        [Test]
+        public void Sc024_FamilyDataKeepsSc013RulesWhenTheRouteIsNotSc024()
+        {
+            // The state deliberately carries the SC-024-only seventh person. The route,
+            // not the presence of that data, decides the fixed line and the roster.
+            SuccessionState state = SC024FamilyDoctrineScenario.CreateSuccession();
+            Assert.That(state.World.PersonCount, Is.EqualTo(7));
+            Assert.That(SC024FamilyDoctrineScenario.HasHeir(state), Is.True);
+
+            Assert.That(M2FixedScenario.ExpectedHeir(state, EventScenarioIds.Sc013),
+                Is.EqualTo(M2FixedScenario.MasatsunaId));
+
+            state.HeadPersonId = M2FixedScenario.MasatsunaId;
+            Assert.That(M2FixedScenario.ExpectedHeir(state, EventScenarioIds.Sc013),
+                Is.EqualTo(M2FixedScenario.NobumasaId));
+
+            // On the ordinary route the third generation has no fixed heir, even though
+            // the SC-024 child exists in the world data.
+            state.HeadPersonId = M2FixedScenario.NobumasaId;
+            M2FixedScenario.SyncDesignation(state, EventScenarioIds.Sc013);
+            Assert.That(M2FixedScenario.ExpectedHeir(state, EventScenarioIds.Sc013),
+                Is.EqualTo(default(PersonId)));
+            Assert.That(M2FixedScenario.ExpectedHeir(state), Is.EqualTo(default(PersonId)));
+            Assert.That(state.DesignatedHeirId.IsEmpty, Is.True);
+
+            IReadOnlyList<M2RosterRow> sc013Rows = M2FixedScenario.BuildRoster(state, Start,
+                state.DesignatedHeirId, EventScenarioIds.Sc013);
+            Assert.That(sc013Rows.Count, Is.EqualTo(6),
+                "ordinary SC-013 keeps the approved six-row roster");
+            Assert.That(sc013Rows.Any(row => row.PersonId == SC024FamilyDoctrineScenario.HeirId),
+                Is.False);
+            Assert.That(sc013Rows.Count(row => row.GenerationLabel == "第四代"), Is.Zero);
+
+            IReadOnlyList<M2RosterRow> noRouteRows = M2FixedScenario.BuildRoster(state, Start,
+                state.DesignatedHeirId);
+            Assert.That(noRouteRows.Count, Is.EqualTo(6),
+                "no route also keeps the approved six-row roster");
+
+            // The same family data on the sc024 route still designates and shows the child.
+            Assert.That(M2FixedScenario.ExpectedHeir(state, SC024FamilyDoctrineScenario.ScenarioId),
+                Is.EqualTo(SC024FamilyDoctrineScenario.HeirId));
+            M2FixedScenario.SyncDesignation(state, SC024FamilyDoctrineScenario.ScenarioId);
+            Assert.That(state.DesignatedHeirId, Is.EqualTo(SC024FamilyDoctrineScenario.HeirId));
+
+            IReadOnlyList<M2RosterRow> sc024Rows = M2FixedScenario.BuildRoster(state, Start,
+                state.DesignatedHeirId, SC024FamilyDoctrineScenario.ScenarioId);
+            Assert.That(sc024Rows.Count, Is.EqualTo(7));
+            M2RosterRow childRow = sc024Rows.Last();
+            Assert.That(childRow.PersonId, Is.EqualTo(SC024FamilyDoctrineScenario.HeirId));
+            Assert.That(childRow.GenerationLabel,
+                Is.EqualTo(SC024FamilyDoctrineScenario.HeirGenerationLabel));
+            Assert.That(childRow.IsDesignatedHeir, Is.True);
         }
 
         [Test]

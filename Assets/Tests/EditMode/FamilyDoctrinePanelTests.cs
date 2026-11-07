@@ -381,11 +381,8 @@ namespace SengokuChronicle.Tests.EditMode
             Choose(_session, SC024EventIds.RighteousnessKeepOptionId);
 
             Assert.That(_session.TryAdvanceToNextMonth(), Is.True, _session.LastEventMessage);
-            Assert.That(_session.PendingEventId, Is.EqualTo(SC013EventIds.PledgeEventId));
-            Choose(_session, SC013EventIds.KeepPromiseOptionId);
-
-            Assert.That(_session.TryAdvanceToNextMonth(), Is.True, _session.LastEventMessage);
-            Assert.That(_session.PendingEventId, Is.EqualTo(SampleEventIds.EventId));
+            Assert.That(_session.PendingEventId, Is.EqualTo(SampleEventIds.EventId),
+                "the SC-024 route must not require the SC-013 inheritance pledge");
             Choose(_session, SampleEventIds.OfferRestOptionId);
 
             Assert.That(_session.CanBeginSuccessionRetirement, Is.True,

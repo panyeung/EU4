@@ -535,8 +535,8 @@ namespace SengokuChronicle.Tests.EditMode
             if (includeV9Fields)
                 return json;
 
-            return RemoveRootProperty(RemoveRootProperty(json, "familyDoctrine"),
-                "activeEventScenarioId");
+            return RemoveRootProperty(RemoveRootProperty(RemoveRootProperty(json,
+                "familyDoctrine"), "activeEventScenarioId"), "dailyActions");
         }
 
         private static string InsertRootProperty(string json, string property)

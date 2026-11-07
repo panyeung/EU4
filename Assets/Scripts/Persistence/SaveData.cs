@@ -15,7 +15,7 @@ namespace SengokuChronicle.Persistence
         public const int CurrentGameSchemaVersion = SaveDataValidator.CurrentVersion;
 
         /// <summary>Rules contract version shared by capture, validation and migration.</summary>
-        public const int CurrentRulesVersion = 5;
+        public const int CurrentRulesVersion = 6;
 
         /// <summary>
         /// Fallback event-content version used only when no catalog is loaded. The
@@ -56,6 +56,7 @@ namespace SengokuChronicle.Persistence
         public FamilyResearchSaveData research;
         public FamilyDoctrineSaveData familyDoctrine;
         public string activeEventScenarioId;
+        public DailyActionStateSaveData dailyActions;
 
         public SaveData()
         {
@@ -77,6 +78,8 @@ namespace SengokuChronicle.Persistence
             research = FamilyResearchSaveData.CreateInitial(WorldClock.NewGameDate);
             familyDoctrine = FamilyDoctrineSaveData.CreateDefault();
             activeEventScenarioId = string.Empty;
+            dailyActions = DailyActionStateSaveData.CreateInitial(WorldClock.NewGameDate,
+                succession, LocationId.Kiyosu.Value);
         }
     }
 
@@ -106,6 +109,7 @@ namespace SengokuChronicle.Persistence
         public FamilyResearchSaveData research;
         public FamilyDoctrineSaveData familyDoctrine;
         public string activeEventScenarioId;
+        public DailyActionStateSaveData dailyActions;
     }
 
     /// <summary>One player-to-NPC relationship value, keyed by stable character ID.</summary>
@@ -1348,6 +1352,275 @@ namespace SengokuChronicle.Persistence
         public int target;
         public bool isComplete;
         public string[] knownTechniqueIds;
+    }
+
+    /// <summary>
+    /// v10 M02 daily-action snapshot. Every roster person has exactly one sorted row;
+    /// a row owns at most one in-flight duration-bound action, so mutual exclusion is
+    /// structural. A travelling row deliberately has no location: the task's origin
+    /// and destination are route metadata, not two simultaneous positions.
+    /// </summary>
+    [Serializable]
+    public sealed class DailyActionStateSaveData
+    {
+        public DailyActionPersonSaveEntry[] persons;
+
+        public static DailyActionStateSaveData CreateEmpty() =>
+            new DailyActionStateSaveData { persons = new DailyActionPersonSaveEntry[0] };
+
+        /// <summary>Opening or migration state: sorted rows at the saved location, no actions.</summary>
+        public static DailyActionStateSaveData CreateInitial(GameDate date,
+            SuccessionSaveData succession, string locationId)
+        {
+            if (succession == null || succession.persons == null)
+                return CreateEmpty();
+
+            LocationId.TryParse(locationId, out LocationId location);
+            var ids = new List<string>();
+            foreach (SuccessionPersonSaveEntry person in succession.persons)
+                if (person != null && PersonId.TryParse(person.personId, out PersonId personId))
+                    ids.Add(personId.Value);
+            ids.Sort(StringComparer.Ordinal);
+
+            var entries = new DailyActionPersonSaveEntry[ids.Count];
+            for (int i = 0; i < entries.Length; i++)
+                entries[i] = new DailyActionPersonSaveEntry
+                {
+                    personId = ids[i],
+                    hasLocation = location.IsValid,
+                    locationId = location.IsValid ? location.Value : string.Empty
+                };
+            return new DailyActionStateSaveData { persons = entries };
+        }
+
+        public static DailyActionStateSaveData Capture(DailyActionState state)
+        {
+            if (state == null)
+                return CreateEmpty();
+
+            IReadOnlyList<DailyActionPersonState> persons = state.Persons;
+            var entries = new DailyActionPersonSaveEntry[persons.Count];
+            for (int i = 0; i < persons.Count; i++)
+            {
+                DailyActionPersonState person = persons[i];
+                DailyActionTask task = person.ActiveAction;
+                var entry = new DailyActionPersonSaveEntry
+                {
+                    personId = person.PersonId.Value,
+                    hasLocation = person.HasLocation,
+                    locationId = person.HasLocation ? person.Location.Value : string.Empty,
+                    hasAction = task != null
+                };
+                if (task != null)
+                {
+                    entry.actionKind = (int)task.Kind;
+                    entry.actionDurationDays = task.DurationDays;
+                    entry.actionElapsedDays = task.ElapsedDays;
+                    entry.actionStartYear = task.StartDate.Year;
+                    entry.actionStartMonth = task.StartDate.Month;
+                    entry.actionStartDay = task.StartDate.Day;
+                    entry.travelOriginId = task.IsTravel ? task.Origin.Value : string.Empty;
+                    entry.travelDestinationId = task.IsTravel ? task.Destination.Value : string.Empty;
+                    entry.actionReason = task.Reason ?? string.Empty;
+                }
+                entries[i] = entry;
+            }
+            return new DailyActionStateSaveData { persons = entries };
+        }
+
+        public DailyActionStateSaveData Clone()
+        {
+            var clone = new DailyActionStateSaveData
+            {
+                persons = new DailyActionPersonSaveEntry[persons != null ? persons.Length : 0]
+            };
+            for (int i = 0; i < clone.persons.Length; i++)
+            {
+                DailyActionPersonSaveEntry entry = persons[i];
+                clone.persons[i] = entry == null ? null : new DailyActionPersonSaveEntry
+                {
+                    personId = entry.personId,
+                    hasLocation = entry.hasLocation,
+                    locationId = entry.locationId,
+                    hasAction = entry.hasAction,
+                    actionKind = entry.actionKind,
+                    actionDurationDays = entry.actionDurationDays,
+                    actionElapsedDays = entry.actionElapsedDays,
+                    actionStartYear = entry.actionStartYear,
+                    actionStartMonth = entry.actionStartMonth,
+                    actionStartDay = entry.actionStartDay,
+                    travelOriginId = entry.travelOriginId,
+                    travelDestinationId = entry.travelDestinationId,
+                    actionReason = entry.actionReason
+                };
+            }
+            return clone;
+        }
+
+        public SaveOperationResult ValidateForSave(GameDate date, SuccessionSaveData succession)
+        {
+            if (persons == null)
+                return Invalid("存档缺少每日行动状态（dailyActions.persons）。");
+            if (succession == null || succession.persons == null || succession.members == null)
+                return Invalid("存档每日行动缺少继承人物名册。");
+
+            var roster = new Dictionary<PersonId, SuccessionPersonSaveEntry>();
+            foreach (SuccessionPersonSaveEntry person in succession.persons)
+                if (person != null && PersonId.TryParse(person.personId, out PersonId personId))
+                    roster[personId] = person;
+            var members = new HashSet<PersonId>();
+            foreach (SuccessionMemberSaveEntry member in succession.members)
+                if (member != null && PersonId.TryParse(member.personId, out PersonId memberId))
+                    members.Add(memberId);
+
+            if (persons.Length != roster.Count)
+                return Invalid("存档每日行动记录必须覆盖名册中的每个人物。");
+
+            var seen = new HashSet<PersonId>();
+            string previous = null;
+            foreach (DailyActionPersonSaveEntry entry in persons)
+            {
+                if (entry == null)
+                    return Invalid("存档每日行动记录为空。");
+                if (!PersonId.TryParse(entry.personId, out PersonId personId) ||
+                    !roster.TryGetValue(personId, out SuccessionPersonSaveEntry rosterEntry))
+                    return Invalid("存档每日行动引用了未知人物。");
+                if (!seen.Add(personId))
+                    return Invalid("存档每日行动人物重复。");
+                if (previous != null && string.CompareOrdinal(previous, entry.personId) > 0)
+                    return Invalid("存档每日行动顺序不稳定。");
+                previous = entry.personId;
+
+                if (entry.hasLocation)
+                {
+                    if (!LocationId.TryParse(entry.locationId, out _))
+                        return Invalid("存档每日行动地点无效：" + (entry.locationId ?? "(null)") + "。");
+                }
+                else if (!string.IsNullOrEmpty(entry.locationId))
+                {
+                    return Invalid("存档每日行动在无地点时仍带有地点 ID。");
+                }
+
+                if (!entry.hasAction)
+                {
+                    if (entry.actionDurationDays != 0 || entry.actionElapsedDays != 0 ||
+                        entry.actionStartYear != 0 || entry.actionStartMonth != 0 ||
+                        entry.actionStartDay != 0 || !string.IsNullOrEmpty(entry.travelOriginId) ||
+                        !string.IsNullOrEmpty(entry.travelDestinationId) ||
+                        !string.IsNullOrEmpty(entry.actionReason))
+                        return Invalid("存档每日行动没有进行中的行动，却仍有行动数据。");
+                    continue;
+                }
+
+                if (!Enum.IsDefined(typeof(DailyActionKind), entry.actionKind))
+                    return Invalid("存档每日行动类型无效。");
+                if (entry.actionDurationDays <= 0 || entry.actionElapsedDays < 0 ||
+                    entry.actionElapsedDays >= entry.actionDurationDays)
+                    return Invalid("存档每日行动进度必须在 0..持续时间-1 之间。");
+                if (!GameDate.IsValidDate(entry.actionStartYear, entry.actionStartMonth,
+                        entry.actionStartDay) ||
+                    new GameDate(entry.actionStartYear, entry.actionStartMonth,
+                        entry.actionStartDay) > date)
+                    return Invalid("存档每日行动开始日期无效。");
+                if (!rosterEntry.alive || !members.Contains(personId))
+                    return Invalid("存档每日行动人物已死亡或不再属于家族。");
+
+                var kind = (DailyActionKind)entry.actionKind;
+                if (kind == DailyActionKind.Travel)
+                {
+                    if (entry.hasLocation)
+                        return Invalid("存档旅行中的人物不能同时停在起点或终点。");
+                    if (!LocationId.TryParse(entry.travelOriginId, out LocationId origin) ||
+                        !LocationId.TryParse(entry.travelDestinationId, out LocationId destination) ||
+                        origin == destination ||
+                        !WorldMapRules.TryGetTravelDays(origin, destination, out int routeDays) ||
+                        routeDays != entry.actionDurationDays)
+                        return Invalid("存档旅行行动不符合世界地图直达路线规则。");
+                }
+                else
+                {
+                    if (!entry.hasLocation)
+                        return Invalid("存档非旅行行动缺少人物地点。");
+                    if (!string.IsNullOrEmpty(entry.travelOriginId) ||
+                        !string.IsNullOrEmpty(entry.travelDestinationId))
+                        return Invalid("存档非旅行行动不应带有旅行端点。");
+                }
+            }
+
+            foreach (PersonId rosterId in roster.Keys)
+                if (!seen.Contains(rosterId))
+                    return Invalid("存档缺少每日行动人物记录：" + rosterId.Value + "。");
+            return SaveOperationResult.Success();
+        }
+
+        public static bool TryRestore(DailyActionStateSaveData data, SuccessionSaveData succession,
+            GameDate date, out DailyActionState state, out string error)
+        {
+            state = null;
+            if (data == null)
+            {
+                error = "存档缺少每日行动状态（dailyActions）。";
+                return false;
+            }
+
+            SaveOperationResult validation = data.ValidateForSave(date, succession);
+            if (!validation.Succeeded)
+            {
+                error = validation.Message;
+                return false;
+            }
+
+            var restored = DailyActionState.CreateEmpty();
+            foreach (DailyActionPersonSaveEntry entry in data.persons)
+            {
+                PersonId.TryParse(entry.personId, out PersonId personId);
+                LocationId.TryParse(entry.locationId, out LocationId location);
+                if (!restored.TryAddPersonForRestore(personId, entry.hasLocation, location, out error))
+                    return false;
+            }
+
+            foreach (DailyActionPersonSaveEntry entry in data.persons)
+            {
+                if (!entry.hasAction)
+                    continue;
+                PersonId.TryParse(entry.personId, out PersonId personId);
+                var startDate = new GameDate(entry.actionStartYear, entry.actionStartMonth,
+                    entry.actionStartDay);
+                bool travel = (DailyActionKind)entry.actionKind == DailyActionKind.Travel;
+                LocationId.TryParse(travel ? entry.travelOriginId : entry.locationId,
+                    out LocationId origin);
+                LocationId.TryParse(entry.travelDestinationId, out LocationId destination);
+                if (!restored.TryRestoreActive(personId, (DailyActionKind)entry.actionKind,
+                        entry.actionDurationDays, entry.actionElapsedDays, startDate, origin,
+                        destination, entry.actionReason, out error))
+                    return false;
+            }
+
+            state = restored;
+            error = string.Empty;
+            return true;
+        }
+
+        private static SaveOperationResult Invalid(string message) =>
+            SaveOperationResult.Failure(SaveErrorCode.InvalidData, message);
+    }
+
+    [Serializable]
+    public sealed class DailyActionPersonSaveEntry
+    {
+        public string personId;
+        public bool hasLocation;
+        public string locationId;
+        public bool hasAction;
+        public int actionKind;
+        public int actionDurationDays;
+        public int actionElapsedDays;
+        public int actionStartYear;
+        public int actionStartMonth;
+        public int actionStartDay;
+        public string travelOriginId;
+        public string travelDestinationId;
+        public string actionReason;
     }
 
     /// <summary>Stable phases in which a save is allowed.</summary>

@@ -98,7 +98,12 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(state.World.Family.Id, Is.EqualTo(M2FixedScenario.FamilyId));
             Assert.That(state.HeadPersonId, Is.EqualTo(M2FixedScenario.HarunobuId));
             Assert.That(state.DesignatedHeirId, Is.EqualTo(M2FixedScenario.MasatsunaId));
-            Assert.That(state.World.Family.Members.Count, Is.EqualTo(6));
+            Assert.That(state.World.Family.Members.Count, Is.EqualTo(7));
+            Assert.That(state.World.TryGetPerson(SC024FamilyDoctrineScenario.HeirId, out _), Is.True,
+                "the SC-024 route owns one extra fourth-generation child");
+            Assert.That(M2FixedScenario.CreateSuccession().World.Family.Members.Count,
+                Is.EqualTo(6),
+                "the ordinary SC-013 roster must remain unchanged");
             Assert.That(SC024FamilyDoctrineScenario.ScenarioId, Is.EqualTo("sc024"));
             Assert.That(SC024FamilyDoctrineScenario.StartDate,
                 Is.EqualTo(SengokuChronicle.Domain.WorldClock.NewGameDate));

@@ -68,6 +68,8 @@ namespace SengokuChronicle.Application
         private CharacterDevelopmentState _development;
         private FamilyResearchState _researchState;
         private FamilyDoctrineState _familyDoctrine;
+        private DailyActionState _dailyActions;
+        private int _dailyActionNotificationSuppression;
         private string _eventScenarioId = string.Empty;
         private HistoryLedger _historyLedger = HistoryLedger.CreateEmpty();
         private readonly Dictionary<Guid, DialogueState> _dialogues = new Dictionary<Guid, DialogueState>();
@@ -390,6 +392,36 @@ namespace SengokuChronicle.Application
         /// <summary>Last visible travel refusal reason; cleared by a successful preview/confirm.</summary>
         public string LastTravelBlockReason { get; private set; } = string.Empty;
 
+        /// <summary>Stable ordinal snapshot of every person's daily action/location state.</summary>
+        public IReadOnlyList<DailyActionPersonState> DailyActions => EnsureDailyActions().Persons;
+
+        /// <summary>Outcomes produced by the most recent successful day/month advance or command.</summary>
+        public IReadOnlyList<DailyActionResult> LastDailyActionOutcomes { get; private set; } =
+            new DailyActionResult[0];
+
+        /// <summary>Readable feedback for the most recent daily-action command or completion.</summary>
+        public string LastDailyActionMessage { get; private set; } = string.Empty;
+
+        /// <summary>True while one action is running for this person.</summary>
+        public bool HasActiveDailyAction(PersonId personId) =>
+            EnsureDailyActions().HasActiveAction(personId);
+
+        /// <summary>Reads one person's in-flight action without exposing writable state.</summary>
+        public bool TryGetDailyAction(PersonId personId, out DailyActionTask task) =>
+            EnsureDailyActions().TryGetActive(personId, out task);
+
+        /// <summary>True when the person is between the travel endpoints, at neither one.</summary>
+        public bool IsPersonInTransit(PersonId personId) =>
+            EnsureDailyActions().TryGetActive(personId, out DailyActionTask task) &&
+            task.IsInTransit;
+
+        /// <summary>
+        /// Reads a usable person location. False means in transit or no trustworthy
+        /// location, so callers cannot treat a traveller as standing at either endpoint.
+        /// </summary>
+        public bool TryGetPersonLocation(PersonId personId, out LocationId location) =>
+            EnsureDailyActions().TryGetLocation(personId, out location);
+
         private bool IndustryStateIsConsistent =>
             _industryState != null &&
             _industryState.LastSettledMonthIndex == IndustryCalendar.MonthIndex(CurrentGameDate) - 1;
@@ -431,7 +463,7 @@ namespace SengokuChronicle.Application
                 if (!M2FixedScenario.IsActive(_succession))
                     return true;
                 return M2FixedScenario.CanBeginRetirement(_succession, EnsureEventRuntimeState(),
-                    CurrentGameDate, out _);
+                    CurrentGameDate, _eventScenarioId, out _);
             }
         }
 
@@ -448,7 +480,7 @@ namespace SengokuChronicle.Application
                 if (!M2FixedScenario.IsActive(_succession))
                     return "当前可按通常继承规则安排交接。";
                 M2FixedScenario.CanBeginRetirement(_succession, EnsureEventRuntimeState(),
-                    CurrentGameDate, out string reason);
+                    CurrentGameDate, _eventScenarioId, out string reason);
                 return reason;
             }
         }
@@ -463,7 +495,7 @@ namespace SengokuChronicle.Application
             {
                 if (!M2FixedScenario.IsActive(Succession))
                     return string.Empty;
-                PersonId heir = M2FixedScenario.ExpectedHeir(Succession);
+                PersonId heir = M2FixedScenario.ExpectedHeir(Succession, _eventScenarioId);
                 if (heir.IsEmpty)
                     return IsM2FinaleCommitted
                         ? "固定继承人：无（第三代终局已完成）"
@@ -499,7 +531,7 @@ namespace SengokuChronicle.Application
                 if (!M2FixedScenario.IsActive(Succession) || IsM2FinaleCommitted)
                     return candidates;
 
-                PersonId heir = M2FixedScenario.ExpectedHeir(Succession);
+                PersonId heir = M2FixedScenario.ExpectedHeir(Succession, _eventScenarioId);
                 var filtered = new List<SuccessionCandidate>(1);
                 foreach (SuccessionCandidate candidate in candidates)
                     if (candidate.PersonId == heir)
@@ -513,7 +545,8 @@ namespace SengokuChronicle.Application
 
         /// <summary>Read-only family roster rows for the SC-013 family panel.</summary>
         public IReadOnlyList<M2RosterRow> FamilyRoster =>
-            M2FixedScenario.BuildRoster(Succession, CurrentGameDate, Succession.DesignatedHeirId);
+            M2FixedScenario.BuildRoster(Succession, CurrentGameDate, Succession.DesignatedHeirId,
+                _eventScenarioId);
 
         private GameDate CurrentGameDate =>
             WorldClock != null ? WorldClock.CurrentDate : SengokuChronicle.Domain.WorldClock.NewGameDate;
@@ -647,8 +680,9 @@ namespace SengokuChronicle.Application
 
         /// <summary>
         /// Starts the SC-024 demonstration with a caller-selected deterministic seed. It
-        /// reuses the SC-013 six-person roster but tags the event route as SC-024, so the
-        /// creed council rows are eligible only in this explicit demonstration.
+        /// reuses the SC-013 six-person roster, adds the SC-024-only fourth-generation
+        /// child, and tags the event route as SC-024 so the creed council rows are
+        /// eligible only in this explicit demonstration.
         /// </summary>
         public void InitFamilyDoctrineDemoScenario(ulong initialSeed)
         {
@@ -684,7 +718,8 @@ namespace SengokuChronicle.Application
             _sealedLetterMission = new SealedLetterMission();
             _marketTallyMission = new MarketTallyMission();
             _succession = succession ?? throw new ArgumentNullException(nameof(succession));
-            M2FixedScenario.SyncDesignation(_succession);
+            M2FixedScenario.SyncDesignation(_succession, eventScenarioId);
+            _dailyActions = CreateDailyActionsFor(_succession, CurrentLocation);
             _development = development ?? CreateDevelopmentFor(_succession);
             _industryState = industry ?? IndustryState.CreateInitial(WorldClock.CurrentDate);
             _researchState = FamilyResearchState.CreateInitial(WorldClock.CurrentDate);
@@ -702,6 +737,8 @@ namespace SengokuChronicle.Application
             LastSuccessionMessage = string.Empty;
             _dialogues.Clear();
             LastMonthTurnOutcome = MonthTurnOutcome.Succeeded;
+            LastDailyActionOutcomes = new DailyActionResult[0];
+            LastDailyActionMessage = string.Empty;
             SessionStateChanged?.Invoke();
         }
 
@@ -725,6 +762,11 @@ namespace SengokuChronicle.Application
             // rebuild growth rows for the replacement roster instead of leaving IDs
             // that no longer belong to this family.
             _development = CreateDevelopmentFor(_succession);
+            // The crisis roster replaces the whole family snapshot, so the daily timeline
+            // is rebuilt for the replacement roster at the current confirmed location.
+            _dailyActions = CreateDailyActionsFor(_succession, CurrentLocation);
+            LastDailyActionOutcomes = new DailyActionResult[0];
+            LastDailyActionMessage = string.Empty;
             // The crisis roster replaces the whole family snapshot, so any research plan
             // that referenced the old roster is rebuilt empty for the new family.
             _researchState = FamilyResearchState.CreateInitial(CurrentGameDate);
@@ -765,7 +807,7 @@ namespace SengokuChronicle.Application
             if (M2FixedScenario.IsActive(_succession) &&
                 _succession.Phase == SuccessionPhase.None &&
                 !M2FixedScenario.CanBeginRetirement(_succession, _eventRuntimeState,
-                    CurrentGameDate, out string gateReason))
+                    CurrentGameDate, _eventScenarioId, out string gateReason))
             {
                 LastSuccessionMessage = gateReason;
                 LastEventMessage = gateReason;
@@ -786,7 +828,7 @@ namespace SengokuChronicle.Application
                 _succession.Phase != SuccessionPhase.None &&
                 !IsM2FinaleCommitted)
             {
-                PersonId expected = M2FixedScenario.ExpectedHeir(_succession);
+                PersonId expected = M2FixedScenario.ExpectedHeir(_succession, _eventScenarioId);
                 if (personId != expected)
                 {
                     const string message = "SC-013 固定剧本只允许选择当前固定继承人。";
@@ -855,7 +897,11 @@ namespace SengokuChronicle.Application
                 return result;
             LastSuccessionMessage = result.Message;
             if (M2FixedScenario.IsActive(_succession))
-                M2FixedScenario.SyncDesignation(_succession);
+                M2FixedScenario.SyncDesignation(_succession, _eventScenarioId);
+            if (!before.HeadId.IsEmpty && before.HeadId != _succession.HeadPersonId)
+                InterruptDailyActionForPerson(before.HeadId,
+                    "家主交接：上一代家主的未完成行动已取消。");
+            ReconcileDailyActions();
             ReconcileDevelopmentRoster();
             if (before.DiffersFrom(_succession))
                 RecordSuccession(before, result);
@@ -1535,8 +1581,10 @@ namespace SengokuChronicle.Application
         {
             if (_succession == null)
             {
-                _succession = M2FixedScenario.CreateSuccession();
-                M2FixedScenario.SyncDesignation(_succession);
+                _succession = SC024FamilyDoctrineScenario.IsRoute(_eventScenarioId)
+                    ? SC024FamilyDoctrineScenario.CreateSuccession()
+                    : M2FixedScenario.CreateSuccession();
+                M2FixedScenario.SyncDesignation(_succession, _eventScenarioId);
             }
         }
 
@@ -1566,6 +1614,17 @@ namespace SengokuChronicle.Application
             if (_familyDoctrine == null)
                 _familyDoctrine = new FamilyDoctrineState();
             return _familyDoctrine;
+        }
+
+        private DailyActionState EnsureDailyActions()
+        {
+            EnsureSuccession();
+            if (_dailyActions == null)
+                _dailyActions = CreateDailyActionsFor(_succession, CurrentLocation);
+            if (_succession.World != null)
+                foreach (PersonState person in _succession.World.Persons)
+                    _dailyActions.EnsurePerson(person.Id, CurrentLocation);
+            return _dailyActions;
         }
 
         /// <summary>Selects the current head's one lifetime ambition; old heads are retained.</summary>
@@ -1616,6 +1675,18 @@ namespace SengokuChronicle.Application
                 development.TryAddPerson(person.Id, values, out _);
             }
             return development;
+        }
+
+        /// <summary>Creates one daily-action row per registered person at the start location.</summary>
+        private static DailyActionState CreateDailyActionsFor(SuccessionState succession,
+            LocationId location)
+        {
+            if (succession == null || succession.World == null)
+                return DailyActionState.CreateEmpty();
+            var ids = new List<PersonId>(succession.World.PersonCount);
+            foreach (PersonState person in succession.World.Persons)
+                ids.Add(person.Id);
+            return DailyActionState.CreateForRoster(ids, location);
         }
 
         private bool HasEligibleEducationLearner()
@@ -1701,6 +1772,7 @@ namespace SengokuChronicle.Application
             // A stable save point must remain saveable after a death, retirement or
             // departure. Cleanup is a total function: no production, no chronicle.
             EnsureIndustryAssignmentsValid();
+            ReconcileDailyActions();
             GameDate date = WorldClock != null ? WorldClock.CurrentDate : SengokuChronicle.Domain.WorldClock.NewGameDate;
 
             return new SaveData
@@ -1728,7 +1800,8 @@ namespace SengokuChronicle.Application
                 development = CharacterDevelopmentSaveData.Capture(EnsureDevelopment()),
                 research = FamilyResearchSaveData.Capture(EnsureResearch()),
                 familyDoctrine = FamilyDoctrineSaveData.Capture(EnsureFamilyDoctrine()),
-                activeEventScenarioId = _eventScenarioId ?? string.Empty
+                activeEventScenarioId = _eventScenarioId ?? string.Empty,
+                dailyActions = DailyActionStateSaveData.Capture(EnsureDailyActions())
             };
         }
 
@@ -1783,6 +1856,11 @@ namespace SengokuChronicle.Application
                 return InvalidSave(string.IsNullOrEmpty(doctrineError)
                     ? "存档家训与抱负状态无效。"
                     : doctrineError);
+            if (!DailyActionStateSaveData.TryRestore(data.dailyActions, data.succession, date,
+                    out DailyActionState dailyActions, out string dailyError))
+                return InvalidSave(string.IsNullOrEmpty(dailyError)
+                    ? "存档每日行动状态无效。"
+                    : dailyError);
 
             // Resolve and validate the saved route before the event runtime, so SC-024
             // history is accepted only in the matching sc024 route. SC-024 reuses the
@@ -1859,11 +1937,12 @@ namespace SengokuChronicle.Application
             _randomStateManager = randomState;
             _eventRuntimeState = eventRuntime;
             _succession = succession;
-            M2FixedScenario.SyncDesignation(_succession);
+            M2FixedScenario.SyncDesignation(_succession, eventScenarioId);
             _industryState = industry;
             _development = development;
             _researchState = research;
             _familyDoctrine = familyDoctrine;
+            _dailyActions = dailyActions;
             _eventScenarioId = eventScenarioId;
             LastFamilyDoctrineMessage = string.Empty;
             LastIndustryReport = null;
@@ -1873,6 +1952,8 @@ namespace SengokuChronicle.Application
             LastResearchMessage = string.Empty;
             LastFamilyFormationMessage = string.Empty;
             LastTravelBlockReason = string.Empty;
+            LastDailyActionOutcomes = new DailyActionResult[0];
+            LastDailyActionMessage = string.Empty;
             _historyLedger = historyLedger;
             LastSuccessionMessage = string.Empty;
             NoticeRegencyHandoffIfDue();
@@ -2482,6 +2563,242 @@ namespace SengokuChronicle.Application
             return session;
         }
 
+        /// <summary>
+        /// True when the person may plan a new activity from the current stable point.
+        /// Time ownership, pending events, succession and industry consistency reuse the
+        /// same gates as month or day advancement.
+        /// </summary>
+        public bool CanPlanDailyAction(PersonId personId, out string reason)
+        {
+            reason = string.Empty;
+            if (WorldClock == null)
+            {
+                reason = "游戏尚未初始化。";
+                return false;
+            }
+            if (IsFamilyExtinct)
+            {
+                reason = "家族已经灭亡：无法再安排人物行动。";
+                return false;
+            }
+            EnsureEventRuntimeState();
+            if (_eventRuntimeState.HasPendingEvents)
+            {
+                reason = "尚有事件待回应：请先处理当前事件，再安排行动。";
+                return false;
+            }
+            if (SuccessionBlocksTimeAdvance)
+            {
+                reason = Succession.IsRegencyHandoffDue(CurrentGameDate)
+                    ? "幼主成年交权尚未完成：请先完成交权，再安排行动。"
+                    : "尚有继承决策待处理：请先完成继承选择，再安排行动。";
+                return false;
+            }
+            if (!ValidateIndustryMonthConsistency())
+            {
+                reason = LastEventMessage;
+                return false;
+            }
+            EnsureSuccession();
+            if (_succession.World == null ||
+                !_succession.World.TryGetPerson(personId, out _) ||
+                !_succession.World.IsLiving(personId) ||
+                !_succession.World.Family.IsMember(personId))
+            {
+                reason = "只有当前在世的家族成员才能安排每日行动。";
+                return false;
+            }
+            if (EnsureDailyActions().HasActiveAction(personId))
+            {
+                reason = "该人物已有进行中的行动；不能同时执行两个行动。";
+                return false;
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// Plans one duration-bound action. Travel duration comes from
+        /// <see cref="WorldMapRules"/>; other kinds require the caller's explicit duration.
+        /// </summary>
+        public bool TryPlanDailyAction(PersonId personId, DailyActionKind kind,
+            int durationDays, LocationId destination, out string reason)
+        {
+            reason = string.Empty;
+            if (!CanPlanDailyAction(personId, out reason))
+            {
+                LastDailyActionMessage = reason;
+                LastDailyActionOutcomes = new[]
+                {
+                    new DailyActionResult(personId, kind, DailyActionOutcomeKind.Rejected,
+                        CurrentGameDate, reason)
+                };
+                return false;
+            }
+
+            DailyActionState actions = EnsureDailyActions();
+            if (!actions.TryGetLocation(personId, out LocationId location))
+            {
+                reason = "该人物正在旅途中或地点未知，无法安排新的行动。";
+                LastDailyActionMessage = reason;
+                LastDailyActionOutcomes = new[]
+                {
+                    new DailyActionResult(personId, kind, DailyActionOutcomeKind.Rejected,
+                        CurrentGameDate, reason)
+                };
+                return false;
+            }
+
+            DailyActionResult result;
+            if (kind == DailyActionKind.Travel)
+            {
+                if (!destination.IsValid)
+                {
+                    reason = "旅行目的地无效。";
+                    return RejectAction(personId, kind, reason);
+                }
+                if (!WorldMapRules.TryGetTravelDays(location, destination, out int routeDays))
+                {
+                    reason = location == destination
+                        ? "旅行目的地必须不同于出发地。"
+                        : "两地之间没有直达路线。";
+                    return RejectAction(personId, kind, reason);
+                }
+                if (durationDays > 0 && durationDays != routeDays)
+                {
+                    reason = "旅行持续时间必须等于世界地图规则给出的天数。";
+                    return RejectAction(personId, kind, reason);
+                }
+                if (!actions.TryPlan(personId, kind, routeDays, location, destination,
+                        CurrentGameDate, "前往" + LocationId.GetChineseName(destination) + "。",
+                        out result))
+                {
+                    reason = result.Reason;
+                    return RejectAction(personId, kind, reason);
+                }
+            }
+            else if (!actions.TryPlan(personId, kind, durationDays, location, default,
+                         CurrentGameDate,
+                         DailyActionState.KindName(kind) + "行动已安排。", out result))
+            {
+                reason = result.Reason;
+                return RejectAction(personId, kind, reason);
+            }
+
+            LastDailyActionOutcomes = new[] { result };
+            LastDailyActionMessage = result.Reason;
+            NotifyDailyActionChanged();
+            return true;
+        }
+
+        public bool TryPlanRestAction(PersonId personId, int durationDays, out string reason) =>
+            TryPlanDailyAction(personId, DailyActionKind.Rest, durationDays, default, out reason);
+
+        public bool TryPlanTrainingAction(PersonId personId, int durationDays, out string reason) =>
+            TryPlanDailyAction(personId, DailyActionKind.Training, durationDays, default, out reason);
+
+        public bool TryPlanWorkAction(PersonId personId, int durationDays, out string reason) =>
+            TryPlanDailyAction(personId, DailyActionKind.Work, durationDays, default, out reason);
+
+        public bool TryPlanTravelAction(PersonId personId, LocationId destination,
+            out string reason) =>
+            TryPlanDailyAction(personId, DailyActionKind.Travel, 0, destination, out reason);
+
+        /// <summary>
+        /// Cancels one active action with an explicit reason. A traveller returns to the
+        /// departure point because this foundation has no mid-route position model.
+        /// </summary>
+        public bool TryInterruptDailyAction(PersonId personId, string reason)
+        {
+            string message = string.IsNullOrWhiteSpace(reason) ? "玩家取消了当前行动。" : reason;
+            if (!EnsureDailyActions().TryInterrupt(personId, message, CurrentGameDate,
+                    out DailyActionResult result))
+            {
+                LastDailyActionMessage = result.Reason;
+                LastDailyActionOutcomes = new[] { result };
+                return false;
+            }
+
+            LastDailyActionOutcomes = new[] { result };
+            LastDailyActionMessage = result.Reason;
+            NotifyDailyActionChanged();
+            return true;
+        }
+
+        /// <summary>
+        /// Atomically replaces an active action with a new plan. The old action is recorded
+        /// as interrupted first; if the new plan is rejected, the old action is restored.
+        /// Notifications are suppressed until the final replacement state is committed, so
+        /// observers never see a temporary no-action gap.
+        /// </summary>
+        public bool TryReplanDailyAction(PersonId personId, DailyActionKind kind,
+            int durationDays, LocationId destination, out string reason)
+        {
+            reason = string.Empty;
+            DailyActionState before = EnsureDailyActions().Clone();
+            IReadOnlyList<DailyActionResult> outcomesBefore = LastDailyActionOutcomes;
+            string messageBefore = LastDailyActionMessage;
+            _dailyActionNotificationSuppression++;
+            try
+            {
+                if (!TryInterruptDailyAction(personId, "重新规划：取消原行动。"))
+                {
+                    reason = LastDailyActionMessage;
+                    LastDailyActionOutcomes = outcomesBefore;
+                    LastDailyActionMessage = messageBefore;
+                    return false;
+                }
+                DailyActionResult interrupted = LastDailyActionOutcomes[0];
+                if (!TryPlanDailyAction(personId, kind, durationDays, destination, out reason))
+                {
+                    _dailyActions = before;
+                    LastDailyActionOutcomes = outcomesBefore;
+                    LastDailyActionMessage = "重新规划失败，已恢复原行动：" + reason;
+                    return false;
+                }
+
+                var outcomes = new List<DailyActionResult>(2)
+                {
+                    interrupted
+                };
+                outcomes.Add(LastDailyActionOutcomes[0]);
+                LastDailyActionOutcomes = outcomes.AsReadOnly();
+                LastDailyActionMessage = "已重新规划：" + LastDailyActionMessage;
+            }
+            finally
+            {
+                _dailyActionNotificationSuppression--;
+            }
+
+            NotifyDailyActionChanged();
+            return true;
+        }
+
+        private bool RejectAction(PersonId personId, DailyActionKind kind, string reason)
+        {
+            LastDailyActionMessage = reason;
+            LastDailyActionOutcomes = new[]
+            {
+                new DailyActionResult(personId, kind, DailyActionOutcomeKind.Rejected,
+                    CurrentGameDate, reason)
+            };
+            return false;
+        }
+
+        /// <summary>
+        /// Explicit daily control: a normal day uses the existing within-month path; the
+        /// last day of a month rolls into the existing monthly transaction exactly once.
+        /// </summary>
+        public bool AdvanceActionDay()
+        {
+            if (WorldClock == null)
+                InitNewGame();
+            GameDate current = WorldClock.CurrentDate;
+            if (GameDate.TryNext(current, out GameDate next) &&
+                (next.Year != current.Year || next.Month != current.Month))
+                return TryAdvanceToNextMonth();
+            return AdvanceOneDay();
+        }
+
         /// <summary>推进一天。成功返回 true；失败返回 false 且状态不变，并通过既有结果/消息通道说明原因。</summary>
         public bool AdvanceOneDay()
         {
@@ -2505,6 +2822,7 @@ namespace SengokuChronicle.Application
             }
             if (!ValidateIndustryMonthConsistency())
                 return false;
+            GameDate previousDate = WorldClock.CurrentDate;
             if (!GameDate.TryNext(WorldClock.CurrentDate, out GameDate nextDate))
             {
                 LastMonthTurnOutcome = MonthTurnOutcome.DateOutOfRange;
@@ -2522,6 +2840,8 @@ namespace SengokuChronicle.Application
                 LastMonthTurnOutcome = MonthTurnOutcome.DateOutOfRange;
                 return false;
             }
+            ApplyDailyActionAdvance(previousDate, 1);
+            SyncCurrentLocationFromDailyActions();
             LastMonthTurnOutcome = MonthTurnOutcome.Succeeded;
             if (NoticeRegencyHandoffIfDue())
                 SessionStateChanged?.Invoke();
@@ -2556,6 +2876,7 @@ namespace SengokuChronicle.Application
             }
             if (!ValidateIndustryMonthConsistency())
                 return false;
+            GameDate previousDate = WorldClock.CurrentDate;
             if (!GameDate.TryAddDays(WorldClock.CurrentDate, count, out GameDate targetDate))
             {
                 LastMonthTurnOutcome = MonthTurnOutcome.DateOutOfRange;
@@ -2573,6 +2894,8 @@ namespace SengokuChronicle.Application
                 LastMonthTurnOutcome = MonthTurnOutcome.DateOutOfRange;
                 return false;
             }
+            ApplyDailyActionAdvance(previousDate, count);
+            SyncCurrentLocationFromDailyActions();
             LastMonthTurnOutcome = MonthTurnOutcome.Succeeded;
             if (NoticeRegencyHandoffIfDue())
                 SessionStateChanged?.Invoke();
@@ -2832,6 +3155,8 @@ namespace SengokuChronicle.Application
             CharacterDevelopmentState developmentBefore = EnsureDevelopment().Clone();
             FamilyResearchState researchBefore = EnsureResearch().Clone();
             FamilyDoctrineState doctrineBefore = EnsureFamilyDoctrine().Clone();
+            DailyActionState dailyBefore = EnsureDailyActions().Clone();
+            LocationId locationBefore = CurrentLocation;
             RandomStateSaveData rngBefore = _randomStateManager.CaptureState();
             FamilyChronicleEntry[] chronicleBefore = EnsureHistoryLedger().Capture();
             EventRuntimeState runtimeBefore = _eventRuntimeState.Clone();
@@ -2840,6 +3165,8 @@ namespace SengokuChronicle.Application
             string educationMessageBefore = LastEducationMessage;
             FamilyResearchMonthReport researchReportBefore = LastResearchReport;
             string researchMessageBefore = LastResearchMessage;
+            IReadOnlyList<DailyActionResult> dailyOutcomesBefore = LastDailyActionOutcomes;
+            string dailyMessageBefore = LastDailyActionMessage;
             try
             {
                 IndustrySettlementResult settlement = IndustrySettlement.Plan(
@@ -2968,6 +3295,12 @@ namespace SengokuChronicle.Application
                     return false;
                 }
 
+                // The monthly jump consumes calendar days for in-flight actions exactly
+                // once, before the fault seam so the transaction owns the result too.
+                int elapsedDays = CountCalendarDays(previousDate, nextDate);
+                if (elapsedDays > 0)
+                    ApplyDailyActionAdvance(previousDate, elapsedDays);
+
                 // Fault-injection seam: the date has already crossed, so any exception
                 // below must restore the clock as well as resources/history/RNG.
                 MonthSettlementFaultInjection?.Invoke();
@@ -2977,6 +3310,7 @@ namespace SengokuChronicle.Application
                 _development = nextDevelopment;
                 _researchState = researchSettlement.NextState ?? researchBefore;
                 _familyDoctrine = nextDoctrine;
+                SyncCurrentLocationFromDailyActions();
                 LastIndustryReport = settlement.Report;
                 if (settlement.Report != null)
                     LastIndustryMessage = settlement.Report.Summary;
@@ -2999,6 +3333,10 @@ namespace SengokuChronicle.Application
                 _development = developmentBefore;
                 _researchState = researchBefore;
                 _familyDoctrine = doctrineBefore;
+                _dailyActions = dailyBefore;
+                CurrentLocation = locationBefore;
+                LastDailyActionOutcomes = dailyOutcomesBefore;
+                LastDailyActionMessage = dailyMessageBefore;
                 RandomStateManager.TryRestore(rngBefore, out _randomStateManager);
                 HistoryLedger.TryRestore(chronicleBefore, out _historyLedger, out _);
                 LastIndustryReport = reportBefore;
@@ -3040,6 +3378,12 @@ namespace SengokuChronicle.Application
             if (!ValidateIndustryMonthConsistency())
             {
                 LastTravelBlockReason = LastEventMessage;
+                return null;
+            }
+            EnsureSuccession();
+            if (HasActiveDailyAction(_succession.HeadPersonId))
+            {
+                LastTravelBlockReason = "当前家主已有进行中的行动；请先完成或中断行动，再直接旅行。";
                 return null;
             }
 
@@ -3088,6 +3432,12 @@ namespace SengokuChronicle.Application
                 LastTravelBlockReason = LastEventMessage;
                 return false;
             }
+            EnsureSuccession();
+            if (HasActiveDailyAction(_succession.HeadPersonId))
+            {
+                LastTravelBlockReason = "当前家主已有进行中的行动；请先完成或中断行动，再直接旅行。";
+                return false;
+            }
 
             if (!preview.Destination.IsValid)
                 return false;
@@ -3111,6 +3461,7 @@ namespace SengokuChronicle.Application
             if (!WorldClock.AdvanceDays(days))
                 return false;
             CurrentLocation = preview.Destination;
+            EnsureDailyActions().TrySetLocation(_succession.HeadPersonId, preview.Destination);
             LastTravelBlockReason = string.Empty;
             if (NoticeRegencyHandoffIfDue())
                 SessionStateChanged?.Invoke();
@@ -3150,6 +3501,119 @@ namespace SengokuChronicle.Application
             LastMonthTurnOutcome = MonthTurnOutcome.IndustryStateInvalid;
             LastEventMessage = "产业状态与当前月份不一致：请读取稳定存档。";
             return false;
+        }
+
+        /// <summary>
+        /// Daily-action commands funnel through here so a compound replan can commit the
+        /// replacement before publishing exactly one state notification.
+        /// </summary>
+        private void NotifyDailyActionChanged()
+        {
+            if (_dailyActionNotificationSuppression > 0)
+                return;
+            SessionStateChanged?.Invoke();
+        }
+
+        /// <summary>Advances in-flight actions by explicit calendar days and records outcomes.</summary>
+        private void ApplyDailyActionAdvance(GameDate previousDate, int days)
+        {
+            IReadOnlyList<DailyActionResult> outcomes = EnsureDailyActions().AdvanceDays(
+                previousDate, days);
+            LastDailyActionOutcomes = outcomes;
+            if (outcomes.Count == 0)
+                return;
+
+            var builder = new StringBuilder();
+            for (int i = 0; i < outcomes.Count; i++)
+            {
+                if (i > 0)
+                    builder.Append("；");
+                DailyActionResult outcome = outcomes[i];
+                builder.Append(PersonDisplayName(outcome.PersonId, outcome.PersonId.Value));
+                builder.Append(outcome.Reason);
+            }
+            LastDailyActionMessage = builder.ToString();
+        }
+
+        /// <summary>
+        /// Mirrors the head's known location back to the legacy CurrentLocation surface.
+        /// An in-transit head has no known location, so the last confirmed location stays
+        /// visible and <see cref="IsPersonInTransit"/> remains the authority.
+        /// </summary>
+        private void SyncCurrentLocationFromDailyActions()
+        {
+            EnsureSuccession();
+            if (_succession == null || _succession.HeadPersonId.IsEmpty)
+                return;
+            if (EnsureDailyActions().TryGetLocation(_succession.HeadPersonId, out LocationId location))
+                CurrentLocation = location;
+        }
+
+        /// <summary>Number of calendar days advanced between two valid saved dates.</summary>
+        private static int CountCalendarDays(GameDate from, GameDate to)
+        {
+            int days = 0;
+            GameDate cursor = from;
+            while (cursor < to)
+            {
+                if (!GameDate.TryNext(cursor, out GameDate next))
+                    break;
+                cursor = next;
+                days++;
+            }
+            return days;
+        }
+
+        /// <summary>
+        /// Interrupts actions of people who died, left the family or disappeared from the
+        /// roster. This is a total cleanup: no production, no chronicle, no time advance.
+        /// </summary>
+        private void ReconcileDailyActions()
+        {
+            EnsureSuccession();
+            DailyActionState actions = EnsureDailyActions();
+            if (_succession.World == null)
+                return;
+
+            foreach (PersonState person in _succession.World.Persons)
+                actions.EnsurePerson(person.Id, CurrentLocation);
+
+            var outcomes = new List<DailyActionResult>();
+            foreach (DailyActionPersonState row in actions.Persons)
+            {
+                if (!row.HasActiveAction)
+                    continue;
+                bool stillAvailable =
+                    _succession.World.TryGetPerson(row.PersonId, out _) &&
+                    _succession.World.IsLiving(row.PersonId) &&
+                    _succession.World.Family.IsMember(row.PersonId);
+                if (stillAvailable)
+                    continue;
+                if (actions.TryInterrupt(row.PersonId,
+                        "人物离世或离开家族，行动已中断。", CurrentGameDate,
+                        out DailyActionResult result))
+                    outcomes.Add(result);
+            }
+
+            if (outcomes.Count == 0)
+                return;
+            LastDailyActionOutcomes = outcomes.AsReadOnly();
+            LastDailyActionMessage = "有 " +
+                outcomes.Count.ToString(CultureInfo.InvariantCulture) +
+                " 项行动因人物状态变化而中断。";
+        }
+
+        /// <summary>Interrupts one person's active action with a caller-supplied reason.</summary>
+        private void InterruptDailyActionForPerson(PersonId personId, string reason)
+        {
+            if (personId.IsEmpty || _dailyActions == null)
+                return;
+            if (_dailyActions.TryInterrupt(personId, reason, CurrentGameDate,
+                    out DailyActionResult result))
+            {
+                LastDailyActionOutcomes = new[] { result };
+                LastDailyActionMessage = result.Reason;
+            }
         }
     }
 }

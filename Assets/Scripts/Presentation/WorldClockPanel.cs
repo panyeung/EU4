@@ -32,6 +32,10 @@ namespace SengokuChronicle.Presentation
         [SerializeField]
         private WorldMapController worldMapController;
 
+        /// <summary>可空：M02 每日行动面板；推进一天或结束月份后显式刷新其行动进度。</summary>
+        [SerializeField]
+        private DailyActionPanel dailyActionPanel;
+
         /// <summary>可空：显示最近一次被拒绝的时间操作原因。</summary>
         [SerializeField]
         private Text feedbackText;
@@ -90,6 +94,12 @@ namespace SengokuChronicle.Presentation
                 feedbackText.gameObject.SetActive(false);
         }
 
+        /// <summary>M02: binds the daily-action panel so successful time turns refresh it.</summary>
+        public void BindDailyActionPanel(DailyActionPanel panel)
+        {
+            dailyActionPanel = panel;
+        }
+
         private void Awake()
         {
             if (gameSession == null)
@@ -117,6 +127,8 @@ namespace SengokuChronicle.Presentation
         /// <summary>
         /// 推进一天。被拒绝时把真实原因写入 <see cref="LastAdvanceMessage"/> 并记录到
         /// Console；继承暂停时显示继承原因，而不是「日期已达支持上限」。
+        /// M02：使用 <see cref="GameSession.AdvanceActionDay"/>，在月内推进一天，
+        /// 月末最后一天复用既有月度事务恰好一次，使进行中的每日行动同步推进。
         /// </summary>
         public bool TryAdvanceOneDay()
         {
@@ -127,11 +139,13 @@ namespace SengokuChronicle.Presentation
                 return false;
             }
 
-            if (gameSession.AdvanceOneDay())
+            if (gameSession.AdvanceActionDay())
             {
                 LastAdvanceMessage = string.Empty;
                 ShowFeedback(string.Empty);
                 Refresh();
+                RefreshMapDateDisplay();
+                RefreshDailyActionPanel();
                 return true;
             }
 
@@ -179,6 +193,7 @@ namespace SengokuChronicle.Presentation
                 ShowFeedback(string.Empty);
                 Refresh();
                 RefreshMapDateDisplay();
+                RefreshDailyActionPanel();
                 return;
             }
 
@@ -256,6 +271,15 @@ namespace SengokuChronicle.Presentation
                 worldMapController = FindAnyObjectByType<WorldMapController>();
             if (worldMapController != null)
                 worldMapController.RefreshDateDisplays();
+        }
+
+        /// <summary>M02：时间推进后刷新每日行动面板；缺省引用时按需查找一次。</summary>
+        private void RefreshDailyActionPanel()
+        {
+            if (dailyActionPanel == null)
+                dailyActionPanel = FindAnyObjectByType<DailyActionPanel>();
+            if (dailyActionPanel != null)
+                dailyActionPanel.Refresh();
         }
 
         private void OnEnable()

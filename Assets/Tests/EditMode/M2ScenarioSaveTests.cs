@@ -46,6 +46,9 @@ namespace SengokuChronicle.Tests.EditMode
                 // fixture valid so the load still reaches the scenario/event gate.
                 mismatched.development =
                     CharacterDevelopmentSaveData.CreateEmpty(mismatched.succession);
+                mismatched.dailyActions = DailyActionStateSaveData.CreateInitial(
+                    new GameDate(mismatched.year, mismatched.month, mismatched.day),
+                    mismatched.succession, mismatched.locationId);
 
                 SaveOperationResult standardResult = standard.TryApplySave(mismatched);
                 Assert.That(standardResult.Succeeded, Is.False,

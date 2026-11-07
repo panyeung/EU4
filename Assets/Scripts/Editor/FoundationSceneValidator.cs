@@ -44,6 +44,7 @@ namespace SengokuChronicle.Editor
             FamilyResearchPanel researchPanel = FindComponent<FamilyResearchPanel>(scene);
             FamilyFormationPanel formationPanel = FindComponent<FamilyFormationPanel>(scene);
             FamilyDoctrinePanel doctrinePanel = FindComponent<FamilyDoctrinePanel>(scene);
+            DailyActionPanel dailyActionPanel = FindComponent<DailyActionPanel>(scene);
 
             CheckFound(report, ref errors, "Canvas", canvas);
             CheckFound(report, ref errors, "Canvas/M2WorldMapRoot", mapRoot);
@@ -64,6 +65,7 @@ namespace SengokuChronicle.Editor
             CheckFound(report, ref errors, "FamilyResearchPanel", researchPanel);
             CheckFound(report, ref errors, "FamilyFormationPanel", formationPanel);
             CheckFound(report, ref errors, "FamilyDoctrinePanel", doctrinePanel);
+            CheckFound(report, ref errors, "DailyActionPanel", dailyActionPanel);
             if (!AddM4SupplyShortageMissionPanel.Validate(scene, out string missionError))
                 AddError(report, ref errors, missionError);
             else
@@ -132,6 +134,10 @@ namespace SengokuChronicle.Editor
                 AddError(report, ref errors, sc024Error);
             else
                 report.AppendLine("PASS SC-024 family-doctrine panel, title entry, bindings, containment, and layout.");
+            if (!AddM02DailyActionPanel.Validate(scene, out string m02Error))
+                AddError(report, ref errors, m02Error);
+            else
+                report.AppendLine("PASS M02 daily-action panel hierarchy, bindings, containment, ordering, and layout.");
 
             if (controller != null)
             {
@@ -281,6 +287,17 @@ namespace SengokuChronicle.Editor
                     "creedText", "creedChoicesText", "effectText", "headText", "ambitionText",
                     "blockReasonText", "messageText", "developHouseholdButton",
                     "passDownTechniqueButton", "educateHeirButton");
+            }
+
+            if (dailyActionPanel != null)
+            {
+                report.AppendLine("\nDAILY ACTION PANEL REFERENCES:");
+                CheckReferences(report, ref errors, dailyActionPanel,
+                    "gameSession", "panelRoot", "openButton", "closeButton", "titleText",
+                    "summaryText", "scrollRect", "content", "rowTemplate", "emptyText",
+                    "selectedText", "durationInput", "restButton", "trainingButton",
+                    "workButton", "travelKiyosuButton", "travelAtsutaButton",
+                    "travelNagoyaButton", "interruptButton", "feedbackText");
             }
 
             report.AppendLine("\nHIERARCHY AND RECTTRANSFORMS:");

@@ -159,7 +159,14 @@ namespace SengokuChronicle.Application
             eventId.StartsWith("event.sc013.", StringComparison.Ordinal);
 
         /// <summary>The approved next direct heir for the current fixed head.</summary>
-        public static PersonId ExpectedHeir(SuccessionState state)
+        public static PersonId ExpectedHeir(SuccessionState state) => ExpectedHeir(state, null);
+
+        /// <summary>
+        /// Route-aware heir lookup. The SC-024 route may designate its own
+        /// fourth-generation child after the two existing successions; every other
+        /// route, including ordinary SC-013, keeps the same fixed direct line.
+        /// </summary>
+        public static PersonId ExpectedHeir(SuccessionState state, string eventScenarioId)
         {
             if (state == null)
                 return default;
@@ -167,15 +174,24 @@ namespace SengokuChronicle.Application
                 return MasatsunaId;
             if (state.HeadPersonId == MasatsunaId)
                 return NobumasaId;
+            // The SC-024 child is valid only on the explicit sc024 route. A state that
+            // merely carries the extra family data (for example a reused save) must not
+            // change the ordinary SC-013 direct line or its "no fixed heir" finale.
+            if (state.HeadPersonId == NobumasaId &&
+                SC024FamilyDoctrineScenario.IsRoute(eventScenarioId))
+                return SC024FamilyDoctrineScenario.ExpectedHeir(state);
             return default;
         }
 
         /// <summary>Restores the fixed designation after a lawful handoff clears it.</summary>
-        public static void SyncDesignation(SuccessionState state)
+        public static void SyncDesignation(SuccessionState state) => SyncDesignation(state, null);
+
+        /// <summary>Route-aware designation sync; ordinary SC-013 callers keep their line.</summary>
+        public static void SyncDesignation(SuccessionState state, string eventScenarioId)
         {
             if (!IsActive(state) || state.Phase != SuccessionPhase.None)
                 return;
-            state.DesignatedHeirId = ExpectedHeir(state);
+            state.DesignatedHeirId = ExpectedHeir(state, eventScenarioId);
         }
 
         /// <summary>
@@ -183,11 +199,21 @@ namespace SengokuChronicle.Application
         /// committed event history and pending-event state; no extra save field exists.
         /// </summary>
         public static bool CanBeginRetirement(SuccessionState state, EventRuntimeState runtime,
-            out string reason) => CanBeginRetirement(state, runtime, null, out reason);
+            out string reason) => CanBeginRetirement(state, runtime, null, null, out reason);
 
         /// <summary>Date-aware overload used by the live session for candidate eligibility.</summary>
         public static bool CanBeginRetirement(SuccessionState state, EventRuntimeState runtime,
-            GameDate? date, out string reason)
+            GameDate? date, out string reason) =>
+            CanBeginRetirement(state, runtime, date, null, out reason);
+
+        /// <summary>
+        /// Route-aware retirement gate. The SC-024 route satisfies the first-generation
+        /// gate with its own creed-council event and does not wait for the SC-013-only
+        /// pledge, rainy-arrival, or rainy-arrival legacy chain. With no route (ordinary
+        /// SC-013) the original gates remain unchanged.
+        /// </summary>
+        public static bool CanBeginRetirement(SuccessionState state, EventRuntimeState runtime,
+            GameDate? date, string eventScenarioId, out string reason)
         {
             reason = string.Empty;
             if (!IsActive(state))
@@ -206,22 +232,38 @@ namespace SengokuChronicle.Application
                 return false;
             }
 
+            bool sc024 = SC024FamilyDoctrineScenario.IsRoute(eventScenarioId);
             if (state.HeadPersonId == HarunobuId)
             {
-                if (!HasCommitted(runtime, PledgeEventId))
+                if (sc024)
                 {
-                    reason = "第一代尚未处理「继承前的家议」：请先结束月份并完成承诺选择。";
-                    return false;
+                    if (!HasCommittedSc024Council(runtime))
+                    {
+                        reason = "第一代尚未处理「家训议事」：请先结束月份并完成家族议事。";
+                        return false;
+                    }
                 }
-                if (!HasCommitted(runtime, SampleEventIds.EventId))
+                else
                 {
-                    reason = "第一代尚未回应「雨夜来客」：请再结束月份，处理旧客来访。";
-                    return false;
+                    if (!HasCommitted(runtime, PledgeEventId))
+                    {
+                        reason = "第一代尚未处理「继承前的家议」：请先结束月份并完成承诺选择。";
+                        return false;
+                    }
+                    if (!HasCommitted(runtime, SampleEventIds.EventId))
+                    {
+                        reason = "第一代尚未回应「雨夜来客」：请再结束月份，处理旧客来访。";
+                        return false;
+                    }
                 }
             }
             else if (state.HeadPersonId == MasatsunaId)
             {
-                if (!HasCommitted(runtime, SC011EventIds.LegacyHonoredEventId) &&
+                // The SC-024 route does not gate on the SC-011 rainy-arrival legacy
+                // chain, which requires an SC-013-compatible rainy choice made before
+                // the first handoff. SC-013 keeps the original legacy gate unchanged.
+                if (!sc024 &&
+                    !HasCommitted(runtime, SC011EventIds.LegacyHonoredEventId) &&
                     !HasCommitted(runtime, SC011EventIds.LegacyDeferredEventId))
                 {
                     reason = "第二代尚未回应旧客回访：请先结束月份并完成旧事选择。";
@@ -243,7 +285,7 @@ namespace SengokuChronicle.Application
                 return false;
             }
 
-            PersonId heir = ExpectedHeir(state);
+            PersonId heir = ExpectedHeir(state, eventScenarioId);
             if (heir.IsEmpty)
             {
                 reason = "当前没有固定的下一代继承人。";
@@ -272,6 +314,12 @@ namespace SengokuChronicle.Application
             }
             return true;
         }
+
+        /// <summary>True when the SC-024 route has committed any of its creed-council events.</summary>
+        public static bool HasCommittedSc024Council(EventRuntimeState runtime) =>
+            HasCommitted(runtime, SC024EventIds.SecrecyCouncilEventId) ||
+            HasCommitted(runtime, SC024EventIds.RighteousnessCouncilEventId) ||
+            HasCommitted(runtime, SC024EventIds.MeritCouncilEventId);
 
         /// <summary>True when any committed history entry used the event.</summary>
         public static bool HasCommitted(EventRuntimeState runtime, string eventId)
@@ -350,16 +398,25 @@ namespace SengokuChronicle.Application
             return true;
         }
 
-        /// <summary>Builds the six fixed rows in a stable presentation order.</summary>
+        /// <summary>Builds the fixed rows in a stable presentation order.</summary>
         public static IReadOnlyList<M2RosterRow> BuildRoster(SuccessionState state, GameDate date,
-            PersonId designatedHeirId)
+            PersonId designatedHeirId) => BuildRoster(state, date, designatedHeirId, null);
+
+        /// <summary>
+        /// Route-aware roster. The six fixed rows keep their order; any SC-024-only
+        /// fourth-generation child is appended without changing the ordinary SC-013 view.
+        /// </summary>
+        public static IReadOnlyList<M2RosterRow> BuildRoster(SuccessionState state, GameDate date,
+            PersonId designatedHeirId, string eventScenarioId)
         {
             var rows = new List<M2RosterRow>();
             if (state == null || state.World == null)
                 return rows.AsReadOnly();
 
             bool m2 = IsActive(state);
-            IEnumerable<PersonState> persons = m2 ? OrderedPersons(state) : state.World.Persons;
+            IEnumerable<PersonState> persons = m2
+                ? OrderedPersons(state, SC024FamilyDoctrineScenario.IsRoute(eventScenarioId))
+                : state.World.Persons;
             bool designatedValid = !designatedHeirId.IsEmpty &&
                 SuccessionService.IsEligibleSuccessor(state, designatedHeirId, date);
 
@@ -369,7 +426,7 @@ namespace SengokuChronicle.Application
                 state.World.TryGetLife(person.Id, out SuccessionPersonLife life);
                 rows.Add(new M2RosterRow(person.Id, person.DisplayName, role,
                     life.BirthYear > 0 ? life.AgeAt(date) : 0,
-                    GenerationLabel(person.Id, role), BuildKinship(state, person.Id),
+                    GenerationLabel(person.Id, role, eventScenarioId), BuildKinship(state, person.Id),
                     person.Id == state.HeadPersonId,
                     person.Id == designatedHeirId,
                     person.Id == designatedHeirId && designatedValid));
@@ -377,8 +434,18 @@ namespace SengokuChronicle.Application
             return rows.AsReadOnly();
         }
 
-        public static string GenerationLabel(PersonId personId, FamilyMemberRole role)
+        public static string GenerationLabel(PersonId personId, FamilyMemberRole role) =>
+            GenerationLabel(personId, role, null);
+
+        public static string GenerationLabel(PersonId personId, FamilyMemberRole role,
+            string eventScenarioId)
         {
+            // The child ID is SC-024-only, so it is labeled only on the explicit route.
+            // Ordinary SC-013 never contains the child, and a stale state that does must
+            // still present the original six-person generations.
+            if (SC024FamilyDoctrineScenario.IsRoute(eventScenarioId) &&
+                SC024FamilyDoctrineScenario.TryGetGenerationLabel(personId, out string sc024Label))
+                return sc024Label;
             if (personId == HarunobuId || personId == ChieId || personId == TokihimeId)
                 return "第一代";
             if (personId == MasatsunaId)
@@ -388,13 +455,29 @@ namespace SengokuChronicle.Application
             return role == FamilyMemberRole.Retainer ? "家臣" : "当代";
         }
 
-        private static IEnumerable<PersonState> OrderedPersons(SuccessionState state)
+        private static IEnumerable<PersonState> OrderedPersons(SuccessionState state,
+            bool includeRouteExtras)
         {
             var ordered = new List<PersonState>(DisplayOrder.Length);
             foreach (PersonId id in DisplayOrder)
                 if (state.World.TryGetPerson(id, out PersonState person))
                     ordered.Add(person);
+            if (!includeRouteExtras)
+                return ordered;
+            // A route may add people on top of the fixed six (SC-024's fourth-generation
+            // child). Append them after the approved order; World.Persons is ordinal-sorted.
+            foreach (PersonState person in state.World.Persons)
+                if (!IsFixedPerson(person.Id))
+                    ordered.Add(person);
             return ordered;
+        }
+
+        private static bool IsFixedPerson(PersonId personId)
+        {
+            for (int i = 0; i < DisplayOrder.Length; i++)
+                if (DisplayOrder[i] == personId)
+                    return true;
+            return false;
         }
 
         private static string BuildKinship(SuccessionState state, PersonId personId)
