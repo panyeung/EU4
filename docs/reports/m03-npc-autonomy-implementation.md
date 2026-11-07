@@ -111,16 +111,17 @@ New review-correction test names (all passed):
 - `NpcAutonomyTests.DecisionRecord_ExposesOutcomeStatusAndReason` (4 cases)
 - `NpcAutonomyTests.TriggerNames_AreStableChineseLabels` (5 cases)
 
-### Independent re-verification (dispatch re-run)
+### Independent re-verification (dispatch re-run, corrected 2026-11-07)
 
 A separate dispatch re-ran the committed M03 code in the same open Editor on 2026-11-07:
 
 - Editor: Unity `6000.6.6f1`, PID `90052`, `-projectPath "C:\Users\panye\My project"` reverified from the process command line; no batchmode and no second Editor for this project.
-- Temporary auto-runner script added only to drive the open Editor, then deleted together with its `.meta`; post-cleanup Tundra build succeeded (`*** Tundra build success (4.68 seconds), 14 items updated, 1975 evaluated`) with no `error CS` afterward.
-- Full EditMode: **1260 passed / 0 failed / 0 skipped / 0 inconclusive**, duration `15.212s`, `ResultState: Passed`; `Logs/m03-verify-full.txt` and `.xml`.
-- Focused EditMode: **126/126 passed**, duration `1.391s`, `ResultState: Passed`, same focused set listed above; `Logs/m03-verify-focused.txt` and `.xml`.
-- Scene validator: `M03Validate: PASS`, exactly one `M03NpcAiInspectorRoot`, and `RESULT: PASS; Errors: 0` in `Logs/SceneValidationReport.txt`; summary `Logs/m03-verify-validator.txt`.
+- Temporary auto-runner script added only to drive the open Editor, then deleted together with its `.meta`; post-cleanup Tundra build succeeded (`*** Tundra build success (2.64 seconds), 10 items updated, 1975 evaluated`) with no `error CS` afterward.
+- Full EditMode: **1260 passed / 0 failed / 0 skipped / 0 inconclusive**, duration `15.416s`, `ResultState: Passed`; `Logs/m03-rerun-full.txt`.
+- Focused EditMode: **126/126 passed**, duration `1.502s`, `ResultState: Passed`, same focused set listed above; `Logs/m03-rerun-focused.txt`.
+- Scene validator: `M03Validate: PASS`, exactly one `M03NpcAiInspectorRoot`, and `RESULT: PASS; Errors: 0` in `Logs/SceneValidationReport.txt`; summary `Logs/m03-rerun-validate.txt`.
 - Active scene stayed `Assets/Scenes/FoundationScene.unity`, loaded, not dirty, and not playing during the checks. Console counts were not separately re-measured in this dispatch; the review-correction counts above remain the recorded Console evidence. Play Mode was not run.
+- **Evidence correction:** the earlier `Logs/m03-verify-full.txt`/`.xml` pair actually contains only the 126-test focused set, so the previously recorded "full 1260 from m03-verify-full" claim was unsupported and is superseded by `Logs/m03-rerun-full.txt`. The earlier focused result (`Logs/m03-verify-focused.txt`, 126/126) was correct. The implementation, scene, and prior `m03-review-full` 1260/1260 result were not changed by this correction.
 
 ### Scene integration
 
