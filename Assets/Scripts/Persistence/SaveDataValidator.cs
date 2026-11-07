@@ -10,7 +10,7 @@ namespace SengokuChronicle.Persistence
     /// </summary>
     public static class SaveDataValidator
     {
-        public const int CurrentVersion = 10;
+        public const int CurrentVersion = 11;
 
         public static SaveOperationResult Validate(SaveData data)
         {
@@ -93,6 +93,12 @@ namespace SengokuChronicle.Persistence
             if (!dailyActions.Succeeded)
                 return dailyActions;
 
+            if (data.npcAutonomy == null)
+                return Invalid("存档缺少 NPC 自主状态（npcAutonomy）。");
+            SaveOperationResult npcAutonomy = data.npcAutonomy.ValidateForSave(data.succession);
+            if (!npcAutonomy.Succeeded)
+                return npcAutonomy;
+
             SaveOperationResult route = ValidateEventScenarioRoute(data.activeEventScenarioId);
             if (!route.Succeeded)
                 return route;
@@ -133,6 +139,7 @@ namespace SengokuChronicle.Persistence
                 probe.saveFormatVersion != 4 && probe.saveFormatVersion != 5 &&
                 probe.saveFormatVersion != 6 && probe.saveFormatVersion != 7 &&
                 probe.saveFormatVersion != 8 && probe.saveFormatVersion != 9 &&
+                probe.saveFormatVersion != 10 &&
                 probe.saveFormatVersion != CurrentVersion)
                 return SaveOperationResult.Failure(
                     SaveErrorCode.UnsupportedVersion,
@@ -166,8 +173,11 @@ namespace SengokuChronicle.Persistence
                 HasRootProperty(json, "activeEventScenarioId"))
                 return Invalid("旧版存档包含 v9 活动事件路线（activeEventScenarioId）；迁移不会静默替换该数据。");
             if (probe.saveFormatVersion >= 2 && probe.saveFormatVersion < CurrentVersion &&
-                HasRootProperty(json, "dailyActions"))
+                HasRootProperty(json, "dailyActions") && probe.saveFormatVersion < 10)
                 return Invalid("旧版存档包含 v10 每日行动状态（dailyActions）；迁移不会静默替换该数据。");
+            if (probe.saveFormatVersion >= 2 && probe.saveFormatVersion < CurrentVersion &&
+                HasRootProperty(json, "npcAutonomy"))
+                return Invalid("旧版存档包含 v11 NPC 自主状态（npcAutonomy）；迁移不会静默替换该数据。");
 
             if (string.IsNullOrWhiteSpace(probe.gameVersion) || probe.rulesVersion <= 0 ||
                 probe.eventContentVersion <= 0)
@@ -207,10 +217,14 @@ namespace SengokuChronicle.Persistence
             if (probe.saveFormatVersion >= 9 &&
                 (!string.IsNullOrEmpty(json) && !HasNonNullRootProperty(json, "activeEventScenarioId")))
                 return Invalid("存档缺少活动事件路线（activeEventScenarioId）。");
-            if (probe.saveFormatVersion == CurrentVersion &&
+            if (probe.saveFormatVersion >= 10 &&
                 (probe.dailyActions == null ||
                  (!string.IsNullOrEmpty(json) && !HasNonNullRootProperty(json, "dailyActions"))))
                 return Invalid("存档缺少每日行动状态（dailyActions）。");
+            if (probe.saveFormatVersion >= 11 &&
+                (probe.npcAutonomy == null ||
+                 (!string.IsNullOrEmpty(json) && !HasNonNullRootProperty(json, "npcAutonomy"))))
+                return Invalid("存档缺少 NPC 自主状态（npcAutonomy）。");
 
             return SaveOperationResult.Success();
         }

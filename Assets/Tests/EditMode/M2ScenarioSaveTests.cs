@@ -49,6 +49,8 @@ namespace SengokuChronicle.Tests.EditMode
                 mismatched.dailyActions = DailyActionStateSaveData.CreateInitial(
                     new GameDate(mismatched.year, mismatched.month, mismatched.day),
                     mismatched.succession, mismatched.locationId);
+                mismatched.npcAutonomy =
+                    NpcAutonomyStateSaveData.CreateInitial(mismatched.succession);
 
                 SaveOperationResult standardResult = standard.TryApplySave(mismatched);
                 Assert.That(standardResult.Succeeded, Is.False,

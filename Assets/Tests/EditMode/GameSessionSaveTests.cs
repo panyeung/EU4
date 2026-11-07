@@ -45,6 +45,29 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
+        public void CaptureSave_IncludesNpcNeedsAndRoundTripsThem()
+        {
+            Assert.That(_session.AdvanceOneDay(), Is.True);
+            SaveData data = _session.CaptureSave();
+
+            Assert.That(data.npcAutonomy, Is.Not.Null);
+            Assert.That(data.npcAutonomy.persons, Has.Length.EqualTo(2));
+            NpcAutonomyPersonSaveEntry masatsuna = Array.Find(data.npcAutonomy.persons,
+                entry => entry.personId == M2FixedScenario.MasatsunaId.Value);
+            Assert.That(masatsuna, Is.Not.Null);
+            Assert.That(masatsuna.rest, Is.EqualTo(44));
+            Assert.That(masatsuna.learning, Is.EqualTo(78));
+            Assert.That(masatsuna.duty, Is.EqualTo(48));
+
+            Assert.That(_session.TryApplySave(data).Succeeded, Is.True,
+                _session.LastEventMessage);
+            Assert.That(_session.TryGetNpcAutonomy(M2FixedScenario.MasatsunaId,
+                out NpcAutonomySnapshot snapshot), Is.True);
+            Assert.That(snapshot.Needs, Is.EqualTo(new NpcNeedValues(44, 78, 48)));
+            Assert.That(snapshot.ActiveAction.Kind, Is.EqualTo(DailyActionKind.Training));
+        }
+
+        [Test]
         public void CaptureSave_ReflectsCurrentState()
         {
             TravelTo(LocationId.Atsuta);

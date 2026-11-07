@@ -125,7 +125,11 @@ namespace SengokuChronicle.Tests.EditMode
                     "rows must follow ordinal person-ID order");
                 previous = personId;
                 Assert.That(panel.RowText(i), Does.Contain("清洲"));
-                Assert.That(panel.RowText(i), Does.Contain("空闲"));
+                if (NpcAutonomyRules.IsPilot(panel.RowPersonId(i)))
+                    Assert.That(panel.RowText(i), Does.Not.Contain("空闲"),
+                        "M03 pilots start with an autonomous action");
+                else
+                    Assert.That(panel.RowText(i), Does.Contain("空闲"));
             }
 
             panel.SelectPerson(M2FixedScenario.HarunobuId);

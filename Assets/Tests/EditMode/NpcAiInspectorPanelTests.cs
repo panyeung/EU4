@@ -1,0 +1,233 @@
+using System;
+using System.Linq;
+using NUnit.Framework;
+using SengokuChronicle.Application;
+using SengokuChronicle.Domain;
+using SengokuChronicle.Editor;
+using SengokuChronicle.Persistence;
+using SengokuChronicle.Presentation;
+using UnityEditor.SceneManagement;
+using UnityEngine;
+using UnityEngine.SceneManagement;
+
+namespace SengokuChronicle.Tests.EditMode
+{
+    /// <summary>
+    /// M03 read-only Inspector coverage: both pilots render, all three candidates show a
+    /// score or exclusion, logs expose trigger/outcome, UI interactions do not mutate the
+    /// session, and the transactional generator is idempotent and rolls back on failure.
+    /// </summary>
+    public sealed class NpcAiInspectorPanelTests
+    {
+        private Scene _scene;
+        private Scene _previousScene;
+        private bool _previousDirty;
+        private GameSession _session;
+
+        [SetUp]
+        public void SetUp()
+        {
+            _previousScene = SceneManager.GetActiveScene();
+            _previousDirty = _previousScene.isDirty;
+            _scene = EditorSceneManager.NewPreviewScene();
+            GameObject canvas = Create("Canvas", null, typeof(Canvas));
+            canvas.GetComponent<RectTransform>().sizeDelta = new Vector2(1280f, 720f);
+            _session = Create("GameSession", null, typeof(GameSession)).GetComponent<GameSession>();
+            _session.InitNewGame();
+            Assert.That(AddM03NpcAiInspector.Update(_scene),
+                Is.EqualTo(AddM03NpcAiInspector.UpdateResult.Success));
+        }
+
+        [TearDown]
+        public void TearDown()
+        {
+            if (_scene.IsValid())
+                EditorSceneManager.ClosePreviewScene(_scene);
+            Assert.That(SceneManager.GetActiveScene(), Is.EqualTo(_previousScene));
+            Assert.That(_previousScene.isDirty, Is.EqualTo(_previousDirty));
+        }
+
+        private NpcAiInspectorPanel Panel() =>
+            Find(AddM03NpcAiInspector.RootName).GetComponent<NpcAiInspectorPanel>();
+
+        [Test]
+        public void Generator_ProducesValidIdempotentSceneWithOneRoot()
+        {
+            Assert.That(AddM03NpcAiInspector.Validate(_scene, out string error), Is.True, error);
+            Assert.That(AddM03NpcAiInspector.Update(_scene),
+                Is.EqualTo(AddM03NpcAiInspector.UpdateResult.Success));
+            Assert.That(FindAll(AddM03NpcAiInspector.RootName).Length, Is.EqualTo(1));
+            Assert.That(FindAll(AddM03NpcAiInspector.OpenButtonName).Length, Is.EqualTo(1));
+
+            NpcAiInspectorPanel panel = Panel();
+            Assert.That(panel.IsBound, Is.True);
+            Assert.That(panel.IsOpen, Is.False,
+                "the Inspector must start hidden behind the HUD button");
+            Assert.That(panel.StaticButtonBindingCount, Is.EqualTo(4));
+        }
+
+        [Test]
+        public void Generator_FaultInjectionRollsBackWithoutPartialControls()
+        {
+            Scene scene = EditorSceneManager.NewPreviewScene();
+            try
+            {
+                GameObject canvas = CreateIn(scene, "Canvas", null, typeof(Canvas));
+                canvas.GetComponent<RectTransform>().sizeDelta = new Vector2(1280f, 720f);
+                GameSession session = CreateIn(scene, "GameSession", null, typeof(GameSession))
+                    .GetComponent<GameSession>();
+                session.InitNewGame();
+
+                AddM03NpcAiInspector.UpdateResult result = AddM03NpcAiInspector.Update(scene,
+                    root =>
+                    {
+                        Transform open = root.transform.Find(
+                            AddM03NpcAiInspector.OpenButtonName);
+                        Assert.That(open, Is.Not.Null);
+                        open.name = "BrokenM03OpenButton";
+                    });
+
+                Assert.That(result,
+                    Is.EqualTo(AddM03NpcAiInspector.UpdateResult.ValidationFailed));
+                Assert.That(FindAllIn(scene, AddM03NpcAiInspector.RootName), Is.Empty);
+                Assert.That(FindAllIn(scene, AddM03NpcAiInspector.PanelName), Is.Empty);
+                Assert.That(scene.GetRootGameObjects()
+                        .SelectMany(root => root.GetComponentsInChildren<NpcAiInspectorPanel>(true))
+                        .ToArray(),
+                    Is.Empty);
+            }
+            finally
+            {
+                if (scene.IsValid())
+                    EditorSceneManager.ClosePreviewScene(scene);
+            }
+        }
+
+        [Test]
+        public void Panel_RendersBothPilotsNeedsCandidatesAndState()
+        {
+            NpcAiInspectorPanel panel = Panel();
+            panel.Open();
+
+            Assert.That(panel.IsOpen, Is.True);
+            Assert.That(panel.SelectedPersonId, Is.EqualTo(M2FixedScenario.MasatsunaId));
+            Assert.That(panel.NeedsLine, Does.Contain("休息 40"));
+            Assert.That(panel.NeedsLine, Does.Contain("学艺 75"));
+            Assert.That(panel.NeedsLine, Does.Contain("家务 45"));
+            Assert.That(panel.NeedsLine, Does.Contain("偏好"));
+            Assert.That(panel.StatusLine, Does.Contain("执行中"));
+            Assert.That(panel.StatusLine, Does.Contain("训练"));
+            Assert.That(panel.CandidatesLine, Does.Contain("休息"));
+            Assert.That(panel.CandidatesLine, Does.Contain("训练"));
+            Assert.That(panel.CandidatesLine, Does.Contain("工作"));
+            Assert.That(panel.CandidatesLine, Does.Contain("分数"));
+            Assert.That(panel.CandidatesLine, Does.Contain("已选中"));
+            Assert.That(panel.CandidatesLine, Does.Not.Contain("排除"),
+                "an idle pilot evaluates all three candidates");
+
+            Assert.That(panel.SelectPilot(M2FixedScenario.NobumasaId), Is.True);
+            Assert.That(panel.NeedsLine, Does.Contain("休息 45"));
+            Assert.That(panel.NeedsLine, Does.Contain("家务 75"));
+            Assert.That(panel.StatusLine, Does.Contain("工作"));
+            Assert.That(panel.CandidatesLine, Does.Contain("已选中"));
+        }
+
+        [Test]
+        public void Panel_RendersExclusionReasonForAnUnknownLocationPilot()
+        {
+            SaveData saved = _session.CaptureSave();
+            DailyActionPersonSaveEntry row = saved.dailyActions.persons.First(entry =>
+                entry.personId == M2FixedScenario.MasatsunaId.Value);
+            row.hasLocation = false;
+            row.locationId = string.Empty;
+            row.hasAction = false;
+            row.actionKind = 0;
+            row.actionDurationDays = 0;
+            row.actionElapsedDays = 0;
+            row.actionStartYear = 0;
+            row.actionStartMonth = 0;
+            row.actionStartDay = 0;
+            row.travelOriginId = string.Empty;
+            row.travelDestinationId = string.Empty;
+            row.actionReason = string.Empty;
+            Assert.That(SaveDataValidator.Validate(saved).Succeeded, Is.True);
+            Assert.That(_session.TryApplySave(saved).Succeeded, Is.True,
+                _session.LastEventMessage);
+
+            NpcAiInspectorPanel panel = Panel();
+            panel.Open();
+            Assert.That(panel.SelectedPersonId, Is.EqualTo(M2FixedScenario.MasatsunaId));
+            Assert.That(panel.CandidatesLine, Does.Contain("排除"));
+            Assert.That(panel.CandidatesLine, Does.Contain("地点未知"));
+            Assert.That(panel.CandidatesLine, Does.Contain("休息"));
+            Assert.That(panel.CandidatesLine, Does.Contain("训练"));
+            Assert.That(panel.CandidatesLine, Does.Contain("工作"));
+        }
+
+        [Test]
+        public void Panel_ShowsRecentDecisionOutcomeAndTrigger()
+        {
+            Assert.That(_session.TryInterruptDailyAction(M2FixedScenario.MasatsunaId,
+                "面板测试中断。"), Is.True);
+
+            NpcAiInspectorPanel panel = Panel();
+            panel.Open();
+            Assert.That(panel.LogLine, Does.Contain("中断"));
+            Assert.That(panel.LogLine, Does.Contain("接受"));
+            Assert.That(panel.LogLine, Does.Contain("行动中断"));
+        }
+
+        [Test]
+        public void Panel_ReadOnlyControlsDoNotMutateSessionState()
+        {
+            SaveData before = _session.CaptureSave();
+            string dailyBefore = JsonUtility.ToJson(before.dailyActions);
+            string needsBefore = JsonUtility.ToJson(before.npcAutonomy);
+
+            NpcAiInspectorPanel panel = Panel();
+            panel.Open();
+            Assert.That(panel.SelectPilot(M2FixedScenario.NobumasaId), Is.True);
+            Assert.That(panel.SelectPilot(M2FixedScenario.MasatsunaId), Is.True);
+            panel.SelectFirstPilot();
+            panel.Refresh();
+            panel.Close();
+
+            SaveData after = _session.CaptureSave();
+            Assert.That(JsonUtility.ToJson(after.dailyActions), Is.EqualTo(dailyBefore));
+            Assert.That(JsonUtility.ToJson(after.npcAutonomy), Is.EqualTo(needsBefore));
+            Assert.That(after.year, Is.EqualTo(before.year));
+            Assert.That(after.month, Is.EqualTo(before.month));
+            Assert.That(after.day, Is.EqualTo(before.day));
+        }
+
+        private GameObject Create(string name, Transform parent, params Type[] components) =>
+            CreateIn(_scene, name, parent, components);
+
+        private static GameObject CreateIn(Scene scene, string name, Transform parent,
+            params Type[] components)
+        {
+            var go = new GameObject(name, typeof(RectTransform));
+            SceneManager.MoveGameObjectToScene(go, scene);
+            if (parent != null)
+                go.transform.SetParent(parent, false);
+            foreach (Type component in components)
+                go.AddComponent(component);
+            return go;
+        }
+
+        private Transform Find(string name) =>
+            _scene.GetRootGameObjects()
+                .SelectMany(root => root.GetComponentsInChildren<Transform>(true))
+                .SingleOrDefault(transform => transform.name == name);
+
+        private Transform[] FindAll(string name) =>
+            _scene.GetRootGameObjects()
+                .SelectMany(root => root.GetComponentsInChildren<Transform>(true))
+                .Where(transform => transform.name == name).ToArray();
+
+        private static Transform[] FindAllIn(Scene scene, string name) =>
+            scene.GetRootGameObjects()
+                .SelectMany(root => root.GetComponentsInChildren<Transform>(true))
+                .Where(transform => transform.name == name).ToArray();
+    }
+}

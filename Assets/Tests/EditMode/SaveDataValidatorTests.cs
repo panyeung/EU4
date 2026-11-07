@@ -38,6 +38,18 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
+        public void MissingNpcAutonomyBlock_IsRejected()
+        {
+            SaveData data = ValidData();
+            data.npcAutonomy = null;
+
+            SaveOperationResult result = SaveDataValidator.Validate(data);
+
+            Assert.That(result.Succeeded, Is.False);
+            Assert.That(result.Message, Does.Contain("npcAutonomy"));
+        }
+
+        [Test]
         public void MissingResearchBlock_IsRejected()
         {
             SaveData data = ValidData();

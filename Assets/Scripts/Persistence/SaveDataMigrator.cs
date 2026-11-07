@@ -80,22 +80,32 @@ namespace SengokuChronicle.Persistence
                         "旧版存档包含 v9 活动事件路线（activeEventScenarioId）；迁移不会静默替换该数据。");
                     return false;
                 }
-                if (SaveDataValidator.HasRootProperty(rawJson, "dailyActions"))
+                if (legacy.saveFormatVersion < 10 &&
+                    SaveDataValidator.HasRootProperty(rawJson, "dailyActions"))
                 {
                     result = SaveOperationResult.Failure(SaveErrorCode.InvalidData,
                         "旧版存档包含 v10 每日行动状态（dailyActions）；迁移不会静默替换该数据。");
                     return false;
                 }
+                if (SaveDataValidator.HasRootProperty(rawJson, "npcAutonomy"))
+                {
+                    result = SaveOperationResult.Failure(SaveErrorCode.InvalidData,
+                        "旧版存档包含 v11 NPC 自主状态（npcAutonomy）；迁移不会静默替换该数据。");
+                    return false;
+                }
             }
 
-            if (legacy.saveFormatVersion == SaveDataValidator.CurrentVersion)
+            if (legacy.saveFormatVersion == 10 ||
+                legacy.saveFormatVersion == SaveDataValidator.CurrentVersion)
             {
+                bool currentVersion = legacy.saveFormatVersion == SaveDataValidator.CurrentVersion;
+                string label = currentVersion ? "v11" : "v10";
                 if (legacy.industry == null ||
                     (!string.IsNullOrEmpty(rawJson) &&
                      !SaveDataValidator.HasNonNullRootProperty(rawJson, "industry")))
                 {
                     result = SaveOperationResult.Failure(SaveErrorCode.InvalidData,
-                        "v10 存档缺少产业状态（industry）；不会用初始状态静默替换。");
+                        label + " 存档缺少产业状态（industry）；不会用初始状态静默替换。");
                     return false;
                 }
                 if (legacy.development == null ||
@@ -103,7 +113,7 @@ namespace SengokuChronicle.Persistence
                      !SaveDataValidator.HasNonNullRootProperty(rawJson, "development")))
                 {
                     result = SaveOperationResult.Failure(SaveErrorCode.InvalidData,
-                        "v10 存档缺少人物成长状态（development）；不会用空记录静默替换。");
+                        label + " 存档缺少人物成长状态（development）；不会用空记录静默替换。");
                     return false;
                 }
                 if (legacy.research == null ||
@@ -111,7 +121,7 @@ namespace SengokuChronicle.Persistence
                      !SaveDataValidator.HasNonNullRootProperty(rawJson, "research")))
                 {
                     result = SaveOperationResult.Failure(SaveErrorCode.InvalidData,
-                        "v10 存档缺少家族研究状态（research）；不会用空记录静默替换。");
+                        label + " 存档缺少家族研究状态（research）；不会用空记录静默替换。");
                     return false;
                 }
                 if (legacy.familyDoctrine == null ||
@@ -119,7 +129,7 @@ namespace SengokuChronicle.Persistence
                      !SaveDataValidator.HasNonNullRootProperty(rawJson, "familyDoctrine")))
                 {
                     result = SaveOperationResult.Failure(SaveErrorCode.InvalidData,
-                        "v10 存档缺少家训与抱负状态（familyDoctrine）；不会用默认家训静默替换。");
+                        label + " 存档缺少家训与抱负状态（familyDoctrine）；不会用默认家训静默替换。");
                     return false;
                 }
                 if (legacy.activeEventScenarioId == null ||
@@ -127,7 +137,7 @@ namespace SengokuChronicle.Persistence
                      !SaveDataValidator.HasRootProperty(rawJson, "activeEventScenarioId")))
                 {
                     result = SaveOperationResult.Failure(SaveErrorCode.InvalidData,
-                        "v10 存档缺少活动事件路线（activeEventScenarioId）；不会用空路线静默替换。");
+                        label + " 存档缺少活动事件路线（activeEventScenarioId）；不会用空路线静默替换。");
                     return false;
                 }
                 if (legacy.dailyActions == null ||
@@ -135,11 +145,29 @@ namespace SengokuChronicle.Persistence
                      !SaveDataValidator.HasNonNullRootProperty(rawJson, "dailyActions")))
                 {
                     result = SaveOperationResult.Failure(SaveErrorCode.InvalidData,
-                        "v10 存档缺少每日行动状态（dailyActions）；不会用空记录静默替换。");
+                        label + " 存档缺少每日行动状态（dailyActions）；不会用空记录静默替换。");
+                    return false;
+                }
+                if (currentVersion &&
+                    (legacy.npcAutonomy == null ||
+                     (!string.IsNullOrEmpty(rawJson) &&
+                      !SaveDataValidator.HasNonNullRootProperty(rawJson, "npcAutonomy"))))
+                {
+                    result = SaveOperationResult.Failure(SaveErrorCode.InvalidData,
+                        "v11 存档缺少 NPC 自主状态（npcAutonomy）；不会用初始需求静默替换。");
                     return false;
                 }
 
                 current = Clone(legacy);
+                current.saveFormatVersion = SaveDataValidator.CurrentVersion;
+                current.rulesVersion = SaveData.CurrentRulesVersion;
+                if (!currentVersion)
+                {
+                    // v10 predates M03. Migration initializes only the approved pilot
+                    // rows from the fixed roster and preserves dailyActions unchanged.
+                    current.npcAutonomy = NpcAutonomyStateSaveData.CreateInitial(
+                        current.succession);
+                }
                 result = SaveDataValidator.Validate(current);
                 if (!result.Succeeded)
                     current = null;
@@ -157,6 +185,7 @@ namespace SengokuChronicle.Persistence
                 current.dailyActions = DailyActionStateSaveData.CreateInitial(
                     new GameDate(legacy.year, legacy.month, legacy.day),
                     legacy.succession, legacy.locationId);
+                current.npcAutonomy = NpcAutonomyStateSaveData.CreateInitial(legacy.succession);
                 result = SaveDataValidator.Validate(current);
                 if (!result.Succeeded)
                     current = null;
@@ -204,6 +233,7 @@ namespace SengokuChronicle.Persistence
                 current.dailyActions = DailyActionStateSaveData.CreateInitial(
                     new GameDate(legacy.year, legacy.month, legacy.day),
                     current.succession, current.locationId);
+                current.npcAutonomy = NpcAutonomyStateSaveData.CreateInitial(current.succession);
                 result = SaveDataValidator.Validate(current);
                 if (!result.Succeeded)
                     current = null;
@@ -252,6 +282,7 @@ namespace SengokuChronicle.Persistence
                 current.dailyActions = DailyActionStateSaveData.CreateInitial(
                     new GameDate(legacy.year, legacy.month, legacy.day),
                     current.succession, current.locationId);
+                current.npcAutonomy = NpcAutonomyStateSaveData.CreateInitial(current.succession);
                 result = SaveDataValidator.Validate(current);
                 if (!result.Succeeded)
                     current = null;
@@ -292,6 +323,7 @@ namespace SengokuChronicle.Persistence
                 current.dailyActions = DailyActionStateSaveData.CreateInitial(
                     new GameDate(legacy.year, legacy.month, legacy.day),
                     current.succession, current.locationId);
+                current.npcAutonomy = NpcAutonomyStateSaveData.CreateInitial(current.succession);
                 result = SaveDataValidator.Validate(current);
                 if (!result.Succeeded)
                     current = null;
@@ -327,6 +359,7 @@ namespace SengokuChronicle.Persistence
                 current.dailyActions = DailyActionStateSaveData.CreateInitial(
                     new GameDate(legacy.year, legacy.month, legacy.day),
                     current.succession, current.locationId);
+                current.npcAutonomy = NpcAutonomyStateSaveData.CreateInitial(current.succession);
                 result = SaveDataValidator.Validate(current);
                 if (!result.Succeeded)
                     current = null;
@@ -363,6 +396,7 @@ namespace SengokuChronicle.Persistence
                 current.dailyActions = DailyActionStateSaveData.CreateInitial(
                     new GameDate(legacy.year, legacy.month, legacy.day),
                     current.succession, current.locationId);
+                current.npcAutonomy = NpcAutonomyStateSaveData.CreateInitial(current.succession);
                 result = SaveDataValidator.Validate(current);
                 if (!result.Succeeded)
                     current = null;
@@ -429,7 +463,9 @@ namespace SengokuChronicle.Persistence
                     dailyActions = DailyActionStateSaveData.CreateInitial(
                         new GameDate(legacy.year, legacy.month, legacy.day),
                         legacy.succession != null ? legacy.succession : SuccessionSaveData.CreateDefault(),
-                        legacy.locationId)
+                        legacy.locationId),
+                    npcAutonomy = NpcAutonomyStateSaveData.CreateInitial(
+                        legacy.succession != null ? legacy.succession : SuccessionSaveData.CreateDefault())
                 };
 
                 result = SaveDataValidator.Validate(current);
@@ -510,7 +546,9 @@ namespace SengokuChronicle.Persistence
                     activeEventScenarioId = string.Empty,
                     dailyActions = DailyActionStateSaveData.CreateInitial(
                         new GameDate(legacy.year, legacy.month, legacy.day),
-                        SuccessionSaveData.CreateDefault(), legacy.locationId)
+                        SuccessionSaveData.CreateDefault(), legacy.locationId),
+                    npcAutonomy = NpcAutonomyStateSaveData.CreateInitial(
+                        SuccessionSaveData.CreateDefault())
                 };
 
                 result = SaveDataValidator.Validate(current);
@@ -523,7 +561,7 @@ namespace SengokuChronicle.Persistence
             {
                 result = SaveOperationResult.Failure(
                     SaveErrorCode.UnsupportedVersion,
-                    $"不支持的存档版本：{legacy.saveFormatVersion}（仅支持 v1–v9 迁移到 v{SaveDataValidator.CurrentVersion}）。");
+                    $"不支持的存档版本：{legacy.saveFormatVersion}（仅支持 v1–v10 迁移到 v{SaveDataValidator.CurrentVersion}）。");
                 return false;
             }
 
@@ -565,7 +603,9 @@ namespace SengokuChronicle.Persistence
                 activeEventScenarioId = string.Empty,
                 dailyActions = DailyActionStateSaveData.CreateInitial(
                     new GameDate(legacy.year, legacy.month, legacy.day),
-                    SuccessionSaveData.CreateDefault(), legacy.locationId)
+                    SuccessionSaveData.CreateDefault(), legacy.locationId),
+                npcAutonomy = NpcAutonomyStateSaveData.CreateInitial(
+                    SuccessionSaveData.CreateDefault())
             };
 
             result = SaveDataValidator.Validate(current);
@@ -604,7 +644,8 @@ namespace SengokuChronicle.Persistence
                 research = source.research != null ? source.research.Clone() : null,
                 familyDoctrine = source.familyDoctrine != null ? source.familyDoctrine.Clone() : null,
                 activeEventScenarioId = source.activeEventScenarioId,
-                dailyActions = source.dailyActions != null ? source.dailyActions.Clone() : null
+                dailyActions = source.dailyActions != null ? source.dailyActions.Clone() : null,
+                npcAutonomy = source.npcAutonomy != null ? source.npcAutonomy.Clone() : null
             };
             return clone;
         }

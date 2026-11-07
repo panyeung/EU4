@@ -15,7 +15,7 @@ namespace SengokuChronicle.Persistence
         public const int CurrentGameSchemaVersion = SaveDataValidator.CurrentVersion;
 
         /// <summary>Rules contract version shared by capture, validation and migration.</summary>
-        public const int CurrentRulesVersion = 6;
+        public const int CurrentRulesVersion = 7;
 
         /// <summary>
         /// Fallback event-content version used only when no catalog is loaded. The
@@ -57,6 +57,7 @@ namespace SengokuChronicle.Persistence
         public FamilyDoctrineSaveData familyDoctrine;
         public string activeEventScenarioId;
         public DailyActionStateSaveData dailyActions;
+        public NpcAutonomyStateSaveData npcAutonomy;
 
         public SaveData()
         {
@@ -80,6 +81,7 @@ namespace SengokuChronicle.Persistence
             activeEventScenarioId = string.Empty;
             dailyActions = DailyActionStateSaveData.CreateInitial(WorldClock.NewGameDate,
                 succession, LocationId.Kiyosu.Value);
+            npcAutonomy = NpcAutonomyStateSaveData.CreateInitial(succession);
         }
     }
 
@@ -110,6 +112,7 @@ namespace SengokuChronicle.Persistence
         public FamilyDoctrineSaveData familyDoctrine;
         public string activeEventScenarioId;
         public DailyActionStateSaveData dailyActions;
+        public NpcAutonomyStateSaveData npcAutonomy;
     }
 
     /// <summary>One player-to-NPC relationship value, keyed by stable character ID.</summary>
@@ -1352,6 +1355,194 @@ namespace SengokuChronicle.Persistence
         public int target;
         public bool isComplete;
         public string[] knownTechniqueIds;
+    }
+
+    /// <summary>
+    /// v11 durable autonomy state: needs for the two approved pilots only. Recent
+    /// evaluation and decision records are session-only and never serialized.
+    /// </summary>
+    [Serializable]
+    public sealed class NpcAutonomyStateSaveData
+    {
+        public NpcAutonomyPersonSaveEntry[] persons;
+
+        public static NpcAutonomyStateSaveData CreateEmpty() =>
+            new NpcAutonomyStateSaveData { persons = new NpcAutonomyPersonSaveEntry[0] };
+
+        /// <summary>
+        /// Opening or migration state: approved initial needs for living pilot rows in
+        /// the saved roster. Non-M2 rosters receive an empty block.
+        /// </summary>
+        public static NpcAutonomyStateSaveData CreateInitial(SuccessionSaveData succession)
+        {
+            if (succession == null || succession.persons == null || succession.members == null)
+                return CreateEmpty();
+
+            var livingMembers = new HashSet<PersonId>();
+            foreach (SuccessionPersonSaveEntry person in succession.persons)
+                if (person != null && person.alive &&
+                    PersonId.TryParse(person.personId, out PersonId personId))
+                    livingMembers.Add(personId);
+            var members = new HashSet<PersonId>();
+            foreach (SuccessionMemberSaveEntry member in succession.members)
+                if (member != null && PersonId.TryParse(member.personId, out PersonId memberId))
+                    members.Add(memberId);
+            livingMembers.IntersectWith(members);
+
+            var ids = new List<PersonId>();
+            foreach (NpcAutonomyProfile profile in NpcAutonomyRules.Profiles)
+                if (livingMembers.Contains(profile.PersonId))
+                    ids.Add(profile.PersonId);
+            ids.Sort((left, right) =>
+                string.Compare(left.Value, right.Value, StringComparison.Ordinal));
+
+            var entries = new NpcAutonomyPersonSaveEntry[ids.Count];
+            for (int i = 0; i < entries.Length; i++)
+            {
+                NpcNeedValues needs = NpcAutonomyRules.InitialNeedsFor(ids[i]);
+                entries[i] = new NpcAutonomyPersonSaveEntry
+                {
+                    personId = ids[i].Value,
+                    rest = needs.Rest,
+                    learning = needs.Learning,
+                    duty = needs.Duty
+                };
+            }
+            return new NpcAutonomyStateSaveData { persons = entries };
+        }
+
+        public static NpcAutonomyStateSaveData Capture(NpcAutonomyState state)
+        {
+            if (state == null)
+                return CreateEmpty();
+            IReadOnlyList<NpcAutonomyPersonState> people = state.Persons;
+            var entries = new NpcAutonomyPersonSaveEntry[people.Count];
+            for (int i = 0; i < people.Count; i++)
+            {
+                NpcAutonomyPersonState person = people[i];
+                entries[i] = new NpcAutonomyPersonSaveEntry
+                {
+                    personId = person.PersonId.Value,
+                    rest = person.Needs.Rest,
+                    learning = person.Needs.Learning,
+                    duty = person.Needs.Duty
+                };
+            }
+            return new NpcAutonomyStateSaveData { persons = entries };
+        }
+
+        public NpcAutonomyStateSaveData Clone()
+        {
+            var clone = new NpcAutonomyStateSaveData
+            {
+                persons = new NpcAutonomyPersonSaveEntry[persons != null ? persons.Length : 0]
+            };
+            for (int i = 0; i < clone.persons.Length; i++)
+            {
+                NpcAutonomyPersonSaveEntry entry = persons[i];
+                clone.persons[i] = entry == null ? null : new NpcAutonomyPersonSaveEntry
+                {
+                    personId = entry.personId,
+                    rest = entry.rest,
+                    learning = entry.learning,
+                    duty = entry.duty
+                };
+            }
+            return clone;
+        }
+
+        public SaveOperationResult ValidateForSave(SuccessionSaveData succession)
+        {
+            if (persons == null)
+                return Invalid("存档缺少 NPC 自主状态（npcAutonomy.persons）。");
+            if (succession == null || succession.persons == null || succession.members == null)
+                return Invalid("存档 NPC 自主状态缺少继承人物名册。");
+
+            var livingMembers = new HashSet<PersonId>();
+            foreach (SuccessionPersonSaveEntry person in succession.persons)
+                if (person != null && person.alive &&
+                    PersonId.TryParse(person.personId, out PersonId personId))
+                    livingMembers.Add(personId);
+            var members = new HashSet<PersonId>();
+            foreach (SuccessionMemberSaveEntry member in succession.members)
+                if (member != null && PersonId.TryParse(member.personId, out PersonId memberId))
+                    members.Add(memberId);
+            livingMembers.IntersectWith(members);
+
+            var seen = new HashSet<PersonId>();
+            string previous = null;
+            foreach (NpcAutonomyPersonSaveEntry entry in persons)
+            {
+                if (entry == null)
+                    return Invalid("存档 NPC 自主人物记录为空。");
+                if (!PersonId.TryParse(entry.personId, out PersonId personId) ||
+                    !NpcAutonomyRules.IsPilot(personId))
+                    return Invalid("存档 NPC 自主人物 ID 不是受支持的试点人物。");
+                if (!livingMembers.Contains(personId))
+                    return Invalid("存档 NPC 自主人物不在当前存活家臣名册中。");
+                if (!seen.Add(personId))
+                    return Invalid("存档 NPC 自主人物重复。");
+                if (previous != null && string.CompareOrdinal(previous, entry.personId) > 0)
+                    return Invalid("存档 NPC 自主人物顺序不稳定。");
+                previous = entry.personId;
+
+                if (entry.rest < NpcNeedValues.Minimum || entry.rest > NpcNeedValues.Maximum ||
+                    entry.learning < NpcNeedValues.Minimum ||
+                    entry.learning > NpcNeedValues.Maximum ||
+                    entry.duty < NpcNeedValues.Minimum || entry.duty > NpcNeedValues.Maximum)
+                    return Invalid("存档 NPC 需求值必须在 0..100 之间。");
+            }
+
+            foreach (NpcAutonomyProfile profile in NpcAutonomyRules.Profiles)
+                if (livingMembers.Contains(profile.PersonId) && !seen.Contains(profile.PersonId))
+                    return Invalid("存档缺少 NPC 自主人物记录：" + profile.PersonId.Value + "。");
+            return SaveOperationResult.Success();
+        }
+
+        public static bool TryRestore(NpcAutonomyStateSaveData data,
+            SuccessionSaveData succession, out NpcAutonomyState state, out string error)
+        {
+            state = null;
+            if (data == null)
+            {
+                error = "存档缺少 NPC 自主状态（npcAutonomy）。";
+                return false;
+            }
+
+            SaveOperationResult validation = data.ValidateForSave(succession);
+            if (!validation.Succeeded)
+            {
+                error = validation.Message;
+                return false;
+            }
+
+            var restored = NpcAutonomyState.CreateEmpty();
+            foreach (NpcAutonomyPersonSaveEntry entry in data.persons)
+            {
+                PersonId.TryParse(entry.personId, out PersonId personId);
+                var needs = new NpcNeedValues(entry.rest, entry.learning, entry.duty);
+                if (!restored.TryAddRestoredPerson(personId, needs))
+                {
+                    error = "存档 NPC 自主人物无法恢复：" + entry.personId + "。";
+                    return false;
+                }
+            }
+            state = restored;
+            error = string.Empty;
+            return true;
+        }
+
+        private static SaveOperationResult Invalid(string message) =>
+            SaveOperationResult.Failure(SaveErrorCode.InvalidData, message);
+    }
+
+    [Serializable]
+    public sealed class NpcAutonomyPersonSaveEntry
+    {
+        public string personId;
+        public int rest;
+        public int learning;
+        public int duty;
     }
 
     /// <summary>

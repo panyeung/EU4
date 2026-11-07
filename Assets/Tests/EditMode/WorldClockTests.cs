@@ -542,7 +542,7 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
-        public void Panel_DayClick_AtMonthEnd_ShowsVisibleReasonWithoutCrossing()
+        public void Panel_DayClick_AtMonthEnd_SettlesMonthExactlyOnce()
         {
             GameSession session = SpawnSession();
             WorldClockPanel panel = SpawnPanel(session, out Text panelDate, out Button advanceButton);
@@ -553,25 +553,28 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(session.AdvanceDays(29), Is.True);
             panel.Refresh();
             GameDate lastDay = session.WorldClock.CurrentDate;
-            IndustryResources resources = session.Industry.Resources;
-            int settled = session.Industry.LastSettledMonthIndex;
-            int chronicle = session.ChronicleEntries.Count;
+            int settledBefore = session.Industry.LastSettledMonthIndex;
 
             Assert.That(lastDay, Is.EqualTo(new GameDate(1560, 4, 30)));
             Assert.That(advanceButton.interactable, Is.True,
-                "the day button must stay clickable so the refusal reason is reachable");
+                "the day button must stay clickable so the month-end path is reachable");
+
+            // M02 made the explicit day control settle the month exactly once on the
+            // last day. The old SC-004 refusal expectation belonged to AdvanceOneDay,
+            // which still refuses to cross the boundary when called directly.
+            Assert.That(session.AdvanceOneDay(), Is.False,
+                "the raw one-day API must still refuse to cross the month");
+            Assert.That(session.WorldClock.CurrentDate, Is.EqualTo(lastDay));
 
             advanceButton.onClick.Invoke();
 
-            Assert.That(session.WorldClock.CurrentDate, Is.EqualTo(lastDay));
-            Assert.That(panelDate.text, Is.EqualTo("1560-04-30"));
-            Assert.That(panel.LastAdvanceMessage, Does.Contain("结束本月"));
-            Assert.That(panel.FeedbackVisible, Is.True);
-            Assert.That(panel.FeedbackLine, Does.Contain("跨月"));
-            Assert.That(session.Industry.Resources, Is.EqualTo(resources));
-            Assert.That(session.Industry.LastSettledMonthIndex, Is.EqualTo(settled),
-                "a refused day step must not settle the month");
-            Assert.That(session.ChronicleEntries.Count, Is.EqualTo(chronicle));
+            Assert.That(session.WorldClock.CurrentDate, Is.EqualTo(new GameDate(1560, 5, 1)));
+            Assert.That(panelDate.text, Is.EqualTo("1560-05-01"));
+            Assert.That(panel.LastAdvanceMessage, Is.Empty);
+            Assert.That(session.Industry.LastSettledMonthIndex,
+                Is.EqualTo(IndustryCalendar.MonthIndex(new GameDate(1560, 5, 1)) - 1));
+            Assert.That(session.Industry.LastSettledMonthIndex,
+                Is.Not.EqualTo(settledBefore));
         }
 
         [Test]

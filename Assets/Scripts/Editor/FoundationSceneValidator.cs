@@ -45,6 +45,7 @@ namespace SengokuChronicle.Editor
             FamilyFormationPanel formationPanel = FindComponent<FamilyFormationPanel>(scene);
             FamilyDoctrinePanel doctrinePanel = FindComponent<FamilyDoctrinePanel>(scene);
             DailyActionPanel dailyActionPanel = FindComponent<DailyActionPanel>(scene);
+            NpcAiInspectorPanel npcAiInspectorPanel = FindComponent<NpcAiInspectorPanel>(scene);
 
             CheckFound(report, ref errors, "Canvas", canvas);
             CheckFound(report, ref errors, "Canvas/M2WorldMapRoot", mapRoot);
@@ -66,6 +67,7 @@ namespace SengokuChronicle.Editor
             CheckFound(report, ref errors, "FamilyFormationPanel", formationPanel);
             CheckFound(report, ref errors, "FamilyDoctrinePanel", doctrinePanel);
             CheckFound(report, ref errors, "DailyActionPanel", dailyActionPanel);
+            CheckFound(report, ref errors, "NpcAiInspectorPanel", npcAiInspectorPanel);
             if (!AddM4SupplyShortageMissionPanel.Validate(scene, out string missionError))
                 AddError(report, ref errors, missionError);
             else
@@ -138,6 +140,10 @@ namespace SengokuChronicle.Editor
                 AddError(report, ref errors, m02Error);
             else
                 report.AppendLine("PASS M02 daily-action panel hierarchy, bindings, containment, ordering, and layout.");
+            if (!AddM03NpcAiInspector.Validate(scene, out string m03Error))
+                AddError(report, ref errors, m03Error);
+            else
+                report.AppendLine("PASS M03 read-only NPC Inspector hierarchy, bindings, containment, ordering, and layout.");
 
             if (controller != null)
             {
@@ -298,6 +304,15 @@ namespace SengokuChronicle.Editor
                     "selectedText", "durationInput", "restButton", "trainingButton",
                     "workButton", "travelKiyosuButton", "travelAtsutaButton",
                     "travelNagoyaButton", "interruptButton", "feedbackText");
+            }
+
+            if (npcAiInspectorPanel != null)
+            {
+                report.AppendLine("\nNPC AI INSPECTOR REFERENCES:");
+                CheckReferences(report, ref errors, npcAiInspectorPanel,
+                    "gameSession", "panelRoot", "openButton", "closeButton",
+                    "masatsunaButton", "nobumasaButton", "titleText", "summaryText",
+                    "needsText", "statusText", "candidatesText", "logText");
             }
 
             report.AppendLine("\nHIERARCHY AND RECTTRANSFORMS:");
