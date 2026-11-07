@@ -119,8 +119,8 @@ New review-correction test names (all passed):
 
 ### Console and runtime boundary
 
-- Before the review test run, the interactive Console counts were **0 errors / 0 warnings / 6 logs**.
-- After the focused run: **0 errors / 0 warnings** at the point recorded in `Logs/m03-review-editor-state.txt`.
+- Before the review test runs, the interactive Console counts were **0 errors / 0 warnings / 6 logs**.
+- After the scene validator rerun: **0 errors / 0 warnings / 10 logs** (`Logs/m03-review-validator.txt`).
 - After the full EditMode run: **2 errors / 25 warnings / 18 logs**. Both errors are intentional fault-injection logs from passing `FamilyFormationSessionTests` (`Marriage_ChronicleAppendFailure_RollsBackMembershipKinshipAndState` and `Adoption_ChronicleAppendFailure_RollsBackMembershipKinshipAndState`); the warnings come from other expected failure/rollback tests. This report does not claim a zero-error Console during the negative-test run.
 - **Play Mode was not run by this worker.** Mochi must run the lead Play Mode gate for both pilots, continued active tasks, interruption/replan explanation, and the read-only Inspector.
 
