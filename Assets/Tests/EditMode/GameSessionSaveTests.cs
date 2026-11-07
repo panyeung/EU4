@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using NUnit.Framework;
 using SengokuChronicle.Application;
@@ -159,6 +160,125 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(_session.SupplyShortageStage, Is.EqualTo(SupplyShortageStage.RewardClaimed));
             Assert.That(_session.Merit, Is.EqualTo(10));
             Assert.That(_session.TryGetRelationship(CharacterId.KurodaIori).CurrentValue, Is.EqualTo(10));
+        }
+
+        /// <summary>
+        /// M01 acceptance regression: a real completed succession followed by a
+        /// capture/apply round trip must keep the household roster, industry
+        /// appointments and resources, the succession chronicle record, and the
+        /// per-head relationship records unchanged. The successor must start with
+        /// no copied value from the previous head, while the old head's private
+        /// value stays readable.
+        /// </summary>
+        [Test]
+        public void CompletedSuccession_SaveLoad_PreservesHouseholdIndustryAndPerHeadRelationships()
+        {
+            _session.InitStandardDemo();
+            PersonId oldHead = SuccessionSample.StandardHeadId;
+            PersonId successor = new PersonId("person.akechi.masatsuna");
+            PersonId retainer = new PersonId("person.retainer.sakon");
+            PersonId member = new PersonId("person.akechi.tokihime");
+
+            int memberCount = _session.Succession.World.Family.MemberCount;
+            Assert.That(_session.TryAssignIndustry(IndustryCatalog.FarmId, successor).Succeeded,
+                Is.True, _session.LastIndustryMessage);
+            Assert.That(_session.TryAssignIndustry(IndustryCatalog.TradingHouseId, retainer).Succeeded,
+                Is.True, _session.LastIndustryMessage);
+            Assert.That(_session.TryChangeFamilyRelationship(oldHead, member, 12).Succeeded, Is.True);
+            IndustryView baseline = _session.Industry;
+
+            Assert.That(_session.BeginSuccessionRetirement().Succeeded, Is.True,
+                _session.LastSuccessionMessage);
+            Assert.That(_session.SelectSuccessionSuccessor(successor).Succeeded, Is.True,
+                _session.LastSuccessionMessage);
+            SuccessionResult confirmed = _session.ConfirmSuccession();
+            Assert.That(confirmed.Succeeded, Is.True, confirmed.Message);
+
+            Assert.That(_session.TryGetFamilyRelationship(successor, member).CurrentValue,
+                Is.EqualTo(0), "the successor must not inherit the previous head's private value");
+            Assert.That(_session.TryGetFamilyRelationship(oldHead, member).CurrentValue,
+                Is.EqualTo(12));
+            Assert.That(_session.TryChangeFamilyRelationship(member, 5).Succeeded, Is.True);
+
+            AssertHouseholdIndustryAndRelationshipContinuity(_session, oldHead, successor, retainer,
+                member, memberCount, baseline);
+
+            SaveData data = _session.CaptureSave();
+            Assert.That(SaveDataValidator.Validate(data).Succeeded, Is.True);
+
+            GameSession restored = GameSession.NewGame();
+            try
+            {
+                restored.InitNewGame();
+                SaveOperationResult applied = restored.TryApplySave(data);
+                Assert.That(applied.Succeeded, Is.True, applied.Message);
+                Assert.That(restored.ChronicleEntries.Count,
+                    Is.EqualTo(_session.ChronicleEntries.Count),
+                    "loading must not duplicate or drop chronicle records");
+
+                AssertHouseholdIndustryAndRelationshipContinuity(restored, oldHead, successor,
+                    retainer, member, memberCount, baseline);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(restored.gameObject);
+            }
+        }
+
+        private static void AssertHouseholdIndustryAndRelationshipContinuity(GameSession session,
+            PersonId oldHead, PersonId successor, PersonId retainer, PersonId member,
+            int memberCount, IndustryView baseline)
+        {
+            Assert.That(session.Succession.SuccessionCount, Is.EqualTo(1));
+            Assert.That(session.Succession.HeadPersonId, Is.EqualTo(successor));
+            Assert.That(session.Succession.World.Family.MemberCount, Is.EqualTo(memberCount),
+                "the household roster must not change across the handoff or the load");
+
+            Assert.That(session.Succession.World.Family.TryGetRole(oldHead,
+                out FamilyMemberRole oldHeadRole), Is.True);
+            Assert.That(oldHeadRole, Is.EqualTo(FamilyMemberRole.DirectKin));
+            Assert.That(session.Succession.World.TryGetLife(oldHead,
+                out SuccessionPersonLife oldHeadLife), Is.True);
+            Assert.That(oldHeadLife.Retired, Is.True);
+            Assert.That(session.Succession.World.Family.TryGetRole(successor,
+                out FamilyMemberRole successorRole), Is.True);
+            Assert.That(successorRole, Is.EqualTo(FamilyMemberRole.Head));
+            Assert.That(session.Succession.World.Family.TryGetRole(retainer,
+                out FamilyMemberRole retainerRole), Is.True);
+            Assert.That(retainerRole, Is.EqualTo(FamilyMemberRole.Retainer));
+
+            Assert.That(session.Industry.Resources.Funds, Is.EqualTo(baseline.Resources.Funds));
+            Assert.That(session.Industry.Resources.Supplies, Is.EqualTo(baseline.Resources.Supplies));
+            Assert.That(session.Industry.Resources.Intelligence,
+                Is.EqualTo(baseline.Resources.Intelligence));
+            Assert.That(session.Industry.LastSettledMonthIndex,
+                Is.EqualTo(baseline.LastSettledMonthIndex));
+            Assert.That(session.Industry.Slot(IndustryCatalog.FarmId).AssigneeId,
+                Is.EqualTo(successor));
+            Assert.That(session.Industry.Slot(IndustryCatalog.TradingHouseId).AssigneeId,
+                Is.EqualTo(retainer));
+
+            FamilyChronicleEntry successionEntry = LastSuccessionEntry(session);
+            Assert.That(successionEntry, Is.Not.Null,
+                "the completed handoff must leave one succession chronicle record");
+            Assert.That(successionEntry.HasHeadChange, Is.True);
+            Assert.That(successionEntry.FromHeadId, Is.EqualTo(oldHead.Value));
+            Assert.That(successionEntry.ToHeadId, Is.EqualTo(successor.Value));
+            Assert.That(successionEntry.SubjectId, Is.EqualTo(successor.Value));
+
+            Assert.That(session.TryGetFamilyRelationship(oldHead, member).CurrentValue,
+                Is.EqualTo(12), "the previous head's private relationship record must persist");
+            Assert.That(session.TryGetFamilyRelationship(successor, member).CurrentValue,
+                Is.EqualTo(5), "the current head's own relationship record must persist");
+        }
+
+        private static FamilyChronicleEntry LastSuccessionEntry(GameSession session)
+        {
+            IReadOnlyList<FamilyChronicleEntry> entries = session.ChronicleEntries;
+            for (int i = entries.Count - 1; i >= 0; i--)
+                if (entries[i].Category == ChronicleCategory.Succession)
+                    return entries[i];
+            return null;
         }
 
         [Test]
