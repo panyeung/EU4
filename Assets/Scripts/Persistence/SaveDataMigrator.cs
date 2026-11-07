@@ -68,13 +68,17 @@ namespace SengokuChronicle.Persistence
                         "旧版存档包含家族研究状态（research）；迁移不会静默替换该数据。");
                     return false;
                 }
-                if (SaveDataValidator.HasRootProperty(rawJson, "familyDoctrine"))
+                // v9 introduced doctrine and the active event route. v10 already
+                // owns both, so only v2-v8 are rejected for carrying them.
+                if (legacy.saveFormatVersion < 9 &&
+                    SaveDataValidator.HasRootProperty(rawJson, "familyDoctrine"))
                 {
                     result = SaveOperationResult.Failure(SaveErrorCode.InvalidData,
                         "旧版存档包含 v9 家训与抱负状态（familyDoctrine）；迁移不会静默替换该数据。");
                     return false;
                 }
-                if (SaveDataValidator.HasRootProperty(rawJson, "activeEventScenarioId"))
+                if (legacy.saveFormatVersion < 9 &&
+                    SaveDataValidator.HasRootProperty(rawJson, "activeEventScenarioId"))
                 {
                     result = SaveOperationResult.Failure(SaveErrorCode.InvalidData,
                         "旧版存档包含 v9 活动事件路线（activeEventScenarioId）；迁移不会静默替换该数据。");

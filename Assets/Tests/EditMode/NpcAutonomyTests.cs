@@ -188,13 +188,62 @@ namespace SengokuChronicle.Tests.EditMode
                 (NpcAutonomyState.MaxDecisionRecords + 2).ToString()));
         }
 
+        [Test]
+        public void Evaluate_ExcludedCandidatesKeepDiagnosticScoresButNeverCompete()
+        {
+            NpcAutonomyEvaluation active = NpcAutonomyRules.Evaluate(
+                M2FixedScenario.MasatsunaId, new NpcNeedValues(40, 75, 45), true, true, true);
+
+            Assert.That(active.HasSelection, Is.False);
+            Assert.That(active.Candidates[0].Score, Is.EqualTo(40));
+            Assert.That(active.Candidates[1].Score, Is.EqualTo(150));
+            Assert.That(active.Candidates[2].Score, Is.EqualTo(45));
+            foreach (NpcActionCandidate candidate in active.Candidates)
+            {
+                Assert.That(candidate.IsEligible, Is.False);
+                Assert.That(candidate.Explanation, Does.Contain("进行中"));
+                Assert.That(candidate.Explanation, Does.Contain("当前分数"));
+            }
+        }
+
+        [TestCase(NpcAutonomyCommandOutcomeKind.Accepted, "接受", "执行中")]
+        [TestCase(NpcAutonomyCommandOutcomeKind.Deferred, "延期", "空闲")]
+        [TestCase(NpcAutonomyCommandOutcomeKind.Rejected, "拒绝", "空闲")]
+        [TestCase(NpcAutonomyCommandOutcomeKind.Interrupted, "中断", "被中断")]
+        public void DecisionRecord_ExposesOutcomeStatusAndReason(
+            NpcAutonomyCommandOutcomeKind outcome, string expectedOutcome,
+            string expectedStatus)
+        {
+            var record = new NpcAutonomyDecisionRecord(new GameDate(1560, 4, 2),
+                M2FixedScenario.MasatsunaId, outcome, DailyActionKind.Training, true,
+                NpcAutonomyTrigger.DailyCheck, "测试原因。");
+
+            Assert.That(record.OutcomeName, Is.EqualTo(expectedOutcome));
+            Assert.That(record.StatusName, Is.EqualTo(expectedStatus));
+            Assert.That(record.TriggerName, Is.EqualTo("每日检查"));
+            Assert.That(record.Reason, Is.EqualTo("测试原因。"));
+            Assert.That(record.HasAction, Is.True);
+            Assert.That(record.Action, Is.EqualTo(DailyActionKind.Training));
+        }
+
+        [TestCase(NpcAutonomyTrigger.Initialization, "首次初始化")]
+        [TestCase(NpcAutonomyTrigger.ActionCompleted, "行动完成")]
+        [TestCase(NpcAutonomyTrigger.ActionInterrupted, "行动中断")]
+        [TestCase(NpcAutonomyTrigger.EligibilityChanged, "资格变化")]
+        [TestCase(NpcAutonomyTrigger.DailyCheck, "每日检查")]
+        public void TriggerNames_AreStableChineseLabels(NpcAutonomyTrigger trigger,
+            string expected)
+        {
+            Assert.That(NpcAutonomyRules.TriggerName(trigger), Is.EqualTo(expected));
+        }
+
         private static void AssertCandidateReasons(NpcAutonomyEvaluation evaluation,
             string expected)
         {
             foreach (NpcActionCandidate candidate in evaluation.Candidates)
             {
                 Assert.That(candidate.IsEligible, Is.False);
-                Assert.That(candidate.Score, Is.Zero);
+                Assert.That(candidate.Score, Is.GreaterThanOrEqualTo(0));
                 Assert.That(candidate.Explanation, Does.Contain(expected));
             }
         }

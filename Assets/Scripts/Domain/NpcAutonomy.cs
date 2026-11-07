@@ -557,15 +557,21 @@ namespace SengokuChronicle.Domain
             int bestScore = int.MinValue;
             foreach (DailyActionKind kind in CandidateKinds)
             {
+                int need = needs.For(kind);
+                int weight = profileKnown ? profile.WeightFor(kind) : 0;
+                int score = need * weight;
                 if (exclusion != null)
                 {
-                    candidates.Add(new NpcActionCandidate(kind, false, 0, exclusion));
+                    // Excluded candidates never compete for selection, but their
+                    // integer score remains visible for read-only diagnostics.
+                    string reason = profileKnown
+                        ? exclusion + " 当前分数 " + score + "（需求 " + need +
+                          " × 偏好 " + weight + "，仅供参考）。"
+                        : exclusion;
+                    candidates.Add(new NpcActionCandidate(kind, false, score, reason));
                     continue;
                 }
 
-                int score = needs.For(kind) * profile.WeightFor(kind);
-                int need = needs.For(kind);
-                int weight = profile.WeightFor(kind);
                 candidates.Add(new NpcActionCandidate(kind, true, score,
                     "需求 " + need + " × 偏好 " + weight + " = " + score + "。"));
                 // CandidateKinds is ascending, so strict '>' keeps the lower kind on ties.

@@ -18,7 +18,7 @@
 | M00 | 现有工程基线与验收收敛 | 进行中：核验未验收切片、工作树和场景证据 |
 | M01 | 固定三代家族可玩原型 | 进行中：SC-024 工作区场景通过当前 Validator，代理 Play Mode 已验证两次交接与存读档关键路径；HEAD 场景仍未接入；最终里程碑验收待办 |
 | M02 | 每日行动与旅行基础 | 进行中：每日行动领域、存档与事务式 UI 已实现；工作区场景已接入并通过当前 Validator；每日行动切片已通过 lead Play Mode gate，用户验收待办 |
-| M03 | 高自主 NPC 与只读 Inspector | 实现完成，待 lead Play Mode 与用户验收：纯 C# 规则、v11 存档/迁移、两名试点、只读 Inspector 与事务式场景接入；EditMode 1243/1243，Validator PASS |
+| M03 | 高自主 NPC 与只读 Inspector | 实现与复审修正完成，待 lead Play Mode 与用户验收：纯 C# 规则、v11 存档/迁移、两名试点、只读 Inspector 与事务式场景接入；复审修正后 EditMode 1260/1260，Validator PASS |
 | M04 | 人物记忆与动态家族 | 计划中 |
 | M05 | 经营与委托纵向切片 | 计划中 |
 | M06 | 回合制潜入原型 | 计划中 |
@@ -55,8 +55,9 @@ M01 尚未完成。SC-024 代码、事件内容、存档 v9、面板与事务式
 - 会话：`GameSession` 在新局初始化、行动完成、玩家中断和下一次模拟日检查空闲试点；活动任务期间不重新评分、不覆盖玩家行动；被拒绝/延期的规划只写决策日志，不改变既有行动。
 - 存档：schema 从 v10 升为 v11（rules 7），新增只包含两名试点需求的 `npcAutonomy`；v10 迁移初始化默认需求并逐字段保留 `dailyActions`；校验拒绝未知/重复/越界/缺失/非名册试点。v11 读档不重新排程，活动任务保持权威；空闲试点在下一次模拟日恢复检查。
 - 只读 Inspector：`NpcAiInspectorPanel` 只订阅并展示需求、偏好、执行状态、当前行动、三个候选的分数或排除原因、最近决策；控件仅选择人物、打开/关闭/刷新视图，不调用排程、中断或重新规划 API。
+- 复审修正：v10 原始 JSON 迁移按 v9 字段引入版本放行 `familyDoctrine`/`activeEventScenarioId`，并保留完整 `dailyActions`；成功推进即使无行动完成也刷新需求与 Inspector；自主行动完成恢复可读消息；活动任务期间候选保留诊断分数但不可重新排程；四种命令结果均有触发原因/状态测试。
 - 场景：`AddM03NpcAiInspector` 通过单个 Undo 组创建/修复 `Canvas/M03NpcAiInspectorRoot`，保存前校验；`FoundationScene` 已接入一个根与一个打开按钮，`FoundationSceneValidator` 为 `RESULT: PASS; Errors: 0`。
-- 证据（2026-11-07，Unity `6000.6.6f1`，Editor PID `90052`，项目路径 `C:\Users\panye\My project`）：最终 Tundra 编译成功且 `error CS` 0；全量 EditMode `1243/1243` 通过、0 失败/跳过/不确定（`Logs/m03-full-editmode.txt` 与 `.xml`）；新增 M03 聚焦用例 38/38 通过（`Logs/m03-auto-tests.txt`）。未运行 Play Mode，未读取交互式 Console 计数；用户最终验收仍待办。
+- 证据（2026-11-07 复审修正轮，Unity `6000.6.6f1`，Editor PID `90052`，项目路径 `C:\Users\panye\My project`）：最终 Tundra 编译成功且 `error CS` 0；聚焦 EditMode `126/126` 通过、全量 EditMode `1260/1260` 通过、0 失败/跳过/不确定（`Logs/m03-review-focused.txt` 与 `Logs/m03-review-full.txt` / `.xml`）；`FoundationSceneValidator` 重跑为 `RESULT: PASS; Errors: 0`（`Logs/m03-review-validator.txt`）。复审修正覆盖 v10 原始 JSON 迁移、需求增长后的 Inspector/会话刷新、自主行动完成消息、以及 Accepted/Deferred/Rejected/Interrupted 的日志与无状态变更断言。运行前 Console 为 0 errors / 0 warnings / 6 logs；全量 EditMode 后为 2 errors / 25 warnings，两条 error 均为通过的 `FamilyFormationSessionTests` 故障注入日志。未运行 Play Mode；用户最终验收仍待办。
 
 ## SC-011 当前实现状态（2026-11-02）
 

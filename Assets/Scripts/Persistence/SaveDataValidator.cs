@@ -166,10 +166,12 @@ namespace SengokuChronicle.Persistence
             if (probe.saveFormatVersion >= 2 && probe.saveFormatVersion < CurrentVersion &&
                 HasRootProperty(json, "research") && probe.saveFormatVersion < 8)
                 return Invalid("旧版存档包含家族研究状态（research）；迁移不会静默替换该数据。");
-            if (probe.saveFormatVersion >= 2 && probe.saveFormatVersion < CurrentVersion &&
+            // v9 introduced doctrine and the active event route. v10 and v11 may
+            // legitimately carry both; only v2-v8 predate them.
+            if (probe.saveFormatVersion >= 2 && probe.saveFormatVersion < 9 &&
                 HasRootProperty(json, "familyDoctrine"))
                 return Invalid("旧版存档包含 v9 家训与抱负状态（familyDoctrine）；迁移不会静默替换该数据。");
-            if (probe.saveFormatVersion >= 2 && probe.saveFormatVersion < CurrentVersion &&
+            if (probe.saveFormatVersion >= 2 && probe.saveFormatVersion < 9 &&
                 HasRootProperty(json, "activeEventScenarioId"))
                 return Invalid("旧版存档包含 v9 活动事件路线（activeEventScenarioId）；迁移不会静默替换该数据。");
             if (probe.saveFormatVersion >= 2 && probe.saveFormatVersion < CurrentVersion &&

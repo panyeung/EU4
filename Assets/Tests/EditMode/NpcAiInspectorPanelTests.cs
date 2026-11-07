@@ -133,6 +133,26 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
+        public void Panel_RefreshesNeedsAndCandidateScoresWhenAnActiveDayGrowsNeeds()
+        {
+            NpcAiInspectorPanel panel = Panel();
+            panel.Open();
+            Assert.That(panel.NeedsLine, Does.Contain("休息 40"));
+            Assert.That(panel.CandidatesLine, Does.Contain("分数 150"));
+
+            Assert.That(_session.AdvanceOneDay(), Is.True);
+
+            Assert.That(panel.NeedsLine, Does.Contain("休息 44"),
+                "the open Inspector must refresh from SessionStateChanged after need growth");
+            Assert.That(panel.NeedsLine, Does.Contain("学艺 78"));
+            Assert.That(panel.CandidatesLine, Does.Contain("分数 156"),
+                "an active pilot's diagnostic candidate scores follow the grown needs");
+            Assert.That(panel.CandidatesLine, Does.Contain("进行中"),
+                "the active pilot still shows why it cannot be replanned");
+            Assert.That(panel.StatusLine, Does.Contain("执行中"));
+        }
+
+        [Test]
         public void Panel_RendersExclusionReasonForAnUnknownLocationPilot()
         {
             SaveData saved = _session.CaptureSave();
