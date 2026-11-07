@@ -111,6 +111,17 @@ New review-correction test names (all passed):
 - `NpcAutonomyTests.DecisionRecord_ExposesOutcomeStatusAndReason` (4 cases)
 - `NpcAutonomyTests.TriggerNames_AreStableChineseLabels` (5 cases)
 
+### Independent re-verification (dispatch re-run)
+
+A separate dispatch re-ran the committed M03 code in the same open Editor on 2026-11-07:
+
+- Editor: Unity `6000.6.6f1`, PID `90052`, `-projectPath "C:\Users\panye\My project"` reverified from the process command line; no batchmode and no second Editor for this project.
+- Temporary auto-runner script added only to drive the open Editor, then deleted together with its `.meta`; post-cleanup Tundra build succeeded (`*** Tundra build success (4.68 seconds), 14 items updated, 1975 evaluated`) with no `error CS` afterward.
+- Full EditMode: **1260 passed / 0 failed / 0 skipped / 0 inconclusive**, duration `15.212s`, `ResultState: Passed`; `Logs/m03-verify-full.txt` and `.xml`.
+- Focused EditMode: **126/126 passed**, duration `1.391s`, `ResultState: Passed`, same focused set listed above; `Logs/m03-verify-focused.txt` and `.xml`.
+- Scene validator: `M03Validate: PASS`, exactly one `M03NpcAiInspectorRoot`, and `RESULT: PASS; Errors: 0` in `Logs/SceneValidationReport.txt`; summary `Logs/m03-verify-validator.txt`.
+- Active scene stayed `Assets/Scenes/FoundationScene.unity`, loaded, not dirty, and not playing during the checks. Console counts were not separately re-measured in this dispatch; the review-correction counts above remain the recorded Console evidence. Play Mode was not run.
+
 ### Scene integration
 
 - The existing transactional generator had already created exactly one `Canvas/M03NpcAiInspectorRoot` and one `M03NpcAiInspectorOpenButton`; `FoundationScene` remained clean and unchanged this round.
@@ -135,4 +146,4 @@ New review-correction test names (all passed):
 
 ## 5. Commit state
 
-The verified M03 review-correction files were committed to the current `main` worktree as `b7c51ba` (`fix(m03): address autonomy review findings`) and pushed to `origin/main` after the focused/full EditMode and Validator gates passed. The unrelated untracked `nul` file was preserved and not staged. No branch, worktree, merge, or tag was created, and this is not a claim of milestone acceptance.
+The verified M03 review-correction files were committed to the current `main` worktree as `b7c51ba` (`fix(m03): address autonomy review findings`) and pushed to `origin/main` after the focused/full EditMode and Validator gates passed. The unrelated untracked `nul` file was preserved and not staged. The independent re-verification addendum above changes only this report and `PROJECT_STATE.md`; it does not change the implementation commit. No branch, worktree, merge, or tag was created, and this is not a claim of milestone acceptance.
