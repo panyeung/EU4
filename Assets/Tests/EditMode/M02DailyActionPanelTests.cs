@@ -68,6 +68,65 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(panel.IsOpen, Is.False,
                 "the panel must start hidden and be opened by the HUD button");
             Assert.That(panel.StaticButtonBindingCount, Is.EqualTo(9));
+
+            var panelRect = (RectTransform)Find(AddM02DailyActionPanel.PanelName);
+            var durationLabel =
+                (RectTransform)Find(AddM02DailyActionPanel.DurationLabelName);
+            float durationLabelLeft = durationLabel.anchoredPosition.x -
+                                      durationLabel.rect.width * 0.5f;
+            Assert.That(durationLabelLeft,
+                Is.GreaterThanOrEqualTo(-panelRect.rect.width * 0.5f + 5f),
+                "the duration label must keep a real margin from the panel edge");
+
+            var feedback = (RectTransform)Find(AddM02DailyActionPanel.FeedbackName);
+            var feedbackText = feedback.GetComponent<Text>();
+            var close = (RectTransform)Find(AddM02DailyActionPanel.CloseButtonName);
+            Assert.That(feedback.rect.height, Is.GreaterThanOrEqualTo(48f),
+                "feedback needs room for three wrapped lines");
+            Assert.That(feedbackText.verticalOverflow,
+                Is.EqualTo(VerticalWrapMode.Truncate),
+                "feedback must clip instead of spilling over nearby controls");
+            float feedbackBottom = feedback.anchoredPosition.y - feedback.rect.height * 0.5f;
+            float closeTop = close.anchoredPosition.y + close.rect.height * 0.5f;
+            Assert.That(feedbackBottom, Is.GreaterThanOrEqualTo(closeTop + 2f),
+                "feedback and the Close button must stay separated");
+        }
+
+        [Test]
+        public void Validate_ToleratesSubpixelEdgeRoundingButRejectsRealOverflow()
+        {
+            var durationLabel =
+                (RectTransform)Find(AddM02DailyActionPanel.DurationLabelName);
+            Vector2 start = durationLabel.anchoredPosition;
+
+            durationLabel.anchoredPosition =
+                new Vector2(start.x - 10.25f, start.y);
+            Assert.That(AddM02DailyActionPanel.Validate(_scene, out string subpixel),
+                Is.True, subpixel);
+
+            durationLabel.anchoredPosition = new Vector2(start.x - 12f, start.y);
+            Assert.That(AddM02DailyActionPanel.Validate(_scene, out string overflow),
+                Is.False);
+            Assert.That(overflow, Does.Contain("outside the panel bounds"));
+
+            durationLabel.anchoredPosition = start;
+        }
+
+        [Test]
+        public void Validate_RejectsFeedbackConfiguredToOverflow()
+        {
+            Text feedback = Find(AddM02DailyActionPanel.FeedbackName).GetComponent<Text>();
+            feedback.verticalOverflow = VerticalWrapMode.Overflow;
+            try
+            {
+                Assert.That(AddM02DailyActionPanel.Validate(_scene, out string error),
+                    Is.False);
+                Assert.That(error, Does.Contain("feedback"));
+            }
+            finally
+            {
+                feedback.verticalOverflow = VerticalWrapMode.Truncate;
+            }
         }
 
         [Test]

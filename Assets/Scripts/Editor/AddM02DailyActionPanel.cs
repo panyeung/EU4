@@ -61,6 +61,11 @@ namespace SengokuChronicle.Editor
         private static readonly Vector2 OpenButtonSize = new Vector2(220f, 44f);
         private static readonly Vector2 PanelSize = new Vector2(980f, 700f);
 
+        // CanvasScaler changes the canvas scale with the Game view, so an element
+        // that sits exactly on the panel edge can map back a few 1e-5 units outside
+        // it. Half a pixel is invisible and still rejects any real overflow.
+        private const float ContainmentTolerance = 0.5f;
+
         public enum UpdateResult
         {
             Success, SceneMismatch, SceneDirty, EditorPlaying, InvalidScene,
@@ -266,6 +271,9 @@ namespace SengokuChronicle.Editor
                     "The M02 duration input must be an integer field starting at 1.");
             if (!titleText.text.Contains("每日行动"))
                 return Invalid(out error, "The M02 title must contain 每日行动.");
+            if (feedbackText.verticalOverflow != VerticalWrapMode.Truncate)
+                return Invalid(out error,
+                    "The M02 feedback text must truncate instead of overflowing its area.");
             if (empty.gameObject.activeSelf)
                 return Invalid(out error, "The empty-state label must start hidden for a live roster.");
 
@@ -459,8 +467,8 @@ namespace SengokuChronicle.Editor
                 RectTransform scrollAreaRect = scrollObject.GetComponent<RectTransform>();
                 scrollAreaRect.anchorMin = scrollAreaRect.anchorMax =
                     scrollAreaRect.pivot = new Vector2(0.5f, 0.5f);
-                scrollAreaRect.anchoredPosition = new Vector2(0f, 75f);
-                scrollAreaRect.sizeDelta = new Vector2(920f, 330f);
+                scrollAreaRect.anchoredPosition = new Vector2(0f, 84f);
+                scrollAreaRect.sizeDelta = new Vector2(920f, 300f);
                 scrollObject.GetComponent<Image>().color = new Color(0.05f, 0.06f, 0.08f, 0.9f);
                 ScrollRect scrollRect = scrollObject.GetComponent<ScrollRect>();
                 scrollRect.horizontal = false;
@@ -493,52 +501,55 @@ namespace SengokuChronicle.Editor
                 template.gameObject.SetActive(false);
 
                 Text empty = CreateText(scene, panelRect, EmptyName, font,
-                    "尚无已登记的家族人物。", 0f, 75f, 860f, 60f, 15,
+                    "尚无已登记的家族人物。", 0f, 84f, 860f, 60f, 15,
                     TextAnchor.MiddleCenter);
                 empty.color = new Color(0.7f, 0.75f, 0.82f, 1f);
                 empty.gameObject.SetActive(false);
 
                 Text selectedText = CreateText(scene, panelRect, SelectedName, font,
-                    "当前选择：未选择人物。", 0f, -118f, 920f, 30f, 15,
+                    "当前选择：未选择人物。", 0f, -89f, 920f, 30f, 15,
                     TextAnchor.MiddleLeft);
 
                 Text durationLabel = CreateText(scene, panelRect, DurationLabelName, font,
-                    "持续天数（≥1）", -410f, -158f, 160f, 30f, 14,
+                    "持续天数（≥1）", -400f, -130f, 160f, 30f, 14,
                     TextAnchor.MiddleLeft);
                 InputField durationInput = CreateIntegerInput(scene, panelRect,
-                    DurationInputName, font, "1", -250f, -158f, 110f, 36f);
+                    DurationInputName, font, "1", -250f, -130f, 110f, 36f);
 
                 Button rest = CreateButton(scene, panelRect, RestButtonName, font, "休息",
                     180f, 40f, 15);
-                SetCenteredRect(rest.transform, new Vector2(-300f, -210f), new Vector2(180f, 40f));
+                SetCenteredRect(rest.transform, new Vector2(-300f, -180f), new Vector2(180f, 40f));
                 Button training = CreateButton(scene, panelRect, TrainingButtonName, font,
                     "训练", 180f, 40f, 15);
-                SetCenteredRect(training.transform, new Vector2(-100f, -210f),
+                SetCenteredRect(training.transform, new Vector2(-100f, -180f),
                     new Vector2(180f, 40f));
                 Button work = CreateButton(scene, panelRect, WorkButtonName, font, "工作",
                     180f, 40f, 15);
-                SetCenteredRect(work.transform, new Vector2(100f, -210f), new Vector2(180f, 40f));
+                SetCenteredRect(work.transform, new Vector2(100f, -180f), new Vector2(180f, 40f));
                 Button interrupt = CreateButton(scene, panelRect, InterruptButtonName, font,
                     "中断当前行动", 240f, 40f, 15);
-                SetCenteredRect(interrupt.transform, new Vector2(340f, -210f),
+                SetCenteredRect(interrupt.transform, new Vector2(340f, -180f),
                     new Vector2(240f, 40f));
 
                 Button travelKiyosu = CreateButton(scene, panelRect, TravelKiyosuButtonName,
                     font, "前往清洲", 220f, 38f, 15);
-                SetCenteredRect(travelKiyosu.transform, new Vector2(-260f, -258f),
+                SetCenteredRect(travelKiyosu.transform, new Vector2(-260f, -227f),
                     new Vector2(220f, 38f));
                 Button travelAtsuta = CreateButton(scene, panelRect, TravelAtsutaButtonName,
                     font, "前往热田", 220f, 38f, 15);
-                SetCenteredRect(travelAtsuta.transform, new Vector2(0f, -258f),
+                SetCenteredRect(travelAtsuta.transform, new Vector2(0f, -227f),
                     new Vector2(220f, 38f));
                 Button travelNagoya = CreateButton(scene, panelRect, TravelNagoyaButtonName,
                     font, "前往那古野", 220f, 38f, 15);
-                SetCenteredRect(travelNagoya.transform, new Vector2(260f, -258f),
+                SetCenteredRect(travelNagoya.transform, new Vector2(260f, -227f),
                     new Vector2(220f, 38f));
 
+                // Three lines of feedback fit here; anything longer is clipped
+                // instead of spilling over the Close button or panel edge.
                 Text feedback = CreateText(scene, panelRect, FeedbackName, font, string.Empty,
-                    0f, -298f, 920f, 28f, 14, TextAnchor.MiddleLeft);
+                    0f, -282f, 920f, 56f, 14, TextAnchor.MiddleLeft);
                 feedback.color = new Color(0.65f, 0.86f, 1f, 1f);
+                feedback.verticalOverflow = VerticalWrapMode.Truncate;
                 feedback.gameObject.SetActive(false);
                 Button close = CreateButton(scene, panelRect, CloseButtonName, font, "关闭",
                     160f, 32f, 15);
@@ -880,7 +891,10 @@ namespace SengokuChronicle.Editor
             return corners.All(corner =>
             {
                 Vector3 point = parent.InverseTransformPoint(corner);
-                return bounds.Contains(new Vector2(point.x, point.y));
+                return point.x >= bounds.xMin - ContainmentTolerance &&
+                       point.x <= bounds.xMax + ContainmentTolerance &&
+                       point.y >= bounds.yMin - ContainmentTolerance &&
+                       point.y <= bounds.yMax + ContainmentTolerance;
             });
         }
 
