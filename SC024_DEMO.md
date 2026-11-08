@@ -1,10 +1,11 @@
 # SC-024 家训与个人抱负示范：试玩与验收说明
 
 日期：2026-11-06
-状态：代码、事件内容、存档 v9、面板与事务式场景生成器已在 `main`。`HEAD` 的 `FoundationScene` 不含 SC-024；当前**未提交工作区**的 `FoundationScene` 已含 SC-024 对象。本文件是纯文本试玩脚本。前一轮聚焦 EditMode 为 76/76；2026-11-06 验证补充已通过全量 EditMode 1184/1184、当前场景 Validator（0 errors）及代理 Play Mode 关键路径。后续确认景继的学问年度计划可提交、信正可选“培养继承人”并显示 0/5；“第三代的家门”弹窗未能通过 Computer Use 选择，未到年度结算。M01 最终验收仍待办；教育成长结算与进度推进未验证，名册视口中的佐近卡片显示需复核。
+当前状态更新（2026-11-07）：M01 已由用户明确验收通过。当前 `main` 的 `Assets/Scenes/FoundationScene.unity` 已包含 SC-024 对象（18 处匹配）；以下日期为 2026-11-06 的试玩与验证记录，关于 HEAD 未接入和验收待办的说法仅是当时快照。用户验收不应被解释为下文所有未覆盖路径均已验证。
+2026-11-06 历史状态：代码、事件内容、存档 v9、面板与事务式场景生成器已在 `main`。当时 `HEAD` 的 `FoundationScene` 不含 SC-024，而未提交工作区已接入。本文件是纯文本试玩脚本。前一轮聚焦 EditMode 为 76/76；2026-11-06 验证补充已通过全量 EditMode 1184/1184、当时场景 Validator（0 errors）及代理 Play Mode 关键路径。后续确认景继的学问年度计划可提交、信正可选“培养继承人”并显示 0/5；“第三代的家门”弹窗未能通过 Computer Use 选择，未到年度结算。教育成长结算与进度推进未验证，名册视口中的佐近卡片显示需复核。以上为当时记录，不覆盖本文开头的当前状态。
 范围：`docs/superpowers/specs/2026-11-05-sc-024-family-creed-ambition-design.md` 与 `docs/superpowers/plans/2026-11-05-sc-024-family-creed-ambition.md` 的纵向切片：一个跨代家训、每任家主一项个人抱负、一次可见的家族议事与存档恢复。**不是完整 M3/M01 验收**；不包含派系、忠诚度、家族投票、随机检定或新的经济系统。
 
-> **先读：区分 `HEAD` 与当前工作区。** 已提交的 `HEAD` 版 `Assets/Scenes/FoundationScene.unity` 中没有任何 `FamilyDoctrineRoot`、`FamilyDoctrineOpenButton`、`SC024FamilyDoctrineDemoButton` 或 `FamilyDoctrinePanel`；当前工作区中**未提交**的同一场景已经包含这些对象（`SC024`/`FamilyDoctrine` 匹配 17 处）。若从 `HEAD`、其他 worktree 或另一台机器开始试玩，必须先完成第 0 节的生成器步骤；若就在当前已接入的工作区，不要重复运行生成器，直接核对对象并运行 Validator。
+> 以下为 2026-11-06 时的集成说明快照：当时 `HEAD` 尚无 SC-024 场景对象。当前 `main` 已包含该接入；开始新的试玩时应以当前 Unity 场景和 Validator 结果为准，不要按旧快照判断是否缺少场景对象。
 
 ## 0. 集成者前置步骤（不属于用户 Play Test）
 

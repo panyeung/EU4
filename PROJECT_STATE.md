@@ -1,6 +1,6 @@
 # 《影之一族》项目状态
 
-更新时间：2026-11-06
+更新时间：2026-11-07
 设计权威：[GDD_v4.0.md](GDD_v4.0.md)。本文件是当前执行状态入口；当前开发节点采用整合后的 `M00`–`M08` 路线；旧《Sengoku Chronicle》M1–M7 文档仅作为历史记录，不代表新方向进度。
 
 ## 当前方向
@@ -9,14 +9,14 @@
 - 工程：复用唯一项目 `C:\Users\panye\My project`，Unity `6000.6.6f1`，不另建项目。
 - 规则与范围以 GDD v4.0 设计和 `M00`–`M08` 执行路线为准；SC-001–SC-024 是纵向功能切片编号，不替代里程碑节点，也不从旧 M1–M7 代号推断新方向进度。
 
-## 当前开发路线（2026-11-06）
+## 当前开发路线（2026-11-07）
 
 用户提供的 `Shadow-Clan-Game-Design-and-Unity-Roadmap-v5.md` 已并入 GDD 第十三章：三代固定剧本收敛后，再推进每日行动、NPC 自主性与只读 Inspector、人物记忆与动态家族、经营/委托、潜入战术、系统整合和内容扩展。v5 中未确认的产品规则仍须在相关节点开始前单独确认。
 
 | 节点 | 方向 | 当前状态 |
 |---|---|---|
 | M00 | 现有工程基线与验收收敛 | 进行中：核验未验收切片、工作树和场景证据 |
-| M01 | 固定三代家族可玩原型 | 进行中：SC-024 工作区场景通过当前 Validator，代理 Play Mode 已验证两次交接与存读档关键路径；HEAD 场景仍未接入；最终里程碑验收待办 |
+| M01 | 固定三代家族可玩原型 | **已验收（2026-11-07，用户明确确认）**；当前 `main` 含 SC-024 场景接入。技术验证细节见下方历史报告，不从用户验收推断额外测试结果 |
 | M02 | 每日行动与旅行基础 | 进行中：每日行动领域、存档与事务式 UI 已实现；工作区场景已接入并通过当前 Validator；每日行动切片已通过 lead Play Mode gate，用户验收待办 |
 | M03 | 高自主 NPC 与只读 Inspector | 实现与两轮复审修正完成，待 lead Play Mode 与用户验收：纯 C# 规则、v11 存档/迁移、两名试点、逐日自主推进、只读可滚动 Inspector 与事务式场景接入；第二轮修正后 EditMode 1274/1274，Validator PASS；2026-11-07 独立派发复跑前一轮为 1260/1260 |
 | M04 | 人物记忆与动态家族 | 计划中 |
@@ -25,7 +25,7 @@
 | M07 | 经营、个人活动与战术整合 | 计划中 |
 | M08 | 内容扩展与正式体验 | 计划中 |
 
-M01 尚未完成。SC-024 代码、事件内容、存档 v9、面板与事务式生成器已在 `main`。场景状态必须区分两点：已提交 `HEAD` 的 `Assets/Scenes/FoundationScene.unity` 不含任何 SC-024 对象（`git show HEAD:Assets/Scenes/FoundationScene.unity | grep -c "SC024\|FamilyDoctrine"` 为 0）；当前**未提交工作区**的场景含 SC-024 接入（匹配 17 处，包含 `Canvas/FamilyDoctrineRoot`、`Canvas/FamilyDoctrineOpenButton`（其上挂 `FamilyDoctrinePanel`）与 `M6TitleRoot/SC024FamilyDoctrineDemoButton`）。该工作区场景不是 `origin/main` 内容，也不是本轮编辑产物。M01/SC-024 代码本轮已修正：`sc024` 路线退休只要求本路线家训议事，第二代不再依赖雨夜链，普通 SC-013 门禁不变；SC-024 专属第四代子嗣 `person.sc024.nobumasa-heir` 仅在 `sc024` 路线指定与展示，普通 SC-013 或空路线即使家系数据中存在该子嗣，仍保持六人名册与原固定继承人规则。`Assets/Tests/EditMode/SC024M01RegressionTests.cs` 是已跟踪文件（`6958b3a` 新增），不是未跟踪改动。先前聚焦 EditMode 为 76/76；本轮在 Unity 6000.6.6f1（PID 90052，项目路径 `C:\Users\panye\My project`）补做全量验证：全量 EditMode 1184/1184 通过（`TestResults.xml`，2026-11-06 15:39）；当前工作区场景 Validator 为 `RESULT: PASS; Errors: 0`（2026-11-06 15:45）；代理 Play Mode 完成家训议事关系变化、正綱与信正两次交接、景继成为指定继承人、传承家技 1/1，以及保存后读档回到 1560-08-01/信正。追加代理 Play Mode 验证（2026-11-06）：信正可为景继提交学问与武艺年度教育计划；首年结算后学问成长 +4、“培养继承人”进度 4/5；第二年结算后抱负面板显示“培养继承人 已完成 5/5”。家族名册显示多代关系连线与五张可见人物卡；当前检查的滚动位置未能确认景继家谱卡片，不能据此断定节点缺失，待复核完整滚动范围；佐近卡片也仍待复核。Play Mode 退出后 Console 当前计数为 0 logs / 0 warnings / 0 errors；EditMode 期间两条红色日志来自通过的编年史失败回滚测试，不能表述为测试时全程零错误。用户存档与备份哈希均保持 `F1C0630E5DD91BAA0B18607CA4367956DB637A8BB4DD6DA21D1E79212BDA4CBE`。`HEAD` 场景未接入、“发展家业 3/3”未验证、完整家谱滚动范围与景继卡片位置仍待确认，M01 最终里程碑验收待办；本轮没有提交或推送。
+M01 已于 2026-11-07 由用户明确验收通过。当前 `main` 的 `Assets/Scenes/FoundationScene.unity` 已包含 SC-024 场景接入（`SC024`/`FamilyDoctrine` 匹配 18 处）；最新 HUD 修复提交为 `18c7b4c`。用户验收记录不替代也不扩写技术证据：SC-024 历史编译、EditMode、Validator 与 Play Mode 结果及各自限制见 [SC-024 实现报告](docs/reports/sc024-implementation.md)；M7 HUD 修复的检查结果单独记录于提交与任务记录。下方标注为 2026-11-06 的 SC-024、M02 内容保留为当时快照，不代表当前场景或验收状态。
 
 ## 新方向检查点
 
@@ -207,7 +207,7 @@ M01 尚未完成。SC-024 代码、事件内容、存档 v9、面板与事务式
 - 验证边界：本 worker **未修改 `FoundationScene`**，未运行场景生成器、Validator、Unity 编译、EditMode、Console 或 Play Mode；独立源码复审 ACCEPT。所有编译/测试/场景/Play Mode 证据仍 pending。SC-023 标题入口和 Validator 行在场景生成前预期失败。用户 Play Test 与验收 pending。详见 `SC023_DEMO.md` 与 `docs/reports/sc023-implementation.md`。
 - 工作区：代码/文档 checkpoint `a2c7a48` 已推送至 `origin/panyeung/sc023-seclusion`；尚未合并、未打 tag。`SampleScene.unity`、`Assets/1.unity`、`Assets/1.unity.meta`、`ProjectSettings/SceneTemplateSettings.json`、`graphify-out/`、`nul` 继续保留为本地用户 WIP，未纳入提交。
 
-## SC-024 家训与个人抱负（2026-11-06）
+## SC-024 家训与个人抱负（2026-11-06 历史快照）
 
 - 范围：M3 家训与抱负纵向切片——复用 SC-013 六人明智家与 `1560-04-01`，为家族提供跨代家训、为每任家主提供一项个人抱负、一次可见的家族议事改革，并把家训/抱负/活动事件路线写入存档 v9。**不是完整 M3/M01**；不含派系、忠诚度、家族投票、随机检定或新经济系统。
 - 家训：`SecrecyFirst`（守秘为先）、`RighteousnessFirst`（义理至上）、`MeritFirst`（唯才是举）；新局默认义理至上，交接后保留。三个稳定议事事件 `event.sc024.creed-council.secrecy/righteousness/merit` 只按当前家训排程，维持/改革关系与家训变更在同一次提交中写入事件记录 + 两条关系记录；改革后旧家训版本不可提交。
@@ -226,7 +226,7 @@ M01 尚未完成。SC-024 代码、事件内容、存档 v9、面板与事务式
 - 场景：新增事务式 `AddM02DailyActionPanel`（单一 Undo 组、保存前验证、异常 Undo 回滚、原对象快照保护），在当前已脏的工作区场景上通过授权 dirty-workspace 入口运行并保存 `FoundationScene`。新增 21 处 `M02DailyAction` 匹配、`Canvas/M02DailyActionRoot`、`Canvas/M02DailyActionOpenButton`、隐藏的 `M02DailyActionPanel` 及 `WorldClockPanel.dailyActionPanel` 绑定。`FoundationSceneValidator` 已增加 `DailyActionPanel` 查找、20 项序列化引用检查与 M02 结构校验。
 - SC-024 保留：场景保存前后按对象名比对无删除；既有 17 处 `SC024`/`FamilyDoctrine` 匹配、`Canvas/FamilyDoctrineRoot`、`Canvas/FamilyDoctrineOpenButton`、`M6TitleRoot/SC024FamilyDoctrineDemoButton` 均保留。未修改 SC-024 的用户 WIP 文本。
 - 证据：在 Unity 6000.6.6f1（PID 90052，`C:\Users\panye\My project`）中完成；最终 `*** Tundra build success`，无 `error CS`；聚焦 EditMode 44/44 通过（`Logs/m02-ui-focused.xml`，`M02DailyActionPanelTests` 7、`M02DailyActionTests` 11、`SC010TimePauseTests` 5、`AddSC004MonthTurnControlTests` 8、`IndustryMonthCrossingTests` 13）；`FoundationSceneValidator` 为 `RESULT: PASS; Errors: 0`（`Logs/SceneValidationReport.txt`）。Play Mode 实测六人名单、两日休息的 0/2→1/2→完成、清洲→热田途中→抵达，以及单槽存档读回未完成任务；退出后 Console 徽章为 0 logs / 0 warnings / 0 errors。详细步骤与存档恢复记录见 `docs/reports/m02-daily-action-foundation.md`。
-- 状态边界：M01 仍为 Go/No-Go pending，最终里程碑验收待办；M02 每日行动切片已通过 lead Play Mode gate，仍待用户明确里程碑验收；工作区与主场景含未提交 SC-024 WIP，本轮未提交、未推送、未合并、未打 tag。
+- 状态边界（截至本节记录时）：M01 为 Go/No-Go pending；M02 每日行动切片已通过 lead Play Mode gate，仍待用户明确里程碑验收；工作区含 SC-024 WIP。本状态是 2026-11-06 历史快照，M01 已于 2026-11-07 由用户验收通过。
 
 ## SC-004–SC-009 已接受 checkpoint
 

@@ -5,6 +5,10 @@
 **范围：** `docs/superpowers/specs/2026-11-05-sc-024-family-creed-ambition-design.md` 与 `docs/superpowers/plans/2026-11-05-sc-024-family-creed-ambition.md` 的代码、事件内容、存档 v9、面板与事务式场景生成器。
 **本报告性质：** 文档与验证报告。原始文档轮次的撰写者没有修改 C#、测试或其他代码；M01 修正与复审判定轮次修改了第 0 节所列 C#/测试文件，并在打开的 Unity Editor 中运行了编译与聚焦 EditMode。Unity 场景、`ProjectSettings`、`Library`、`Temp` 未被本轮修改。
 
+## 当前状态更新（2026-11-07）
+
+用户已明确验收 M01。当前 `main` 的 `FoundationScene` 已提交 SC-024 场景接入（`SC024`/`FamilyDoctrine` 匹配 18 处；提交 `18c7b4c`）。下方 2026-11-06 验证结果和历史问题仍按当时范围记录；用户验收不补充未记录的测试步骤、结果或覆盖率。
+
 ## 当前验证补充（2026-11-06）
 
 后续在同一 Unity `6000.6.6f1` Editor（PID 90052，`C:\Users\panye\My project`）中完成验证。与下方“修正与复审判定”历史记录分开：
