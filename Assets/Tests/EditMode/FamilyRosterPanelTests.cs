@@ -114,6 +114,28 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(_panel.NodeTextFor(M2FixedScenario.SakonId), Does.Contain("家臣"));
             Assert.That(_panel.NodeTextFor(M2FixedScenario.SakonId), Does.Not.Contain("第1代"));
 
+            // Portrait cards: headship and known ages map onto the supplied
+            // archetype portraits; unrelated faces are never reused.
+            Assert.That(_panel.NodePortraitFor(M2FixedScenario.HarunobuId), Is.Not.Null,
+                "the current head renders a supplied portrait");
+            Assert.That(_panel.NodePortraitFor(M2FixedScenario.HarunobuId),
+                Is.Not.EqualTo(_panel.NodePortraitFor(M2FixedScenario.ChieId)),
+                "the head and an elder kinsman must not share one face");
+            Assert.That(_panel.NodePortraitFor(M2FixedScenario.NobumasaId), Is.Not.Null);
+
+            Transform headCard = FindNode(M2FixedScenario.HarunobuId);
+            Image headPortrait = headCard.Find(FamilyRosterPanel.PortraitChildName)
+                .GetComponent<Image>();
+            Assert.That(headPortrait.sprite,
+                Is.EqualTo(_panel.NodePortraitFor(M2FixedScenario.HarunobuId)));
+            Assert.That(headPortrait.preserveAspect, Is.True);
+            Assert.That(headPortrait.raycastTarget, Is.False,
+                "portrait art must never block card raycasts");
+            Text headLabel = headCard.GetComponentInChildren<Text>(true);
+            Assert.That(headLabel.rectTransform.offsetMin.x,
+                Is.GreaterThanOrEqualTo(headPortrait.rectTransform.offsetMax.x),
+                "card text starts right of the portrait strip: no overlap");
+
             var types = new HashSet<KinshipType>();
             for (int i = 0; i < _panel.VisibleRelationCount; i++)
                 types.Add(_panel.RelationType(i));
@@ -195,6 +217,75 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(deepest.anchoredPosition.y, Is.LessThan(0f));
             Assert.That(-deepest.anchoredPosition.y,
                 Is.LessThanOrEqualTo(_panel.ContentSize.y));
+        }
+
+        [Test]
+        public void PortraitKeyFor_UsesIdentityDataOnlyAndAlwaysHasFallback()
+        {
+            var head = new FamilyTreePersonNode(new PersonId("person.p.head"),
+                "当主", FamilyMemberRole.Head, 70, true, true, true, false, true,
+                false, false, FamilyTreeMemberSection.Kinship);
+            var elder = new FamilyTreePersonNode(new PersonId("person.p.elder"),
+                "长老", FamilyMemberRole.DirectKin, 66, true, true, true, false, false,
+                false, false, FamilyTreeMemberSection.Kinship);
+            var youth = new FamilyTreePersonNode(new PersonId("person.p.youth"),
+                "幼年", FamilyMemberRole.DirectKin, 12, true, true, true, false, false,
+                false, false, FamilyTreeMemberSection.Kinship);
+            var adult = new FamilyTreePersonNode(new PersonId("person.p.adult"),
+                "成人", FamilyMemberRole.CollateralKin, 30, true, true, true, false, false,
+                false, false, FamilyTreeMemberSection.Kinship);
+            var unknown = new FamilyTreePersonNode(new PersonId("person.p.unknown"),
+                "资料不明", FamilyMemberRole.Retainer, 0, false, false, false, false,
+                false, false, false, FamilyTreeMemberSection.Household);
+
+            Assert.That(FamilyRosterPanel.PortraitKeyFor(head), Is.EqualTo("master"));
+            Assert.That(FamilyRosterPanel.PortraitKeyFor(elder), Is.EqualTo("elder"));
+            Assert.That(FamilyRosterPanel.PortraitKeyFor(youth), Is.EqualTo("youth"));
+            Assert.That(FamilyRosterPanel.PortraitKeyFor(adult), Is.EqualTo("main"));
+            Assert.That(FamilyRosterPanel.PortraitKeyFor(unknown), Is.EqualTo("main"),
+                "unknown identity data still gets the readable generic portrait");
+
+            foreach (string key in new[] { "master", "elder", "youth", "main" })
+            {
+                Texture2D texture = Resources.Load<Texture2D>("ReferenceArt/portrait_" + key);
+                Assert.That(texture, Is.Not.Null,
+                    "the reference gallery supplies a portrait for " + key);
+            }
+        }
+
+        [Test]
+        public void Refresh_LargeRosterCardsKeepPortraitsInsideCardBounds()
+        {
+            PersonId greatGrandchild = AddPerson("person.test.g4", "第四代", 1552,
+                FamilyMemberRole.DirectKin);
+            _panel.Open();
+
+            foreach (PersonId id in new[]
+            {
+                M2FixedScenario.HarunobuId, M2FixedScenario.ChieId,
+                M2FixedScenario.NobumasaId, M2FixedScenario.SakonId, greatGrandchild
+            })
+            {
+                Transform card = FindNode(id);
+                Assert.That(card, Is.Not.Null);
+                RectTransform cardRect = (RectTransform)card;
+                Transform portrait = card.Find(FamilyRosterPanel.PortraitChildName);
+                Assert.That(portrait, Is.Not.Null,
+                    "every mapped card in a larger roster keeps its portrait");
+                RectTransform portraitRect = (RectTransform)portrait;
+                Assert.That(portraitRect.offsetMin.x,
+                    Is.GreaterThanOrEqualTo(0f));
+                Assert.That(portraitRect.offsetMax.x,
+                    Is.LessThanOrEqualTo(cardRect.sizeDelta.x));
+                Assert.That(-portraitRect.offsetMax.y,
+                    Is.LessThanOrEqualTo(cardRect.sizeDelta.y));
+                Assert.That(portraitRect.offsetMax.x - portraitRect.offsetMin.x,
+                    Is.EqualTo(FamilyRosterPanel.PortraitWidth).Within(0.01f));
+                Text label = card.GetComponentInChildren<Text>(true);
+                Assert.That(label.rectTransform.offsetMin.x,
+                    Is.GreaterThanOrEqualTo(portraitRect.offsetMax.x),
+                    "portrait and card text never overlap");
+            }
         }
 
         [Test]

@@ -67,6 +67,30 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
+        public void PanelTitleAlwaysComesFromTheLivePendingEvent()
+        {
+            CreatePanelFixture();
+            Assert.That(_session.TryAdvanceToNextMonth(), Is.True, _session.LastEventMessage);
+            string eventId = _session.PendingEventId;
+            string textId = _session.EventCatalog.events
+                .First(definition => definition.eventId == eventId).textId;
+            string expected = _session.EventText.entries
+                .First(entry => entry.textId == textId).title;
+
+            Text title = _modalRoot.GetComponentsInChildren<Text>(true)
+                .First(label => label.gameObject.name == "Title");
+            Assert.That(title.text, Is.EqualTo(expected),
+                "the modal renders whichever event is actually pending");
+            Assert.That(title.text, Does.Not.Contain("示例"),
+                "no example text from the reference sheet may leak into the panel");
+
+            Button first = Buttons().First(button => button.interactable);
+            first.onClick.Invoke();
+            Assert.That(_session.PendingEventId, Is.Not.EqualTo(eventId),
+                "invoking the live option advances the real queue");
+        }
+
+        [Test]
         public void LoadingPendingEventAutomaticallyOpensPanelAgain()
         {
             CreatePanelFixture();

@@ -108,6 +108,58 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
+        public void GeneratedStoryCardKeepsEveryRegionInsideTheModal()
+        {
+            Assert.That(AddSC005EventChoicePanel.Update(_scene),
+                Is.EqualTo(AddSC005EventChoicePanel.UpdateResult.Success));
+            Canvas.ForceUpdateCanvases();
+
+            RectTransform modal = (RectTransform)Find(AddSC005EventChoicePanel.ModalName);
+            foreach (string childName in new[]
+            {
+                AddSC005EventChoicePanel.TitleName,
+                AddSC005EventChoicePanel.BodyName,
+                AddSC005EventChoicePanel.OptionsName
+            })
+            {
+                RectTransform child = (RectTransform)Find(childName);
+                Rect modalBounds = LocalBounds(modal, modal);
+                Rect childBounds = LocalBounds(child, modal);
+                Assert.That(modalBounds.Contains(new Vector2(childBounds.xMin, childBounds.yMin)),
+                    Is.True, childName + " must stay inside the story card");
+                Assert.That(modalBounds.Contains(new Vector2(childBounds.xMax, childBounds.yMax)),
+                    Is.True, childName + " must stay inside the story card");
+            }
+
+            Rect title = LocalBounds((RectTransform)Find(AddSC005EventChoicePanel.TitleName), null);
+            Rect body = LocalBounds((RectTransform)Find(AddSC005EventChoicePanel.BodyName), null);
+            Rect options = LocalBounds((RectTransform)Find(AddSC005EventChoicePanel.OptionsName), null);
+            Assert.That(title.Overlaps(body, true), Is.False);
+            Assert.That(body.Overlaps(options, true), Is.False);
+            Assert.That(title.center.y, Is.GreaterThan(body.center.y),
+                "the card stacks title above story above choices");
+        }
+
+        private static Rect LocalBounds(RectTransform target, RectTransform coordinateRoot)
+        {
+            var corners = new Vector3[4];
+            target.GetWorldCorners(corners);
+            float xMin = float.MaxValue, xMax = float.MinValue;
+            float yMin = float.MaxValue, yMax = float.MinValue;
+            foreach (Vector3 corner in corners)
+            {
+                Vector3 local = coordinateRoot != null
+                    ? coordinateRoot.InverseTransformPoint(corner)
+                    : corner;
+                xMin = Mathf.Min(xMin, local.x);
+                xMax = Mathf.Max(xMax, local.x);
+                yMin = Mathf.Min(yMin, local.y);
+                yMax = Mathf.Max(yMax, local.y);
+            }
+            return Rect.MinMaxRect(xMin, yMin, xMax, yMax);
+        }
+
+        [Test]
         public void FeedbackBannerClearsTheMapActionRowBand()
         {
             // FoundationScene keeps the map confirm/cancel row at canvas y=-322.

@@ -2,6 +2,8 @@
 
 # Character Profile and Daily Actions UI Slice
 
+> **范围更新（2026-11-07）：** 此计划仍记录 M02 单页首片。用户已将范围扩展为五张参考图对应页面；后续实现按 [五页实现计划](2026-11-07-ui-reference-gallery.md) 执行。
+
 ## Goal
 Adapt the existing M02 daily-action screen toward design-gallery page 02: a selected-character profile alongside action planning, in the game's established widescreen Japanese-paper / indigo / vermilion visual language. Keep current M02 action behavior and the M03 Inspector read-only.
 

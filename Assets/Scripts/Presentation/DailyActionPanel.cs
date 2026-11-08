@@ -42,6 +42,7 @@ namespace SengokuChronicle.Presentation
         [SerializeField] private Button travelNagoyaButton;
         [SerializeField] private Button interruptButton;
         [SerializeField] private Text feedbackText;
+        [SerializeField] private CharacterDailyPageView pageView;
 
         private readonly List<GameObject> _rows = new List<GameObject>();
         private readonly List<PersonId> _rowPersonIds = new List<PersonId>();
@@ -66,7 +67,8 @@ namespace SengokuChronicle.Presentation
             rowTemplate != null && emptyText != null && selectedText != null &&
             durationInput != null && restButton != null && trainingButton != null &&
             workButton != null && travelKiyosuButton != null && travelAtsutaButton != null &&
-            travelNagoyaButton != null && interruptButton != null && feedbackText != null;
+            travelNagoyaButton != null && interruptButton != null && feedbackText != null &&
+            pageView != null && pageView.IsBound;
 
         public bool IsOpen => panelRoot != null && panelRoot.activeSelf;
         public int RowCount => _rows.Count;
@@ -112,7 +114,7 @@ namespace SengokuChronicle.Presentation
             Text title, Text summary, ScrollRect scroll, Transform rows, GameObject template,
             Text empty, Text selected, InputField duration, Button rest, Button training,
             Button work, Button travelKiyosu, Button travelAtsuta, Button travelNagoya,
-            Button interrupt, Text feedback)
+            Button interrupt, Text feedback, CharacterDailyPageView view)
         {
             Unsubscribe();
             ClearRows();
@@ -138,6 +140,7 @@ namespace SengokuChronicle.Presentation
             travelNagoyaButton = travelNagoya;
             interruptButton = interrupt;
             feedbackText = feedback;
+            pageView = view;
             Subscribe();
             // Do not build runtime rows here: this seam is also used by the transactional
             // scene generator and generated rows must never be serialized into FoundationScene.
@@ -218,7 +221,7 @@ namespace SengokuChronicle.Presentation
                 return;
             }
 
-            titleText.text = "人物档案 · 每日行动";
+            titleText.text = "人物管理 › 人物档案 · 每日行动";
             IReadOnlyList<DailyActionPersonState> persons = gameSession.DailyActions;
             EnsureSelection(persons);
 
@@ -234,6 +237,8 @@ namespace SengokuChronicle.Presentation
             RenderSelected(persons);
             RenderTravelButtons(persons);
             RenderFeedback();
+            if (pageView != null && pageView.IsBound)
+                pageView.Render(gameSession, _selectedPersonId, persons);
         }
 
         private bool Submit(DailyActionKind kind)

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using SengokuChronicle.Application;
 using SengokuChronicle.Domain;
@@ -42,6 +43,8 @@ namespace SengokuChronicle.Presentation
 
         private readonly List<GameObject> _nodes = new List<GameObject>();
         private readonly List<FamilyTreePersonNode> _nodeData = new List<FamilyTreePersonNode>();
+        private static readonly Dictionary<string, Sprite> PortraitCache =
+            new Dictionary<string, Sprite>(StringComparer.Ordinal);
         private readonly List<GameObject> _edges = new List<GameObject>();
         private readonly List<FamilyTreeRelationEdge> _edgeData = new List<FamilyTreeRelationEdge>();
         private readonly List<IReadOnlyList<FamilyTreePoint>> _relationPaths =
@@ -73,6 +76,63 @@ namespace SengokuChronicle.Presentation
         public int HouseholdNodeCount => _householdCount;
         public bool HasUnconnectedKin => _unconnectedCount > 0;
         public bool HasHousehold => _householdCount > 0;
+
+        /// <summary>Portrait strip width reserved inside a person card.</summary>
+        public const float PortraitWidth = 58f;
+        public const string PortraitChildName = "FamilyRosterPortrait";
+
+        /// <summary>
+        /// Maps existing identity data (headship and known age) onto the archetype
+        /// portraits: the generated clan atlas first, then the owner-provided crops
+        /// from the reference gallery. People without a usable signal fall back to
+        /// the generic adult face; the mapping never invents identity data and never
+        /// uses unrelated artwork.
+        /// </summary>
+        public static string PortraitKeyFor(FamilyTreePersonNode node)
+        {
+            if (node.IsHead)
+                return "master";
+            if (node.HasAge)
+            {
+                if (node.Age >= 60)
+                    return "elder";
+                if (node.Age <= 16)
+                    return "youth";
+            }
+            return "main";
+        }
+
+        private static Sprite LoadPortrait(string key)
+        {
+            if (key == null)
+                return null;
+            if (PortraitCache.TryGetValue(key, out Sprite cached))
+                return cached;
+            // The generated clan atlas is the primary portrait source; the older
+            // owner-supplied single crops stay as a fallback so the roster renders
+            // even before the atlas import is refreshed.
+            Sprite sprite = SengokuUiArt.Portrait(key);
+            if (sprite == null)
+            {
+                Texture2D texture = Resources.Load<Texture2D>("ReferenceArt/portrait_" + key);
+                sprite = texture != null
+                    ? Sprite.Create(texture, new Rect(0f, 0f, texture.width, texture.height),
+                        new Vector2(0.5f, 0.5f), 100f)
+                    : null;
+            }
+            PortraitCache[key] = sprite;
+            return sprite;
+        }
+
+        /// <summary>Read-only test seam: the portrait sprite rendered for one person.</summary>
+        public Sprite NodePortraitFor(PersonId personId)
+        {
+            for (int i = 0; i < _nodeData.Count; i++)
+                if (_nodeData[i].PersonId == personId)
+                    return LoadPortrait(PortraitKeyFor(_nodeData[i]));
+            return null;
+        }
+
         public ScrollRect ScrollRect => scrollRect;
         public Vector2 ContentSize =>
             content is RectTransform rect ? rect.sizeDelta : Vector2.zero;
@@ -322,11 +382,38 @@ namespace SengokuChronicle.Presentation
                         : KinCardColor;
             }
 
+            Sprite portrait = LoadPortrait(PortraitKeyFor(person));
+
             Text text = card.GetComponentInChildren<Text>(true);
             if (text != null)
             {
                 text.text = FormatNode(person, placement);
                 text.raycastTarget = false;
+                RectTransform textRect = text.rectTransform;
+                textRect.anchorMin = Vector2.zero;
+                textRect.anchorMax = Vector2.one;
+                textRect.pivot = new Vector2(0.5f, 0.5f);
+                float leftInset = portrait != null ? PortraitWidth + 8f : 10f;
+                textRect.offsetMin = new Vector2(leftInset, 8f);
+                textRect.offsetMax = new Vector2(-10f, -8f);
+            }
+
+            if (portrait != null)
+            {
+                var portraitObject = new GameObject(PortraitChildName,
+                    typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+                portraitObject.transform.SetParent(card.transform, false);
+                RectTransform portraitRect = portraitObject.GetComponent<RectTransform>();
+                portraitRect.anchorMin = new Vector2(0f, 0f);
+                portraitRect.anchorMax = new Vector2(0f, 1f);
+                portraitRect.pivot = new Vector2(0f, 0.5f);
+                portraitRect.offsetMin = new Vector2(3f, 3f);
+                portraitRect.offsetMax = new Vector2(3f + PortraitWidth, -3f);
+                Image portraitImage = portraitObject.GetComponent<Image>();
+                portraitImage.sprite = portrait;
+                portraitImage.color = Color.white;
+                portraitImage.preserveAspect = true;
+                portraitImage.raycastTarget = false;
             }
 
             card.SetActive(true);

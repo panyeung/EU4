@@ -52,6 +52,8 @@ namespace SengokuChronicle.Presentation
         public bool IsBound => gameSession != null && _catalog != null && _textCatalog != null &&
                                modalRoot != null && titleText != null && bodyText != null &&
                                optionsContent != null && optionButtonPrefab != null && feedbackText != null;
+        public bool HasPendingEvent => gameSession != null &&
+                                       !string.IsNullOrEmpty(gameSession.PendingEventId);
 
         /// <summary>
         /// Pins the feedback banner inside the top band. Applied at runtime too so an

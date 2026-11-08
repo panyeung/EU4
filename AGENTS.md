@@ -285,3 +285,8 @@ For each substantial feature, Mochi creates one dependent final sign-off task li
 
 
 
+
+
+## Art asset workflow
+
+Follow [docs/ART_ASSET_WORKFLOW.md](docs/ART_ASSET_WORKFLOW.md): Mochi generates original reference-matched art, records it in ASSETS.md, and OpenCode2 implements and integrates it. Mochi may take implementation over if OpenCode2 is unavailable or cannot complete it.
