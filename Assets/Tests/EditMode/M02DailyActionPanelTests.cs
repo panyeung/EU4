@@ -78,6 +78,22 @@ namespace SengokuChronicle.Tests.EditMode
                 Is.GreaterThanOrEqualTo(-panelRect.rect.width * 0.5f + 5f),
                 "the duration label must keep a real margin from the panel edge");
 
+            var scroll = (RectTransform)Find(AddM02DailyActionPanel.ScrollName);
+            var profile = (RectTransform)Find(AddM02DailyActionPanel.SelectedName);
+            var profileText = profile.GetComponent<Text>();
+            Assert.That(profile.rect.width, Is.GreaterThanOrEqualTo(360f),
+                "the selected profile must be a substantial information column");
+            Assert.That(profile.rect.height, Is.GreaterThanOrEqualTo(300f));
+            Assert.That(scroll.anchoredPosition.x + scroll.rect.width * 0.5f,
+                Is.LessThan(profile.anchoredPosition.x - profile.rect.width * 0.5f),
+                "the roster and profile columns must not overlap");
+            Assert.That(profileText.alignment, Is.EqualTo(TextAnchor.UpperLeft));
+            Assert.That(profileText.fontSize, Is.GreaterThanOrEqualTo(16));
+            Assert.That(profileText.verticalOverflow,
+                Is.EqualTo(VerticalWrapMode.Truncate));
+            Assert.That(profileText.supportRichText, Is.True);
+            Assert.That(profileText.text, Does.Contain("人物档案"));
+
             var feedback = (RectTransform)Find(AddM02DailyActionPanel.FeedbackName);
             var feedbackText = feedback.GetComponent<Text>();
             var close = (RectTransform)Find(AddM02DailyActionPanel.CloseButtonName);
@@ -95,21 +111,19 @@ namespace SengokuChronicle.Tests.EditMode
         [Test]
         public void Validate_ToleratesSubpixelEdgeRoundingButRejectsRealOverflow()
         {
-            var durationLabel =
-                (RectTransform)Find(AddM02DailyActionPanel.DurationLabelName);
-            Vector2 start = durationLabel.anchoredPosition;
+            var close = (RectTransform)Find(AddM02DailyActionPanel.CloseButtonName);
+            Vector2 start = close.anchoredPosition;
 
-            durationLabel.anchoredPosition =
-                new Vector2(start.x - 10.25f, start.y);
+            close.anchoredPosition = new Vector2(start.x, start.y - 2.25f);
             Assert.That(AddM02DailyActionPanel.Validate(_scene, out string subpixel),
                 Is.True, subpixel);
 
-            durationLabel.anchoredPosition = new Vector2(start.x - 12f, start.y);
+            close.anchoredPosition = new Vector2(start.x, start.y - 3f);
             Assert.That(AddM02DailyActionPanel.Validate(_scene, out string overflow),
                 Is.False);
             Assert.That(overflow, Does.Contain("outside the panel bounds"));
 
-            durationLabel.anchoredPosition = start;
+            close.anchoredPosition = start;
         }
 
         [Test]
@@ -203,6 +217,99 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(panel.SelectedLine, Does.Contain("休息 进度 0/2"));
             Assert.That(panel.FeedbackVisible, Is.True);
             Assert.That(panel.FeedbackLine, Does.Contain("已安排"));
+        }
+
+        [Test]
+        public void Panel_ProfileUsesLiveRosterFactsAndFollowsSelection()
+        {
+            DailyActionPanel panel = Panel();
+            panel.Open();
+            M2RosterRow harunobu = _session.FamilyRoster.Single(
+                row => row.PersonId == M2FixedScenario.HarunobuId);
+
+            panel.SelectPerson(M2FixedScenario.HarunobuId);
+
+            Assert.That(panel.ProfileLine, Does.Contain("人物档案"));
+            Assert.That(panel.ProfileLine, Does.Contain(harunobu.DisplayName));
+            Assert.That(panel.ProfileLine, Does.Contain(harunobu.Age + "岁"));
+            Assert.That(panel.ProfileLine, Does.Contain(harunobu.RoleName));
+            Assert.That(panel.ProfileLine, Does.Contain(harunobu.GenerationLabel));
+            Assert.That(panel.ProfileLine, Does.Contain(harunobu.Kinship));
+            Assert.That(panel.ProfileLine, Does.Contain("所在：清洲"));
+            Assert.That(panel.ProfileLine, Does.Contain("行动：空闲"));
+
+            M2RosterRow chie = _session.FamilyRoster.Single(
+                row => row.PersonId == M2FixedScenario.ChieId);
+            panel.SelectPerson(M2FixedScenario.ChieId);
+
+            Assert.That(panel.SelectedPersonId, Is.EqualTo(M2FixedScenario.ChieId));
+            Assert.That(panel.ProfileLine, Does.Contain(chie.DisplayName));
+            Assert.That(panel.ProfileLine, Does.Contain(chie.RoleName));
+            Assert.That(panel.ProfileLine, Does.Contain(chie.Kinship),
+                "the profile must follow the selected family member");
+            Assert.That(panel.ProfileLine, Does.Not.Contain(harunobu.Kinship),
+                "the previous member's kinship must not leak into the new profile");
+        }
+
+        [Test]
+        public void Panel_ProfileTracksActionProgressDateAndTransit()
+        {
+            DailyActionPanel panel = Panel();
+            panel.Open();
+            panel.SelectPerson(M2FixedScenario.ChieId);
+            panel.SetDuration("2");
+            Assert.That(panel.ClickRest(), Is.True, panel.FeedbackLine);
+
+            Assert.That(panel.ProfileLine,
+                Does.Contain("行动：休息 进度 0/2 天（剩 2）"));
+
+            Assert.That(_session.AdvanceOneDay(), Is.True);
+            panel.Refresh();
+
+            Assert.That(panel.ProfileLine,
+                Does.Contain("行动：休息 进度 1/2 天（剩 1）"));
+            Assert.That(panel.SummaryLine,
+                Does.Contain(_session.WorldClock.CurrentDate.ToString()));
+
+            Assert.That(panel.ClickInterrupt(), Is.True, panel.FeedbackLine);
+            Assert.That(panel.ProfileLine, Does.Contain("行动：空闲"));
+            Assert.That(panel.ClickTravel(LocationId.Atsuta), Is.True, panel.FeedbackLine);
+            Assert.That(panel.ProfileLine, Does.Contain("旅途中：清洲→热田"));
+        }
+
+        [Test]
+        public void Layout_KeepsEveryM02ControlInsideThePanelAt1280x720()
+        {
+            var canvas = (RectTransform)Find("Canvas");
+            var panel = (RectTransform)Find(AddM02DailyActionPanel.PanelName);
+            var open = (RectTransform)Find(AddM02DailyActionPanel.OpenButtonName);
+            Assert.That(Contained(panel, canvas), Is.True);
+            Assert.That(Contained(open, canvas), Is.True);
+
+            string[] controls =
+            {
+                AddM02DailyActionPanel.TitleName, AddM02DailyActionPanel.SummaryName,
+                AddM02DailyActionPanel.ScrollName, AddM02DailyActionPanel.EmptyName,
+                AddM02DailyActionPanel.SelectedName,
+                AddM02DailyActionPanel.DurationLabelName,
+                AddM02DailyActionPanel.DurationInputName,
+                AddM02DailyActionPanel.RestButtonName,
+                AddM02DailyActionPanel.TrainingButtonName,
+                AddM02DailyActionPanel.WorkButtonName,
+                AddM02DailyActionPanel.TravelKiyosuButtonName,
+                AddM02DailyActionPanel.TravelAtsutaButtonName,
+                AddM02DailyActionPanel.TravelNagoyaButtonName,
+                AddM02DailyActionPanel.InterruptButtonName,
+                AddM02DailyActionPanel.FeedbackName,
+                AddM02DailyActionPanel.CloseButtonName
+            };
+            foreach (string name in controls)
+                Assert.That(Contained((RectTransform)Find(name), panel), Is.True, name);
+
+            var scroll = (RectTransform)Find(AddM02DailyActionPanel.ScrollName);
+            var profile = (RectTransform)Find(AddM02DailyActionPanel.SelectedName);
+            Assert.That(scroll.anchoredPosition.x + scroll.rect.width * 0.5f,
+                Is.LessThan(profile.anchoredPosition.x - profile.rect.width * 0.5f));
         }
 
         [Test]
@@ -388,5 +495,20 @@ namespace SengokuChronicle.Tests.EditMode
             scene.GetRootGameObjects()
                 .SelectMany(root => root.GetComponentsInChildren<Transform>(true))
                 .Where(transform => transform.name == name).ToArray();
+
+        private static bool Contained(RectTransform child, RectTransform parent)
+        {
+            var corners = new Vector3[4];
+            child.GetWorldCorners(corners);
+            Rect bounds = parent.rect;
+            return corners.All(corner =>
+            {
+                Vector3 point = parent.InverseTransformPoint(corner);
+                return point.x >= bounds.xMin - 0.5f &&
+                       point.x <= bounds.xMax + 0.5f &&
+                       point.y >= bounds.yMin - 0.5f &&
+                       point.y <= bounds.yMax + 0.5f;
+            });
+        }
     }
 }

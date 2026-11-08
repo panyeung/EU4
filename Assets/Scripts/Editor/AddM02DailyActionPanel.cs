@@ -224,6 +224,11 @@ namespace SengokuChronicle.Editor
                 content.GetComponent<ContentSizeFitter>() == null)
                 return Invalid(out error,
                     "M02 scroll content needs a vertical layout and size fitter.");
+            RectTransform templateRect = template as RectTransform;
+            if (templateRect == null ||
+                templateRect.rect.width > scrollRectTransform.rect.width)
+                return Invalid(out error,
+                    "The M02 roster row template must fit inside the left-column scroll area.");
 
             Text titleText = title.GetComponent<Text>();
             Text summaryText = summary.GetComponent<Text>();
@@ -274,6 +279,15 @@ namespace SengokuChronicle.Editor
             if (feedbackText.verticalOverflow != VerticalWrapMode.Truncate)
                 return Invalid(out error,
                     "The M02 feedback text must truncate instead of overflowing its area.");
+            if (!selectedText.text.Contains("人物档案"))
+                return Invalid(out error,
+                    "The selected-member area must start as the character profile block.");
+            if (selectedText.alignment != TextAnchor.UpperLeft ||
+                selectedText.verticalOverflow != VerticalWrapMode.Truncate ||
+                !selectedText.supportRichText || selectedText.fontSize < 16 ||
+                selectedText.lineSpacing < 1f)
+                return Invalid(out error,
+                    "The character profile text must be a wrapping, truncating rich-text block.");
             if (empty.gameObject.activeSelf)
                 return Invalid(out error, "The empty-state label must start hidden for a live roster.");
 
@@ -350,12 +364,25 @@ namespace SengokuChronicle.Editor
                     return Invalid(out error,
                         "An M02 daily-action control lies outside the panel bounds.");
 
+            if (selectedRect.rect.width < 360f || selectedRect.rect.height < 300f)
+                return Invalid(out error,
+                    "The character profile area must be a substantial right-column block.");
+            float rosterRight = scrollAreaRect.anchoredPosition.x +
+                                scrollAreaRect.rect.width * 0.5f;
+            float profileLeft = selectedRect.anchoredPosition.x -
+                                selectedRect.rect.width * 0.5f;
+            if (rosterRight > profileLeft - 20f)
+                return Invalid(out error,
+                    "The roster and character profile must stay in separate columns.");
+
             if (Overlaps(titleRect, summaryRect, panelRect))
                 return Invalid(out error, "M02 overlap: title/summary.");
             if (Overlaps(summaryRect, scrollAreaRect, panelRect))
                 return Invalid(out error, "M02 overlap: summary/scroll.");
+            if (Overlaps(summaryRect, selectedRect, panelRect))
+                return Invalid(out error, "M02 overlap: summary/profile.");
             if (Overlaps(scrollAreaRect, selectedRect, panelRect))
-                return Invalid(out error, "M02 overlap: scroll/selected.");
+                return Invalid(out error, "M02 overlap: scroll/profile.");
             if (Overlaps(selectedRect, durationLabelRect, panelRect))
                 return Invalid(out error, "M02 overlap: selected/duration label.");
             if (Overlaps(selectedRect, durationInputRect, panelRect))
@@ -455,20 +482,22 @@ namespace SengokuChronicle.Editor
                 background.raycastTarget = true;
                 panelObject.SetActive(false);
 
-                Text title = CreateText(scene, panelRect, TitleName, font, "每日行动",
-                    0f, 322f, 920f, 34f, 22, TextAnchor.MiddleLeft);
+                Text title = CreateText(scene, panelRect, TitleName, font,
+                    "人物档案 · 每日行动", 0f, 322f, 920f, 34f, 22,
+                    TextAnchor.MiddleLeft);
+                title.color = new Color(0.93f, 0.88f, 0.78f, 1f);
                 Text summary = CreateText(scene, panelRect, SummaryName, font,
-                    "当前日期：—　已登记人物：0　行动按人物稳定顺序列出。",
-                    0f, 288f, 920f, 30f, 14, TextAnchor.MiddleLeft);
-                summary.color = new Color(0.82f, 0.88f, 0.95f, 1f);
+                    "当前日期：—　｜　家族登记 0 人　｜　左侧选择人物，右侧安排行动",
+                    0f, 290f, 920f, 26f, 13, TextAnchor.MiddleLeft);
+                summary.color = new Color(0.65f, 0.71f, 0.78f, 1f);
 
                 GameObject scrollObject = Create(scene, panelRect, ScrollName,
                     typeof(Image), typeof(ScrollRect), typeof(RectMask2D));
                 RectTransform scrollAreaRect = scrollObject.GetComponent<RectTransform>();
                 scrollAreaRect.anchorMin = scrollAreaRect.anchorMax =
                     scrollAreaRect.pivot = new Vector2(0.5f, 0.5f);
-                scrollAreaRect.anchoredPosition = new Vector2(0f, 84f);
-                scrollAreaRect.sizeDelta = new Vector2(920f, 300f);
+                scrollAreaRect.anchoredPosition = new Vector2(-225f, 45f);
+                scrollAreaRect.sizeDelta = new Vector2(510f, 430f);
                 scrollObject.GetComponent<Image>().color = new Color(0.05f, 0.06f, 0.08f, 0.9f);
                 ScrollRect scrollRect = scrollObject.GetComponent<ScrollRect>();
                 scrollRect.horizontal = false;
@@ -491,69 +520,75 @@ namespace SengokuChronicle.Editor
                 scrollRect.content = contentRect;
 
                 Button template = CreateButton(scene, contentRect, RowTemplateName, font,
-                    "家族人物", 900f, 44f, 15);
+                    "家族人物", 500f, 44f, 14);
                 Text templateLabel = template.GetComponentInChildren<Text>(true);
                 if (templateLabel != null)
                     templateLabel.alignment = TextAnchor.MiddleLeft;
                 LayoutElement templateLayout = template.GetComponent<LayoutElement>();
+                templateLayout.preferredWidth = 500f;
                 templateLayout.preferredHeight = 44f;
                 templateLayout.flexibleHeight = 0f;
                 template.gameObject.SetActive(false);
 
                 Text empty = CreateText(scene, panelRect, EmptyName, font,
-                    "尚无已登记的家族人物。", 0f, 84f, 860f, 60f, 15,
+                    "尚无已登记的家族人物。", -225f, 45f, 480f, 60f, 15,
                     TextAnchor.MiddleCenter);
                 empty.color = new Color(0.7f, 0.75f, 0.82f, 1f);
                 empty.gameObject.SetActive(false);
 
+                // The selected member is the right-column profile focus. Its text is
+                // rebuilt from the live roster and daily-action snapshot on every refresh.
                 Text selectedText = CreateText(scene, panelRect, SelectedName, font,
-                    "当前选择：未选择人物。", 0f, -89f, 920f, 30f, 15,
-                    TextAnchor.MiddleLeft);
+                    "<color=#C4553B>人物档案</color>\n当前选择：未选择人物。",
+                    270f, 55f, 400f, 370f, 16, TextAnchor.UpperLeft);
+                selectedText.color = new Color(0.93f, 0.88f, 0.78f, 1f);
+                selectedText.verticalOverflow = VerticalWrapMode.Truncate;
+                selectedText.lineSpacing = 1.15f;
 
                 Text durationLabel = CreateText(scene, panelRect, DurationLabelName, font,
-                    "持续天数（≥1）", -400f, -130f, 160f, 30f, 14,
+                    "持续天数（≥1）", 125f, -166f, 170f, 28f, 14,
                     TextAnchor.MiddleLeft);
                 InputField durationInput = CreateIntegerInput(scene, panelRect,
-                    DurationInputName, font, "1", -250f, -130f, 110f, 36f);
+                    DurationInputName, font, "1", 295f, -166f, 110f, 36f);
 
                 Button rest = CreateButton(scene, panelRect, RestButtonName, font, "休息",
                     180f, 40f, 15);
-                SetCenteredRect(rest.transform, new Vector2(-300f, -180f), new Vector2(180f, 40f));
+                SetCenteredRect(rest.transform, new Vector2(-300f, -206f), new Vector2(180f, 40f));
                 Button training = CreateButton(scene, panelRect, TrainingButtonName, font,
                     "训练", 180f, 40f, 15);
-                SetCenteredRect(training.transform, new Vector2(-100f, -180f),
+                SetCenteredRect(training.transform, new Vector2(-100f, -206f),
                     new Vector2(180f, 40f));
                 Button work = CreateButton(scene, panelRect, WorkButtonName, font, "工作",
                     180f, 40f, 15);
-                SetCenteredRect(work.transform, new Vector2(100f, -180f), new Vector2(180f, 40f));
+                SetCenteredRect(work.transform, new Vector2(100f, -206f), new Vector2(180f, 40f));
                 Button interrupt = CreateButton(scene, panelRect, InterruptButtonName, font,
                     "中断当前行动", 240f, 40f, 15);
-                SetCenteredRect(interrupt.transform, new Vector2(340f, -180f),
+                SetCenteredRect(interrupt.transform, new Vector2(340f, -206f),
                     new Vector2(240f, 40f));
 
                 Button travelKiyosu = CreateButton(scene, panelRect, TravelKiyosuButtonName,
                     font, "前往清洲", 220f, 38f, 15);
-                SetCenteredRect(travelKiyosu.transform, new Vector2(-260f, -227f),
+                SetCenteredRect(travelKiyosu.transform, new Vector2(-260f, -247f),
                     new Vector2(220f, 38f));
                 Button travelAtsuta = CreateButton(scene, panelRect, TravelAtsutaButtonName,
                     font, "前往热田", 220f, 38f, 15);
-                SetCenteredRect(travelAtsuta.transform, new Vector2(0f, -227f),
+                SetCenteredRect(travelAtsuta.transform, new Vector2(0f, -247f),
                     new Vector2(220f, 38f));
                 Button travelNagoya = CreateButton(scene, panelRect, TravelNagoyaButtonName,
                     font, "前往那古野", 220f, 38f, 15);
-                SetCenteredRect(travelNagoya.transform, new Vector2(260f, -227f),
+                SetCenteredRect(travelNagoya.transform, new Vector2(260f, -247f),
                     new Vector2(220f, 38f));
 
                 // Three lines of feedback fit here; anything longer is clipped
                 // instead of spilling over the Close button or panel edge.
                 Text feedback = CreateText(scene, panelRect, FeedbackName, font, string.Empty,
-                    0f, -282f, 920f, 56f, 14, TextAnchor.MiddleLeft);
+                    0f, -292f, 920f, 48f, 14, TextAnchor.MiddleLeft);
                 feedback.color = new Color(0.65f, 0.86f, 1f, 1f);
                 feedback.verticalOverflow = VerticalWrapMode.Truncate;
                 feedback.gameObject.SetActive(false);
                 Button close = CreateButton(scene, panelRect, CloseButtonName, font, "关闭",
-                    160f, 32f, 15);
-                SetCenteredRect(close.transform, new Vector2(0f, -330f), new Vector2(160f, 32f));
+                    160f, 30f, 15);
+                SetCenteredRect(close.transform, new Vector2(0f, -333f), new Vector2(160f, 30f));
 
                 PlaceAboveMapHud(canvas, rootObject.transform);
 

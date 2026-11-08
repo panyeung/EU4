@@ -73,6 +73,7 @@ namespace SengokuChronicle.Presentation
         public int StaticButtonBindingCount => _staticButtonBindings;
         public PersonId SelectedPersonId => _selectedPersonId;
         public string SelectedLine => selectedText != null ? selectedText.text : string.Empty;
+        public string ProfileLine => SelectedLine;
         public string SummaryLine => summaryText != null ? summaryText.text : string.Empty;
         public string TitleLine => titleText != null ? titleText.text : string.Empty;
         public string FeedbackLine => feedbackText != null ? feedbackText.text : string.Empty;
@@ -217,7 +218,7 @@ namespace SengokuChronicle.Presentation
                 return;
             }
 
-            titleText.text = "每日行动";
+            titleText.text = "人物档案 · 每日行动";
             IReadOnlyList<DailyActionPersonState> persons = gameSession.DailyActions;
             EnsureSelection(persons);
 
@@ -225,9 +226,9 @@ namespace SengokuChronicle.Presentation
                                (gameSession.WorldClock != null
                                    ? gameSession.WorldClock.CurrentDate.ToString()
                                    : "未初始化") +
-                               "　已登记人物：" +
+                               "　｜　家族登记 " +
                                persons.Count.ToString(System.Globalization.CultureInfo.InvariantCulture) +
-                               "　行动按人物稳定顺序列出。";
+                               " 人　｜　左侧选择人物，右侧安排行动";
 
             RebuildRows(persons);
             RenderSelected(persons);
@@ -330,6 +331,9 @@ namespace SengokuChronicle.Presentation
                 }
 
                 label.text = FormatRow(person, person.PersonId == _selectedPersonId);
+                label.fontStyle = person.PersonId == _selectedPersonId
+                    ? FontStyle.Bold
+                    : FontStyle.Normal;
                 Button button = row.GetComponent<Button>();
                 if (button != null)
                 {
@@ -393,6 +397,11 @@ namespace SengokuChronicle.Presentation
             return builder.ToString();
         }
 
+        /// <summary>
+        /// Renders the selected family member as the profile focus. Every value comes from
+        /// the session's current roster and daily-action snapshot; the panel never invents
+        /// a stat or relationship, and this method never mutates session state.
+        /// </summary>
         private void RenderSelected(IReadOnlyList<DailyActionPersonState> persons)
         {
             DailyActionPersonState selected = null;
@@ -405,39 +414,92 @@ namespace SengokuChronicle.Presentation
 
             if (selected == null)
             {
-                selectedText.text = "当前选择：未选择人物。";
+                selectedText.text = "<color=#C4553B>人物档案</color>\n当前选择：未选择人物。";
                 return;
             }
 
-            var builder = new StringBuilder(96);
-            builder.Append("当前选择：").Append(PersonName(selected.PersonId));
-            if (selected.IsInTransit && selected.ActiveAction != null)
+            var builder = new StringBuilder(220);
+            builder.Append("<color=#C4553B>人物档案</color>\n");
+
+            string displayName = PersonName(selected.PersonId);
+            if (TryRosterRow(selected.PersonId, out M2RosterRow row))
             {
-                builder.Append("　｜　旅途中（")
-                    .Append(LocationId.GetChineseName(selected.ActiveAction.Origin))
-                    .Append("→")
-                    .Append(LocationId.GetChineseName(selected.ActiveAction.Destination))
-                    .Append("）");
-            }
-            else if (selected.HasLocation)
-            {
-                builder.Append("　｜　").Append(LocationId.GetChineseName(selected.Location));
-                builder.Append("　｜　已知目的地：").Append(KnownDestinations(selected.Location));
+                if (!string.IsNullOrWhiteSpace(row.DisplayName))
+                    displayName = row.DisplayName;
+                builder.Append("<size=24><b>").Append(displayName).Append("</b></size>\n");
+                builder.Append(row.Age > 0 ? row.Age.ToString(
+                        System.Globalization.CultureInfo.InvariantCulture) + "岁"
+                    : "年龄未知")
+                    .Append("　｜　").Append(row.RoleName)
+                    .Append("　｜　").Append(row.GenerationLabel).Append('\n');
+                if (!string.IsNullOrWhiteSpace(row.Kinship))
+                    builder.Append("亲族：").Append(row.Kinship).Append('\n');
             }
             else
             {
-                builder.Append("　｜　地点未知");
+                builder.Append("<size=24><b>").Append(displayName).Append("</b></size>\n");
+                builder.Append("人物详情暂未登记在家族名册中。\n");
+            }
+
+            if (selected.IsInTransit && selected.ActiveAction != null)
+            {
+                builder.Append("旅途中：")
+                    .Append(LocationId.GetChineseName(selected.ActiveAction.Origin))
+                    .Append("→")
+                    .Append(LocationId.GetChineseName(selected.ActiveAction.Destination))
+                    .Append("　剩余 ")
+                    .Append(selected.ActiveAction.RemainingDays.ToString(
+                        System.Globalization.CultureInfo.InvariantCulture))
+                    .Append(" 天\n");
+            }
+            else if (selected.HasLocation)
+            {
+                builder.Append("所在：").Append(LocationId.GetChineseName(selected.Location));
+                builder.Append("　｜　可前往：").Append(KnownDestinations(selected.Location))
+                    .Append('\n');
+            }
+            else
+            {
+                builder.Append("所在：地点未知\n");
             }
 
             if (selected.ActiveAction != null)
-                builder.Append("　｜　").Append(selected.ActiveAction.KindName)
+            {
+                builder.Append("行动：").Append(selected.ActiveAction.KindName)
                     .Append(" 进度 ")
                     .Append(selected.ActiveAction.ElapsedDays.ToString(
                         System.Globalization.CultureInfo.InvariantCulture))
                     .Append('/')
                     .Append(selected.ActiveAction.DurationDays.ToString(
-                        System.Globalization.CultureInfo.InvariantCulture));
+                        System.Globalization.CultureInfo.InvariantCulture))
+                    .Append(" 天（剩 ")
+                    .Append(selected.ActiveAction.RemainingDays.ToString(
+                        System.Globalization.CultureInfo.InvariantCulture))
+                    .Append('）');
+            }
+            else
+            {
+                builder.Append("行动：空闲");
+            }
+
             selectedText.text = builder.ToString();
+        }
+
+        private bool TryRosterRow(PersonId personId, out M2RosterRow row)
+        {
+            row = default;
+            if (gameSession == null)
+                return false;
+            IReadOnlyList<M2RosterRow> roster = gameSession.FamilyRoster;
+            if (roster == null)
+                return false;
+            for (int i = 0; i < roster.Count; i++)
+                if (roster[i].PersonId == personId)
+                {
+                    row = roster[i];
+                    return true;
+                }
+            return false;
         }
 
         private static string KnownDestinations(LocationId location)
