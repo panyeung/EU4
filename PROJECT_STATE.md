@@ -1,6 +1,6 @@
 # 《影之一族》项目状态
 
-更新时间：2026-11-07
+更新时间：2026-11-08
 设计权威：[GDD_v4.0.md](GDD_v4.0.md)。本文件是当前执行状态入口；当前开发节点采用整合后的 `M00`–`M08` 路线；旧《Sengoku Chronicle》M1–M7 文档仅作为历史记录，不代表新方向进度。
 
 ## 当前方向
@@ -15,10 +15,10 @@
 
 | 节点 | 方向 | 当前状态 |
 |---|---|---|
-| M00 | 现有工程基线与验收收敛 | 进行中：核验未验收切片、工作树和场景证据 |
+| M00 | 现有工程基线与验收收敛 | 进行中：已核对 main/远端、工作树、Editor 路径和最新 EditMode；仍有一个带脏改动的 detached SC-021 工作树、启动场景与演示场景不一致，且当前场景尚无本次提交后的 Validator/Play Mode 证据 |
 | M01 | 固定三代家族可玩原型 | **已验收（2026-11-07，用户明确确认）**；当前 `main` 含 SC-024 场景接入。技术验证细节见下方历史报告，不从用户验收推断额外测试结果 |
-| M02 | 每日行动与旅行基础 | 进行中：每日行动领域、存档与事务式 UI 已实现；工作区场景已接入并通过当前 Validator；每日行动切片已通过 lead Play Mode gate，用户验收待办 |
-| M03 | 高自主 NPC 与只读 Inspector | 实现与两轮复审修正完成，待 lead Play Mode 与用户验收：纯 C# 规则、v11 存档/迁移、两名试点、逐日自主推进、只读可滚动 Inspector 与事务式场景接入；第二轮修正后 EditMode 1274/1274，Validator PASS；2026-11-07 独立派发复跑前一轮为 1260/1260 |
+| M02 | 每日行动与旅行基础 | 进行中：领域、存档与 UI 已实现；2026-11-06 的 Play Mode/Validator 曾通过，但 2026-11-08 又合入 UI 与 FoundationScene 改动，需对当前 main 重跑场景 Validator 与 Play Mode；用户验收待办 |
+| M03 | 高自主 NPC 与只读 Inspector | 实现与两轮复审修正完成，待 lead Play Mode 与用户验收：纯 C# 规则、v11 存档/迁移、两名试点、逐日自主推进、只读可滚动 Inspector 与事务式场景接入；第二轮修正后历史 EditMode 1274/1274、Validator PASS；2026-11-08 全量 EditMode 1303/1303，但未取得该提交后的 M03 Validator/Play Mode 证据 |
 | M04 | 人物记忆与动态家族 | 计划中 |
 | M05 | 经营与委托纵向切片 | 计划中 |
 | M06 | 回合制潜入原型 | 计划中 |
@@ -26,6 +26,16 @@
 | M08 | 内容扩展与正式体验 | 计划中 |
 
 M01 已于 2026-11-07 由用户明确验收通过。当前 `main` 的 `Assets/Scenes/FoundationScene.unity` 已包含 SC-024 场景接入（`SC024`/`FamilyDoctrine` 匹配 18 处）；最新 HUD 修复提交为 `18c7b4c`。用户验收记录不替代也不扩写技术证据：SC-024 历史编译、EditMode、Validator 与 Play Mode 结果及各自限制见 [SC-024 实现报告](docs/reports/sc024-implementation.md)；M7 HUD 修复的检查结果单独记录于提交与任务记录。下方标注为 2026-11-06 的 SC-024、M02 内容保留为当时快照，不代表当前场景或验收状态。
+
+## M00 基线核验（2026-11-08）
+
+- Git：当前 checkout 为 `main`，HEAD 与 `origin/main` 同为 `e298312c5100de9f715e7d74c6ad8e0930e02a65`（`Integrate reference gallery and daily actions`）；本地/远端分支列表只有 `main`。主工作树无已跟踪文件修改，尚有旧失败报告 `Assets/Scenes/TestResults_20261108_072929.xml` 及其 `.meta`、`graphify-out/` 和 `nul` 未跟踪；均保留且未纳入已推送提交。
+- 工作树：Git 与 Orca 均登记一个额外的 SC-021 场景集成工作树 `C:\Users\panye\orca\workspaces\My project\sc021-scene-integration`，HEAD `66373ee`，处于 detached 状态。该工作树的 `.vscode/settings.json` 与 `ProjectSettings/Packages/com.unity.learn.iet-framework/Settings.json` 有未提交修改；本轮未触碰或清理。它是 M00 尚未收敛的开放 WIP，不等于 Git 分支。
+- Unity：当前 Editor PID `126040`，命令行 `-projectPath "C:\Users\panye\My project"`，版本 `6000.6.6f1`。`ProjectSettings/EditorBuildSettings.asset` 当前启用的是 `Assets/Scenes/SampleScene.unity`；主要可玩与集成场景 `Assets/Scenes/FoundationScene.unity` 未列入启动场景。需先明确演示/启动入口并验证相应场景，不能把 FoundationScene 的历史结果当作当前启动路径证据。
+- 最新自动化证据：当前提交附带 `Assets/Scenes/TestResults_20261108_114927.xml`，结果 `1303 passed / 0 failed / 0 inconclusive / 0 skipped`（2026-11-08 21:48:15Z–21:48:31Z）；此前报告中两个失败用例在此结果中均为 Passed。`Logs/Editor.log` 最新记录 `*** Tundra build success (0.71 seconds), 1 items updated, 1975 evaluated`，该日志内未检出 `error CS`。这是编译与 EditMode 证据，不代表场景 Validator 或 Play Mode。
+- Console：本次 EditMode 后 Editor Console 为 `17 logs / 25 warnings / 2 errors`；两条 error 是 `FamilyFormationSessionTests` 故障注入路径预期产生的 `LogError`，对应测试通过。这里不记为零错误。当前没有本次提交后的 Validator 结果或 M03 Play Mode 结果。
+- 验收状态：M01 仍为用户已接受；M02 的 2026-11-06 Play Mode/Validator 记录早于 `e298312` 对每日行动 UI 和 `FoundationScene` 的后续修改，因此只作为历史证据，当前 main 需重跑对应场景验证与 Play Mode；M02 最终用户验收待办。M03 的历史全量 EditMode 与 Validator 结果不代替当前提交后的场景/Play Mode 验证；用户验收待办。
+- M00 剩余项：保护并处理 SC-021 detached 工作树中的两个脏文件；确定 SampleScene 与 FoundationScene 的启动/演示关系；对当前 `main` 记录独立的启动场景、FoundationScene Validator、Play Mode、存读档和最终用户验收证据。未解决前 M00 保持进行中。
 
 ## 新方向检查点
 
