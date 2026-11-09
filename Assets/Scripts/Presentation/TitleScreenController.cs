@@ -6,7 +6,8 @@ using SengokuChronicle.Persistence;
 namespace SengokuChronicle.Presentation
 {
     /// <summary>
-    /// Phase 1 标题界面：全屏覆盖层，提供「新游戏」与「继续」。
+    /// Phase 1 标题界面：全屏覆盖层。主菜单只提供「继续游戏」与「开始新游戏」；
+    /// 「开始新游戏」打开剧本选择页，由选择页启动既有剧本，不在打开时改动会话。
     /// 继续直接读取 M5 单槽存档；缺档或坏档只在标题上报告，会话与槽文件保持不变。
     /// 所有游戏状态都在 GameSession 与 SaveSlotStore 中；本组件只转发输入并显示结果。
     /// </summary>
@@ -25,10 +26,23 @@ namespace SengokuChronicle.Presentation
         private GameObject titleRoot;
 
         [SerializeField]
+        private GameObject mainMenuRoot;
+
+        [SerializeField]
+        private GameObject scenarioSelectionRoot;
+
+        [SerializeField]
         private Button newGameButton;
 
         [SerializeField]
         private Button continueButton;
+
+        [Header("Scenario selection page")]
+        [SerializeField]
+        private Button fixedScenarioButton;
+
+        [SerializeField]
+        private Button scenarioBackButton;
 
         [Header("SC-013 scenario entries")]
         [SerializeField]
@@ -72,6 +86,13 @@ namespace SengokuChronicle.Presentation
         /// <summary>True while the title overlay is blocking the map.</summary>
         public bool IsTitleVisible => titleRoot != null && titleRoot.activeSelf;
 
+        /// <summary>True while the two-action main menu page is actually shown.</summary>
+        public bool IsMainMenuVisible => IsTitleVisible && mainMenuRoot != null && mainMenuRoot.activeSelf;
+
+        /// <summary>True while the scenario-selection page is actually shown.</summary>
+        public bool IsScenarioSelectionVisible =>
+            IsTitleVisible && scenarioSelectionRoot != null && scenarioSelectionRoot.activeSelf;
+
         /// <summary>The slot store in use; exposed for tests and diagnostics.</summary>
         public SaveSlotStore Store => _store;
 
@@ -93,6 +114,12 @@ namespace SengokuChronicle.Presentation
         /// <summary>True when the separate SC-024 family-doctrine entry is wired.</summary>
         public bool FamilyDoctrineScenarioBound => familyDoctrineDemoButton != null;
 
+        /// <summary>True when the fixed SC-013 selector entry is wired.</summary>
+        public bool FixedScenarioBound => fixedScenarioButton != null;
+
+        /// <summary>True when the selector back button is wired.</summary>
+        public bool BackButtonBound => scenarioBackButton != null;
+
         public void Bind(
             GameSession session,
             SaveSlotStore store,
@@ -110,6 +137,25 @@ namespace SengokuChronicle.Presentation
             newGameButton = newGame;
             continueButton = cont;
             statusText = status;
+            BindButtons(isActiveAndEnabled);
+        }
+
+        /// <summary>
+        /// Binds the two title pages: the two-action main menu and the scenario selector.
+        /// The main-menu New Game action only opens the selector; starting a scenario is
+        /// reserved for the fixed-entry and existing scenario buttons.
+        /// </summary>
+        public void BindScenarioSelection(
+            GameObject mainMenuRoot,
+            GameObject scenarioSelectionRoot,
+            Button fixedScenarioButton,
+            Button backButton)
+        {
+            BindButtons(false);
+            this.mainMenuRoot = mainMenuRoot;
+            this.scenarioSelectionRoot = scenarioSelectionRoot;
+            this.fixedScenarioButton = fixedScenarioButton;
+            scenarioBackButton = backButton;
             BindButtons(isActiveAndEnabled);
         }
 
@@ -180,6 +226,7 @@ namespace SengokuChronicle.Presentation
             BindButtons(true);
             ShowTitle();
             RefreshTitleState();
+            SengokuUiTheme.ApplyFont(titleRoot != null ? titleRoot.transform : transform);
         }
 
         private void OnEnable()
@@ -206,6 +253,20 @@ namespace SengokuChronicle.Presentation
                 continueButton.onClick.RemoveListener(OnContinueButton);
                 if (add)
                     continueButton.onClick.AddListener(OnContinueButton);
+            }
+
+            if (fixedScenarioButton != null)
+            {
+                fixedScenarioButton.onClick.RemoveListener(OnFixedScenarioButton);
+                if (add)
+                    fixedScenarioButton.onClick.AddListener(OnFixedScenarioButton);
+            }
+
+            if (scenarioBackButton != null)
+            {
+                scenarioBackButton.onClick.RemoveListener(OnScenarioBackButton);
+                if (add)
+                    scenarioBackButton.onClick.AddListener(OnScenarioBackButton);
             }
 
             if (standardSampleButton != null)
@@ -260,7 +321,27 @@ namespace SengokuChronicle.Presentation
 
         private void OnNewGameButton()
         {
+            // A scene saved before the two-page migration still has no selector root.
+            // Keep the old direct-start behaviour there instead of silently doing nothing.
+            if (scenarioSelectionRoot == null)
+            {
+                Debug.LogWarning("M6ScenarioSelectRoot is missing; starting SC-013 directly. " +
+                                 "Run Tools > Sengoku Chronicle/Add M6 Title Screen to migrate.");
+                StartNewGame();
+                return;
+            }
+
+            ShowScenarioSelection();
+        }
+
+        private void OnFixedScenarioButton()
+        {
             StartNewGame();
+        }
+
+        private void OnScenarioBackButton()
+        {
+            ShowMainMenu();
         }
 
         private void OnContinueButton()
@@ -303,11 +384,35 @@ namespace SengokuChronicle.Presentation
             StartFamilyDoctrineDemo();
         }
 
-        /// <summary>显示标题覆盖层。</summary>
+        /// <summary>显示标题覆盖层，并总是回到两动作主菜单。</summary>
         public void ShowTitle()
         {
             if (titleRoot != null)
                 titleRoot.SetActive(true);
+            ShowMainMenu();
+        }
+
+        /// <summary>显示主菜单页并隐藏剧本选择页；不启动或改动任何剧本/存档状态。</summary>
+        public void ShowMainMenu()
+        {
+            if (mainMenuRoot != null)
+                mainMenuRoot.SetActive(true);
+            if (scenarioSelectionRoot != null)
+                scenarioSelectionRoot.SetActive(false);
+        }
+
+        /// <summary>
+        /// 打开剧本选择页。此操作只切换标题内部页面，
+        /// 不初始化剧本、不读取或写入存档，也不改动会话。
+        /// </summary>
+        public void ShowScenarioSelection()
+        {
+            if (titleRoot != null)
+                titleRoot.SetActive(true);
+            if (mainMenuRoot != null)
+                mainMenuRoot.SetActive(false);
+            if (scenarioSelectionRoot != null)
+                scenarioSelectionRoot.SetActive(true);
         }
 
         /// <summary>隐藏标题覆盖层，把输入交还地图。</summary>

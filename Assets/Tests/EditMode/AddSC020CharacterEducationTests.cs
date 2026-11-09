@@ -221,6 +221,33 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(AddSC020CharacterEducation.Validate(_scene, out error), Is.True, error);
         }
 
+        [Test]
+        public void Validator_AcceptsTheEducationEntryOnAMigratedSelectorPage()
+        {
+            Assert.That(AddSC020CharacterEducation.Update(_scene),
+                Is.EqualTo(AddSC020CharacterEducation.UpdateResult.Success));
+
+            Transform selector = Create("M6ScenarioSelectRoot", _titleRoot).transform;
+            RectTransform selectorRect = (RectTransform)selector;
+            selectorRect.anchorMin = Vector2.zero;
+            selectorRect.anchorMax = Vector2.one;
+            selectorRect.offsetMin = Vector2.zero;
+            selectorRect.offsetMax = Vector2.zero;
+            Transform entry = Find(AddSC020CharacterEducation.TitleButtonName);
+            entry.SetParent(selector, false);
+            ((RectTransform)entry).anchoredPosition = Vector2.zero;
+            LayoutRebuilder.ForceRebuildLayoutImmediate(selectorRect);
+
+            int count = ObjectCount();
+            Assert.That(AddSC020CharacterEducation.Update(_scene),
+                Is.EqualTo(AddSC020CharacterEducation.UpdateResult.Success));
+            Assert.That(ObjectCount(), Is.EqualTo(count),
+                "A migrated rerun must not create a second flat title entry.");
+            Assert.That(entry.parent, Is.EqualTo(selector));
+            Assert.That(_titleRoot.Find(AddSC020CharacterEducation.TitleButtonName), Is.Null);
+            Assert.That(AddSC020CharacterEducation.Validate(_scene, out string error), Is.True, error);
+        }
+
         private Text CreateText(string name, Transform parent, string value)
         {
             GameObject go = Create(name, parent, typeof(Text));

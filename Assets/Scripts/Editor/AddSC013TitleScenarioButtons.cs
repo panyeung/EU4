@@ -98,6 +98,11 @@ namespace SengokuChronicle.Editor
                 return Invalid(out error, "M6TitleRoot must be a direct child of Canvas.");
             if (root.gameObject.activeSelf)
                 return Invalid(out error, "M6TitleRoot must be saved inactive; Play Mode shows it.");
+
+            Transform selector = root.Find(AddM6TitleScreen.ScenarioSelectRootName);
+            if (selector != null)
+                return ValidateMigratedTitle(scene, root, selector, standard, crisis, status, controllers[0]);
+
             int optionalEntries = (Named(scene, EducationButtonName).Any() ? 1 : 0) +
                                   (Named(scene, ResearchButtonName).Any() ? 1 : 0) +
                                   (Named(scene, FamilyFormationButtonName).Any() ? 1 : 0) +
@@ -157,6 +162,46 @@ namespace SengokuChronicle.Editor
                     return Invalid(out error,
                         "The SC-024 title entry overlaps another title control.");
             }
+            return true;
+        }
+
+        /// <summary>
+        /// The two-page title layout owns its own geometry and bindings. A rerun of this
+        /// updater only has to confirm that the SC-013 entries moved with their page and
+        /// remain bound, so migration never triggers a flat-layout repair.
+        /// </summary>
+        private static bool ValidateMigratedTitle(Scene scene, Transform root, Transform selector,
+            Transform standard, Transform crisis, Transform status, TitleScreenController controller)
+        {
+            Transform main = root.Find(AddM6TitleScreen.MainMenuRootName);
+            if (main == null)
+                return Invalid(out _, "M6MainMenuRoot is missing from the migrated title hierarchy.");
+            if (standard.parent != selector || crisis.parent != selector || status.parent != main)
+                return Invalid(out _,
+                    "SC-013 entries must live on the scenario selector and status text on the main menu.");
+            if (!standard.gameObject.activeSelf || !crisis.gameObject.activeSelf)
+                return Invalid(out _, "SC-013 title entries must be active under the inactive title root.");
+            if (!ValidButton(standard) || !ValidButton(crisis))
+                return Invalid(out _, "SC-013 title buttons are unbound or have invalid labels.");
+            if (!Bound(controller, "gameSession", Components<GameSession>(scene).Single()) ||
+                !Bound(controller, "titleRoot", root.gameObject) ||
+                !Bound(controller, "standardSampleButton", standard.GetComponent<Button>()) ||
+                !Bound(controller, "crisisDemoButton", crisis.GetComponent<Button>()))
+                return Invalid(out _, "TitleScreenController SC-013 references are not bound.");
+
+            RectTransform selectorRect = selector as RectTransform;
+            RectTransform standardRect = standard as RectTransform;
+            RectTransform crisisRect = crisis as RectTransform;
+            if (selectorRect == null || standardRect == null || crisisRect == null ||
+                !Contained(standardRect, selectorRect) || !Contained(crisisRect, selectorRect))
+                return Invalid(out _, "SC-013 title controls lie outside the scenario selector bounds.");
+
+            Transform familyDoctrine = Require(scene, FamilyDoctrineButtonName);
+            if (familyDoctrine != null &&
+                (familyDoctrine.parent != selector || !familyDoctrine.gameObject.activeSelf ||
+                 !ValidButton(familyDoctrine) ||
+                 !Bound(controller, "familyDoctrineDemoButton", familyDoctrine.GetComponent<Button>())))
+                return Invalid(out _, "The SC-024 title entry is not valid on the scenario selector.");
             return true;
         }
 

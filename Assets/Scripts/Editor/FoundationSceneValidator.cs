@@ -186,10 +186,11 @@ namespace SengokuChronicle.Editor
             {
                 report.AppendLine("\nTITLE SCREEN CONTROLLER REFERENCES:");
                 CheckReferences(report, ref errors, titleController,
-                    "gameSession", "worldMapController", "titleRoot", "newGameButton", "continueButton",
-                    "standardSampleButton", "crisisDemoButton", "educationDemoButton",
-                    "researchDemoButton", "familyFormationDemoButton", "seclusionDemoButton",
-                    "statusText");
+                    "gameSession", "worldMapController", "titleRoot", "mainMenuRoot",
+                    "scenarioSelectionRoot", "newGameButton", "continueButton", "fixedScenarioButton",
+                    "scenarioBackButton", "standardSampleButton", "crisisDemoButton",
+                    "educationDemoButton", "researchDemoButton", "familyFormationDemoButton",
+                    "seclusionDemoButton", "familyDoctrineDemoButton", "statusText");
             }
 
             if (demoPanel != null)

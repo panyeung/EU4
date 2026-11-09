@@ -271,6 +271,33 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
+        public void Validator_AcceptsTheDoctrineEntryOnAMigratedSelectorPage()
+        {
+            Assert.That(AddSC024FamilyDoctrine.Update(_scene),
+                Is.EqualTo(AddSC024FamilyDoctrine.UpdateResult.Success));
+
+            Transform selector = Create("M6ScenarioSelectRoot", _titleRoot).transform;
+            RectTransform selectorRect = (RectTransform)selector;
+            selectorRect.anchorMin = Vector2.zero;
+            selectorRect.anchorMax = Vector2.one;
+            selectorRect.offsetMin = Vector2.zero;
+            selectorRect.offsetMax = Vector2.zero;
+            Transform entry = Find(AddSC024FamilyDoctrine.TitleButtonName);
+            entry.SetParent(selector, false);
+            ((RectTransform)entry).anchoredPosition = Vector2.zero;
+            LayoutRebuilder.ForceRebuildLayoutImmediate(selectorRect);
+
+            int count = ObjectCount();
+            Assert.That(AddSC024FamilyDoctrine.Update(_scene),
+                Is.EqualTo(AddSC024FamilyDoctrine.UpdateResult.Success));
+            Assert.That(ObjectCount(), Is.EqualTo(count),
+                "A migrated rerun must not create a second flat title entry.");
+            Assert.That(entry.parent, Is.EqualTo(selector));
+            Assert.That(_titleRoot.Find(AddSC024FamilyDoctrine.TitleButtonName), Is.Null);
+            Assert.That(AddSC024FamilyDoctrine.Validate(_scene, out string error), Is.True, error);
+        }
+
+        [Test]
         public void TitleEntry_StartsTheFixedSc024Scenario()
         {
             Assert.That(AddSC024FamilyDoctrine.Update(_scene),

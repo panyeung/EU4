@@ -114,10 +114,12 @@ namespace SengokuChronicle.Editor
             Transform[] buttons = Named(scene, TitleButtonName).ToArray();
             if (buttons.Length != 1)
                 return Invalid(out error, "Expected exactly one SC-023 title entry.");
+            Transform selector = titleRoot.Find(AddM6TitleScreen.ScenarioSelectRootName);
+            Transform expectedParent = selector != null ? selector : titleRoot;
             Transform button = buttons[0];
-            if (button.parent != titleRoot || !button.gameObject.activeSelf)
+            if (button.parent != expectedParent || !button.gameObject.activeSelf)
                 return Invalid(out error,
-                    "The SC-023 title entry must be active under M6TitleRoot.");
+                    "The SC-023 title entry must be active on the title scenario page.");
             if (!HasButtonVisual(button.GetComponent<Button>()) ||
                 !HasRaycastTarget(button.GetComponent<Button>()))
                 return Invalid(out error, "The SC-023 title entry button is invalid.");
@@ -130,6 +132,15 @@ namespace SengokuChronicle.Editor
 
             RectTransform rootRect = titleRoot as RectTransform;
             RectTransform buttonRect = button as RectTransform;
+            if (selector != null)
+            {
+                RectTransform selectorRect = selector as RectTransform;
+                if (selectorRect == null || buttonRect == null || !Contained(buttonRect, selectorRect))
+                    return Invalid(out error,
+                        "The SC-023 title entry lies outside the scenario selector page.");
+                return ValidateEducationDependency(scene, canvas, out error);
+            }
+
             RectTransform statusRect = Require(scene, TitleStatusName) as RectTransform;
             if (rootRect == null || buttonRect == null || statusRect == null)
                 return Invalid(out error,
@@ -153,8 +164,13 @@ namespace SengokuChronicle.Editor
                 OverlapsNamed(scene, statusRect, FamilyFormationTitleButtonName, rootRect))
                 return Invalid(out error, "The SC-023 title entry or status line overlaps another title control.");
 
-            // SC-023 deliberately reuses the accepted SC-020 education panel instead of
-            // creating a second panel or scene root.
+            return ValidateEducationDependency(scene, canvas, out error);
+        }
+
+        // SC-023 deliberately reuses the accepted SC-020 education panel instead of
+        // creating a second panel or scene root.
+        private static bool ValidateEducationDependency(Scene scene, Transform canvas, out string error)
+        {
             Transform[] educationRoots = Named(scene, RootName).ToArray();
             CharacterEducationPanel[] panels = Components<CharacterEducationPanel>(scene);
             if (educationRoots.Length != 1 || panels.Length != 1 ||
@@ -163,6 +179,7 @@ namespace SengokuChronicle.Editor
                 return Invalid(out error,
                     "SC-023 requires the existing SC020EducationRoot and its bound CharacterEducationPanel.");
 
+            error = null;
             return true;
         }
 
@@ -198,8 +215,9 @@ namespace SengokuChronicle.Editor
                 Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
                 if (font == null) throw new InvalidOperationException("Missing built-in UI font.");
 
-                Button button = CreateTitleButton(scene, titleRoot, TitleButtonName, font,
-                    "SC-023 隐居与后见人示范", TitleButtonPosition, TitleButtonSize);
+                Button button = CreateTitleButton(scene,
+                    titleRoot.Find(AddM6TitleScreen.ScenarioSelectRootName) ?? titleRoot,
+                    TitleButtonName, font, "SC-023 隐居与后见人示范", TitleButtonPosition, TitleButtonSize);
                 Transform status = titleRoot.Find(TitleStatusName);
                 if (status != null)
                     SetCenteredRect(status, StatusPosition, StatusSize);

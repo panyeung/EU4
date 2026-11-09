@@ -326,12 +326,14 @@ namespace SengokuChronicle.Editor
             Transform titleRoot = canvas.Find(TitleRootName);
             if (titleRoot == null)
                 return true;
+            Transform selector = titleRoot.Find(AddM6TitleScreen.ScenarioSelectRootName);
+            Transform expectedParent = selector != null ? selector : titleRoot;
             Transform button = Require(scene, TitleButtonName);
             TitleScreenController[] controllers = Components<TitleScreenController>(scene);
             if (button == null || controllers.Length != 1)
                 return Invalid(out _, "The SC-021 title entry or TitleScreenController is missing.");
-            if (button.parent != titleRoot || !button.gameObject.activeSelf)
-                return Invalid(out _, "The SC-021 title entry must be active under M6TitleRoot.");
+            if (button.parent != expectedParent || !button.gameObject.activeSelf)
+                return Invalid(out _, "The SC-021 title entry must be active on the title scenario page.");
             if (!HasButtonVisual(button.GetComponent<Button>()) ||
                 !HasRaycastTarget(button.GetComponent<Button>()))
                 return Invalid(out _, "The SC-021 title entry button is invalid.");
@@ -342,16 +344,18 @@ namespace SengokuChronicle.Editor
                 !Bound(controllers[0], "gameSession", session))
                 return Invalid(out _, "TitleScreenController SC-021 references are not bound.");
 
-            RectTransform rootRect = titleRoot as RectTransform;
+            RectTransform bounds = expectedParent as RectTransform;
             RectTransform buttonRect = button as RectTransform;
-            if (rootRect == null || buttonRect == null || !Contained(buttonRect, rootRect))
-                return Invalid(out _, "The SC-021 title entry lies outside M6TitleRoot.");
-            if (OverlapsNamed(scene, buttonRect, CrisisButtonName, rootRect) ||
-                OverlapsNamed(scene, buttonRect, TitleStatusName, rootRect) ||
-                OverlapsNamed(scene, buttonRect, StandardButtonName, rootRect) ||
-                OverlapsNamed(scene, buttonRect, NewGameButtonName, rootRect) ||
-                OverlapsNamed(scene, buttonRect, ContinueButtonName, rootRect) ||
-                OverlapsNamed(scene, buttonRect, EducationTitleButtonName, rootRect))
+            if (bounds == null || buttonRect == null || !Contained(buttonRect, bounds))
+                return Invalid(out _, "The SC-021 title entry lies outside the title scenario page.");
+            if (selector != null)
+                return true;
+            if (OverlapsNamed(scene, buttonRect, CrisisButtonName, bounds) ||
+                OverlapsNamed(scene, buttonRect, TitleStatusName, bounds) ||
+                OverlapsNamed(scene, buttonRect, StandardButtonName, bounds) ||
+                OverlapsNamed(scene, buttonRect, NewGameButtonName, bounds) ||
+                OverlapsNamed(scene, buttonRect, ContinueButtonName, bounds) ||
+                OverlapsNamed(scene, buttonRect, EducationTitleButtonName, bounds))
                 return Invalid(out _, "The SC-021 title entry overlaps another title control.");
             return true;
         }
@@ -615,17 +619,25 @@ namespace SengokuChronicle.Editor
             if (controller == null)
                 throw new InvalidOperationException("TitleScreenController is missing.");
 
-            Transform existing = titleRoot.Find(TitleButtonName);
+            Transform selector = titleRoot.Find(AddM6TitleScreen.ScenarioSelectRootName);
+            Transform entryParent = selector != null ? selector : titleRoot;
+            Transform existing = titleRoot.GetComponentsInChildren<Transform>(true)
+                .FirstOrDefault(transform => transform.name == TitleButtonName);
             Button button;
             if (existing == null)
             {
-                button = CreateTitleButton(scene, titleRoot, TitleButtonName, font,
+                if (selector != null)
+                    throw new InvalidOperationException(
+                        "The SC-021 title entry is missing from the migrated selector; " +
+                        "run Tools > Sengoku Chronicle/Add M6 Title Screen first.");
+                button = CreateTitleButton(scene, entryParent, TitleButtonName, font,
                     "SC-021 家族研究示范", TitleButtonPosition, new Vector2(300f, 48f));
             }
             else
             {
                 button = existing.GetComponent<Button>();
-                SetCenteredRect(existing, TitleButtonPosition, new Vector2(300f, 48f));
+                if (selector == null)
+                    SetCenteredRect(existing, TitleButtonPosition, new Vector2(300f, 48f));
             }
             if (button == null)
                 throw new InvalidOperationException("The SC-021 title entry has no Button component.");
