@@ -305,6 +305,8 @@ namespace SengokuChronicle.Presentation
         public void ReturnToMap()
         {
             _inTownMenu = false;
+            if (worldClockPanel != null)
+                worldClockPanel.gameObject.SetActive(true);
             if (supplyShortageMissionPanel != null)
                 supplyShortageMissionPanel.Close();
             if (townNpcDialoguePanel != null)
@@ -564,6 +566,9 @@ namespace SengokuChronicle.Presentation
                 }
                 townMenuRoot.SetActive(true);
             }
+
+            if (worldClockPanel != null)
+                worldClockPanel.gameObject.SetActive(false);
 
             if (townMenuTitleText != null && gameSession != null)
                 townMenuTitleText.text = $"{LocationId.GetChineseName(gameSession.CurrentLocation)} 镇";

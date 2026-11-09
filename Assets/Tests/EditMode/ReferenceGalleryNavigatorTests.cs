@@ -34,8 +34,12 @@ namespace SengokuChronicle.Tests.EditMode
                 buttons[i] = CreateButton("Button" + i);
 
             GameObject familyRoot = Create("FamilyRoot");
+            GameObject pageHost = Create("PageHost", typeof(RectTransform));
             GameObject mapRoot = Create("MapRoot", typeof(RectTransform),
                 typeof(CanvasRenderer), typeof(Image));
+            mapRoot.transform.SetParent(pageHost.transform, false);
+            GameObject clockRoot = Create("WorldClockPanel", typeof(RectTransform));
+            clockRoot.transform.SetParent(pageHost.transform, false);
             GameObject eventRoot = Create("EventRoot");
             eventRoot.AddComponent<EventChoicePanel>();
             GameObject characterRoot = Create("M03NpcAiInspectorRoot");
@@ -76,6 +80,9 @@ namespace SengokuChronicle.Tests.EditMode
                 "the shared page background must not block page controls");
             Assert.That(header.activeSelf, Is.True);
             Assert.That(mapRoot.activeSelf, Is.True);
+            Assert.That(clockRoot.transform.GetSiblingIndex(),
+                Is.GreaterThan(mapRoot.transform.GetSiblingIndex()),
+                "map travel overlays must not cover the month-turn controls");
             Transform mapIllustration = mapRoot.transform.Find("ReferenceMapIllustration");
             Assert.That(mapIllustration, Is.Not.Null,
                 "the map reference art is attached to the map page");

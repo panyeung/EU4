@@ -1180,6 +1180,10 @@ namespace SengokuChronicle.Presentation
                 ApplyAspectFitToMapBox(mapIllustration, root.sizeDelta);
             }
 
+            Transform clockRoot = root.parent != null ? root.parent.Find("WorldClockPanel") : null;
+            if (clockRoot != null)
+                clockRoot.SetAsLastSibling();
+
             SetText(mapPanelRoot.transform, "TitleText", SengokuUiTheme.Vermilion);
             foreach (Text label in mapPanelRoot.GetComponentsInChildren<Text>(true))
                 if (label.gameObject.name != "TitleText")
