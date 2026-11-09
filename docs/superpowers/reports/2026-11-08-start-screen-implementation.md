@@ -2,7 +2,7 @@
 
 Date: 2026-11-08
 Scope: approved plan `docs/superpowers/plans/2026-11-08-start-screen.md`, Tasks 1–3 (code and art), plus the corrections requested in `2026-11-08-start-screen-review.md` and `2026-11-08-start-screen-review-2.md`.
-Status: Unity compile and full EditMode suite pass (1343/1343); art import is confirmed. Scene migration/validation and Play Mode remain pending because FoundationScene has existing dirty and unsaved work.
+Status: code and generated art are committed at `220b44f` on `origin/main`. FoundationScene integration, scene validation, and Play Mode were completed locally on 2026-11-08. The scene remains uncommitted because its diff contains pre-existing unrelated M02 WIP that cannot be safely separated yet.
 
 ## Changed files
 
@@ -37,17 +37,22 @@ Status: Unity compile and full EditMode suite pass (1343/1343); art import is co
 - Unity imported `Assets/Art/UI/start_screen_background.png`.
 - Static Roslyn compile of all changed production and test C# files (including the new SC-023 fixture) against the Unity 6000.6.6f1 reference assemblies and current project DLLs: 0 errors. The only warnings were expected CS0436 notices caused by compiling source alongside the previous compiled project DLLs.
 - `git diff --check`: clean for all changed task files.
-- Read-only inspection of the on-disk `FoundationScene.unity` confirmed the 11 legacy title children, the seven controller bindings, and the current `M6TitleRoot`/`EventChoiceRoot` Canvas order. The open scene is marked unsaved and the scene file has pre-existing WIP; neither was changed for this task.
+- Before integration, a byte-identical backup of the on-disk `FoundationScene.unity` was verified at `%LOCALAPPDATA%\Temp\FoundationScene.before-startscreen-20261108-203808.unity`. The user authorized saving and integrating the current scene; `Tools > Sengoku Chronicle > Add M6 Title Screen` logged `M6 title screen validated; FoundationScene saved.` The Editor title then showed the scene as saved.
+- `Tools > Sengoku Chronicle > Validate Foundation Scene` completed with `RESULT: PASS; Errors: 0` (`Logs/SceneValidationReport.txt`, 2026-11-08 20:55).
+- Play Mode in Unity Editor PID 126040 (`-projectPath C:\Users\panye\My project`) displayed the main menu, opened the scenario selector, returned to the main menu with Back, and launched both fixed SC-013 and SC-010 standard into gameplay. The selector visibly exposed SC-020–SC-024. No Continue action was taken and no save was overwritten. Runtime visual inspection was at GameView Full HD (1920×1080); 1280×720 was not checked.
+- At initial Play Mode entry, Unity's Clear on Play left the visible Console counters at 0 logs, 0 warnings, 0 errors. Counts were not rechecked after scenario launches. The Editor log's only matching error was a Unity Licensing access-token refresh message; it was not a C# compiler error.
+- Play Mode was exited after the checks. All `*-screenshot.png` files in the dedicated Computer Use temporary cache were deleted and the cache was verified clear.
 - `graphify update .` run after the edits.
 
-## Still pending
+## Remaining gaps
 
-- Generator menu run, scene save, `Validate Foundation Scene`, and Play Mode verification have not been performed.
-- The M6 generator refuses a dirty scene. Preserve the existing FoundationScene WIP and resolve its ownership before migration; do not save or discard it as part of this task.
-- Unity Console counters were not separately captured during this verification pass.
+- Continue was not clicked because the existing profile reports a save; no-save Continue behavior remains covered by EditMode tests rather than this runtime pass.
+- Only Full HD (1920×1080) was inspected. A 1280×720 visual pass remains open.
+- FoundationScene integration is saved locally but is not on GitHub: its working diff contains existing M02 WIP mixed with the M6 scene change. Do not stage or push the whole scene until the M6-only change can be isolated safely.
+- No final milestone acceptance was requested or recorded; do not tag a milestone.
 
 ## Integration steps required
 
-1. Preserve and reconcile the existing FoundationScene WIP so the loaded scene is clean without losing its changes.
-2. Run `Tools > Sengoku Chronicle/Add M6 Title Screen` on the clean `FoundationScene`; it migrates the complete legacy hierarchy and places the title immediately below `EventChoiceRoot`.
-3. Run `Tools > Sengoku Chronicle/Validate Foundation Scene`, then Play Mode checks for Continue state, New Game → selector without mutation, Back, SC-013, SC-010, SC-020–SC-024 at 1280×720 and 1920×1080.
+1. To publish the saved scene integration, compare the pre-integration backup with the saved scene and isolate only M6 changes; preserve the unrelated M02 WIP.
+2. Optionally inspect 1280×720 and the no-save Continue path in a disposable save-free setup.
+3. After scene-only verification is safely staged, update this report and push only verified task files. Wait for explicit milestone acceptance before tagging.

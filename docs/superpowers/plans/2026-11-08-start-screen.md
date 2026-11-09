@@ -10,7 +10,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-11-08-start-screen-design.md`
 
-**Current progress (2026-11-08):** OpenCode2 implementation and original art are in place. Unity 6000.6.6f1 compiled the latest source, the full EditMode suite passed 1343/1343, and the background PNG imported. Generator integration and Play Mode remain pending: the existing FoundationScene is modified on disk and marked unsaved in the open Editor, so preserve and reconcile that WIP before running the scene generator.
+**Current progress (2026-11-08):** OpenCode2 implementation and original art are committed and pushed in `220b44f`. Unity 6000.6.6f1 compiled the latest source, the full EditMode suite passed 1343/1343, and the background PNG imported. The user authorized saving the current FoundationScene; M6 integration and the full scene validator passed. Play Mode launched SC-013 and SC-010 standard successfully. The saved scene stays local because it contains existing M02 WIP that cannot be safely included in the M6 push.
 
 ## Global Constraints
 
@@ -81,7 +81,7 @@
 - [x] Generate the main menu with the approved title, proposed subtitle, two actions, `SengokuUiTheme` colors, existing seal, and separate background Sprite. Generate a scenario selector with one fixed SC-013 entry and the seven existing SC-010/SC-020–SC-024 entries, grouped by role and using their existing start methods.
 - [x] Extend `Validate` to check unique required nodes/bindings, title-root sibling order, inactive boot state, Sprite assignment, no stale demo buttons on the main-menu subroot, and safe Canvas bounds.
 - [x] Preserve the title root, `TitleScreenController`, `DemoSummaryPanel`, and map summary object during a validated legacy upgrade; rebuild only owned title UI children with `Undo.DestroyObjectImmediate`. Roll back the whole group on validation failure and save only after validation passes.
-- [ ] Run `AddM6TitleScreenTests` in EditMode, including idempotence and rollback tests. Before scene integration, inspect the existing `FoundationScene` diff and confirm its WIP is recoverable; if the Editor reports the scene dirty, preserve/reconcile that WIP before saving rather than bypassing preflight. Then run the generator in the current project Editor and confirm `FoundationScene` validation passes.
+- [x] Run `AddM6TitleScreenTests` in EditMode, including idempotence and rollback tests. A byte-identical pre-integration scene backup was verified; after explicit user authorization, run the generator in the current project Editor and confirm `FoundationScene` validation passes.
 
 ### Task 4: Full verification and handoff
 
@@ -91,11 +91,11 @@
 
 - [x] Confirm the running Unity Editor's `-projectPath` is the current project; never run batchmode against it.
 - [x] Confirm Unity compilation succeeds, then run the full EditMode suite in the Editor Test Runner with zero failures.
-- [ ] Run `Tools > Sengoku Chronicle > Validate Foundation Scene`; record result and Console counts separately.
-- [ ] In Play Mode, verify title startup, no-save Continue state, New Game to selector without session mutation, Back to main menu, one SC-013 launch, one SC-010 launch, and access to all SC-020–SC-024 entries. Do not overwrite a user save.
-- [ ] Inspect 1280×720 and 1920×1080 for cropping, contrast, button hit areas, and safe margins; exit Play Mode and delete every Computer Use screenshot after inspection.
-- [ ] Request a separate read-only OpenCode review after implementation; address findings and rerun affected tests.
-- [ ] Update the design/report with actual compile, EditMode, validator, Console, and Play Mode evidence. Stage only verified task files and push each passed verification checkpoint to `origin/main`; leave merge/tag for explicit milestone acceptance.
+- [x] Run `Tools > Sengoku Chronicle > Validate Foundation Scene`; record result and Console counts separately. Result: PASS, 0 validator errors. At initial Play Mode entry, visible Console counters were 0/0/0; post-launch counters were not rechecked.
+- [x] In Play Mode, verify title startup, New Game to selector, Back to main menu, SC-013 launch, SC-010 standard launch, and access to all SC-020–SC-024 entries. No save was overwritten. Continue was not clicked because a save was detected; no-save Continue remains an EditMode-only check.
+- [ ] Inspect 1280×720 and 1920×1080 for cropping, contrast, button hit areas, and safe margins. Full HD (1920×1080) only was inspected; Play Mode was exited and inspected screenshots deleted.
+- [x] Request a separate read-only OpenCode review after implementation; address findings and rerun affected tests.
+- [x] Update the design/report with actual compile, EditMode, validator, Console, and Play Mode evidence. The implementation checkpoint `220b44f` was pushed to `origin/main`. The scene integration remains unstaged to avoid mixing existing M02 WIP; do not tag before explicit milestone acceptance.
 
 ## Self-review
 
