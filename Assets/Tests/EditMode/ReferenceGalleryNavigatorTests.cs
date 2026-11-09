@@ -69,8 +69,8 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(nav.activeSelf, Is.True);
             Assert.That(nav.GetComponent<Image>().color, Is.EqualTo(SengokuUiTheme.IndigoRail));
             Assert.That(backdrop.GetComponent<Image>().color, Is.EqualTo(SengokuUiTheme.IndigoDeep));
-            Image sharedBackdrop = navigator.transform.Find("ReferenceGalleryBackdrop")
-                .GetComponent<Image>();
+            Image sharedBackdrop = BackdropHost(navigator)
+                .Find("ReferenceGalleryBackdrop").GetComponent<Image>();
             Assert.That(sharedBackdrop.color, Is.EqualTo(SengokuUiTheme.IndigoDeep));
             Assert.That(sharedBackdrop.raycastTarget, Is.False,
                 "the shared page background must not block page controls");
@@ -89,7 +89,14 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(panels[3].activeSelf, Is.True);
             Assert.That(panels[2].activeSelf, Is.False);
             Assert.That(launcher.gameObject.activeSelf, Is.False);
-            Assert.That(buttons[(int)ReferenceGalleryPage.Map].interactable, Is.False);
+            Assert.That(buttons[(int)ReferenceGalleryPage.Map].interactable, Is.True,
+                "the selected tab stays a valid, idempotent target");
+            Assert.That((Color32)buttons[(int)ReferenceGalleryPage.Map].targetGraphic.color,
+                Is.EqualTo((Color32)ReferenceGalleryNavigator.PageSelectedBackground),
+                "the selected page uses the vermilion seal accent");
+            Assert.That((Color32)buttons[(int)ReferenceGalleryPage.Character].targetGraphic.color,
+                Is.EqualTo((Color32)ReferenceGalleryNavigator.PageIdleBackground),
+                "non-selected tabs keep the indigo rail surface");
 
             navigator.ShowPage(ReferenceGalleryPage.Household);
             Assert.That(familyRoot.activeSelf, Is.False);
@@ -358,8 +365,15 @@ namespace SengokuChronicle.Tests.EditMode
             var rects = new Dictionary<string, RectTransform>();
             foreach (string name in controlNames)
             {
-                GameObject child = Create(name, typeof(RectTransform), typeof(Image));
+                bool isButton = name == "ConfirmButton" || name == "CancelButton" ||
+                    name.StartsWith("DestButton_", StringComparison.Ordinal);
+                GameObject child = isButton
+                    ? Create(name, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image),
+                        typeof(Button))
+                    : Create(name, typeof(RectTransform), typeof(Text));
                 child.transform.SetParent(mapRoot.transform, false);
+                if (isButton)
+                    child.GetComponent<Button>().targetGraphic = child.GetComponent<Image>();
                 rects[name] = (RectTransform)child.transform;
             }
 
@@ -385,13 +399,20 @@ namespace SengokuChronicle.Tests.EditMode
             float imageAspect = image.sizeDelta.x / image.sizeDelta.y;
             Assert.That(imageAspect, Is.EqualTo(spriteAspect).Within(0.01f),
                 "the map illustration must keep its source aspect ratio");
-            Assert.That(image.sizeDelta.x, Is.GreaterThan(600f),
+            Assert.That(image.sizeDelta.x, Is.GreaterThan(560f),
                 "the central map crop should use the space between the side columns");
 
             // Inside the central map rectangle of the root.
             float rootWidth = ((RectTransform)mapRoot.transform).sizeDelta.x;
             float rootHeight = ((RectTransform)mapRoot.transform).sizeDelta.y;
-            Assert.That(rootWidth, Is.EqualTo(1130f).Within(1f));
+            Assert.That(rootWidth, Is.EqualTo(1060f).Within(1f));
+            Assert.That(mapRoot.transform.Find("CurrentDateText").GetComponent<Text>().color,
+                Is.EqualTo(SengokuUiTheme.Parchment));
+            Assert.That(mapRoot.transform.Find("LocationMarkerText").GetComponent<Text>().color,
+                Is.EqualTo(SengokuUiTheme.Parchment));
+            Assert.That(mapRoot.transform.Find("FeedbackText").GetComponent<Text>().color,
+                Is.EqualTo(SengokuUiTheme.Parchment),
+                "map status text stays legible over the indigo background");
             Assert.That(Mathf.Abs(image.anchoredPosition.x) + image.sizeDelta.x / 2f,
                 Is.LessThanOrEqualTo(rootWidth *
                     ReferenceGalleryNavigator.MapBoxHalfWidthFraction + 0.1f));
@@ -563,6 +584,353 @@ namespace SengokuChronicle.Tests.EditMode
                 "showing the page must not commit anything by itself");
         }
 
+        [Test]
+        public void ShowPage_AllFivePagesActivateOnlyTheirOwnRootsAndSharedChrome()
+        {
+            GameObject host = Create("CanvasHost", typeof(RectTransform));
+            ((RectTransform)host.transform).sizeDelta = new Vector2(1280f, 720f);
+            GameObject navigation = Create("Navigation", typeof(RectTransform),
+                typeof(CanvasRenderer), typeof(Image));
+            navigation.transform.SetParent(host.transform, false);
+            GameObject header = Create("Header", typeof(RectTransform));
+            header.transform.SetParent(host.transform, false);
+            Button launcher = CreateButton("Launcher");
+            launcher.transform.SetParent(host.transform, false);
+
+            var roots = new ReferenceGalleryPageRoot[ReferenceGalleryNavigator.PageCount];
+            var panels = new GameObject[ReferenceGalleryNavigator.PageCount];
+            Button[] buttons = new Button[ReferenceGalleryNavigator.PageCount];
+            for (int i = 0; i < roots.Length; i++)
+            {
+                GameObject pageRoot = Create("PageRoot" + i, typeof(RectTransform),
+                    typeof(CanvasRenderer), typeof(Image));
+                pageRoot.transform.SetParent(host.transform, false);
+                roots[i] = new ReferenceGalleryPageRoot(pageRoot,
+                    (ReferenceGalleryPageMask)(1 << i));
+                // BindReferences carries exactly four dedicated panel roots
+                // (character, family, household, map). The Events page has no
+                // panel argument: its live content is the EventChoiceRoot page
+                // root, whose Household|Events mask is asserted through roots[].
+                if (i != (int)ReferenceGalleryPage.Events)
+                {
+                    panels[i] = Create("PagePanel" + i, typeof(RectTransform));
+                    panels[i].transform.SetParent(host.transform, false);
+                }
+                buttons[i] = CreateButton("Button" + i);
+            }
+
+            ReferenceGalleryNavigator navigator = Create("Navigator", typeof(RectTransform))
+                .AddComponent<ReferenceGalleryNavigator>();
+            navigator.transform.SetParent(host.transform, false);
+            navigator.BindReferences(roots, buttons, panels[1], panels[2], panels[0],
+                panels[3], launcher, navigation, header);
+
+            for (int pageIndex = 0; pageIndex < roots.Length; pageIndex++)
+            {
+                ReferenceGalleryPage page = (ReferenceGalleryPage)pageIndex;
+                navigator.ShowPage(page);
+
+                Assert.That(navigator.CurrentPage, Is.EqualTo(page));
+                Assert.That(navigation.activeSelf, Is.True);
+                Assert.That(header.activeSelf, Is.True);
+                Assert.That(launcher.gameObject.activeSelf, Is.False);
+                for (int i = 0; i < roots.Length; i++)
+                {
+                    Assert.That(roots[i].Root.activeSelf, Is.EqualTo(i == pageIndex),
+                        roots[i].Root.name + " must only be active on its own page");
+                    if (i == (int)ReferenceGalleryPage.Events)
+                    {
+                        Assert.That(panels[i], Is.Null,
+                            "the Events page has no separate panel root; EventChoiceRoot is its page root");
+                    }
+                    else
+                    {
+                        Assert.That(panels[i], Is.Not.Null,
+                            "every non-events page owns a dedicated panel root");
+                        Assert.That(panels[i].activeSelf, Is.EqualTo(i == pageIndex),
+                            panels[i].name + " must only be active on its own page");
+                    }
+                    Assert.That(buttons[i].interactable, Is.True,
+                        "page tabs stay interactive so the selected page is explicit");
+                    Assert.That((Color32)buttons[i].targetGraphic.color,
+                        Is.EqualTo((Color32)(i == pageIndex
+                            ? ReferenceGalleryNavigator.PageSelectedBackground
+                            : ReferenceGalleryNavigator.PageIdleBackground)),
+                        "only the selected tab carries the seal accent");
+                }
+
+                Image backdrop = BackdropHost(navigator)
+                    .Find("ReferenceGalleryBackdrop").GetComponent<Image>();
+                Assert.That(backdrop.raycastTarget, Is.False,
+                    "the shared backdrop never blocks page controls");
+                Assert.That(backdrop.rectTransform.anchorMin, Is.EqualTo(Vector2.zero));
+                Assert.That(backdrop.rectTransform.anchorMax, Is.EqualTo(Vector2.one));
+            }
+        }
+
+        [Test]
+        public void ShowPage_SwitchingAllFivePagesDoesNotCommitSessionState()
+        {
+            GameSession session = GameSession.NewGame();
+            _objects.Add(session.gameObject);
+            GameObject host = Create("CanvasHost", typeof(RectTransform));
+            ((RectTransform)host.transform).sizeDelta = new Vector2(1280f, 720f);
+
+            var roots = new ReferenceGalleryPageRoot[ReferenceGalleryNavigator.PageCount];
+            var panels = new GameObject[ReferenceGalleryNavigator.PageCount];
+            Button[] buttons = new Button[ReferenceGalleryNavigator.PageCount];
+            for (int i = 0; i < roots.Length; i++)
+            {
+                GameObject pageRoot = Create("StatePageRoot" + i, typeof(RectTransform),
+                    typeof(CanvasRenderer), typeof(Image));
+                pageRoot.transform.SetParent(host.transform, false);
+                roots[i] = new ReferenceGalleryPageRoot(pageRoot,
+                    (ReferenceGalleryPageMask)(1 << i));
+                panels[i] = Create("StatePagePanel" + i, typeof(RectTransform));
+                panels[i].transform.SetParent(host.transform, false);
+                buttons[i] = CreateButton("StateButton" + i);
+            }
+
+            ReferenceGalleryNavigator navigator = Create("Navigator", typeof(RectTransform))
+                .AddComponent<ReferenceGalleryNavigator>();
+            navigator.transform.SetParent(host.transform, false);
+            navigator.BindReferences(roots, buttons, panels[1], panels[2], panels[0],
+                panels[3], buttons[0], Create("Navigation"), Create("Header"));
+            navigator.BindGameSession(session);
+
+            string head = session.SuccessionHeadName;
+            var date = session.WorldClock.CurrentDate;
+            int merit = session.Merit;
+            string pendingEvent = session.PendingEventId;
+
+            foreach (ReferenceGalleryPage page in Enum.GetValues(typeof(ReferenceGalleryPage)))
+                navigator.ShowPage(page);
+
+            Assert.That(session.SuccessionHeadName, Is.EqualTo(head));
+            Assert.That(session.WorldClock.CurrentDate, Is.EqualTo(date));
+            Assert.That(session.Merit, Is.EqualTo(merit));
+            Assert.That(session.PendingEventId, Is.EqualTo(pendingEvent),
+                "page navigation never resolves or queues a pending event");
+        }
+
+        [Test]
+        public void ShowPage_ReclickingTheCurrentTabDoesNotReplayPageSideEffects()
+        {
+            GameSession session = GameSession.NewGame();
+            _objects.Add(session.gameObject);
+            GameObject host = Create("CanvasHost", typeof(RectTransform));
+            ((RectTransform)host.transform).sizeDelta = new Vector2(1280f, 720f);
+
+            GameObject mapRoot = Create("MapRoot", typeof(RectTransform),
+                typeof(CanvasRenderer), typeof(Image));
+            mapRoot.transform.SetParent(host.transform, false);
+            Text feedback = Create("Feedback", typeof(RectTransform), typeof(Text))
+                .GetComponent<Text>();
+            feedback.transform.SetParent(host.transform, false);
+            feedback.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            WorldMapController worldMap = mapRoot.AddComponent<WorldMapController>();
+            worldMap.BindReferences(session, null, null, feedback, null, null, null, null,
+                null, null, null, null, null, null);
+
+            GameObject eventRoot = Create("EventChoiceRoot", typeof(RectTransform),
+                typeof(CanvasRenderer), typeof(Image));
+            eventRoot.transform.SetParent(host.transform, false);
+            eventRoot.AddComponent<EventChoicePanel>();
+            GameObject characterPanel = Create("CharacterPanel", typeof(RectTransform));
+            GameObject familyPanel = Create("FamilyPanel", typeof(RectTransform));
+            GameObject householdPanel = Create("HouseholdPanel", typeof(RectTransform));
+
+            Button[] buttons = new Button[ReferenceGalleryNavigator.PageCount];
+            for (int i = 0; i < buttons.Length; i++)
+                buttons[i] = CreateButton("Button" + i);
+            ReferenceGalleryNavigator navigator = Create("Navigator", typeof(RectTransform))
+                .AddComponent<ReferenceGalleryNavigator>();
+            navigator.transform.SetParent(host.transform, false);
+            navigator.BindReferences(new[]
+            {
+                new ReferenceGalleryPageRoot(mapRoot, ReferenceGalleryPageMask.Map),
+                new ReferenceGalleryPageRoot(eventRoot, ReferenceGalleryPageMask.Events)
+            }, buttons, characterPanel, familyPanel, householdPanel, mapRoot, buttons[0],
+                Create("Navigation", typeof(RectTransform), typeof(Image)), Create("Header"));
+            navigator.BindGameSession(session);
+
+            navigator.ShowPage(ReferenceGalleryPage.Map);
+            int mapReturns = navigator.MapReturnCount;
+            Assert.That(mapReturns, Is.GreaterThan(0));
+            navigator.ShowPage(ReferenceGalleryPage.Map);
+            Assert.That(navigator.MapReturnCount, Is.EqualTo(mapReturns),
+                "clicking the active Map tab must not return to the map again");
+
+            navigator.ShowPage(ReferenceGalleryPage.Household);
+            int builds = navigator.HouseholdCompositionBuildCount;
+            Assert.That(builds, Is.GreaterThan(0));
+            navigator.ShowPage(ReferenceGalleryPage.Household);
+            Assert.That(navigator.HouseholdCompositionBuildCount, Is.EqualTo(builds),
+                "clicking the active Household tab must not rebuild the composition");
+
+            // A real session change may refresh the navigator-owned composition.
+            session.InitNewGame();
+            Assert.That(navigator.HouseholdCompositionBuildCount,
+                Is.GreaterThan(builds),
+                "session-state changes, not re-clicks, drive the shared refresh");
+
+            navigator.ShowPage(ReferenceGalleryPage.Events);
+            int refreshes = navigator.EventPanelRefreshCount;
+            Assert.That(refreshes, Is.GreaterThan(0));
+            string pending = session.PendingEventId;
+            navigator.ShowPage(ReferenceGalleryPage.Events);
+            Assert.That(navigator.EventPanelRefreshCount, Is.EqualTo(refreshes),
+                "clicking the active Events tab must not refresh or resolve the event view");
+            Assert.That(session.PendingEventId, Is.EqualTo(pending));
+        }
+
+        [Test]
+        public void ShowPage_Family_CentresTheRosterBetweenTheRailAndSuccessionHud()
+        {
+            GameObject host = Create("CanvasHost", typeof(RectTransform));
+            ((RectTransform)host.transform).sizeDelta = new Vector2(1280f, 720f);
+            GameObject familyRoot = Create("FamilyRosterRoot", typeof(RectTransform));
+            familyRoot.transform.SetParent(host.transform, false);
+            GameObject familyPanel = Create("FamilyRosterPanel", typeof(RectTransform),
+                typeof(CanvasRenderer), typeof(Image));
+            familyPanel.transform.SetParent(familyRoot.transform, false);
+            ((RectTransform)familyPanel.transform).sizeDelta = new Vector2(760f, 620f);
+            familyRoot.AddComponent<FamilyRosterPanel>();
+
+            GameObject successionRoot = Create("SuccessionRoot", typeof(RectTransform));
+            successionRoot.transform.SetParent(host.transform, false);
+            GameObject successionHud = Create("SuccessionHud", typeof(RectTransform),
+                typeof(CanvasRenderer), typeof(Image));
+            successionHud.transform.SetParent(successionRoot.transform, false);
+            GameObject characterPanel = Create("CharacterPanel", typeof(RectTransform));
+            GameObject householdPanel = Create("HouseholdPanel", typeof(RectTransform));
+            GameObject mapPanel = Create("MapPanel", typeof(RectTransform));
+
+            Button[] buttons = new Button[ReferenceGalleryNavigator.PageCount];
+            for (int i = 0; i < buttons.Length; i++)
+                buttons[i] = CreateButton("FamilyButton" + i);
+            ReferenceGalleryNavigator navigator = Create("Navigator", typeof(RectTransform))
+                .AddComponent<ReferenceGalleryNavigator>();
+            navigator.transform.SetParent(host.transform, false);
+            navigator.BindReferences(new[]
+            {
+                new ReferenceGalleryPageRoot(successionRoot, ReferenceGalleryPageMask.Family)
+            }, buttons, characterPanel, familyRoot, householdPanel, mapPanel, buttons[0],
+                Create("Navigation", typeof(RectTransform), typeof(Image)), Create("Header"));
+
+            navigator.ShowPage(ReferenceGalleryPage.Family);
+
+            RectTransform roster = (RectTransform)familyPanel.transform;
+            Assert.That(roster.anchoredPosition, Is.EqualTo(new Vector2(-100f, -26f)),
+                "the roster sits left of the succession HUD and right of the nav rail");
+            float left = roster.anchoredPosition.x - roster.rect.width / 2f;
+            float right = roster.anchoredPosition.x + roster.rect.width / 2f;
+            Assert.That(left, Is.GreaterThanOrEqualTo(-490f),
+                "the genealogy card clears the 150px navigation rail");
+            Assert.That(right, Is.LessThanOrEqualTo(284f),
+                "the genealogy card clears the 340px succession column");
+            RectTransform hud = (RectTransform)successionHud.transform;
+            Assert.That(hud.sizeDelta, Is.EqualTo(new Vector2(340f, 260f)));
+            Assert.That(hud.anchoredPosition, Is.EqualTo(new Vector2(-16f, -70f)),
+                "the succession column keeps its reference top-right position");
+            Assert.That(right,
+                Is.LessThanOrEqualTo(640f - 16f - hud.sizeDelta.x),
+                "roster and succession HUD do not overlap");
+        }
+
+        [Test]
+        public void PageRegions_StayInsideThe1280x720SafeCanvasAndDoNotOverlap()
+        {
+            const float halfWidth = 640f;
+            const float halfHeight = 360f;
+            var regions = new[]
+            {
+                new
+                {
+                    Name = "HouseholdIndustry",
+                    Position = ReferenceGalleryNavigator.HouseholdIndustryPosition,
+                    Size = ReferenceGalleryNavigator.HouseholdIndustrySize
+                },
+                new
+                {
+                    Name = "HouseholdHeadRail",
+                    Position = ReferenceGalleryNavigator.HouseholdHeadRailPosition,
+                    Size = ReferenceGalleryNavigator.HouseholdHeadRailSize
+                },
+                new
+                {
+                    Name = "HouseholdMonthEvent",
+                    Position = ReferenceGalleryNavigator.HouseholdMonthEventPosition,
+                    Size = ReferenceGalleryNavigator.HouseholdMonthEventSize
+                },
+                new
+                {
+                    Name = "PendingRail",
+                    Position = ReferenceGalleryNavigator.PendingRailPosition,
+                    Size = ReferenceGalleryNavigator.PendingRailSize
+                },
+                new
+                {
+                    Name = "HouseholdModal",
+                    Position = ReferenceGalleryNavigator.HouseholdModalPosition,
+                    Size = ReferenceGalleryNavigator.HouseholdModalSize
+                },
+                new
+                {
+                    Name = "EventsModal",
+                    Position = ReferenceGalleryNavigator.EventsModalPosition,
+                    Size = ReferenceGalleryNavigator.EventsModalSize
+                },
+                new
+                {
+                    Name = "EventsRail",
+                    Position = ReferenceGalleryNavigator.EventsRailPosition,
+                    Size = ReferenceGalleryNavigator.EventsRailSize
+                },
+                new
+                {
+                    Name = "MapRoot",
+                    Position = ReferenceGalleryNavigator.MapRootPosition,
+                    Size = new Vector2(
+                        ReferenceGalleryNavigator.MapRootSizeFraction.x * 1280f,
+                        ReferenceGalleryNavigator.MapRootSizeFraction.y * 720f)
+                }
+            };
+
+            foreach (var region in regions)
+            {
+                Assert.That(region.Position.x - region.Size.x / 2f,
+                    Is.GreaterThanOrEqualTo(-halfWidth), region.Name + " left edge");
+                Assert.That(region.Position.x + region.Size.x / 2f,
+                    Is.LessThanOrEqualTo(halfWidth), region.Name + " right edge");
+                Assert.That(region.Position.y - region.Size.y / 2f,
+                    Is.GreaterThanOrEqualTo(-halfHeight), region.Name + " bottom edge");
+                Assert.That(region.Position.y + region.Size.y / 2f,
+                    Is.LessThanOrEqualTo(halfHeight), region.Name + " top edge");
+            }
+
+            Assert.That(RectsOverlap(
+                ReferenceGalleryNavigator.HouseholdIndustryPosition,
+                ReferenceGalleryNavigator.HouseholdIndustrySize,
+                ReferenceGalleryNavigator.HouseholdHeadRailPosition,
+                ReferenceGalleryNavigator.HouseholdHeadRailSize), Is.False);
+            Assert.That(RectsOverlap(
+                ReferenceGalleryNavigator.HouseholdIndustryPosition,
+                ReferenceGalleryNavigator.HouseholdIndustrySize,
+                ReferenceGalleryNavigator.HouseholdMonthEventPosition,
+                ReferenceGalleryNavigator.HouseholdMonthEventSize), Is.False);
+            Assert.That(RectsOverlap(
+                ReferenceGalleryNavigator.PendingRailPosition,
+                ReferenceGalleryNavigator.PendingRailSize,
+                ReferenceGalleryNavigator.HouseholdModalPosition,
+                ReferenceGalleryNavigator.HouseholdModalSize), Is.False);
+            Assert.That(RectsOverlap(
+                ReferenceGalleryNavigator.EventsModalPosition,
+                ReferenceGalleryNavigator.EventsModalSize,
+                ReferenceGalleryNavigator.EventsRailPosition,
+                ReferenceGalleryNavigator.EventsRailSize), Is.False);
+        }
+
         private Text CreateTextChild(string name, Transform parent)
         {
             GameObject go = Create(name, typeof(RectTransform), typeof(Text));
@@ -592,6 +960,10 @@ namespace SengokuChronicle.Tests.EditMode
                 secondPosition.y + secondSize.y / 2f);
             return first.Overlaps(second, true);
         }
+
+        /// <summary>The navigator creates its shared backdrop under the canvas parent, not itself.</summary>
+        private static Transform BackdropHost(ReferenceGalleryNavigator navigator) =>
+            navigator.transform.parent != null ? navigator.transform.parent : navigator.transform;
 
         private static Transform FindDeep(Transform root, string name)
         {

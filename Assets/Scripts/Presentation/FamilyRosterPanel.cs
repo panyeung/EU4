@@ -37,9 +37,9 @@ namespace SengokuChronicle.Presentation
         private static readonly Color AdoptionColor = new Color(0.68f, 0.47f, 0.86f, 1f);
         private static readonly Color SiblingColor = new Color(0.42f, 0.76f, 0.54f, 1f);
         private static readonly Color SpouseColor = new Color(0.43f, 0.65f, 0.92f, 1f);
-        private static readonly Color KinCardColor = new Color(0.16f, 0.22f, 0.3f, 1f);
-        private static readonly Color UnconnectedCardColor = new Color(0.22f, 0.24f, 0.28f, 1f);
-        private static readonly Color HouseholdCardColor = new Color(0.3f, 0.24f, 0.18f, 1f);
+        private static readonly Color KinCardColor = SengokuUiTheme.ParchmentDeep;
+        private static readonly Color UnconnectedCardColor = SengokuUiTheme.Parchment;
+        private static readonly Color HouseholdCardColor = SengokuUiTheme.ParchmentLight;
 
         private readonly List<GameObject> _nodes = new List<GameObject>();
         private readonly List<FamilyTreePersonNode> _nodeData = new List<FamilyTreePersonNode>();
@@ -388,6 +388,7 @@ namespace SengokuChronicle.Presentation
             if (text != null)
             {
                 text.text = FormatNode(person, placement);
+                text.color = SengokuUiTheme.Ink;
                 text.raycastTarget = false;
                 RectTransform textRect = text.rectTransform;
                 textRect.anchorMin = Vector2.zero;
@@ -436,6 +437,7 @@ namespace SengokuChronicle.Presentation
                 rect.localScale = Vector3.one;
             }
             label.text = section.Title;
+            label.color = SengokuUiTheme.InkSoft;
             label.raycastTarget = false;
             label.gameObject.SetActive(true);
             _sections.Add(label.gameObject);

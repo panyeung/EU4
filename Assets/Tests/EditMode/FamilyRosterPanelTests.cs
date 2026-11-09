@@ -124,6 +124,9 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(_panel.NodePortraitFor(M2FixedScenario.NobumasaId), Is.Not.Null);
 
             Transform headCard = FindNode(M2FixedScenario.HarunobuId);
+            Assert.That(headCard.GetComponent<Image>().color,
+                Is.EqualTo(SengokuUiTheme.ParchmentDeep),
+                "family tree cards keep readable parchment contrast");
             Image headPortrait = headCard.Find(FamilyRosterPanel.PortraitChildName)
                 .GetComponent<Image>();
             Assert.That(headPortrait.sprite,
@@ -132,6 +135,8 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(headPortrait.raycastTarget, Is.False,
                 "portrait art must never block card raycasts");
             Text headLabel = headCard.GetComponentInChildren<Text>(true);
+            Assert.That(headLabel.color, Is.EqualTo(SengokuUiTheme.Ink),
+                "family tree card labels use dark ink on parchment");
             Assert.That(headLabel.rectTransform.offsetMin.x,
                 Is.GreaterThanOrEqualTo(headPortrait.rectTransform.offsetMax.x),
                 "card text starts right of the portrait strip: no overlap");

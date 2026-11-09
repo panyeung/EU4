@@ -73,6 +73,11 @@ namespace SengokuChronicle.Presentation
         private readonly List<UnityAction> _listeners = new List<UnityAction>();
         private UnityAction _launcherListener;
         private bool _wired;
+        private bool _hasShownPage;
+        private GameSession _subscribedSession;
+        private int _mapReturnCount;
+        private int _householdCompositionBuildCount;
+        private int _eventPanelRefreshCount;
         private ReferenceGalleryPage _currentPage = ReferenceGalleryPage.Character;
         private GameObject _eventsEmptyState;
         private GameObject _householdComposition;
@@ -98,8 +103,18 @@ namespace SengokuChronicle.Presentation
 
         public ReferenceGalleryPage CurrentPage => _currentPage;
 
+        /// <summary>Diagnostics proving a same-page click does not replay page side effects.</summary>
+        public int MapReturnCount => _mapReturnCount;
+        public int HouseholdCompositionBuildCount => _householdCompositionBuildCount;
+        public int EventPanelRefreshCount => _eventPanelRefreshCount;
+
         /// <summary>Optional live-data binding for household/event composition.</summary>
-        public void BindGameSession(GameSession session) => gameSession = session;
+        public void BindGameSession(GameSession session)
+        {
+            UnsubscribeSession();
+            gameSession = session;
+            SubscribeSession();
+        }
 
         public GameObject HouseholdComposition => _householdComposition;
         public GameObject PendingEventsRail => _pendingEventsRail;
@@ -128,14 +143,14 @@ namespace SengokuChronicle.Presentation
         public const string MapIllustrationChildName = "ReferenceMapIllustration";
 
         /// <summary>Map page: central illustration box, in fractions of the map root.</summary>
-        public static readonly Vector2 MapRootSizeFraction = new Vector2(1130f / DesignWidth, 636f / DesignHeight);
+        public static readonly Vector2 MapRootSizeFraction = new Vector2(1060f / DesignWidth, 636f / DesignHeight);
         public static readonly Vector2 MapRootPosition = new Vector2(75f, -42f);
         /// <summary>
         /// Central map box half-width, as a fraction of the map root. Sized so the
         /// wide generated world map (1672x941) aspect-fits clear of both side
-        /// columns, whose inner edges sit at 0.389 - 120/1130 of the root width.
+        /// columns, whose inner edges sit at 0.389 of the root width minus 120px.
         /// </summary>
-        public const float MapBoxHalfWidthFraction = 0.28f;
+        public const float MapBoxHalfWidthFraction = 0.27f;
         public const float MapBoxTopFraction = 0.412f;
 
         public void BindReferences(ReferenceGalleryPageRoot[] roots, Button[] buttons,
@@ -144,6 +159,7 @@ namespace SengokuChronicle.Presentation
             GameObject navRoot, GameObject header)
         {
             UnwireButtons();
+            _hasShownPage = false;
             pageRoots = roots;
             configurationVersion = CurrentConfigurationVersion;
             navigationButtons = buttons;
@@ -164,13 +180,68 @@ namespace SengokuChronicle.Presentation
                 Initialize();
         }
 
-        private void OnDisable() => UnwireButtons();
+        private void OnEnable() => SubscribeSession();
+
+        private void OnDisable()
+        {
+            UnwireButtons();
+            UnsubscribeSession();
+        }
+
+        private void SubscribeSession()
+        {
+            if (gameSession == null || _subscribedSession == gameSession)
+                return;
+            UnsubscribeSession();
+            _subscribedSession = gameSession;
+            _subscribedSession.SessionStateChanged += OnSessionStateChanged;
+        }
+
+        private void UnsubscribeSession()
+        {
+            if (_subscribedSession != null)
+                _subscribedSession.SessionStateChanged -= OnSessionStateChanged;
+            _subscribedSession = null;
+        }
+
+        /// <summary>
+        /// Shared refresh is driven only by a real session-state change. Individual
+        /// page controllers refresh themselves; the navigator owns just the composed
+        /// household regions and the pending-events rail.
+        /// </summary>
+        private void OnSessionStateChanged()
+        {
+            if (!_hasShownPage)
+                return;
+            if (_currentPage == ReferenceGalleryPage.Household)
+            {
+                BuildHouseholdComposition();
+                UpdatePendingRail();
+            }
+            else if (_currentPage == ReferenceGalleryPage.Events)
+            {
+                UpdatePendingRail();
+                SetEventsEmptyState(!HasPendingEvent());
+            }
+        }
 
         public void ShowPage(ReferenceGalleryPage page)
         {
             if (!Enum.IsDefined(typeof(ReferenceGalleryPage), page))
                 return;
 
+            // Re-selecting the active tab is a true no-op. Page controllers already
+            // subscribe to GameSession.SessionStateChanged for their own refresh, so
+            // a same-page click must not replay ReturnToMap, rebuild the household
+            // composition or refresh the event view.
+            if (_hasShownPage && page == _currentPage)
+            {
+                RestoreCurrentPageVisibility();
+                StyleNavigationSelection(page);
+                return;
+            }
+
+            _hasShownPage = true;
             _currentPage = page;
             SetPanel(navigationRoot, true);
             SetPanel(headerRoot, true);
@@ -219,7 +290,10 @@ namespace SengokuChronicle.Presentation
             {
                 EventChoicePanel eventPanel = GetEventPanel();
                 if (eventPanel != null)
+                {
+                    _eventPanelRefreshCount++;
                     eventPanel.Refresh();
+                }
             }
             SetEventsEmptyState(page == ReferenceGalleryPage.Events && !HasPendingEvent());
             if (page == ReferenceGalleryPage.Character)
@@ -249,7 +323,10 @@ namespace SengokuChronicle.Presentation
                     ? mapPanelRoot.GetComponent<WorldMapController>()
                     : null;
                 if (worldMap != null)
+                {
+                    _mapReturnCount++;
                     worldMap.ReturnToMap();
+                }
                 StyleMapPage();
             }
             else if (page == ReferenceGalleryPage.Events)
@@ -259,16 +336,85 @@ namespace SengokuChronicle.Presentation
                 UpdatePendingRail();
             }
 
-            if (navigationButtons != null)
-                for (int i = 0; i < navigationButtons.Length; i++)
-                    if (navigationButtons[i] != null)
-                        navigationButtons[i].interactable = i != (int)page;
+            StyleNavigationSelection(page);
+        }
+
+        /// <summary>
+        /// A same-tab click must not replay page commands, but it must restore a page
+        /// that closed itself. Only the Character page owns a Close/Open toggle today:
+        /// reactivate its page roots and reopen the daily-action panel only when it is
+        /// actually closed, so an already-visible page stays a strict no-op.
+        /// </summary>
+        private void RestoreCurrentPageVisibility()
+        {
+            if (_currentPage != ReferenceGalleryPage.Character)
+                return;
+
+            if (pageRoots != null)
+            {
+                ReferenceGalleryPageMask mask = ReferenceGalleryPageMask.Character;
+                for (int i = 0; i < pageRoots.Length; i++)
+                {
+                    GameObject root = pageRoots[i].Root;
+                    if (root != null && (pageRoots[i].VisibleOn & mask) != 0 &&
+                        !root.activeSelf)
+                    {
+                        root.SetActive(true);
+                        if (root.name == "M03NpcAiInspectorRoot")
+                        {
+                            Transform opener = root.transform.Find(
+                                "M03NpcAiInspectorOpenButton");
+                            if (opener != null)
+                                opener.gameObject.SetActive(false);
+                        }
+                    }
+                }
+            }
+
+            if (characterPanelRoot == null)
+                return;
+            DailyActionPanel dailyAction =
+                characterPanelRoot.GetComponentInParent<DailyActionPanel>(true);
+            if (dailyAction != null)
+            {
+                if (!dailyAction.IsOpen)
+                    dailyAction.Open();
+                else
+                    SetPanel(characterPanelRoot, true);
+            }
+            else
+            {
+                SetPanel(characterPanelRoot, true);
+            }
+        }
+
+        /// <summary>
+        /// Paints the current page with the vermilion seal accent while keeping every
+        /// tab interactive. Selecting the already-active page simply re-applies the
+        /// same presentation state and never commits a session command.
+        /// </summary>
+        private void StyleNavigationSelection(ReferenceGalleryPage page)
+        {
+            if (navigationButtons == null)
+                return;
+            for (int i = 0; i < navigationButtons.Length; i++)
+            {
+                Button button = navigationButtons[i];
+                if (button == null)
+                    continue;
+                bool selected = i == (int)page;
+                button.interactable = true;
+                SetButton(button,
+                    selected ? PageSelectedBackground : PageIdleBackground,
+                    selected ? PageSelectedForeground : PageIdleForeground);
+            }
         }
 
         private void Initialize()
         {
             if (!IsBound)
                 return;
+            SubscribeSession();
             WireButtons();
             if (launcherButton != null && _launcherListener == null)
             {
@@ -394,6 +540,16 @@ namespace SengokuChronicle.Presentation
             SengokuUiArt.IconSealedLetter
         };
 
+        /// <summary>
+        /// Selected/idle visuals for the five page tabs. The selected tab stays
+        /// clickable so re-selecting the current page is an idempotent no-op; the
+        /// vermilion seal is the page-selection affordance from the reference.
+        /// </summary>
+        public static readonly Color PageSelectedBackground = SengokuUiTheme.VermilionDark;
+        public static readonly Color PageSelectedForeground = SengokuUiTheme.ParchmentLight;
+        public static readonly Color PageIdleBackground = SengokuUiTheme.IndigoPanel;
+        public static readonly Color PageIdleForeground = SengokuUiTheme.ParchmentLight;
+
         public const string NavIconChildName = "ReferenceNavIcon";
 
         /// <summary>
@@ -469,7 +625,9 @@ namespace SengokuChronicle.Presentation
                     RectTransform panelRect = roster.transform.Find("FamilyRosterPanel") as RectTransform;
                     if (panelRect != null)
                     {
-                        panelRect.anchoredPosition = new Vector2(-130f, -26f);
+                        // Centre the genealogy card between the 150px left rail
+                        // and the 340px succession HUD, with no overlap at 1280x720.
+                        panelRect.anchoredPosition = new Vector2(-100f, -26f);
                         Image panelImage = panelRect.GetComponent<Image>();
                         if (panelImage != null)
                         {
@@ -599,7 +757,10 @@ namespace SengokuChronicle.Presentation
         private GameSession ResolveSession()
         {
             if (gameSession == null)
+            {
                 gameSession = UnityEngine.Object.FindFirstObjectByType<GameSession>();
+                SubscribeSession();
+            }
             return gameSession;
         }
 
@@ -624,6 +785,7 @@ namespace SengokuChronicle.Presentation
                 return;
             }
 
+            _householdCompositionBuildCount++;
             if (_householdComposition == null)
             {
                 _householdComposition = new GameObject("ReferenceHouseholdComposition",
@@ -664,6 +826,10 @@ namespace SengokuChronicle.Presentation
                     TextAnchor.UpperLeft, true);
             CreateLabel(headRail, "HouseholdRosterHeader", "家族成员", Vector2.zero,
                 new Vector2(0f, 160f), 16, SengokuUiTheme.Gold, 170f, TextAnchor.MiddleLeft);
+            if (graph.Persons.Count == 0)
+                CreateLabel(headRail, "HouseholdRosterEmpty", "暂无家族成员记录。", Vector2.zero,
+                    new Vector2(0f, 132f), 12, SengokuUiTheme.ParchmentLight, 172f,
+                    TextAnchor.MiddleLeft);
 
             float rowY = 132f;
             int shown = 0;
@@ -1018,6 +1184,9 @@ namespace SengokuChronicle.Presentation
             foreach (Text label in mapPanelRoot.GetComponentsInChildren<Text>(true))
                 if (label.gameObject.name != "TitleText")
                     label.color = SengokuUiTheme.Ink;
+            SetText(mapPanelRoot.transform, "CurrentDateText", SengokuUiTheme.Parchment);
+            SetText(mapPanelRoot.transform, "LocationMarkerText", SengokuUiTheme.Parchment);
+            SetText(mapPanelRoot.transform, "FeedbackText", SengokuUiTheme.Parchment);
             Button[] buttons = mapPanelRoot.GetComponentsInChildren<Button>(true);
             for (int i = 0; i < buttons.Length; i++)
                 SetButton(buttons[i], SengokuUiTheme.ParchmentDeep, SengokuUiTheme.Ink);
