@@ -71,6 +71,7 @@ namespace SengokuChronicle.Presentation
             pageView != null && pageView.IsBound;
 
         public bool IsOpen => panelRoot != null && panelRoot.activeSelf;
+        public int OpenCount { get; private set; }
         public int RowCount => _rows.Count;
         public int StaticButtonBindingCount => _staticButtonBindings;
         public PersonId SelectedPersonId => _selectedPersonId;
@@ -118,6 +119,7 @@ namespace SengokuChronicle.Presentation
         {
             Unsubscribe();
             ClearRows();
+            OpenCount = 0;
             _feedback = string.Empty;
             _selectedPersonId = default;
             gameSession = session;
@@ -152,6 +154,7 @@ namespace SengokuChronicle.Presentation
         {
             if (panelRoot == null)
                 return;
+            OpenCount++;
             EnsureSelection();
             panelRoot.SetActive(true);
             _feedback = SessionFeedback();
@@ -160,8 +163,18 @@ namespace SengokuChronicle.Presentation
 
         public void Close()
         {
-            if (panelRoot != null)
-                panelRoot.SetActive(false);
+            if (panelRoot == null)
+                return;
+
+            // This panel root is also the Character page root, so hiding it alone would
+            // leave the page area blank while the Character tab stayed selected. Let the
+            // bound navigator leave the page instead; panels used without a navigator
+            // keep the plain hide behaviour.
+            ReferenceGalleryNavigator navigator = GetComponentInParent<ReferenceGalleryNavigator>();
+            if (navigator != null && navigator.TryReturnFromCharacterPage())
+                return;
+
+            panelRoot.SetActive(false);
         }
 
         /// <summary>Selects a registered person and re-renders the row highlight.</summary>

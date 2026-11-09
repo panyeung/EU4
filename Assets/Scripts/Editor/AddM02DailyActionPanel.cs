@@ -82,6 +82,7 @@ namespace SengokuChronicle.Editor
         public const string RelationRootName = "M02RelationCard";
         public const string RelationNameName = "M02RelationNameText";
         public const string RelationDetailName = "M02RelationDetailText";
+        public const string RelationsEmptyName = "M02RelationsEmptyText";
         public const string ProfileBodyName = "M02ProfileBody";
         public const string RelationsBodyName = "M02RelationsBody";
         public const string HistoryBodyName = "M02HistoryBody";
@@ -301,6 +302,7 @@ namespace SengokuChronicle.Editor
             Transform inspectorRail = Require(scene, InspectorRailName);
             Transform profileBody = Require(scene, ProfileBodyName);
             Transform relationsBody = Require(scene, RelationsBodyName);
+            Transform relationsEmpty = Require(scene, RelationsEmptyName);
             Transform historyBody = Require(scene, HistoryBodyName);
             Transform portrait = Require(scene, ProfilePortraitName);
             Transform profileName = Require(scene, ProfileNameName);
@@ -587,6 +589,16 @@ namespace SengokuChronicle.Editor
             if (pageView == null || !pageView.IsBound)
                 return Invalid(out error,
                     "The character/daily-action page view is missing or incompletely bound.");
+            if (relationsEmpty == null || relationsEmpty.parent != relationsBody)
+                return Invalid(out error,
+                    "The M02 relations empty-state text must be a direct child of M02RelationsBody.");
+            Text relationsEmptyText = relationsEmpty.GetComponent<Text>();
+            if (relationsEmptyText == null)
+                return Invalid(out error,
+                    "The M02 relations empty-state text is missing.");
+            if (!Bound(pageView, "relationsEmptyText", relationsEmptyText))
+                return Invalid(out error,
+                    "The CharacterDailyPageView relationsEmptyText reference is not bound.");
 
             if (!Bound(panel, "gameSession", sessions[0]) ||
                 !Bound(panel, "panelRoot", panelRoot.gameObject) ||
@@ -974,6 +986,12 @@ namespace SengokuChronicle.Editor
                 selected.lineSpacing = 1.15f;
                 GameObject relationsBody = WrapBody(scene, profileContentParent,
                     RelationsBodyName, selected, active: false);
+                Text relationsEmpty = CreateText(scene, relationsBody.transform,
+                    RelationsEmptyName, font, "该人物暂无其他可展示的关系。", 0f, 520f,
+                    412f, 40f, 12, TextAnchor.MiddleCenter);
+                relationsEmpty.color = SengokuUiTheme.InkSoft;
+                relationsEmpty.verticalOverflow = VerticalWrapMode.Truncate;
+                relationsEmpty.gameObject.SetActive(false);
 
                 CharacterDailyPageView view = Undo.AddComponent<CharacterDailyPageView>(rootObject);
 
@@ -1650,6 +1668,7 @@ namespace SengokuChronicle.Editor
             SetArray(serialized, "relationRoots", relationRoots);
             SetArray(serialized, "relationNameTexts", relationNames);
             SetArray(serialized, "relationDetailTexts", relationDetails);
+            Set(serialized, "relationsEmptyText", Find<Text>(scene, RelationsEmptyName));
 
             Set(serialized, "profileBody", FindGameObject(scene, ProfileBodyName));
             Set(serialized, "relationsBody", FindGameObject(scene, RelationsBodyName));

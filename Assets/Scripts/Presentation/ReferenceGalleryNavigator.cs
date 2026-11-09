@@ -170,6 +170,9 @@ namespace SengokuChronicle.Presentation
             launcherButton = launcher;
             navigationRoot = navRoot;
             headerRoot = header;
+            // Bind the tab listeners at bind time so the editor/test seam drives the
+            // same Button path as runtime instead of only exposing ShowPage directly.
+            WireButtons();
             if (UnityEngine.Application.isPlaying)
                 Initialize();
         }
@@ -337,6 +340,23 @@ namespace SengokuChronicle.Presentation
             }
 
             StyleNavigationSelection(page);
+        }
+
+        /// <summary>
+        /// Handles the Character page's Return control. The M02 page root is both the
+        /// character panel and the daily-action panel, so hiding that root on its own
+        /// would empty the whole page area while the Character tab still read as
+        /// selected. Returning therefore switches to the household overview - a real,
+        /// already-populated page - and a normal Character tab click re-enters the
+        /// dossier. Navigation never advances the clock or commits a session command.
+        /// Returns true when the Return click was handled by leaving the page.
+        /// </summary>
+        public bool TryReturnFromCharacterPage()
+        {
+            if (_currentPage != ReferenceGalleryPage.Character)
+                return false;
+            ShowPage(ReferenceGalleryPage.Household);
+            return true;
         }
 
         /// <summary>

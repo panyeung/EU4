@@ -97,6 +97,9 @@ namespace SengokuChronicle.Presentation
         [Header("Supply Shortage Mission")]
         [SerializeField] private SupplyShortageMissionPanel supplyShortageMissionPanel;
 
+        [Header("Town Overview")]
+        [SerializeField] private TownOverviewPanel townOverviewPanel;
+
         // ---- 公开状态（测试断言用）----
 
         /// <summary>是否位于城镉菜单。</summary>
@@ -113,6 +116,9 @@ namespace SengokuChronicle.Presentation
 
         /// <summary>当前所在的 GameSession。</summary>
         public GameSession Session => gameSession;
+        public bool HasSupplyShortageMissionPanel => supplyShortageMissionPanel != null;
+        public bool IsSupplyShortageMissionOpen =>
+            supplyShortageMissionPanel != null && supplyShortageMissionPanel.IsOpen;
 
         /// <summary>城镉菜单根对象（初始隐藏）。</summary>
         public GameObject GetTownMenuRoot() => townMenuRoot;
@@ -143,6 +149,8 @@ namespace SengokuChronicle.Presentation
             if (townNpcDialoguePanel != null)
                 townNpcDialoguePanel.BindWorldMapController(this);
             BindSupplyShortageMissionPanel(supplyShortageMissionPanel);
+            if (townOverviewPanel != null)
+                townOverviewPanel.Bind(this);
             SubscribeSession();
             RefreshAll();
         }
@@ -336,6 +344,8 @@ namespace SengokuChronicle.Presentation
                 worldClockPanel.Refresh();
             if (supplyShortageMissionPanel != null)
                 supplyShortageMissionPanel.Refresh();
+            if (townOverviewPanel != null)
+                townOverviewPanel.Refresh();
         }
 
         /// <summary>
@@ -550,7 +560,10 @@ namespace SengokuChronicle.Presentation
             if (supplyShortageMissionPanel != null)
             {
                 supplyShortageMissionPanel.Bind(gameSession);
-                supplyShortageMissionPanel.Open();
+                if (townOverviewPanel != null)
+                    supplyShortageMissionPanel.Close();
+                else
+                    supplyShortageMissionPanel.Open();
             }
             SetMapContentVisible(false);
             if (townNpcDialoguePanel != null)
@@ -572,6 +585,9 @@ namespace SengokuChronicle.Presentation
 
             if (townMenuTitleText != null && gameSession != null)
                 townMenuTitleText.text = $"{LocationId.GetChineseName(gameSession.CurrentLocation)} 镇";
+
+            if (townOverviewPanel != null)
+                townOverviewPanel.Refresh();
 
             if (facilityTexts == null)
                 return;
@@ -595,8 +611,33 @@ namespace SengokuChronicle.Presentation
             if (panel == null)
                 return;
             panel.Bind(gameSession);
-            if (_inTownMenu) panel.Open();
-            else panel.Close();
+            panel.Close();
+        }
+
+        public void BindTownOverviewPanel(TownOverviewPanel panel)
+        {
+            townOverviewPanel = panel;
+            if (panel != null)
+                panel.Bind(this);
+        }
+
+        public void ToggleSupplyShortageMissionPanel()
+        {
+            if (!_inTownMenu || supplyShortageMissionPanel == null)
+                return;
+
+            if (supplyShortageMissionPanel.IsOpen)
+                supplyShortageMissionPanel.Close();
+            else
+            {
+                supplyShortageMissionPanel.Bind(gameSession);
+                supplyShortageMissionPanel.Open();
+                supplyShortageMissionPanel.transform.SetAsLastSibling();
+                if (returnToMapButton != null)
+                    returnToMapButton.transform.SetAsLastSibling();
+            }
+            if (townOverviewPanel != null)
+                townOverviewPanel.Refresh();
         }
 
         private void SetMapContentVisible(bool visible)

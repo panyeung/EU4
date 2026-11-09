@@ -6,6 +6,7 @@ using SengokuChronicle.Domain;
 using SengokuChronicle.Editor;
 using SengokuChronicle.Events;
 using SengokuChronicle.Presentation;
+using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -83,6 +84,82 @@ namespace SengokuChronicle.Tests.EditMode
                 "the page must render the live current head instead of an unselected placeholder");
             Assert.That(View().ProfileNameLine, Is.Not.Empty);
             Assert.That(View().ProfileNameLine, Does.Not.Contain("未选择"));
+        }
+
+        [Test]
+        public void Navigator_ReclickingTheCharacterTabReopensAClosedPageOnlyOnce()
+        {
+            ReferenceGalleryNavigator navigator = Find(AddM02DailyActionPanel.RootName)
+                .GetComponent<ReferenceGalleryNavigator>();
+            navigator.ShowPage(ReferenceGalleryPage.Character);
+            DailyActionPanel panel = Panel();
+            Assert.That(panel.IsOpen, Is.True);
+            int opens = panel.OpenCount;
+
+            panel.Close();
+            Assert.That(panel.IsOpen, Is.False);
+
+            navigator.ShowPage(ReferenceGalleryPage.Character);
+            Assert.That(panel.IsOpen, Is.True,
+                "re-clicking the active Character tab restores its closed page");
+            Assert.That(panel.OpenCount, Is.EqualTo(opens + 1),
+                "a closed page is reopened exactly once");
+
+            navigator.ShowPage(ReferenceGalleryPage.Character);
+            Assert.That(panel.IsOpen, Is.True);
+            Assert.That(panel.OpenCount, Is.EqualTo(opens + 1),
+                "an already-visible Character page is not reopened again");
+        }
+
+        [Test]
+        public void Navigator_ReturnButtonLeavesANonEmptyPageWithoutASecondClick()
+        {
+            ReferenceGalleryNavigator navigator = Find(AddM02DailyActionPanel.RootName)
+                .GetComponent<ReferenceGalleryNavigator>();
+            Button characterTab = Find(AddM02DailyActionPanel.NavCharacterButtonName)
+                .GetComponent<Button>();
+            Button returnButton = Find(AddM02DailyActionPanel.CloseButtonName)
+                .GetComponent<Button>();
+            DailyActionPanel panel = Panel();
+
+            // Enter the page through the bound tab listener, exactly as a player click does.
+            characterTab.onClick.Invoke();
+            Assert.That(navigator.CurrentPage, Is.EqualTo(ReferenceGalleryPage.Character));
+            Assert.That(panel.IsOpen, Is.True);
+            Assert.That(Find(AddM02DailyActionPanel.PanelName).gameObject.activeSelf, Is.True,
+                "the Character tab click populates the page");
+
+            GameDate date = _session.WorldClock.CurrentDate;
+            int actions = _session.DailyActions.Count;
+
+            // "返回" is the bound Close listener; it must leave a real page behind.
+            returnButton.onClick.Invoke();
+
+            Assert.That(navigator.CurrentPage, Is.EqualTo(ReferenceGalleryPage.Household),
+                "Return leaves the Character page instead of blanking the centre");
+            Assert.That(panel.IsOpen, Is.False);
+            Assert.That(Find(AddM02DailyActionPanel.PanelName).gameObject.activeSelf, Is.False);
+            Assert.That(Find(AddSC019IndustryPanel.PanelName).gameObject.activeSelf, Is.True,
+                "the page that replaces the dossier is the populated household overview");
+            Assert.That(Find(AddM02DailyActionPanel.NavCharacterButtonName)
+                    .GetComponent<Button>().targetGraphic.color,
+                Is.Not.EqualTo(ReferenceGalleryNavigator.PageSelectedBackground),
+                "no tab keeps the selected accent for the page that just closed");
+            Assert.That(Find(AddM02DailyActionPanel.NavHouseholdButtonName)
+                    .GetComponent<Button>().targetGraphic.color,
+                Is.EqualTo(ReferenceGalleryNavigator.PageSelectedBackground),
+                "the selected accent follows the page that is actually shown");
+
+            // The page stays navigable: one more tab click re-enters it, no extra step.
+            characterTab.onClick.Invoke();
+            Assert.That(navigator.CurrentPage, Is.EqualTo(ReferenceGalleryPage.Character));
+            Assert.That(panel.IsOpen, Is.True);
+            Assert.That(_session.WorldClock.CurrentDate, Is.EqualTo(date),
+                "returning and re-entering never advances the clock");
+            Assert.That(_session.DailyActions.Count, Is.EqualTo(actions),
+                "returning never mutates the M02 action roster");
+            Assert.That(panel.ActionSubmitCount, Is.Zero,
+                "returning never submits a daily action");
         }
 
         [Test]
@@ -207,6 +284,29 @@ namespace SengokuChronicle.Tests.EditMode
             };
             foreach (string buttonName in pageButtons)
                 Assert.That(Find(buttonName).GetComponent<Button>(), Is.Not.Null);
+
+            // Every tab is a real hit target inside the 150px rail, and the five
+            // 40px rows never overlap one another at the 1280x720 design canvas.
+            var navButtons = new RectTransform[pageButtons.Length];
+            for (int i = 0; i < pageButtons.Length; i++)
+            {
+                navButtons[i] = (RectTransform)Find(pageButtons[i]);
+                Assert.That(Contained(navButtons[i], (RectTransform)navRail), Is.True,
+                    pageButtons[i] + " must sit inside the navigation rail");
+                Assert.That(navButtons[i].rect.width, Is.GreaterThanOrEqualTo(120f),
+                    pageButtons[i] + " must keep a wide click target");
+                Assert.That(navButtons[i].rect.height, Is.GreaterThanOrEqualTo(40f),
+                    pageButtons[i] + " must keep a tall click target");
+            }
+            for (int i = 0; i < navButtons.Length; i++)
+                for (int j = i + 1; j < navButtons.Length; j++)
+                    Assert.That(
+                        Mathf.Abs(navButtons[i].anchoredPosition.y -
+                                  navButtons[j].anchoredPosition.y),
+                        Is.GreaterThanOrEqualTo(
+                            Mathf.Max(navButtons[i].rect.height, navButtons[j].rect.height)),
+                        "navigation tab hit areas must not overlap");
+
             ReferenceGalleryNavigator navigator = Find(AddM02DailyActionPanel.RootName)
                 .GetComponent<ReferenceGalleryNavigator>();
             Assert.That(navigator.IsBound, Is.True);
@@ -226,6 +326,17 @@ namespace SengokuChronicle.Tests.EditMode
                 Is.False);
             Assert.That(Find(AddM02DailyActionPanel.ProfileBodyName).gameObject.activeSelf,
                 Is.True);
+
+            // A live roster with no other members shows a truthful empty state
+            // instead of leaving the relation area blank.
+            Assert.That(FindAll(AddM02DailyActionPanel.RelationsEmptyName).Length,
+                Is.EqualTo(1));
+            Transform relationsEmpty = Find(AddM02DailyActionPanel.RelationsEmptyName);
+            Assert.That(relationsEmpty.gameObject.activeSelf, Is.False,
+                "the relation empty state stays hidden while live relation cards render");
+            Assert.That(relationsEmpty.GetComponent<Text>().text,
+                Does.Contain("暂无其他可展示的关系"));
+            Assert.That(relationsEmpty.GetComponent<Text>().raycastTarget, Is.False);
         }
 
         [Test]
@@ -511,6 +622,137 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(panel.ActionSubmitCount, Is.EqualTo(0),
                 "rendering the page never submits an action");
         }
+
+        [Test]
+        public void PageView_RelationsEmptyStateTracksRosterSizeAndSelection()
+        {
+            CharacterDailyPageView view = View();
+            Text empty = Find(AddM02DailyActionPanel.RelationsEmptyName).GetComponent<Text>();
+            GameObject[] cards =
+            {
+                Find(AddM02DailyActionPanel.RelationRootName + "_1").gameObject,
+                Find(AddM02DailyActionPanel.RelationRootName + "_2").gameObject,
+                Find(AddM02DailyActionPanel.RelationRootName + "_3").gameObject
+            };
+
+            M2RosterRow selected = RelationRow("test.person.selected", "选中人物", true);
+            M2RosterRow first = RelationRow("test.person.first", "甲");
+            M2RosterRow second = RelationRow("test.person.second", "乙");
+            M2RosterRow third = RelationRow("test.person.third", "丙");
+
+            // 0 other members: the roster has only the selected person.
+            view.RenderRelations(new[] { selected }, selected.PersonId);
+            Assert.That(empty.gameObject.activeSelf, Is.True);
+            Assert.That(empty.text, Does.Contain("暂无其他可展示的关系"));
+            foreach (GameObject card in cards)
+                Assert.That(card.activeSelf, Is.False);
+
+            // Truly empty roster (and no selection) uses the roster-specific copy.
+            view.RenderRelations(new M2RosterRow[0], selected.PersonId);
+            Assert.That(empty.gameObject.activeSelf, Is.True);
+            Assert.That(empty.text, Does.Contain("家族名册为空"));
+
+            // 1 other member: exactly one card, empty state hidden.
+            view.RenderRelations(new[] { selected, first }, selected.PersonId);
+            Assert.That(empty.gameObject.activeSelf, Is.False);
+            Assert.That(cards[0].activeSelf, Is.True);
+            Assert.That(cards[1].activeSelf, Is.False);
+            Assert.That(cards[2].activeSelf, Is.False);
+            Assert.That(Find(AddM02DailyActionPanel.RelationNameName + "_1")
+                .GetComponent<Text>().text, Is.EqualTo("甲"));
+
+            // 3 other members: all cards render from the supplied live projection.
+            // Only the head-first rule is contractual; the remaining order is not.
+            view.RenderRelations(new[] { selected, first, second, third }, selected.PersonId);
+            Assert.That(empty.gameObject.activeSelf, Is.False);
+            foreach (GameObject card in cards)
+                Assert.That(card.activeSelf, Is.True);
+            string[] shownNames =
+            {
+                Find(AddM02DailyActionPanel.RelationNameName + "_1").GetComponent<Text>().text,
+                Find(AddM02DailyActionPanel.RelationNameName + "_2").GetComponent<Text>().text,
+                Find(AddM02DailyActionPanel.RelationNameName + "_3").GetComponent<Text>().text
+            };
+            Assert.That(shownNames, Is.EquivalentTo(new[] { "甲", "乙", "丙" }));
+
+            // Switching the selected person re-drives the same render path.
+            view.RenderRelations(new[] { selected, first, second, third }, first.PersonId);
+            Assert.That(empty.gameObject.activeSelf, Is.False);
+            foreach (GameObject card in cards)
+                Assert.That(card.activeSelf, Is.True);
+            Assert.That(Find(AddM02DailyActionPanel.RelationNameName + "_1")
+                .GetComponent<Text>().text, Is.EqualTo("选中人物"),
+                "the head of household sorts first among the remaining relations");
+
+            // Switching to a person with no other members shows the empty state.
+            view.RenderRelations(new[] { first }, first.PersonId);
+            Assert.That(empty.gameObject.activeSelf, Is.True);
+            Assert.That(empty.text, Does.Contain("暂无其他可展示的关系"));
+            foreach (GameObject card in cards)
+                Assert.That(card.activeSelf, Is.False);
+
+            // No selected person: no fabricated relation cards and an explicit hint.
+            view.RenderRelations(new[] { selected }, default(PersonId));
+            Assert.That(empty.gameObject.activeSelf, Is.True);
+            Assert.That(empty.text, Does.Contain("尚未选择人物"));
+            foreach (GameObject card in cards)
+                Assert.That(card.activeSelf, Is.False);
+        }
+
+        [Test]
+        public void Validate_RequiresTheBoundRelationsEmptyText()
+        {
+            Assert.That(AddM02DailyActionPanel.Validate(_scene, out string baseline),
+                Is.True, baseline);
+            CharacterDailyPageView view = View();
+            Text empty = Find(AddM02DailyActionPanel.RelationsEmptyName).GetComponent<Text>();
+            var serialized = new SerializedObject(view);
+            SerializedProperty property = serialized.FindProperty("relationsEmptyText");
+            Assert.That(property, Is.Not.Null);
+            Assert.That(property.objectReferenceValue, Is.EqualTo(empty),
+                "the generated page view must reference the generated empty-state Text");
+
+            property.objectReferenceValue = null;
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+            try
+            {
+                Assert.That(AddM02DailyActionPanel.Validate(_scene, out string error), Is.False);
+                Assert.That(error, Does.Contain("relationsEmptyText"));
+            }
+            finally
+            {
+                property.objectReferenceValue = empty;
+                serialized.ApplyModifiedPropertiesWithoutUndo();
+            }
+            Assert.That(AddM02DailyActionPanel.Validate(_scene, out string restored),
+                Is.True, restored);
+        }
+
+        [Test]
+        public void Validate_RejectsRelationsEmptyTextOutsideRelationsBody()
+        {
+            Transform empty = Find(AddM02DailyActionPanel.RelationsEmptyName);
+            Transform originalParent = empty.parent;
+            Assert.That(originalParent.name, Is.EqualTo(AddM02DailyActionPanel.RelationsBodyName));
+
+            empty.SetParent(Find(AddM02DailyActionPanel.ProfileBodyName), false);
+            try
+            {
+                Assert.That(AddM02DailyActionPanel.Validate(_scene, out string error), Is.False);
+                Assert.That(error, Does.Contain("direct child of M02RelationsBody"));
+            }
+            finally
+            {
+                empty.SetParent(originalParent, false);
+            }
+            Assert.That(AddM02DailyActionPanel.Validate(_scene, out string restored),
+                Is.True, restored);
+        }
+
+        private static M2RosterRow RelationRow(string id, string name, bool isHead = false) =>
+            new M2RosterRow(new PersonId(id), name,
+                isHead ? FamilyMemberRole.Head : FamilyMemberRole.DirectKin, 30, "第二代",
+                "亲族", isHead, false, false);
 
         [Test]
         public void PageView_ProgressAndScheduleFollowTheScheduledAction()

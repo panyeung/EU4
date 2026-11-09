@@ -296,15 +296,161 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
+        public void OpenTownMenu_UsesMissionPanelWhenOverviewIsMissing()
+        {
+            var missionObject = new GameObject("MissionPanel_Test");
+            var missionRoot = new GameObject("MissionRoot_Test");
+            var panel = missionObject.AddComponent<SupplyShortageMissionPanel>();
+            panel.BindReferences(missionRoot,
+                CreateText("Stage"), CreateText("Objective"), CreateText("Merit"), CreateText("MissionFeedback"),
+                CreateButton("Accept"), CreateButton("Investigate"), CreateButton("Negotiate"), CreateButton("Report"));
+            _controller.BindSupplyShortageMissionPanel(panel);
+
+            try
+            {
+                _controller.OpenTownMenu();
+
+                Assert.That(_townRoot.activeSelf, Is.True, "Town entry must show its overview root.");
+                Assert.That(panel.IsOpen, Is.True, "Legacy scenes without the overview must keep the mission entry available.");
+
+                _controller.ToggleSupplyShortageMissionPanel();
+                Assert.That(panel.IsOpen, Is.False);
+                _controller.ToggleSupplyShortageMissionPanel();
+                Assert.That(panel.IsOpen, Is.True);
+                Assert.That(_townRoot.activeSelf, Is.True);
+            }
+            finally
+            {
+                Object.DestroyImmediate(missionRoot);
+                Object.DestroyImmediate(missionObject);
+            }
+        }
+
+        [Test]
+        public void TownIllustration_UsesDistinctArtworkForEachCity()
+        {
+            Sprite kiyosu = SengokuUiArt.TownIllustration(LocationId.Kiyosu);
+            Sprite atsuta = SengokuUiArt.TownIllustration(LocationId.Atsuta);
+            Sprite nagoya = SengokuUiArt.TownIllustration(LocationId.Nagoya);
+
+            Assert.That(kiyosu, Is.Not.Null);
+            Assert.That(atsuta, Is.Not.Null);
+            Assert.That(nagoya, Is.Not.Null);
+            Assert.That(kiyosu, Is.Not.SameAs(atsuta));
+            Assert.That(atsuta, Is.Not.SameAs(nagoya));
+            Assert.That(kiyosu, Is.Not.SameAs(nagoya));
+        }
+
+        [Test]
+        public void TownOverview_BindsCurrentCityIdentityAndArtwork()
+        {
+            var artObject = new GameObject("TownArt", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            artObject.transform.SetParent(_townRoot.transform, false);
+            Text name = CreateText("TownName"); name.transform.SetParent(_townRoot.transform, false);
+            Text feature = CreateText("TownFeature"); feature.transform.SetParent(_townRoot.transform, false);
+            Text residents = CreateText("Residents"); residents.transform.SetParent(_townRoot.transform, false);
+            Text rumors = CreateText("Rumors"); rumors.transform.SetParent(_townRoot.transform, false);
+            Button roster = CreateButton("Roster"); roster.transform.SetParent(_townRoot.transform, false);
+            Button mission = CreateButton("Mission"); mission.transform.SetParent(_townRoot.transform, false);
+            var panel = _townRoot.AddComponent<TownOverviewPanel>();
+            panel.BindReferences(artObject.GetComponent<Image>(), name, feature, residents, rumors,
+                roster, mission, _return);
+            _controller.BindTownOverviewPanel(panel);
+
+            _controller.OpenTownMenu();
+            Assert.That(name.text, Is.EqualTo("清洲"));
+            Assert.That(feature.text, Does.Contain("城郭"));
+            Assert.That(artObject.GetComponent<Image>().sprite, Is.SameAs(SengokuUiArt.TownIllustration(LocationId.Kiyosu)));
+
+            _controller.ReturnToMap();
+            _controller.SelectDestination(LocationId.Atsuta);
+            _controller.ConfirmTravel();
+            Assert.That(name.text, Is.EqualTo("热田"));
+            Assert.That(feature.text, Does.Contain("神宫"));
+            Assert.That(artObject.GetComponent<Image>().sprite, Is.SameAs(SengokuUiArt.TownIllustration(LocationId.Atsuta)));
+
+            _controller.ReturnToMap();
+            _controller.SelectDestination(LocationId.Nagoya);
+            Assert.That(_controller.CurrentPreview, Is.Null, "Atsuta to Nagoya has no direct route.");
+            _controller.SelectDestination(LocationId.Kiyosu);
+            _controller.ConfirmTravel();
+            _controller.ReturnToMap();
+            _controller.SelectDestination(LocationId.Nagoya);
+            _controller.ConfirmTravel();
+            Assert.That(name.text, Is.EqualTo("那古野"));
+            Assert.That(feature.text, Does.Contain("市集"));
+            Assert.That(artObject.GetComponent<Image>().sprite, Is.SameAs(SengokuUiArt.TownIllustration(LocationId.Nagoya)));
+        }
+
+        [Test]
+        public void TownOverview_MissionCanOpenAndReturnWithoutHidingItsActions()
+        {
+            var overviewRoot = new GameObject("TownOverview_Test", typeof(RectTransform));
+            overviewRoot.transform.SetParent(_townRoot.transform, false);
+            var artObject = new GameObject("TownArt", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            artObject.transform.SetParent(overviewRoot.transform, false);
+            Text name = CreateText("TownName"); name.transform.SetParent(overviewRoot.transform, false);
+            Text feature = CreateText("TownFeature"); feature.transform.SetParent(overviewRoot.transform, false);
+            Text residents = CreateText("Residents"); residents.transform.SetParent(overviewRoot.transform, false);
+            Text rumors = CreateText("Rumors"); rumors.transform.SetParent(overviewRoot.transform, false);
+            Button roster = CreateButton("Roster"); roster.transform.SetParent(overviewRoot.transform, false);
+            Button mission = CreateButton("Mission"); mission.transform.SetParent(overviewRoot.transform, false);
+            _return.transform.SetParent(_townRoot.transform, false);
+
+            var missionObject = new GameObject("MissionPanel_Test");
+            missionObject.transform.SetParent(_townRoot.transform, false);
+            var missionPanel = missionObject.AddComponent<SupplyShortageMissionPanel>();
+            missionPanel.BindReferences(missionObject,
+                CreateText("Stage"), CreateText("Objective"), CreateText("Merit"), CreateText("MissionFeedback"),
+                CreateButton("Accept"), CreateButton("Investigate"), CreateButton("Negotiate"), CreateButton("Report"));
+            _controller.BindSupplyShortageMissionPanel(missionPanel);
+
+            var overview = overviewRoot.AddComponent<TownOverviewPanel>();
+            overview.BindReferences(artObject.GetComponent<Image>(), name, feature, residents, rumors,
+                roster, mission, _return);
+            _controller.BindTownOverviewPanel(overview);
+
+            try
+            {
+                _controller.OpenTownMenu();
+                Assert.That(_controller.InTownMenu, Is.True);
+                Assert.That(_controller.HasSupplyShortageMissionPanel, Is.True);
+                Assert.That(overview.isActiveAndEnabled, Is.True);
+                Assert.That(mission.interactable, Is.True);
+                mission.onClick.Invoke();
+
+                Assert.That(missionPanel.IsOpen, Is.True);
+                Assert.That(missionObject.activeSelf, Is.True);
+                Assert.That(mission.transform.parent, Is.SameAs(_townRoot.transform));
+                Assert.That(mission.transform.GetSiblingIndex(), Is.LessThan(_return.transform.GetSiblingIndex()));
+
+                mission.onClick.Invoke();
+
+                Assert.That(missionPanel.IsOpen, Is.False);
+                Assert.That(missionObject.activeSelf, Is.False);
+                Assert.That(mission.transform.parent, Is.SameAs(overviewRoot.transform));
+                Assert.That(_townRoot.activeSelf, Is.True);
+                Assert.That(_controller.InTownMenu, Is.True);
+            }
+            finally
+            {
+                Object.DestroyImmediate(missionObject);
+                Object.DestroyImmediate(overviewRoot);
+            }
+        }
+
+        [Test]
         public void ReturnToMap_ExitsTownMenuToMapView()
         {
             _controller.SelectDestination(LocationId.Atsuta);
             _controller.ConfirmTravel();
             Assert.That(_controller.InTownMenu, Is.True);
+            Assert.That(_worldClockPanel.gameObject.activeSelf, Is.False);
 
             _controller.ReturnToMap();
 
             Assert.That(_controller.InTownMenu, Is.False);
+            Assert.That(_worldClockPanel.gameObject.activeSelf, Is.True);
             Assert.That(_townRoot.activeSelf, Is.False);
             Assert.That(_marker.gameObject.activeSelf, Is.True);
             Assert.That(_feedback.gameObject.activeSelf, Is.True);

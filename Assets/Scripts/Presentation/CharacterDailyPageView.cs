@@ -59,6 +59,8 @@ namespace SengokuChronicle.Presentation
         [SerializeField] private GameObject[] relationRoots;
         [SerializeField] private Text[] relationNameTexts;
         [SerializeField] private Text[] relationDetailTexts;
+        // Optional truthful empty state; older generated scenes simply omit it.
+        [SerializeField] private Text relationsEmptyText;
 
         [Header("Tabs")]
         [SerializeField] private GameObject profileBody;
@@ -375,14 +377,26 @@ namespace SengokuChronicle.Presentation
 
         private void RenderRelations(GameSession session, PersonId selectedId)
         {
+            IReadOnlyList<M2RosterRow> roster = session != null ? session.FamilyRoster : null;
+            RenderRelations(roster, selectedId);
+        }
+
+        /// <summary>
+        /// Renders the relation area from an explicit roster projection. This is the
+        /// single path used by <see cref="Render"/>; it is public so previews/tests can
+        /// exercise real 0/1/3-other-member and selection-switch states without
+        /// synthesising generated Text objects.
+        /// </summary>
+        public void RenderRelations(IReadOnlyList<M2RosterRow> roster, PersonId selectedId)
+        {
             if (relationRoots == null || relationNameTexts == null ||
                 relationDetailTexts == null)
                 return;
 
+            bool hasSelection = !selectedId.IsEmpty;
             var others = new List<M2RosterRow>();
-            if (session != null && session.FamilyRoster != null)
+            if (hasSelection && roster != null)
             {
-                IReadOnlyList<M2RosterRow> roster = session.FamilyRoster;
                 for (int i = 0; i < roster.Count; i++)
                     if (roster[i].PersonId != selectedId)
                         others.Add(roster[i]);
@@ -394,6 +408,24 @@ namespace SengokuChronicle.Presentation
                 });
             }
 
+            // Truthful empty copy: no selection, empty roster and a selected person
+            // without other members are distinct states, never fabricated relations.
+            string emptyCopy = null;
+            if (!hasSelection)
+                emptyCopy = roster != null && roster.Count == 0
+                    ? "家族名册为空，暂无可展示的关系。"
+                    : "尚未选择人物，无法展示关系。";
+            else if (others.Count == 0)
+                emptyCopy = roster != null && roster.Count == 0
+                    ? "家族名册为空，暂无可展示的关系。"
+                    : "该人物暂无其他可展示的关系。";
+
+            if (relationsEmptyText != null)
+            {
+                relationsEmptyText.gameObject.SetActive(emptyCopy != null);
+                if (emptyCopy != null)
+                    relationsEmptyText.text = emptyCopy;
+            }
             for (int i = 0; i < relationRoots.Length; i++)
             {
                 bool show = i < others.Count;

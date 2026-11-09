@@ -31,6 +31,7 @@ namespace SengokuChronicle.Editor
             WorldMapController controller = mapRoot != null ? mapRoot.GetComponent<WorldMapController>() : null;
             TownNpcDialoguePanel panel = FindComponent<TownNpcDialoguePanel>(scene);
             SupplyShortageMissionPanel missionPanel = FindComponent<SupplyShortageMissionPanel>(scene);
+            TownOverviewPanel townOverviewPanel = FindComponent<TownOverviewPanel>(scene);
             SaveLoadPanel saveLoadPanel = FindComponent<SaveLoadPanel>(scene);
             TitleScreenController titleController = FindComponent<TitleScreenController>(scene);
             DemoSummaryPanel demoPanel = FindComponent<DemoSummaryPanel>(scene);
@@ -53,6 +54,7 @@ namespace SengokuChronicle.Editor
             CheckFound(report, ref errors, "WorldMapController", controller);
             CheckFound(report, ref errors, "TownNpcDialoguePanel", panel);
             CheckFound(report, ref errors, "SupplyShortageMissionPanel", missionPanel);
+            CheckFound(report, ref errors, "TownOverviewPanel", townOverviewPanel);
             CheckFound(report, ref errors, "SaveLoadPanel", saveLoadPanel);
             CheckFound(report, ref errors, "TitleScreenController", titleController);
             CheckFound(report, ref errors, "DemoSummaryPanel", demoPanel);
@@ -72,6 +74,10 @@ namespace SengokuChronicle.Editor
                 AddError(report, ref errors, missionError);
             else
                 report.AppendLine("PASS M4a mission hierarchy, unique objects, bindings, and containment.");
+            if (!UpdateTownOverview.Validate(scene, out string townOverviewError))
+                AddError(report, ref errors, townOverviewError);
+            else
+                report.AppendLine("PASS town overview hierarchy, city-specific art controls, and controller binding.");
             if (!AddM4bMissionBoard.Validate(scene, out string m4bError))
                 AddError(report, ref errors, m4bError);
             else

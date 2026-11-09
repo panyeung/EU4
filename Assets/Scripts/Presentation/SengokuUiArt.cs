@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+using SengokuChronicle.Domain;
 
 namespace SengokuChronicle.Presentation
 {
@@ -22,6 +23,9 @@ namespace SengokuChronicle.Presentation
         public const string IndigoPatternPath = "Generated/indigo_pattern_tile";
         public const string EventIllustrationPath = "Generated/event_rainy_visitor";
         public const string WorldMapIllustrationPath = "Generated/world_map_illustration";
+        public const string KiyosuTownIllustrationPath = "Generated/town_kiyosu";
+        public const string AtsutaTownIllustrationPath = "Generated/town_atsuta";
+        public const string NagoyaTownIllustrationPath = "Generated/town_nagoya";
 
         // Sprite indices inside the generated 4x4 icon atlas (row-major, top-left
         // first). The names are the importer's stable ui_icons_atlas_N entries.
@@ -102,6 +106,17 @@ namespace SengokuChronicle.Presentation
         public static Sprite WorldMapIllustration =>
             FindSprite(WorldMapIllustrationPath, "world_map_illustration_0")
             ?? FindSprite(WorldMapIllustrationPath, "world_map_illustration");
+
+        /// <summary>Distinct generated town art, with no generic-city fallback.</summary>
+        public static Sprite TownIllustration(LocationId location)
+        {
+            string path;
+            if (location == LocationId.Kiyosu) path = KiyosuTownIllustrationPath;
+            else if (location == LocationId.Atsuta) path = AtsutaTownIllustrationPath;
+            else if (location == LocationId.Nagoya) path = NagoyaTownIllustrationPath;
+            else return null;
+            return FindSprite(path, path.Substring(path.LastIndexOf('/') + 1) + "_0");
+        }
 
         /// <summary>
         /// Gives a light panel its parchment grain: the tile is drawn as a repeating
