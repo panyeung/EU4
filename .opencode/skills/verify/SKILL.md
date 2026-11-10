@@ -1,0 +1,170 @@
+---
+name: verify
+description: Drive 《影之一族》/Sengoku Chronicle in the live Unity Editor — FoundationScene Play Mode, HUD and panel flows, console evidence — and prove a user-visible feature actually works. Use before claiming a gameplay change works, or when asked to play-test, screenshot, or acceptance-check the game.
+---
+
+# Verify 《影之一族》 (Unity, live Editor)
+
+The app is a Unity 6 (6000.6.6f1) 2D game rendered inside the Editor's Game view. There is
+no separate executable: the thing a user touches is Play Mode in `FoundationScene`, and the
+thing that proves behavior is what the running game does, not that the code compiled.
+
+Drive it through the **Unity Pipeline** package (`com.unity.pipeline`, server port 7800-7849)
+with the `unity` CLI already on `PATH`. Never drive it through the GUI when a command
+exists; never start a second Editor, and never run `-batchmode`/`-runTests` against
+`C:\Users\panye\My project` while an Editor holds it.
+
+Project root: `C:\Users\panye\My project`. Every command below runs from there.
+
+## Launch
+
+```powershell
+cd "C:\Users\panye\My project"
+unity pipeline list
+unity command set_autotick --enable true
+unity command editor_status
+unity command open_scene --path Assets/Scenes/FoundationScene.unity
+unity command editor_play
+```
+
+Ready means `unity command editor_status` reports `"status":"ready"` and
+`"playMode":"playing"`. Poll it; do not trust the `editor_play` reply string alone — on
+2026-11-10 it answered `Entered play mode` while the Editor refused with
+`All compiler errors have to be fixed before you can enter playmode!` and stayed
+`"playMode":"stopped"`.
+
+Play Mode stalls while the Editor is unfocused: `VerifyUi.State` froze at the same
+`frame=`/`time=` across a 3 s gap and `capture_game_view` returned a stale frame. Run
+`unity command editor_focus` before you capture, and treat a frozen frame counter as "this
+image is old", never as evidence.
+
+Launch from an empty state: the Editor may be sitting on an untitled scene, so opening
+`FoundationScene` is part of launch, not a convenience. If the scene is dirty, stop and
+report — do not save over someone's work.
+
+Teardown is `unity command editor_stop`. Never save the scene as part of teardown.
+
+## Doctor
+
+One read-only pass that answers "is this instance worth driving?":
+
+```powershell
+unity pipeline list          # exactly one entry, this path, 服务器可达 = true, 服务器端口 7800-7849
+unity command console_status # groundTruth.compilationFailed must be false
+unity command editor_status  # status "ready" (not "blocked_by_dialog"), compiling false
+unity command list_open_scenes
+```
+
+Require `groundTruth.compilationFailed=false`. With `true` the Editor will not enter Play
+Mode at all, and every runtime claim you make afterwards is invented. Report the compile
+error (file, line, message) and stop; do not paper over it with an EditMode test run.
+
+Require the active scene path to be `Assets/Scenes/FoundationScene.unity`. An untitled scene
+reports `"sceneName":""` and `list_open_scenes` shows empty `path`; Play Mode there proves
+nothing about the game.
+
+`"status":"blocked_by_dialog"` means a modal dialog owns the main thread and no command can
+run until a human dismisses it. Stop and say which dialog, with its title and buttons.
+
+## Drive
+
+Windows PowerShell 5.1 strips the quotes out of a `--args '["..."]'` argument before it
+reaches `unity`, and `run_script` then rejects the payload as "not a JArray". Always drive
+through the wrapper, which builds the JSON in-process:
+
+```powershell
+python .opencode/skills/verify/scripts/unity-run.py state
+python .opencode/skills/verify/scripts/unity-run.py buttons
+python .opencode/skills/verify/scripts/unity-run.py texts
+python .opencode/skills/verify/scripts/unity-run.py click Canvas/M6TitleRoot/M6MainMenuRoot/M6NewGameButton
+python .opencode/skills/verify/scripts/unity-run.py probe Canvas/M02DailyActionRoot/M02TopBar/M02HeaderDateText
+```
+
+`click` takes the ASCII hierarchy path from `buttons`, never a Chinese label: the label has
+to survive the console code page on the way to the Editor, and it does not. `probe` returns
+one field, which is what an evidence file should quote.
+
+`VerifyUi.Click` raises the control's real `onClick` after checking `interactable`, so it
+runs the same handler a pointer click runs. It does not hit-test through the EventSystem: a
+control hidden behind another panel still clicks. When the point of the run is that
+something is *reachable*, confirm it with a capture in the same step.
+
+Capture the Game view — this reads the Game window's own render target, so Screen Space
+Overlay UI (every HUD in this project) is included:
+
+```powershell
+unity command editor_focus
+unity command capture_game_view --save_path Assets/Logs/verify/_scratch/<stamp>-<feature>-<step>.png
+```
+
+`save_path` always resolves under `Assets/` (an absolute path is remapped, and `..` is
+rejected), so captures land in the imported asset tree and Unity logs
+`Files generated by test without cleanup`. Write them under `Assets/Logs/verify/_scratch/`,
+read them, then delete `Assets/Logs` and `Assets/Logs.meta` before you finish. Text goes
+under `Logs/verify/`, which is gitignored.
+
+Keep raw output small: one `probe` per value you intend to quote, and parse rather than
+pasting whole console dumps into chat.
+
+## Evidence
+
+One file per run: `Logs/verify/<stamp>-<feature>.md`. It holds:
+
+- the feature file and entry point used (`features/*.md`, feature ID);
+- the exact commands run, in order;
+- `editor_status` before and after Play Mode;
+- `console` output since a recorded cursor (`--since <seq> --since_session <session>`), errors included;
+- the state readback (`VerifyUi.State`, plus the specific values the feature promises);
+- a verdict line: `PASS`, `FAIL`, or `BLOCKED` with the reason.
+
+Proof standards:
+
+- Exercise the path a player takes. Do not assert on a private field where a HUD label is
+  the user-visible promise.
+- Capture the action and the resulting state, not only the last screen.
+- Treat compilation, EditMode results, and Play Mode behavior as three separate claims.
+- PNGs are for your eyes only during the run. Write them under `Assets/Logs/verify/_scratch/`,
+  inspect them, then delete them. Durable evidence is the text file, never a screenshot.
+
+## Cleanup
+
+```powershell
+unity command editor_stop
+```
+
+Then delete `Assets/Logs/verify/_scratch/`, `Assets/Logs`, and `Assets/Logs.meta` (screenshots
+that Unity imported as assets), and keep `Logs/verify/*.md`. Kill nothing by process name; the
+Editor belongs to the user and must survive the run, and the scene must stay unsaved.
+
+## Status
+
+Proven on 2026-11-10 on this checkout, end to end: doctor → Play Mode → `开始新游戏` →
+`选择剧本` → `固定三代剧本（SC-013）` → campaign HUD, with `PASS` recorded in
+`Logs/verify/20261110-2332-title-new-game.md`. `editor_play`, `editor_stop`, `editor_focus`,
+`console`, `console_status`, `run_script` (all five helper entries), and `capture_game_view`
+were all exercised against the live Editor.
+
+That run also corrected the map: real labels are `开始新游戏` / `继续游戏`, a scenario
+selector sits between the title and the campaign, and the date a player reads is
+`Canvas/M02DailyActionRoot/M02TopBar/M02HeaderDateText`.
+
+A second run on 2026-11-10 (`Logs/verify/20261110-2341-month-turn-travel-succession.md`) proved
+the clock (`推进一天` 4 月 1 日 → 4 月 2 日, `结束月份` → 5 月 1 日) and the succession HUD, and
+**failed** the travel preview: selecting a town reported `无直达路线` while standing in a town the
+route table connects, with 766 `IndexOutOfRangeException` entries from
+`UnityEngine.UI.Selectable.OnEnable`. Save/load has not been driven, because it writes a real
+save slot and the user has one on this machine.
+
+## Helpers
+
+- `scripts/VerifyUi.cs` — `unity command run_script` entry points `Buttons()`, `Texts()`,
+  `Text(path)`, `Click(label)`, `ClickPath(path)`, `State()`. It lives outside `Assets/` so
+  running it never triggers an import or a domain reload.
+- `scripts/unity-run.py` — the wrapper you actually call: `state | buttons | texts | click
+  <ascii-path> | probe <ascii-path>`. It exists because the shell mangles JSON `--args`.
+- `features/` — the maintained feature map. Read `features/README.md` first.
+
+## Feature map
+
+Start from `features/README.md`. A proof that drives one convenient screen is incomplete
+when the map lists other entry points for the same feature.
