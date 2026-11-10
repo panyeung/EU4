@@ -239,6 +239,7 @@ namespace SengokuChronicle.Presentation
             // composition or refresh the event view.
             if (_hasShownPage && page == _currentPage)
             {
+                ConfigureRosterRail();
                 RestoreCurrentPageVisibility();
                 StyleNavigationSelection(page);
                 return;
@@ -488,6 +489,7 @@ namespace SengokuChronicle.Presentation
 
         private void StyleSharedFrame()
         {
+            ConfigureRosterRail();
             Image navigation = navigationRoot != null ? navigationRoot.GetComponent<Image>() : null;
             if (navigation != null)
             {
@@ -536,6 +538,24 @@ namespace SengokuChronicle.Presentation
                 ApplyParchmentToChild(panelHost, "M02ProfilePanel");
                 ApplyParchmentToChild(panelHost, "M02ActionPanel");
             }
+        }
+
+        private void ConfigureRosterRail()
+        {
+            if (navigationRoot == null || characterPanelRoot == null)
+                return;
+            Transform rail = navigationRoot.transform;
+            Transform roster = rail.Find("M02DailyActionScroll") ??
+                characterPanelRoot.transform.Find("M02DailyActionScroll");
+            if (!(roster is RectTransform rect))
+                return;
+            if (roster.parent != rail)
+            {
+                // The opaque shared rail draws after the page; its roster must be a child.
+                roster.SetParent(rail, false);
+                rect.anchoredPosition = new Vector2(8f, -330f);
+            }
+            SetPanel(roster.gameObject, _currentPage == ReferenceGalleryPage.Character);
         }
 
         private static void ApplyParchmentToChild(Transform parent, string childName)

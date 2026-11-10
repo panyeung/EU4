@@ -165,6 +165,41 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
+        public void CharacterRoster_RendersAboveRailAndHidesWhenLeavingCharacterPage()
+        {
+            ReferenceGalleryNavigator navigator = Find(AddM02DailyActionPanel.RootName)
+                .GetComponent<ReferenceGalleryNavigator>();
+            navigator.ShowPage(ReferenceGalleryPage.Character);
+            Transform rail = Find(AddM02DailyActionPanel.NavRailName);
+            Transform roster = Find(AddM02DailyActionPanel.ScrollName);
+            Transform originalRoster = roster;
+
+            Assert.That(roster.parent, Is.SameAs(rail),
+                "a roster inside the earlier page panel is covered by the later opaque rail");
+            Assert.That(roster.GetSiblingIndex(), Is.GreaterThan(
+                rail.Find(ReferenceGalleryNavigator.NavPatternChildName).GetSiblingIndex()));
+            var rect = (RectTransform)roster;
+            Assert.That(-rect.anchoredPosition.y, Is.GreaterThan(322f),
+                "the list must start below the rail's roster header and rule");
+            Assert.That(-rect.anchoredPosition.y + rect.rect.height,
+                Is.LessThanOrEqualTo(((RectTransform)rail).rect.height));
+
+            navigator.ShowPage(ReferenceGalleryPage.Map);
+            Assert.That(rail.gameObject.activeSelf, Is.True);
+            Assert.That(roster.gameObject.activeSelf, Is.False,
+                "the shared rail stays visible, but character rows must leave other pages");
+            navigator.ShowPage(ReferenceGalleryPage.Character);
+            navigator.ShowPage(ReferenceGalleryPage.Character);
+            Assert.That(Find(AddM02DailyActionPanel.ScrollName), Is.SameAs(originalRoster));
+            Assert.That(roster.gameObject.activeInHierarchy, Is.True);
+            Find("M02DailyActionRow_" + M2FixedScenario.MasatsunaId.Value)
+                .GetComponent<Button>().onClick.Invoke();
+            Assert.That(Panel().SelectedPersonId, Is.EqualTo(M2FixedScenario.MasatsunaId));
+            Assert.That(View().ProfileNameLine, Is.EqualTo(_session.FamilyRoster.Single(
+                person => person.PersonId == M2FixedScenario.MasatsunaId).DisplayName));
+        }
+
+        [Test]
         public void Generator_ProducesValidIdempotentSceneAndPreservesTheClockBindings()
         {
             Assert.That(AddM02DailyActionPanel.Validate(_scene, out string error), Is.True, error);
