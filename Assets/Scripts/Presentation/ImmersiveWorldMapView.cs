@@ -22,8 +22,9 @@ namespace SengokuChronicle.Presentation
         public void Configure()
         {
             var root = (RectTransform)transform;
-            if (!configured && root.rect.width < 950f) informationExpanded = false;
-            if (!configured && root.rect.width < 680f) travelExpanded = false;
+            bool resized = !configured || previousSize != root.rect.size;
+            if (resized && root.rect.width < 950f) informationExpanded = false;
+            if (resized && root.rect.width < 680f) travelExpanded = false;
             configured = true;
             previousSize = root.rect.size;
             Layout();

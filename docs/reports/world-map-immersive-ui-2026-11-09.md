@@ -1,6 +1,6 @@
 # 沉浸式世界地图 UI 验证记录
 
-状态：实现、编译、EditMode、Validator、独立只读复审与 16:9 lead Play Mode 通过；窄窗实机仍待补。不是 M02 最终用户里程碑验收。
+状态：实现、编译、EditMode、Validator、独立只读复审与 960×720 / 1280×720 lead Play Mode 检查通过。M02 最终用户里程碑验收仍待用户确认。
 
 ## 实现范围
 
@@ -39,9 +39,21 @@
 - 没有点击游戏保存；active 存档与 `.bak` SHA256 均保持原值：`1E61ED9C…BCB92C`、`F1C0630E…A4CBE`。
 - 最终字体/存读档结果色检查：再次进入 Play Mode → 继续游戏 → 地图 → 读档，白色“已载入存档”可见。该轮及退出后 Console 均为 `0 logs / 0 warnings / 0 errors`。已退出 Play Mode；临时 runner 和 `.meta` 均不存在，截图查看后即时删除，专用缓存 PNG 计数为 0。
 
+## 2026-11-10 窄屏家谱与全量验收
+
+- 当前 Unity 6000.6.6f1 Editor PID `126040`，项目路径正确。窄屏与标准逻辑分辨率均由 Game View 预设实际切换读回，不使用 batchmode。
+- 家谱窄屏布局沿用既有 ScrollRect/content，只收窄视口并添加自动隐藏的 uGUI 横向滚动条；重复布局保留 Scrollbar 管理的 handle anchors/宽度。没有改变家谱数据、卡片字号、节点布局、存档或场景。
+- TDD 回归：初始断言红测 `0/1`，因为横向滚动条为空；修复后聚焦测试 `Logs/map-scroll-green.xml` 为 `1 passed / 0 failed`。独立只读 QA 第五轮 ACCEPT；修复前曾发现重复布局把 handle 宽度归零，现由重复配置后的非零宽度断言覆盖。
+- 最终完整 EditMode：`Logs/map-scroll-full.xml`，`1386 passed / 0 failed / 0 skipped`。Unity 编译无 C# 错误；移除本轮临时 runner 后 Editor 最后一次刷新/编译成功，`Editor.log` 未见 C# 编译错误。
+- 960×720 Play Mode：家谱卡片避开左导航与右侧 HUD；点击横向滚动条后图内容向右移动，右侧成员进入视口。地图左右栏可分别操作；选择热田显示次日抵达预览，取消后日期与位置不变；结束月份按钮可用并推进到 `1560-06-01`。
+- 1280×720 Play Mode：地图与家谱恢复标准宽度，家谱/地图导航可往返；顶部资源栏、地图地点、固定时间操作可见。退出 Play Mode 后恢复原 4K UHD Game View 预设。
+- 最终 FoundationScene Validator：`Logs/SceneValidationReport.txt` 于 `2026-11-10 06:20:51` 更新，`Loaded: True; Dirty: False; RESULT: PASS; Errors: 0`。Play Mode 后 Console 为 `1 log / 0 warnings / 0 errors`，唯一日志为 Validator 标题；场景未保存或改动。
+- 用户 active 与备份存档 SHA256 未变：`1E61ED9C…BCB92C`、`F1C0630E…A4CBE`。本次没有执行游戏内保存。
+- 截图仅在 Computer Use 返回的内存图像中查看，未写入项目或备份；已退出 Play Mode，移除了临时 runner 与 `.meta`。M02 最终用户验收仍未宣称完成。
+
 ## 验证边界
 
-- 实机 Game View 为 4K UHD、16:9，Canvas 按现有 1280×720 逻辑设计。尝试 GUI 切换分辨率未得到可靠读回，不宣称原生 1280×720 或窄窗实机通过；600 宽重排由 EditMode 几何与显隐断言覆盖。
+- 实机检查覆盖 960×720、1280×720 两个 Game View 预设；随后恢复 4K UHD。未宣称全屏器件/所有任意窗口尺寸均通过。
 - 不新增平移/缩放、队伍、传闻或委托数据。地图沿用现有插画及地点；不宣称与参考商业游戏画面逐像素一致。
 - 当前已登记家族树与编年史能够从新快捷入口进入；原家族页 HUD 的后续独立排版整理不在本轮范围。
 - 本轮实机验证 GUI 读档，没有再次写入用户游戏存档；原保存命令由既有保存测试覆盖。

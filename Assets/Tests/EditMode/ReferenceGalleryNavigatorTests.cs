@@ -805,6 +805,17 @@ namespace SengokuChronicle.Tests.EditMode
                 typeof(CanvasRenderer), typeof(Image));
             familyPanel.transform.SetParent(familyRoot.transform, false);
             ((RectTransform)familyPanel.transform).sizeDelta = new Vector2(760f, 620f);
+            GameObject scroll = Create("FamilyRosterScroll", typeof(RectTransform), typeof(ScrollRect));
+            scroll.transform.SetParent(familyPanel.transform, false);
+            ((RectTransform)scroll.transform).sizeDelta = new Vector2(700, 410);
+            var graph = Create("Graph", typeof(RectTransform));
+            graph.transform.SetParent(scroll.transform, false);
+            var graphRect = (RectTransform)graph.transform;
+            graphRect.anchorMin = graphRect.anchorMax = graphRect.pivot = new Vector2(0, 1);
+            graphRect.sizeDelta = new Vector2(720, 732);
+            var scrollRect = scroll.GetComponent<ScrollRect>();
+            scrollRect.viewport = (RectTransform)scroll.transform;
+            scrollRect.content = graphRect;
             familyRoot.AddComponent<FamilyRosterPanel>();
 
             GameObject successionRoot = Create("SuccessionRoot", typeof(RectTransform));
@@ -846,6 +857,24 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(right,
                 Is.LessThanOrEqualTo(640f - 16f - hud.sizeDelta.x),
                 "roster and succession HUD do not overlap");
+            ((RectTransform)host.transform).sizeDelta = new Vector2(1108, 831);
+            typeof(ReferenceGalleryNavigator).GetMethod("LateUpdate",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).Invoke(navigator, null);
+            Assert.That(roster.anchoredPosition.x - roster.rect.width / 2,
+                Is.GreaterThanOrEqualTo(-554 + 150), "narrow genealogy must clear the navigation rail");
+            Assert.That(roster.anchoredPosition.x + roster.rect.width / 2,
+                Is.LessThanOrEqualTo(554 - 16 - 340), "narrow genealogy must clear the succession HUD");
+            Assert.That(((RectTransform)scroll.transform).rect.width, Is.LessThan(roster.rect.width));
+            Assert.That(hud.anchoredPosition.y, Is.EqualTo(-100));
+            Assert.That(scrollRect.horizontalScrollbar, Is.Not.Null, "the full graph must be reachable without drag gestures");
+            typeof(ReferenceGalleryNavigator).GetMethod("StyleFamilyPage",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).Invoke(navigator, null);
+            Assert.That(familyPanel.transform.Find("FamilyRosterHorizontalScrollbar"), Is.Not.Null,
+                "re-entering the family page reuses its scrollbar");
+            Assert.That(scrollRect.horizontalScrollbar.handleRect.rect.width, Is.GreaterThan(0),
+                "reconfiguring the page preserves the Scrollbar-managed handle width");
+            scrollRect.horizontalScrollbar.value = 1;
+            Assert.That(graphRect.anchoredPosition.x, Is.LessThan(0), "scrollbar changes the existing graph offset");
         }
 
         [Test]
@@ -939,6 +968,59 @@ namespace SengokuChronicle.Tests.EditMode
                 ReferenceGalleryNavigator.EventsModalSize,
                 ReferenceGalleryNavigator.EventsRailPosition,
                 ReferenceGalleryNavigator.EventsRailSize), Is.False);
+        }
+
+        [Test]
+        public void CanvasResize_ReflowsMapAndHeaderWithoutReenteringThePage()
+        {
+            GameObject host = Create("CanvasHost", typeof(RectTransform));
+            var canvas = (RectTransform)host.transform;
+            canvas.sizeDelta = new Vector2(1280, 720);
+            var navigator = Create("Navigator", typeof(RectTransform)).AddComponent<ReferenceGalleryNavigator>();
+            navigator.transform.SetParent(host.transform, false);
+            GameObject map = Create("Map", typeof(RectTransform));
+            map.transform.SetParent(host.transform, false);
+            GameObject header = Create("M02TopBar", typeof(RectTransform));
+            header.transform.SetParent(navigator.transform, false);
+            string[] resources = { "功名", "人口", "资金", "物资", "情报" };
+            var chips = new List<RectTransform>();
+            for (int i = 0; i < resources.Length; i++)
+            {
+                var chip = Create("M02Chip_" + resources[i], typeof(RectTransform));
+                chip.transform.SetParent(header.transform, false);
+                var chipRect = (RectTransform)chip.transform;
+                chipRect.anchorMin = chipRect.anchorMax = chipRect.pivot = new Vector2(0, 1);
+                chipRect.anchoredPosition = new Vector2(662 + i * 116, -8);
+                chipRect.sizeDelta = new Vector2(108, 36);
+                chips.Add(chipRect);
+            }
+            Button[] buttons = new Button[ReferenceGalleryNavigator.PageCount];
+            for (int i = 0; i < buttons.Length; i++) buttons[i] = CreateButton("Tab" + i);
+            navigator.BindReferences(new[] { new ReferenceGalleryPageRoot(map, ReferenceGalleryPageMask.Map) },
+                buttons, Create("Character"), Create("Family"), Create("Household"), map,
+                buttons[0], Create("Rail", typeof(RectTransform)), header);
+            navigator.ShowPage(ReferenceGalleryPage.Map);
+            int returnCount = navigator.MapReturnCount;
+            canvas.sizeDelta = new Vector2(1108, 831); // CanvasScaler result for a 960x720 window.
+            typeof(ReferenceGalleryNavigator).GetMethod("LateUpdate",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).Invoke(navigator, null);
+            var mapRect = (RectTransform)map.transform;
+            Assert.That(mapRect.sizeDelta.x, Is.LessThan(950), "the parent resize must reach the map");
+            Assert.That(mapRect.anchoredPosition.x + mapRect.sizeDelta.x / 2,
+                Is.LessThanOrEqualTo(canvas.rect.xMax));
+            Assert.That(map.transform.Find("MapInformationSurface").gameObject.activeSelf, Is.False);
+            foreach (var chip in chips)
+            {
+                Assert.That(chip.anchoredPosition.x + chip.sizeDelta.x, Is.LessThan(1108), chip.name);
+                Assert.That(chip.anchoredPosition.y, Is.LessThan(-40), "resources move below the date row: " + chip.name);
+            }
+            Assert.That(navigator.MapReturnCount, Is.EqualTo(returnCount), "resize is presentation-only");
+            canvas.sizeDelta = new Vector2(1280, 720);
+            typeof(ReferenceGalleryNavigator).GetMethod("LateUpdate",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).Invoke(navigator, null);
+            Assert.That(((RectTransform)header.transform).sizeDelta, Is.EqualTo(new Vector2(1280, 52)));
+            Assert.That(chips[4].anchoredPosition, Is.EqualTo(new Vector2(1126, -8)), "wide layout is restored");
+            Assert.That(navigator.MapReturnCount, Is.EqualTo(returnCount));
         }
 
         private Text CreateTextChild(string name, Transform parent)

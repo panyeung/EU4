@@ -82,6 +82,7 @@ namespace SengokuChronicle.Presentation
         private GameObject _eventsEmptyState;
         private GameObject _householdComposition;
         private GameObject _pendingEventsRail;
+        private Vector2 _lastPageSize;
 
         public bool IsBound
         {
@@ -184,6 +185,17 @@ namespace SengokuChronicle.Presentation
         }
 
         private void OnEnable() => SubscribeSession();
+
+        private void LateUpdate()
+        {
+            if (!_hasShownPage || PageSize() == _lastPageSize)
+                return;
+            StyleSharedFrame();
+            if (_currentPage == ReferenceGalleryPage.Map)
+                StyleMapPage();
+            else if (_currentPage == ReferenceGalleryPage.Family)
+                StyleFamilyPage();
+        }
 
         private void OnDisable()
         {
@@ -489,6 +501,8 @@ namespace SengokuChronicle.Presentation
 
         private void StyleSharedFrame()
         {
+            _lastPageSize = PageSize();
+            LayoutSharedHeader(_lastPageSize);
             ConfigureRosterRail();
             Image navigation = navigationRoot != null ? navigationRoot.GetComponent<Image>() : null;
             if (navigation != null)
@@ -537,6 +551,35 @@ namespace SengokuChronicle.Presentation
             {
                 ApplyParchmentToChild(panelHost, "M02ProfilePanel");
                 ApplyParchmentToChild(panelHost, "M02ActionPanel");
+            }
+        }
+
+        private void LayoutSharedHeader(Vector2 page)
+        {
+            bool compact = page.x < 1240f;
+            float height = compact ? 82f : 52f;
+            if (headerRoot != null && headerRoot.transform is RectTransform header)
+            {
+                header.sizeDelta = new Vector2(page.x, height);
+                string[] resources = { "功名", "人口", "资金", "物资", "情报" };
+                for (int i = 0; i < resources.Length; i++)
+                    if (header.Find("M02Chip_" + resources[i]) is RectTransform chip)
+                        chip.anchoredPosition = compact
+                            ? new Vector2(166f + i * 116f, -44f)
+                            : new Vector2(662f + i * 116f, -8f);
+                Transform subtitle = header.Find("M02BrandSubText");
+                if (subtitle != null) subtitle.gameObject.SetActive(!compact);
+                if (header.Find("M02HeaderGoldLine") is RectTransform line)
+                {
+                    line.anchoredPosition = new Vector2(0, -height + 2f);
+                    line.sizeDelta = new Vector2(page.x, 2f);
+                }
+            }
+            if (navigationRoot != null && navigationRoot.transform is RectTransform rail)
+            {
+                rail.anchorMin = rail.anchorMax = rail.pivot = new Vector2(0, 1);
+                rail.anchoredPosition = new Vector2(0, -height);
+                rail.sizeDelta = new Vector2(150f, Mathf.Max(0f, page.y - height - 18f));
             }
         }
 
@@ -665,9 +708,20 @@ namespace SengokuChronicle.Presentation
                     RectTransform panelRect = roster.transform.Find("FamilyRosterPanel") as RectTransform;
                     if (panelRect != null)
                     {
-                        // Centre the genealogy card between the 150px left rail
-                        // and the 340px succession HUD, with no overlap at 1280x720.
-                        panelRect.anchoredPosition = new Vector2(-100f, -26f);
+                        // Shrink the viewport, not the family graph or its type.
+                        Vector2 page = PageSize();
+                        bool compact = page.x < 1240f;
+                        float width = compact ? Mathf.Max(240f, page.x - 522f) : 760f;
+                        panelRect.anchoredPosition = new Vector2(compact ? -95f : -100f, -26f);
+                        panelRect.sizeDelta = new Vector2(width, 620f);
+                        SetChildRect(panelRect, "FamilyRosterTitleText", new Vector2(0, 280), new Vector2(width - 40, 36));
+                        SetChildRect(panelRect, "FamilyRosterLegendText", new Vector2(0, compact ? 240 : 246),
+                            new Vector2(width - 40, compact ? 40 : 22));
+                        SetChildRect(panelRect, "FamilyRosterScroll", new Vector2(0, 5), new Vector2(width - 60, 410));
+                        SetChildRect(panelRect, "FamilyRosterHeirText", new Vector2(0, -239), new Vector2(width - 60, 34));
+                        ScrollRect graphScroll = panelRect.Find("FamilyRosterScroll")?.GetComponent<ScrollRect>();
+                        if (graphScroll != null)
+                            ConfigureFamilyRosterScrollbar(panelRect, graphScroll, width - 60);
                         Image panelImage = panelRect.GetComponent<Image>();
                         if (panelImage != null)
                         {
@@ -706,7 +760,7 @@ namespace SengokuChronicle.Presentation
                 if (hudRect != null)
                 {
                     hudRect.anchorMin = hudRect.anchorMax = hudRect.pivot = Vector2.one;
-                    hudRect.anchoredPosition = new Vector2(-16f, -70f);
+                    hudRect.anchoredPosition = new Vector2(-16f, PageSize().x < 1240f ? -100f : -70f);
                     hudRect.sizeDelta = new Vector2(340f, 260f);
                     Image image = hudRect.GetComponent<Image>();
                     if (image != null)
@@ -741,6 +795,53 @@ namespace SengokuChronicle.Presentation
                     SengokuUiTheme.ApplyFont(root.transform);
                 break;
             }
+        }
+
+        private static void ConfigureFamilyRosterScrollbar(RectTransform panel, ScrollRect graphScroll,
+            float width)
+        {
+            const string scrollbarName = "FamilyRosterHorizontalScrollbar";
+            Transform existing = panel.Find(scrollbarName);
+            GameObject scrollbarObject = existing != null
+                ? existing.gameObject
+                : new GameObject(scrollbarName, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Scrollbar));
+            RectTransform scrollbarRect = scrollbarObject.GetComponent<RectTransform>();
+            scrollbarRect.SetParent(panel, false);
+            scrollbarRect.anchorMin = scrollbarRect.anchorMax = scrollbarRect.pivot = new Vector2(0.5f, 0.5f);
+            scrollbarRect.anchoredPosition = new Vector2(0, -210);
+            scrollbarRect.sizeDelta = new Vector2(width, 12);
+
+            Transform handleTransform = scrollbarObject.transform.Find("Handle");
+            bool createHandle = handleTransform == null;
+            GameObject handleObject = handleTransform != null
+                ? handleTransform.gameObject
+                : new GameObject("Handle", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            RectTransform handleRect = handleObject.GetComponent<RectTransform>();
+            handleRect.SetParent(scrollbarRect, false);
+            if (createHandle)
+            {
+                handleRect.anchorMin = new Vector2(0, 0);
+                handleRect.anchorMax = new Vector2(0, 1);
+                handleRect.sizeDelta = Vector2.zero;
+            }
+
+            Image track = scrollbarObject.GetComponent<Image>();
+            Image handle = handleObject.GetComponent<Image>();
+            track.color = SengokuUiTheme.PaperLine;
+            handle.color = SengokuUiTheme.Gold;
+            Scrollbar scrollbar = scrollbarObject.GetComponent<Scrollbar>();
+            if (scrollbar.handleRect != handleRect)
+                scrollbar.handleRect = handleRect;
+            if (scrollbar.targetGraphic != handle)
+                scrollbar.targetGraphic = handle;
+            if (scrollbar.direction != Scrollbar.Direction.LeftToRight)
+                scrollbar.direction = Scrollbar.Direction.LeftToRight;
+            if (graphScroll.horizontalScrollbar != scrollbar)
+                graphScroll.horizontalScrollbar = scrollbar;
+            if (graphScroll.horizontalScrollbarVisibility != ScrollRect.ScrollbarVisibility.AutoHide)
+                graphScroll.horizontalScrollbarVisibility = ScrollRect.ScrollbarVisibility.AutoHide;
+            if (graphScroll.horizontalScrollbarSpacing != 2)
+                graphScroll.horizontalScrollbarSpacing = 2;
         }
 
         private void StyleHouseholdPage()
