@@ -10,7 +10,7 @@
 
 **Spec:** [M04A 个人行动记忆设计稿](../specs/2026-11-07-m04a-personal-memories-design.md)
 
-**执行进度（2026-11-09）：** 已接续现有 WIP，领域、会话、存档与只读显示均已实现；聚焦 150/150、全量 1379/1379、最终编译和场景 Validator 通过。独立复审与 Play Mode 待办。历史“先写测试再实现”的顺序缺少证据，不追溯勾选；本轮缺字段修复有三例明确 red→green 记录，详见 [实现报告](../../reports/m04a-personal-memories.md)。
+**执行进度（2026-11-09）：** M04A lead 技术签收通过；最终聚焦 181/181、全量 1381/1381、编译、Validator、两轮独立复审与 Play Mode（含 30/31 日和 GUI 存读档）通过。试玩后额外修复记忆裁切与读档共享顶部栏日期刷新，复用原滚动文本和现有回调，未改场景；相关文件为 `NpcAiInspectorPanel.cs`、`CharacterDailyPageView.cs`、`DailyActionPanel.cs` 及对应测试。历史“先写测试再实现”的顺序缺少证据，不追溯勾选；本轮三例缺字段、两例 UI 修复均有明确 red→green 记录，详见 [实现报告](../../reports/m04a-personal-memories.md)。用户最终 M04 里程碑验收仍待办。
 
 ## 全局约束
 
@@ -96,9 +96,9 @@
 
 - [x] 在目标 Unity Editor 中确认进程与 `-projectPath`；禁止对其项目路径运行 batchmode。
 - [x] 运行聚焦及全量 EditMode；分别记录编译结果、测试计数、Console logs/warnings/errors、`FoundationSceneValidator` 结果。
-- [ ] 由 Mochi 在现有 Editor 执行 M04A Play Mode：完成与中断行动、评分解释、30/31 日边界和保存/读取；确认后退出 Play Mode，不保存无关场景状态。
-- [ ] 按项目流程把实现交给 OpenCode2 的只读复审；修正项在同一实现任务复审后再作最终签收。
-- [ ] 更新状态/报告，区分实际验证与未验证项；只提交并推送已通过对应验证门的 M04A 文件，等待用户明确验收后再做最终里程碑 checkpoint、合并或 tag。
+- [x] 由 Mochi 在现有 Editor 执行 M04A Play Mode：完成与中断行动、评分解释、30/31 日边界和保存/读取；确认后退出 Play Mode，不保存无关场景状态。
+- [x] 按项目流程执行独立只读复审；OpenCode 启动器不可用，独立 QATester 在同一实现任务下两轮 ACCEPT，修正后再作技术签收。
+- [x] 更新状态/报告，区分实际验证与未验证项；只提交并推送已通过对应验证门的 M04A 文件，等待用户明确验收后再做最终里程碑 checkpoint、合并或 tag。
 
 ## 计划自检
 

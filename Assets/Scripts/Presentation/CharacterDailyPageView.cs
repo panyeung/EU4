@@ -211,7 +211,8 @@ namespace SengokuChronicle.Presentation
             SetTab(_tab);
         }
 
-        private void RenderHeader(GameSession session, DailyActionPersonState selected)
+        /// <summary>Refreshes the shared header even when another page is visible.</summary>
+        public void RenderHeader(GameSession session, DailyActionPersonState selected)
         {
             GameDate date = session != null && session.WorldClock != null
                 ? session.WorldClock.CurrentDate

@@ -661,6 +661,23 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
+        public void SharedHeader_RefreshesAfterLoadWhileCharacterPageIsClosed()
+        {
+            DailyActionPanel panel = Panel();
+            panel.Open();
+            var saved = _session.CaptureSave();
+            Assert.That(_session.AdvanceOneDay(), Is.True);
+            Assert.That(View().HeaderDateLine, Does.Contain("2 日"));
+            panel.Close();
+
+            Assert.That(_session.TryApplySave(saved).Succeeded, Is.True);
+
+            Assert.That(panel.IsOpen, Is.False);
+            Assert.That(View().HeaderDateLine, Is.EqualTo("1560 年 4 月 1 日"),
+                "the shared header remains visible on other pages and must follow load");
+        }
+
+        [Test]
         public void PageView_RendersHeaderAndProfileFromLiveSessionData()
         {
             DailyActionPanel panel = Panel();

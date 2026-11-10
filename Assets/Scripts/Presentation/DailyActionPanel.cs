@@ -893,6 +893,19 @@ namespace SengokuChronicle.Presentation
                 _feedback = SessionFeedback();
                 Refresh();
             }
+            else if (pageView != null && pageView.IsBound)
+            {
+                IReadOnlyList<DailyActionPersonState> persons = gameSession.DailyActions;
+                EnsureSelection(persons);
+                DailyActionPersonState selected = null;
+                foreach (DailyActionPersonState person in persons)
+                    if (person.PersonId == _selectedPersonId)
+                    {
+                        selected = person;
+                        break;
+                    }
+                pageView.RenderHeader(gameSession, selected);
+            }
         }
 
         private void OnEnable()

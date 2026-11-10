@@ -171,8 +171,8 @@ namespace SengokuChronicle.Presentation
 
             needsText.text = "需求（0..100）：" + selected.Needs.Describe() + "　｜　" +
                              selected.Profile.PreferenceSummary;
-            statusText.text = BuildStatus(selected, today);
-            candidatesText.text = BuildCandidates(selected);
+            statusText.text = BuildStatus(selected);
+            candidatesText.text = BuildCandidates(selected, today);
             logText.text = BuildLog(selected);
             ResetDiagnosticsScroll();
         }
@@ -183,7 +183,7 @@ namespace SengokuChronicle.Presentation
                 diagnosticsScroll.verticalNormalizedPosition = 1f;
         }
 
-        private string BuildStatus(NpcAutonomySnapshot snapshot, GameDate today)
+        private static string BuildStatus(NpcAutonomySnapshot snapshot)
         {
             var builder = new StringBuilder(160);
             builder.Append("状态：").Append(snapshot.StatusName);
@@ -216,7 +216,6 @@ namespace SengokuChronicle.Presentation
                     .Append(snapshot.LastOutcome.Date.ToString())
                     .Append('）');
             }
-            builder.Append('\n').Append(BuildMemories(snapshot, today));
             return builder.ToString();
         }
 
@@ -245,14 +244,15 @@ namespace SengokuChronicle.Presentation
             return builder.ToString();
         }
 
-        private static string BuildCandidates(NpcAutonomySnapshot snapshot)
+        private static string BuildCandidates(NpcAutonomySnapshot snapshot, GameDate today)
         {
             NpcAutonomyEvaluation latest = snapshot.LatestEvaluation;
             NpcAutonomyEvaluation current = snapshot.CurrentEvaluation ?? latest;
+            var builder = new StringBuilder(600);
+            builder.Append(BuildMemories(snapshot, today)).Append("\n\n");
             if (latest == null && current == null)
-                return "尚无评估。";
+                return builder.Append("尚无评估。").ToString();
 
-            var builder = new StringBuilder(420);
             if (latest != null)
             {
                 builder.Append("最近目标评估：").Append(latest.Summary);
