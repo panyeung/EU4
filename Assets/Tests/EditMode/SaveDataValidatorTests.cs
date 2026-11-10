@@ -1,5 +1,6 @@
 using System.Globalization;
 using NUnit.Framework;
+using SengokuChronicle.Application;
 using SengokuChronicle.Domain;
 using SengokuChronicle.Persistence;
 
@@ -47,6 +48,86 @@ namespace SengokuChronicle.Tests.EditMode
 
             Assert.That(result.Succeeded, Is.False);
             Assert.That(result.Message, Does.Contain("npcAutonomy"));
+        }
+
+        [Test]
+        public void MissingMemoryArray_IsRejected()
+        {
+            GameSession session = GameSession.NewGame();
+            try
+            {
+                SaveData data = session.CaptureSave();
+                data.npcAutonomy.persons[0].memories = null;
+
+                SaveOperationResult result = SaveDataValidator.Validate(data);
+
+                Assert.That(result.Succeeded, Is.False);
+                Assert.That(result.Message, Does.Contain("memories"));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(session.gameObject);
+            }
+        }
+
+        [Test]
+        public void FutureMemoryDate_IsRejected()
+        {
+            GameSession session = GameSession.NewGame();
+            try
+            {
+                SaveData data = session.CaptureSave();
+                data.npcAutonomy.persons[0].memories = new[]
+                {
+                    new NpcActionMemorySaveEntry
+                    {
+                        personId = data.npcAutonomy.persons[0].personId,
+                        kind = (int)NpcActionMemoryKind.Completed,
+                        action = (int)DailyActionKind.Rest,
+                        year = data.year,
+                        month = data.month,
+                        day = data.day + 1
+                    }
+                };
+
+                Assert.That(SaveDataValidator.Validate(data).Succeeded, Is.False);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(session.gameObject);
+            }
+        }
+
+        [Test]
+        public void DuplicateMemoryKind_IsRejected()
+        {
+            GameSession session = GameSession.NewGame();
+            try
+            {
+                SaveData data = session.CaptureSave();
+                string owner = data.npcAutonomy.persons[0].personId;
+                data.npcAutonomy.persons[0].memories = new[]
+                {
+                    new NpcActionMemorySaveEntry
+                    {
+                        personId = owner, kind = (int)NpcActionMemoryKind.Completed,
+                        action = (int)DailyActionKind.Rest, year = data.year,
+                        month = data.month, day = data.day
+                    },
+                    new NpcActionMemorySaveEntry
+                    {
+                        personId = owner, kind = (int)NpcActionMemoryKind.Completed,
+                        action = (int)DailyActionKind.Work, year = data.year,
+                        month = data.month, day = data.day
+                    }
+                };
+
+                Assert.That(SaveDataValidator.Validate(data).Succeeded, Is.False);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(session.gameObject);
+            }
         }
 
         [Test]

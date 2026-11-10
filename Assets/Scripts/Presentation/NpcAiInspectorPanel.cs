@@ -156,6 +156,9 @@ namespace SengokuChronicle.Presentation
                     break;
                 }
 
+            GameDate today = gameSession.WorldClock != null
+                ? gameSession.WorldClock.CurrentDate
+                : default;
             if (selected == null)
             {
                 needsText.text = "尚无登记的自主 NPC。";
@@ -168,7 +171,7 @@ namespace SengokuChronicle.Presentation
 
             needsText.text = "需求（0..100）：" + selected.Needs.Describe() + "　｜　" +
                              selected.Profile.PreferenceSummary;
-            statusText.text = BuildStatus(selected);
+            statusText.text = BuildStatus(selected, today);
             candidatesText.text = BuildCandidates(selected);
             logText.text = BuildLog(selected);
             ResetDiagnosticsScroll();
@@ -180,9 +183,9 @@ namespace SengokuChronicle.Presentation
                 diagnosticsScroll.verticalNormalizedPosition = 1f;
         }
 
-        private string BuildStatus(NpcAutonomySnapshot snapshot)
+        private string BuildStatus(NpcAutonomySnapshot snapshot, GameDate today)
         {
-            var builder = new StringBuilder(96);
+            var builder = new StringBuilder(160);
             builder.Append("状态：").Append(snapshot.StatusName);
             if (snapshot.HasActiveAction)
             {
@@ -212,6 +215,32 @@ namespace SengokuChronicle.Presentation
                     .Append("（")
                     .Append(snapshot.LastOutcome.Date.ToString())
                     .Append('）');
+            }
+            builder.Append('\n').Append(BuildMemories(snapshot, today));
+            return builder.ToString();
+        }
+
+        private static string BuildMemories(NpcAutonomySnapshot snapshot, GameDate today)
+        {
+            IReadOnlyList<NpcActionMemory> memories = snapshot.Memories;
+            if (memories == null || memories.Count == 0)
+                return "记忆：暂无（最多保存最近一次完成与最近一次中断）。";
+
+            var builder = new StringBuilder(180);
+            builder.Append("记忆（最近一次完成／最近一次中断）：");
+            foreach (NpcActionMemory memory in memories)
+            {
+                int adjustment = NpcAutonomyRules.MemoryAdjustmentFor(memory, memory.Action,
+                    today);
+                bool active = NpcAutonomyRules.IsMemoryActive(memory, today);
+                builder.Append("\n- ").Append(memory.KindName).Append(' ')
+                    .Append(memory.ActionName).Append(' ')
+                    .Append(memory.Date.ToString())
+                    .Append("　当前修正 ")
+                    .Append(NpcAutonomyRules.Signed(adjustment))
+                    .Append(active ? "（生效）" : "（已过期，仅展示）");
+                if (!string.IsNullOrWhiteSpace(memory.Reason))
+                    builder.Append("　原因：").Append(memory.Reason);
             }
             return builder.ToString();
         }

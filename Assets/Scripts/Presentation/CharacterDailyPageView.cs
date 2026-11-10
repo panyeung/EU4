@@ -596,6 +596,42 @@ namespace SengokuChronicle.Presentation
             }
             builder.Append("需求：").Append(snapshot.Needs.Describe()).Append('\n')
                 .Append("偏好：").Append(snapshot.Profile.PreferenceSummary).Append('\n');
+            GameDate today = session.WorldClock != null
+                ? session.WorldClock.CurrentDate
+                : default;
+            IReadOnlyList<NpcActionMemory> memories = snapshot.Memories;
+            builder.Append("记忆：");
+            if (memories == null || memories.Count == 0)
+            {
+                builder.Append("暂无\n");
+            }
+            else
+            {
+                foreach (NpcActionMemory memory in memories)
+                {
+                    int adjustment = NpcAutonomyRules.MemoryAdjustmentFor(memory,
+                        memory.Action, today);
+                    builder.Append('\n').Append("- ").Append(memory.KindName).Append(' ')
+                        .Append(memory.ActionName).Append(' ')
+                        .Append(memory.Date.ToString())
+                        .Append("　当前修正 ")
+                        .Append(NpcAutonomyRules.Signed(adjustment))
+                        .Append(NpcAutonomyRules.IsMemoryActive(memory, today)
+                            ? "（生效）"
+                            : "（已过期，仅展示）");
+                }
+                builder.Append('\n');
+            }
+            NpcAutonomyEvaluation evaluation = snapshot.LatestEvaluation;
+            if (evaluation != null && evaluation.HasSelection)
+            {
+                NpcActionCandidate selected = evaluation.Selected;
+                builder.Append("上次选择：").Append(selected.KindName)
+                    .Append("　基础分数 ").Append(selected.BaseScore)
+                    .Append("　记忆修正 ")
+                    .Append(NpcAutonomyRules.Signed(selected.MemoryAdjustment))
+                    .Append("　最终分数 ").Append(selected.FinalScore).Append('\n');
+            }
             IReadOnlyList<NpcAutonomyDecisionRecord> decisions = snapshot.RecentDecisions;
             if (decisions != null && decisions.Count > 0)
             {

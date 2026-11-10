@@ -19,7 +19,7 @@
 | M01 | 固定三代家族可玩原型 | **已验收（2026-11-07，用户明确确认）**；当前 `main` 含 SC-024 场景接入。技术验证细节见下方历史报告，不从用户验收推断额外测试结果 |
 | M02 | 每日行动与旅行基础 | 当前 main 技术门已通过（2026-11-09）：全量 EditMode 1374/1374、FoundationSceneValidator PASS、当前 FoundationScene Play Mode 验证了持续天数关闭重开、两日休息推进与清洲→热田旅行；本轮未重测存读档，用户最终里程碑验收待办。证据见 [M02 当前 main 验收追加记录](docs/reports/m02-daily-action-foundation.md#2026-11-09-current-main-verification-addendum) |
 | M03 | 高自主 NPC 与只读 Inspector | 实现与两轮复审修正完成，待 lead Play Mode 与用户验收：纯 C# 规则、v11 存档/迁移、两名试点、逐日自主推进、只读可滚动 Inspector 与事务式场景接入；第二轮修正后历史 EditMode 1274/1274、Validator PASS；2026-11-08 全量 EditMode 1303/1303，但未取得该提交后的 M03 Validator/Play Mode 证据 |
-| M04 | 人物记忆与动态家族 | 计划中 |
+| M04 | 人物记忆与动态家族 | M04A 个人行动记忆实现中：已有两类有界记忆、确定性评分修正、v12 存档/迁移和只读显示；2026-11-09 接手 OpenCode2 中断后修复缺字段校验，聚焦 150/150、全量 1379/1379、编译和场景 Validator 通过；独立复审与 Play Mode 待办。详见 [M04A 验证记录](docs/reports/m04a-personal-memories.md) |
 | M05 | 经营与委托纵向切片 | 计划中 |
 | M06 | 回合制潜入原型 | 计划中 |
 | M07 | 经营、个人活动与战术整合 | 计划中 |

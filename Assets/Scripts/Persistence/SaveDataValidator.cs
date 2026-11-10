@@ -10,7 +10,7 @@ namespace SengokuChronicle.Persistence
     /// </summary>
     public static class SaveDataValidator
     {
-        public const int CurrentVersion = 11;
+        public const int CurrentVersion = 12;
 
         public static SaveOperationResult Validate(SaveData data)
         {
@@ -95,7 +95,8 @@ namespace SengokuChronicle.Persistence
 
             if (data.npcAutonomy == null)
                 return Invalid("存档缺少 NPC 自主状态（npcAutonomy）。");
-            SaveOperationResult npcAutonomy = data.npcAutonomy.ValidateForSave(data.succession);
+            SaveOperationResult npcAutonomy = data.npcAutonomy.ValidateForSave(
+                data.succession, date);
             if (!npcAutonomy.Succeeded)
                 return npcAutonomy;
 
@@ -139,7 +140,7 @@ namespace SengokuChronicle.Persistence
                 probe.saveFormatVersion != 4 && probe.saveFormatVersion != 5 &&
                 probe.saveFormatVersion != 6 && probe.saveFormatVersion != 7 &&
                 probe.saveFormatVersion != 8 && probe.saveFormatVersion != 9 &&
-                probe.saveFormatVersion != 10 &&
+                probe.saveFormatVersion != 10 && probe.saveFormatVersion != 11 &&
                 probe.saveFormatVersion != CurrentVersion)
                 return SaveOperationResult.Failure(
                     SaveErrorCode.UnsupportedVersion,
@@ -177,7 +178,7 @@ namespace SengokuChronicle.Persistence
             if (probe.saveFormatVersion >= 2 && probe.saveFormatVersion < CurrentVersion &&
                 HasRootProperty(json, "dailyActions") && probe.saveFormatVersion < 10)
                 return Invalid("旧版存档包含 v10 每日行动状态（dailyActions）；迁移不会静默替换该数据。");
-            if (probe.saveFormatVersion >= 2 && probe.saveFormatVersion < CurrentVersion &&
+            if (probe.saveFormatVersion >= 2 && probe.saveFormatVersion < 11 &&
                 HasRootProperty(json, "npcAutonomy"))
                 return Invalid("旧版存档包含 v11 NPC 自主状态（npcAutonomy）；迁移不会静默替换该数据。");
 
@@ -227,6 +228,18 @@ namespace SengokuChronicle.Persistence
                 (probe.npcAutonomy == null ||
                  (!string.IsNullOrEmpty(json) && !HasNonNullRootProperty(json, "npcAutonomy"))))
                 return Invalid("存档缺少 NPC 自主状态（npcAutonomy）。");
+            if (probe.saveFormatVersion >= 12 && probe.npcAutonomy != null)
+            {
+                if (probe.npcAutonomy.persons == null)
+                    return Invalid("存档缺少 NPC 自主人物记录（npcAutonomy.persons）。");
+                for (int i = 0; i < probe.npcAutonomy.persons.Length; i++)
+                {
+                    NpcAutonomyPersonSaveEntry person = probe.npcAutonomy.persons[i];
+                    if (person == null || person.memories == null)
+                        return Invalid(
+                            "存档缺少 NPC 行动记忆列表（npcAutonomy.persons[].memories）。");
+                }
+            }
 
             return SaveOperationResult.Success();
         }

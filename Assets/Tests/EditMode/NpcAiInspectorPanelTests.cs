@@ -280,6 +280,77 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
+        public void Panel_ShowsEmptyMemoryStateForFreshPilot()
+        {
+            NpcAiInspectorPanel panel = Panel();
+            panel.Open();
+
+            Assert.That(panel.StatusLine, Does.Contain("记忆：暂无"));
+            Assert.That(panel.CandidatesLine, Does.Contain("基础分数"));
+            Assert.That(panel.CandidatesLine, Does.Contain("记忆修正 +0"));
+            Assert.That(panel.CandidatesLine, Does.Contain("最终分数"));
+            Assert.That(panel.GetComponentsInChildren<InputField>(true), Is.Empty,
+                "the read-only Inspector must not gain editable memory controls");
+        }
+
+        [Test]
+        public void Panel_ShowsCompletedMemoryAndScoreBreakdown()
+        {
+            Assert.That(_session.AdvanceOneDay(), Is.True);
+            Assert.That(_session.AdvanceOneDay(), Is.True);
+
+            NpcAiInspectorPanel panel = Panel();
+            panel.Open();
+
+            Assert.That(panel.StatusLine, Does.Contain("记忆"));
+            Assert.That(panel.StatusLine, Does.Contain("完成记忆 训练"));
+            Assert.That(panel.StatusLine, Does.Contain("1560-04-03"));
+            Assert.That(panel.StatusLine, Does.Contain("当前修正 +12"));
+            Assert.That(panel.StatusLine, Does.Contain("生效"));
+            Assert.That(panel.CandidatesLine, Does.Contain("基础分数"));
+            Assert.That(panel.CandidatesLine, Does.Contain("记忆修正 +12"));
+            Assert.That(panel.CandidatesLine, Does.Contain("最终分数"));
+            Assert.That(panel.CandidatesLine, Does.Contain("完成记忆"));
+        }
+
+        [Test]
+        public void Panel_ShowsInterruptedMemoryReasonAndExpiredAdjustment()
+        {
+            Assert.That(_session.TryInterruptDailyAction(M2FixedScenario.MasatsunaId,
+                "面板记忆中断原因。"), Is.True);
+            NpcAiInspectorPanel panel = Panel();
+            panel.Open();
+            Assert.That(panel.StatusLine, Does.Contain("中断记忆 训练"));
+            Assert.That(panel.StatusLine, Does.Contain("当前修正 -12"));
+            Assert.That(panel.StatusLine, Does.Contain("面板记忆中断原因"));
+
+            SaveData saved = _session.CaptureSave();
+            NpcAutonomyPersonSaveEntry entry = saved.npcAutonomy.persons.First(row =>
+                row.personId == M2FixedScenario.MasatsunaId.Value);
+            entry.memories = new[]
+            {
+                new NpcActionMemorySaveEntry
+                {
+                    personId = M2FixedScenario.MasatsunaId.Value,
+                    kind = (int)NpcActionMemoryKind.Completed,
+                    action = (int)DailyActionKind.Rest,
+                    year = 1560,
+                    month = 3,
+                    day = 1,
+                    reason = string.Empty
+                }
+            };
+            Assert.That(SaveDataValidator.Validate(saved).Succeeded, Is.True,
+                SaveDataValidator.Validate(saved).Message);
+            Assert.That(_session.TryApplySave(saved).Succeeded, Is.True,
+                _session.LastEventMessage);
+
+            panel.Refresh();
+            Assert.That(panel.StatusLine, Does.Contain("已过期"));
+            Assert.That(panel.StatusLine, Does.Contain("当前修正 +0"));
+        }
+
+        [Test]
         public void Generator_ProducesScrollableDiagnosticsForCandidatesAndLog()
         {
             Transform scrollTransform = Find(AddM03NpcAiInspector.ScrollName);

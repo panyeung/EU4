@@ -467,7 +467,7 @@ namespace SengokuChronicle.Application
             bool hasKnownLocation = _dailyActions != null &&
                 _dailyActions.TryGetLocation(personId, out _);
             NpcAutonomyEvaluation current = NpcAutonomyRules.Evaluate(personId, person.Needs,
-                true, hasKnownLocation, hasActiveAction);
+                person.Memories, CurrentGameDate, true, hasKnownLocation, hasActiveAction);
             NpcAutonomyEvaluation latest = person.LatestEvaluation ?? current;
             string displayName = profile.DisplayName;
             if (_succession != null && _succession.World != null &&
@@ -476,7 +476,7 @@ namespace SengokuChronicle.Application
                 displayName = personState.DisplayName;
             snapshot = new NpcAutonomySnapshot(personId, displayName, person.Needs, profile,
                 person.Status, task, latest, current, person.LastOutcome, person.HasLastOutcome,
-                _npcAutonomy.RecentDecisionsFor(personId, 8));
+                person.Memories, _npcAutonomy.RecentDecisionsFor(personId, 8));
             return true;
         }
 
@@ -1719,21 +1719,23 @@ namespace SengokuChronicle.Application
             return ids.AsReadOnly();
         }
 
-        private NpcAutonomyEvaluation BuildNpcEvaluation(PersonId personId, NpcNeedValues needs)
+        private NpcAutonomyEvaluation BuildNpcEvaluation(PersonId personId, NpcNeedValues needs,
+            IReadOnlyList<NpcActionMemory> memories)
         {
             DailyActionState actions = EnsureDailyActions();
             bool hasLocation = actions.TryGetLocation(personId, out _);
             bool hasActive = actions.HasActiveAction(personId);
-            return NpcAutonomyRules.Evaluate(personId, needs, true, hasLocation, hasActive);
+            return NpcAutonomyRules.Evaluate(personId, needs, memories, CurrentGameDate,
+                true, hasLocation, hasActive);
         }
 
         private NpcAutonomyEvaluation BuildNpcEvaluation(PersonId personId, NpcNeedValues needs,
-            bool hasActiveAction)
+            IReadOnlyList<NpcActionMemory> memories, bool hasActiveAction)
         {
             DailyActionState actions = EnsureDailyActions();
             bool hasLocation = actions.TryGetLocation(personId, out _);
-            return NpcAutonomyRules.Evaluate(personId, needs, true, hasLocation,
-                hasActiveAction);
+            return NpcAutonomyRules.Evaluate(personId, needs, memories, CurrentGameDate,
+                true, hasLocation, hasActiveAction);
         }
 
         /// <summary>Initial plan for a new session; never runs during save restore.</summary>
@@ -1781,6 +1783,19 @@ namespace SengokuChronicle.Application
                 _npcAutonomy.ApplyCompletedAction(outcome.PersonId, outcome.Kind,
                     outcome.Date, outcome.Reason);
             }
+        }
+
+        /// <summary>
+        /// Records one committed pilot interruption in the same transaction as the
+        /// daily-action state change. Rejected or rolled-back commands never call this.
+        /// </summary>
+        private void ApplyNpcActionInterruption(DailyActionResult outcome)
+        {
+            if (_npcAutonomy == null || outcome.Outcome != DailyActionOutcomeKind.Interrupted ||
+                !NpcAutonomyRules.IsPilot(outcome.PersonId))
+                return;
+            _npcAutonomy.ApplyInterruptedAction(outcome.PersonId, outcome.Kind,
+                outcome.Date, outcome.Reason);
         }
 
         /// <summary>
@@ -1911,7 +1926,7 @@ namespace SengokuChronicle.Application
 
             bool hasLocation = EnsureDailyActions().TryGetLocation(personId, out _);
             NpcAutonomyEvaluation evaluation = NpcAutonomyRules.Evaluate(personId,
-                person.Needs, true, hasLocation, false);
+                person.Needs, person.Memories, CurrentGameDate, true, hasLocation, false);
             state.SetLatestEvaluation(personId, evaluation);
             if (!evaluation.HasSelection)
             {
@@ -1959,7 +1974,7 @@ namespace SengokuChronicle.Application
             {
                 if (person.LatestEvaluation == null)
                     state.SetLatestEvaluation(person.PersonId,
-                        BuildNpcEvaluation(person.PersonId, person.Needs));
+                        BuildNpcEvaluation(person.PersonId, person.Needs, person.Memories));
                 if (EnsureDailyActions().HasActiveAction(person.PersonId))
                     state.SetStatus(person.PersonId, NpcAutonomyStatus.Executing);
             }
@@ -2215,7 +2230,7 @@ namespace SengokuChronicle.Application
                 return InvalidSave(string.IsNullOrEmpty(dailyError)
                     ? "存档每日行动状态无效。"
                     : dailyError);
-            if (!NpcAutonomyStateSaveData.TryRestore(data.npcAutonomy, data.succession,
+            if (!NpcAutonomyStateSaveData.TryRestore(data.npcAutonomy, data.succession, date,
                     out NpcAutonomyState npcAutonomy, out string npcError))
                 return InvalidSave(string.IsNullOrEmpty(npcError)
                     ? "存档 NPC 自主状态无效。"
@@ -3086,12 +3101,10 @@ namespace SengokuChronicle.Application
             if (NpcAutonomyRules.IsPilot(personId) && _npcAutonomy != null &&
                 _npcAutonomy.TryGetPerson(personId, out _))
             {
+                ApplyNpcActionInterruption(result);
                 _npcAutonomy.RecordDecision(new NpcAutonomyDecisionRecord(CurrentGameDate,
                     personId, NpcAutonomyCommandOutcomeKind.Interrupted, result.Kind, true,
                     NpcAutonomyTrigger.ActionInterrupted, result.Reason));
-                _npcAutonomy.SetStatus(personId, NpcAutonomyStatus.Interrupted);
-                _npcAutonomy.SetLastOutcome(personId, new NpcAutonomyOutcomeRecord(
-                    NpcAutonomyStatus.Interrupted, result.Kind, result.Date, result.Reason));
 
                 if (_autonomyInterruptionSuppression == 0)
                 {
@@ -4099,7 +4112,10 @@ namespace SengokuChronicle.Application
                 if (actions.TryInterrupt(row.PersonId,
                         "人物离世或离开家族，行动已中断。", CurrentGameDate,
                         out DailyActionResult result))
+                {
+                    ApplyNpcActionInterruption(result);
                     outcomes.Add(result);
+                }
             }
 
             if (outcomes.Count == 0)
@@ -4118,6 +4134,7 @@ namespace SengokuChronicle.Application
             if (_dailyActions.TryInterrupt(personId, reason, CurrentGameDate,
                     out DailyActionResult result))
             {
+                ApplyNpcActionInterruption(result);
                 LastDailyActionOutcomes = new[] { result };
                 LastDailyActionMessage = result.Reason;
             }

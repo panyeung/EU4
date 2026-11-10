@@ -91,7 +91,8 @@ namespace SengokuChronicle.Persistence
                         "旧版存档包含 v10 每日行动状态（dailyActions）；迁移不会静默替换该数据。");
                     return false;
                 }
-                if (SaveDataValidator.HasRootProperty(rawJson, "npcAutonomy"))
+                if (legacy.saveFormatVersion < 11 &&
+                    SaveDataValidator.HasRootProperty(rawJson, "npcAutonomy"))
                 {
                     result = SaveOperationResult.Failure(SaveErrorCode.InvalidData,
                         "旧版存档包含 v11 NPC 自主状态（npcAutonomy）；迁移不会静默替换该数据。");
@@ -100,10 +101,12 @@ namespace SengokuChronicle.Persistence
             }
 
             if (legacy.saveFormatVersion == 10 ||
+                legacy.saveFormatVersion == 11 ||
                 legacy.saveFormatVersion == SaveDataValidator.CurrentVersion)
             {
-                bool currentVersion = legacy.saveFormatVersion == SaveDataValidator.CurrentVersion;
-                string label = currentVersion ? "v11" : "v10";
+                int version = legacy.saveFormatVersion;
+                bool currentVersion = version == SaveDataValidator.CurrentVersion;
+                string label = "v" + version;
                 if (legacy.industry == null ||
                     (!string.IsNullOrEmpty(rawJson) &&
                      !SaveDataValidator.HasNonNullRootProperty(rawJson, "industry")))
@@ -152,32 +155,45 @@ namespace SengokuChronicle.Persistence
                         label + " 存档缺少每日行动状态（dailyActions）；不会用空记录静默替换。");
                     return false;
                 }
-                if (currentVersion &&
+                if (version >= 11 &&
                     (legacy.npcAutonomy == null ||
                      (!string.IsNullOrEmpty(rawJson) &&
                       !SaveDataValidator.HasNonNullRootProperty(rawJson, "npcAutonomy"))))
                 {
                     result = SaveOperationResult.Failure(SaveErrorCode.InvalidData,
-                        "v11 存档缺少 NPC 自主状态（npcAutonomy）；不会用初始需求静默替换。");
+                        label + " 存档缺少 NPC 自主状态（npcAutonomy）；不会用初始需求静默替换。");
                     return false;
                 }
-                if (currentVersion && legacy.rulesVersion != SaveData.CurrentRulesVersion)
+                if (version >= 11 && legacy.rulesVersion != SaveData.CurrentRulesVersion)
                 {
                     result = SaveOperationResult.Failure(SaveErrorCode.UnsupportedVersion,
-                        "v11 存档规则版本不受支持：" + legacy.rulesVersion +
+                        label + " 存档规则版本不受支持：" + legacy.rulesVersion +
                         "（当前规则版本 " + SaveData.CurrentRulesVersion + "）。");
+                    return false;
+                }
+                if (version == 11 && ContainsMemoryPayload(legacy.npcAutonomy))
+                {
+                    result = SaveOperationResult.Failure(SaveErrorCode.InvalidData,
+                        "v11 存档包含 v12 行动记忆（npcAutonomy.persons[].memories）；迁移不会静默替换该数据。");
                     return false;
                 }
 
                 current = Clone(legacy);
                 current.saveFormatVersion = SaveDataValidator.CurrentVersion;
                 current.rulesVersion = SaveData.CurrentRulesVersion;
-                if (!currentVersion)
+                if (version == 10)
                 {
                     // v10 predates M03. Migration initializes only the approved pilot
                     // rows from the fixed roster and preserves dailyActions unchanged.
                     current.npcAutonomy = NpcAutonomyStateSaveData.CreateInitial(
                         current.succession);
+                }
+                else if (version == 11)
+                {
+                    // v11 owns needs but predates memories. Only empty lists are added;
+                    // no past action is inferred from logs or history.
+                    current.npcAutonomy = NpcAutonomyStateSaveData.CreateMigratedV11(
+                        legacy.npcAutonomy);
                 }
                 result = SaveDataValidator.Validate(current);
                 if (!result.Succeeded)
@@ -572,7 +588,7 @@ namespace SengokuChronicle.Persistence
             {
                 result = SaveOperationResult.Failure(
                     SaveErrorCode.UnsupportedVersion,
-                    $"不支持的存档版本：{legacy.saveFormatVersion}（仅支持 v1–v10 迁移到 v{SaveDataValidator.CurrentVersion}）。");
+                    $"不支持的存档版本：{legacy.saveFormatVersion}（仅支持 v1–v11 迁移到 v{SaveDataValidator.CurrentVersion}）。");
                 return false;
             }
 
@@ -623,6 +639,16 @@ namespace SengokuChronicle.Persistence
             if (!result.Succeeded)
                 current = null;
             return result.Succeeded;
+        }
+
+        private static bool ContainsMemoryPayload(NpcAutonomyStateSaveData data)
+        {
+            if (data == null || data.persons == null)
+                return false;
+            foreach (NpcAutonomyPersonSaveEntry person in data.persons)
+                if (person != null && person.memories != null)
+                    return true;
+            return false;
         }
 
         private static SaveData Clone(SaveData source)

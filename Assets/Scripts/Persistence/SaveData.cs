@@ -1358,8 +1358,8 @@ namespace SengokuChronicle.Persistence
     }
 
     /// <summary>
-    /// v11 durable autonomy state: needs for the two approved pilots only. Recent
-    /// evaluation and decision records are session-only and never serialized.
+    /// v12 durable autonomy state: needs and up to two action memories for the two
+    /// approved pilots only. Recent evaluation and decision records are session-only.
     /// </summary>
     [Serializable]
     public sealed class NpcAutonomyStateSaveData
@@ -1405,7 +1405,8 @@ namespace SengokuChronicle.Persistence
                     personId = ids[i].Value,
                     rest = needs.Rest,
                     learning = needs.Learning,
-                    duty = needs.Duty
+                    duty = needs.Duty,
+                    memories = new NpcActionMemorySaveEntry[0]
                 };
             }
             return new NpcAutonomyStateSaveData { persons = entries };
@@ -1420,12 +1421,30 @@ namespace SengokuChronicle.Persistence
             for (int i = 0; i < people.Count; i++)
             {
                 NpcAutonomyPersonState person = people[i];
+                IReadOnlyList<NpcActionMemory> memories = person.Memories;
+                var memoryEntries = new NpcActionMemorySaveEntry[memories.Count];
+                for (int m = 0; m < memoryEntries.Length; m++)
+                {
+                    NpcActionMemory memory = memories[m];
+                    memoryEntries[m] = new NpcActionMemorySaveEntry
+                    {
+                        personId = memory.PersonId.Value,
+                        kind = (int)memory.Kind,
+                        action = (int)memory.Action,
+                        year = memory.Date.Year,
+                        month = memory.Date.Month,
+                        day = memory.Date.Day,
+                        reason = memory.Reason
+                    };
+                }
+
                 entries[i] = new NpcAutonomyPersonSaveEntry
                 {
                     personId = person.PersonId.Value,
                     rest = person.Needs.Rest,
                     learning = person.Needs.Learning,
-                    duty = person.Needs.Duty
+                    duty = person.Needs.Duty,
+                    memories = memoryEntries
                 };
             }
             return new NpcAutonomyStateSaveData { persons = entries };
@@ -1440,18 +1459,68 @@ namespace SengokuChronicle.Persistence
             for (int i = 0; i < clone.persons.Length; i++)
             {
                 NpcAutonomyPersonSaveEntry entry = persons[i];
-                clone.persons[i] = entry == null ? null : new NpcAutonomyPersonSaveEntry
+                if (entry == null)
+                {
+                    clone.persons[i] = null;
+                    continue;
+                }
+                var memories = new NpcActionMemorySaveEntry[
+                    entry.memories != null ? entry.memories.Length : 0];
+                for (int m = 0; m < memories.Length; m++)
+                {
+                    NpcActionMemorySaveEntry memory = entry.memories[m];
+                    memories[m] = memory == null ? null : new NpcActionMemorySaveEntry
+                    {
+                        personId = memory.personId,
+                        kind = memory.kind,
+                        action = memory.action,
+                        year = memory.year,
+                        month = memory.month,
+                        day = memory.day,
+                        reason = memory.reason
+                    };
+                }
+                clone.persons[i] = new NpcAutonomyPersonSaveEntry
                 {
                     personId = entry.personId,
                     rest = entry.rest,
                     learning = entry.learning,
-                    duty = entry.duty
+                    duty = entry.duty,
+                    memories = memories
                 };
             }
             return clone;
         }
 
-        public SaveOperationResult ValidateForSave(SuccessionSaveData succession)
+        /// <summary>
+        /// v11 migration support: keep every saved need row and add an empty memory list
+        /// to each. No memory is inferred from old logs or history.
+        /// </summary>
+        public static NpcAutonomyStateSaveData CreateMigratedV11(NpcAutonomyStateSaveData source)
+        {
+            if (source == null)
+                return CreateEmpty();
+            var entries = new NpcAutonomyPersonSaveEntry[
+                source.persons != null ? source.persons.Length : 0];
+            for (int i = 0; i < entries.Length; i++)
+            {
+                NpcAutonomyPersonSaveEntry person = source.persons[i];
+                entries[i] = person == null
+                    ? null
+                    : new NpcAutonomyPersonSaveEntry
+                    {
+                        personId = person.personId,
+                        rest = person.rest,
+                        learning = person.learning,
+                        duty = person.duty,
+                        memories = new NpcActionMemorySaveEntry[0]
+                    };
+            }
+            return new NpcAutonomyStateSaveData { persons = entries };
+        }
+
+        public SaveOperationResult ValidateForSave(SuccessionSaveData succession,
+            GameDate currentDate)
         {
             if (persons == null)
                 return Invalid("存档缺少 NPC 自主状态（npcAutonomy.persons）。");
@@ -1491,6 +1560,10 @@ namespace SengokuChronicle.Persistence
                     entry.learning > NpcNeedValues.Maximum ||
                     entry.duty < NpcNeedValues.Minimum || entry.duty > NpcNeedValues.Maximum)
                     return Invalid("存档 NPC 需求值必须在 0..100 之间。");
+
+                SaveOperationResult memories = ValidateMemories(entry, personId, currentDate);
+                if (!memories.Succeeded)
+                    return memories;
             }
 
             foreach (NpcAutonomyProfile profile in NpcAutonomyRules.Profiles)
@@ -1499,8 +1572,56 @@ namespace SengokuChronicle.Persistence
             return SaveOperationResult.Success();
         }
 
+        private static SaveOperationResult ValidateMemories(NpcAutonomyPersonSaveEntry entry,
+            PersonId owner, GameDate currentDate)
+        {
+            if (entry.memories == null)
+                return Invalid("存档缺少 NPC 行动记忆列表（npcAutonomy.persons[].memories）。");
+            if (entry.memories.Length > 2)
+                return Invalid("存档 NPC 行动记忆最多两条。");
+
+            var seenKinds = new HashSet<NpcActionMemoryKind>();
+            int previousKind = -1;
+            foreach (NpcActionMemorySaveEntry memory in entry.memories)
+            {
+                if (memory == null)
+                    return Invalid("存档 NPC 行动记忆记录为空。");
+                if (!PersonId.TryParse(memory.personId, out PersonId memoryPerson) ||
+                    memoryPerson != owner)
+                    return Invalid("存档 NPC 行动记忆人物归属不一致。");
+                if (!Enum.IsDefined(typeof(NpcActionMemoryKind), memory.kind))
+                    return Invalid("存档 NPC 行动记忆类型无效。");
+                if (!Enum.IsDefined(typeof(DailyActionKind), memory.action))
+                    return Invalid("存档 NPC 行动记忆行动类型无效。");
+                if (memory.reason == null)
+                    return Invalid("存档 NPC 行动记忆缺少原因字段（reason）。");
+                if (!GameDate.IsValidDate(memory.year, memory.month, memory.day))
+                    return Invalid("存档 NPC 行动记忆日期无效。");
+                var date = new GameDate(memory.year, memory.month, memory.day);
+                if (currentDate.IsValid && date > currentDate)
+                    return Invalid("存档 NPC 行动记忆日期不能晚于当前日期。");
+                var kind = (NpcActionMemoryKind)memory.kind;
+                if (!seenKinds.Add(kind))
+                    return Invalid("存档 NPC 行动记忆同一类型重复。");
+                if ((int)kind <= previousKind)
+                    return Invalid("存档 NPC 行动记忆顺序不稳定。");
+                previousKind = (int)kind;
+                if (kind == NpcActionMemoryKind.Completed)
+                {
+                    if (!string.IsNullOrWhiteSpace(memory.reason))
+                        return Invalid("存档完成记忆不应保存中断原因。");
+                }
+                else if (string.IsNullOrWhiteSpace(memory.reason))
+                {
+                    return Invalid("存档中断记忆缺少原因。");
+                }
+            }
+            return SaveOperationResult.Success();
+        }
+
         public static bool TryRestore(NpcAutonomyStateSaveData data,
-            SuccessionSaveData succession, out NpcAutonomyState state, out string error)
+            SuccessionSaveData succession, GameDate currentDate,
+            out NpcAutonomyState state, out string error)
         {
             state = null;
             if (data == null)
@@ -1509,7 +1630,7 @@ namespace SengokuChronicle.Persistence
                 return false;
             }
 
-            SaveOperationResult validation = data.ValidateForSave(succession);
+            SaveOperationResult validation = data.ValidateForSave(succession, currentDate);
             if (!validation.Succeeded)
             {
                 error = validation.Message;
@@ -1525,6 +1646,23 @@ namespace SengokuChronicle.Persistence
                 {
                     error = "存档 NPC 自主人物无法恢复：" + entry.personId + "。";
                     return false;
+                }
+            }
+
+            foreach (NpcAutonomyPersonSaveEntry entry in data.persons)
+            {
+                PersonId.TryParse(entry.personId, out PersonId personId);
+                foreach (NpcActionMemorySaveEntry memory in entry.memories)
+                {
+                    PersonId.TryParse(memory.personId, out PersonId memoryPerson);
+                    var date = new GameDate(memory.year, memory.month, memory.day);
+                    if (!restored.TryRestoreMemory(memoryPerson,
+                            (NpcActionMemoryKind)memory.kind,
+                            (DailyActionKind)memory.action, date, memory.reason))
+                    {
+                        error = "存档 NPC 行动记忆无法恢复：" + entry.personId + "。";
+                        return false;
+                    }
                 }
             }
             state = restored;
@@ -1543,6 +1681,20 @@ namespace SengokuChronicle.Persistence
         public int rest;
         public int learning;
         public int duty;
+        public NpcActionMemorySaveEntry[] memories;
+    }
+
+    [Serializable]
+    public sealed class NpcActionMemorySaveEntry
+    {
+        public string personId;
+        // Missing JSON enums must fail validation instead of becoming Completed/Rest.
+        public int kind = -1;
+        public int action = -1;
+        public int year;
+        public int month;
+        public int day;
+        public string reason;
     }
 
     /// <summary>

@@ -347,7 +347,8 @@ namespace SengokuChronicle.Tests.EditMode
                 new NpcAutonomyPersonSaveEntry
                 {
                     personId = first.personId, rest = first.rest,
-                    learning = first.learning, duty = first.duty
+                    learning = first.learning, duty = first.duty,
+                    memories = new NpcActionMemorySaveEntry[0]
                 }
             };
             Assert.That(SaveDataValidator.Validate(duplicate).Succeeded, Is.False);
@@ -431,6 +432,417 @@ namespace SengokuChronicle.Tests.EditMode
                 out _, out SaveOperationResult result), Is.False);
             Assert.That(result.Message, Does.Contain("npcAutonomy"));
         }
+
+        [Test]
+        public void CompletedAction_RecordsCompletedMemoryForThatPilotOnly()
+        {
+            GameSession session = NewSession();
+            Assert.That(Snapshot(session, M2FixedScenario.MasatsunaId).Memories, Is.Empty);
+            Assert.That(Snapshot(session, M2FixedScenario.NobumasaId).Memories, Is.Empty);
+
+            Assert.That(session.AdvanceOneDay(), Is.True);
+            Assert.That(session.AdvanceOneDay(), Is.True);
+
+            NpcAutonomySnapshot masatsuna = Snapshot(session, M2FixedScenario.MasatsunaId);
+            Assert.That(masatsuna.Memories, Has.Count.EqualTo(1));
+            Assert.That(masatsuna.Memories[0].Kind,
+                Is.EqualTo(NpcActionMemoryKind.Completed));
+            Assert.That(masatsuna.Memories[0].Action, Is.EqualTo(DailyActionKind.Training));
+            Assert.That(masatsuna.Memories[0].Date, Is.EqualTo(new GameDate(1560, 4, 3)));
+            Assert.That(masatsuna.Memories[0].PersonId,
+                Is.EqualTo(M2FixedScenario.MasatsunaId));
+            Assert.That(masatsuna.Memories[0].Reason, Is.Empty);
+
+            NpcAutonomySnapshot nobumasa = Snapshot(session, M2FixedScenario.NobumasaId);
+            Assert.That(nobumasa.Memories, Is.Empty,
+                "a completion must never write another pilot's memory");
+            Assert.That(nobumasa.HasActiveAction, Is.True,
+                "the other pilot's in-flight Work action is unaffected");
+        }
+
+        [Test]
+        public void PlayerInterrupt_RecordsInterruptedMemoryForThatPilotOnly()
+        {
+            GameSession session = NewSession();
+            const string reason = "玩家中止训练以改做其他事务。";
+
+            Assert.That(session.TryInterruptDailyAction(M2FixedScenario.MasatsunaId, reason),
+                Is.True, session.LastDailyActionMessage);
+
+            NpcAutonomySnapshot masatsuna = Snapshot(session, M2FixedScenario.MasatsunaId);
+            Assert.That(masatsuna.Memories, Has.Count.EqualTo(1));
+            Assert.That(masatsuna.Memories[0].Kind,
+                Is.EqualTo(NpcActionMemoryKind.Interrupted));
+            Assert.That(masatsuna.Memories[0].Action, Is.EqualTo(DailyActionKind.Training));
+            Assert.That(masatsuna.Memories[0].Date, Is.EqualTo(new GameDate(1560, 4, 1)));
+            Assert.That(masatsuna.Memories[0].Reason, Does.Contain(reason));
+
+            Assert.That(Snapshot(session, M2FixedScenario.NobumasaId).Memories, Is.Empty,
+                "interrupting one pilot must not touch the other pilot's memory");
+        }
+
+        [Test]
+        public void PlayerPlannedCompletion_RecordsCompletedMemoryForThatPilotOnly()
+        {
+            GameSession session = NewSession();
+            SaveData idle = IdlePilotSave(session);
+            Assert.That(session.TryApplySave(idle).Succeeded, Is.True,
+                session.LastEventMessage);
+            Assert.That(Snapshot(session, M2FixedScenario.MasatsunaId).Memories, Is.Empty);
+            Assert.That(Snapshot(session, M2FixedScenario.NobumasaId).Memories, Is.Empty);
+
+            Assert.That(session.TryPlanDailyAction(M2FixedScenario.MasatsunaId,
+                DailyActionKind.Rest, 1, default, out string reason), Is.True, reason);
+            Assert.That(session.AdvanceOneDay(), Is.True);
+
+            NpcAutonomySnapshot masatsuna = Snapshot(session, M2FixedScenario.MasatsunaId);
+            Assert.That(masatsuna.Memories, Has.Count.EqualTo(1),
+                "a player-arranged completion is recorded exactly once");
+            Assert.That(masatsuna.Memories[0].Kind,
+                Is.EqualTo(NpcActionMemoryKind.Completed));
+            Assert.That(masatsuna.Memories[0].Action, Is.EqualTo(DailyActionKind.Rest));
+            Assert.That(masatsuna.Memories[0].Date, Is.EqualTo(new GameDate(1560, 4, 2)));
+            Assert.That(masatsuna.Memories[0].PersonId,
+                Is.EqualTo(M2FixedScenario.MasatsunaId));
+            Assert.That(masatsuna.Memories[0].Reason, Is.Empty);
+
+            Assert.That(Snapshot(session, M2FixedScenario.NobumasaId).Memories, Is.Empty,
+                "the other pilot's autonomous plan must not record this completion");
+        }
+
+        [Test]
+        public void FailedReplan_RollsBackWithoutLeavingAnInterruptionMemory()
+        {
+            GameSession session = NewSession();
+            Assert.That(session.TryGetDailyAction(M2FixedScenario.MasatsunaId,
+                out DailyActionTask before), Is.True);
+            Assert.That(Snapshot(session, M2FixedScenario.MasatsunaId).Memories, Is.Empty);
+
+            Assert.That(session.TryReplanDailyAction(M2FixedScenario.MasatsunaId,
+                DailyActionKind.Travel, 0, default, out string reason), Is.False);
+            Assert.That(reason, Is.Not.Empty);
+
+            NpcAutonomySnapshot after = Snapshot(session, M2FixedScenario.MasatsunaId);
+            Assert.That(after.Memories, Is.Empty,
+                "a rolled-back interruption must not leave a memory");
+            Assert.That(after.ActiveAction, Is.Not.Null);
+            Assert.That(after.ActiveAction.Kind, Is.EqualTo(before.Kind));
+            Assert.That(after.ActiveAction.StartDate, Is.EqualTo(before.StartDate));
+        }
+
+        [Test]
+        public void RejectedActionCommand_DoesNotRecordMemory()
+        {
+            GameSession session = NewSession();
+
+            Assert.That(session.TryPlanDailyAction(M2FixedScenario.NobumasaId,
+                DailyActionKind.Rest, 1, default, out _), Is.False,
+                "the pilot already has an active action");
+
+            Assert.That(Snapshot(session, M2FixedScenario.NobumasaId).Memories, Is.Empty);
+            Assert.That(Snapshot(session, M2FixedScenario.MasatsunaId).Memories, Is.Empty);
+        }
+
+        [Test]
+        public void RolledBackMonthlySettlement_DoesNotLeaveACompletionMemory()
+        {
+            GameSession source = NewSession();
+            SaveData saved = IdlePilotSave(source);
+            saved.year = 1560;
+            saved.month = 4;
+            saved.day = 30;
+            DailyActionPersonSaveEntry row = ActionEntry(saved, M2FixedScenario.MasatsunaId);
+            row.hasAction = true;
+            row.actionKind = (int)DailyActionKind.Training;
+            row.actionDurationDays = 1;
+            row.actionElapsedDays = 0;
+            row.actionStartYear = saved.year;
+            row.actionStartMonth = saved.month;
+            row.actionStartDay = saved.day;
+            row.actionReason = "月末完成的训练。";
+            Assert.That(SaveDataValidator.Validate(saved).Succeeded, Is.True);
+
+            GameSession restored = NewSession(31UL);
+            Assert.That(restored.TryApplySave(saved).Succeeded, Is.True,
+                restored.LastEventMessage);
+            Assert.That(Snapshot(restored, M2FixedScenario.MasatsunaId).Memories, Is.Empty);
+
+            restored.MonthSettlementFaultInjection = () =>
+                throw new InvalidOperationException("月度结算故障注入。");
+            Assert.That(restored.TryAdvanceToNextMonth(), Is.False);
+
+            NpcAutonomySnapshot after = Snapshot(restored, M2FixedScenario.MasatsunaId);
+            Assert.That(after.Memories, Is.Empty,
+                "a completion inside a rolled-back monthly settlement must not persist");
+            Assert.That(after.HasActiveAction, Is.True,
+                "the pre-settlement training action is restored");
+        }
+
+        [Test]
+        public void DepartedPilotCleanup_DoesNotTransferInterruptionMemoryToTheSurvivor()
+        {
+            GameSession session = NewSession();
+            Assert.That(session.AdvanceOneDay(), Is.True);
+            Assert.That(session.Succession.World.TryGetLife(M2FixedScenario.NobumasaId,
+                out SuccessionPersonLife life), Is.True);
+            Assert.That(session.Succession.World.TrySetLife(M2FixedScenario.NobumasaId,
+                new SuccessionPersonLife(life.BirthYear, false, life.Retired),
+                out string lifeError), Is.True, lifeError);
+
+            SaveData saved = session.CaptureSave();
+            SaveOperationResult validation = SaveDataValidator.Validate(saved);
+            Assert.That(validation.Succeeded, Is.True, validation.Message);
+            Assert.That(saved.npcAutonomy.persons, Has.Length.EqualTo(1),
+                "the departed pilot's autonomy row is removed from a stable save point");
+            Assert.That(saved.npcAutonomy.persons[0].personId,
+                Is.EqualTo(M2FixedScenario.MasatsunaId.Value));
+            Assert.That(saved.npcAutonomy.persons[0].memories, Is.Empty,
+                "cleanup interruption must never be written onto the surviving pilot");
+
+            GameSession restored = NewSession(43UL);
+            Assert.That(restored.TryApplySave(saved).Succeeded, Is.True,
+                restored.LastEventMessage);
+            Assert.That(restored.TryGetNpcAutonomy(M2FixedScenario.NobumasaId, out _),
+                Is.False);
+        }
+
+        [Test]
+        public void LongSession_KeepsAtMostOneMemoryPerKind()
+        {
+            GameSession session = NewSession();
+            Assert.That(session.AdvanceDays(14), Is.True, session.LastEventMessage);
+
+            foreach (NpcAutonomySnapshot snapshot in session.NpcAutonomySnapshots)
+            {
+                Assert.That(snapshot.Memories.Count, Is.LessThanOrEqualTo(2));
+                Assert.That(snapshot.Memories.Count(memory =>
+                        memory.Kind == NpcActionMemoryKind.Completed),
+                    Is.LessThanOrEqualTo(1));
+                Assert.That(snapshot.Memories.Count(memory =>
+                        memory.Kind == NpcActionMemoryKind.Interrupted),
+                    Is.LessThanOrEqualTo(1));
+            }
+        }
+
+        [Test]
+        public void SaveLoad_RestoresBothMemoryKindsWithOwnerDateActionAndReason()
+        {
+            GameSession source = NewSession();
+            Assert.That(source.AdvanceOneDay(), Is.True);
+            Assert.That(source.AdvanceOneDay(), Is.True);
+            Assert.That(source.TryInterruptDailyAction(M2FixedScenario.MasatsunaId,
+                "保存前中断。"), Is.True, source.LastDailyActionMessage);
+
+            NpcAutonomySnapshot before = Snapshot(source, M2FixedScenario.MasatsunaId);
+            Assert.That(before.Memories, Has.Count.EqualTo(2));
+            SaveData saved = source.CaptureSave();
+            NpcAutonomyPersonSaveEntry savedEntry = Entry(saved, M2FixedScenario.MasatsunaId);
+            Assert.That(savedEntry.memories, Has.Length.EqualTo(2));
+
+            GameSession restored = NewSession(37UL);
+            Assert.That(restored.TryApplySave(saved).Succeeded, Is.True,
+                restored.LastEventMessage);
+
+            NpcAutonomySnapshot after = Snapshot(restored, M2FixedScenario.MasatsunaId);
+            Assert.That(after.Memories, Has.Count.EqualTo(2));
+            for (int i = 0; i < before.Memories.Count; i++)
+                Assert.That(after.Memories[i], Is.EqualTo(before.Memories[i]),
+                    "memory owner, kind, action, date and reason must round-trip exactly");
+            Assert.That(after.Memories[0].Kind, Is.EqualTo(NpcActionMemoryKind.Completed));
+            Assert.That(after.Memories[1].Kind, Is.EqualTo(NpcActionMemoryKind.Interrupted));
+            Assert.That(after.Memories[1].Reason, Does.Contain("保存前中断。"));
+            Assert.That(Snapshot(restored, M2FixedScenario.NobumasaId).Memories, Is.Empty);
+        }
+
+        [Test]
+        public void V11Migration_AddsEmptyMemoriesAndPreservesNeedsAndDailyActions()
+        {
+            GameSession session = NewSession();
+            Assert.That(session.AdvanceOneDay(), Is.True);
+            SaveData legacy = session.CaptureSave();
+            string dailyActionsJson = JsonUtility.ToJson(legacy.dailyActions);
+            legacy.saveFormatVersion = 11;
+            foreach (NpcAutonomyPersonSaveEntry entry in legacy.npcAutonomy.persons)
+                entry.memories = null;
+
+            Assert.That(SaveDataMigrator.TryMigrate(legacy, null, out SaveData current,
+                out SaveOperationResult result), Is.True, result.Message);
+
+            Assert.That(current.saveFormatVersion,
+                Is.EqualTo(SaveDataValidator.CurrentVersion));
+            Assert.That(current.npcAutonomy.persons, Has.Length.EqualTo(2));
+            foreach (NpcAutonomyPersonSaveEntry entry in current.npcAutonomy.persons)
+                Assert.That(entry.memories, Is.Empty,
+                    "v11 migration must create empty memory lists, never infer history");
+            Assert.That(Entry(current, M2FixedScenario.MasatsunaId).rest, Is.EqualTo(44));
+            Assert.That(Entry(current, M2FixedScenario.MasatsunaId).learning, Is.EqualTo(78));
+            Assert.That(Entry(current, M2FixedScenario.MasatsunaId).duty, Is.EqualTo(48));
+            Assert.That(JsonUtility.ToJson(current.dailyActions), Is.EqualTo(dailyActionsJson));
+        }
+
+        [Test]
+        public void V11Migration_RejectsAPayloadThatAlreadyCarriesMemories()
+        {
+            GameSession session = NewSession();
+            Assert.That(session.AdvanceOneDay(), Is.True);
+            Assert.That(session.AdvanceOneDay(), Is.True);
+            SaveData legacy = session.CaptureSave();
+            Assert.That(Entry(legacy, M2FixedScenario.MasatsunaId).memories, Is.Not.Empty);
+            legacy.saveFormatVersion = 11;
+
+            Assert.That(SaveDataMigrator.TryMigrate(legacy, null, out SaveData current,
+                out SaveOperationResult result), Is.False);
+            Assert.That(result.Message, Does.Contain("memories"));
+            Assert.That(current, Is.Null);
+        }
+
+        [Test]
+        public void V12Validation_RejectsMissingOrInvalidMemoryData()
+        {
+            GameSession session = NewSession();
+            SaveData valid = session.CaptureSave();
+            Assert.That(SaveDataValidator.Validate(valid).Succeeded, Is.True);
+
+            SaveData missing = session.CaptureSave();
+            Entry(missing, M2FixedScenario.MasatsunaId).memories = null;
+            SaveOperationResult missingResult = SaveDataValidator.Validate(missing);
+            Assert.That(missingResult.Succeeded, Is.False);
+            Assert.That(missingResult.Message, Does.Contain("memories"));
+
+            SaveData wrongOwner = session.CaptureSave();
+            Entry(wrongOwner, M2FixedScenario.MasatsunaId).memories =
+                new[] { Memory(M2FixedScenario.NobumasaId, NpcActionMemoryKind.Completed,
+                    DailyActionKind.Rest, valid.year, valid.month, valid.day, string.Empty) };
+            Assert.That(SaveDataValidator.Validate(wrongOwner).Succeeded, Is.False,
+                "nested memory owner must match its pilot row");
+
+            SaveData future = session.CaptureSave();
+            Assert.That(GameDate.TryAddDays(
+                new GameDate(valid.year, valid.month, valid.day), 1,
+                out GameDate tomorrow));
+            Entry(future, M2FixedScenario.MasatsunaId).memories =
+                new[] { Memory(M2FixedScenario.MasatsunaId, NpcActionMemoryKind.Completed,
+                    DailyActionKind.Rest, tomorrow.Year, tomorrow.Month, tomorrow.Day,
+                    string.Empty) };
+            SaveOperationResult futureResult = SaveDataValidator.Validate(future);
+            Assert.That(futureResult.Succeeded, Is.False);
+            Assert.That(futureResult.Message, Does.Contain("晚于当前日期"));
+
+            SaveData badKind = session.CaptureSave();
+            NpcActionMemorySaveEntry bad = Memory(M2FixedScenario.MasatsunaId,
+                NpcActionMemoryKind.Completed, DailyActionKind.Rest,
+                valid.year, valid.month, valid.day, string.Empty);
+            bad.kind = 9;
+            Entry(badKind, M2FixedScenario.MasatsunaId).memories = new[] { bad };
+            Assert.That(SaveDataValidator.Validate(badKind).Succeeded, Is.False);
+
+            SaveData badAction = session.CaptureSave();
+            NpcActionMemorySaveEntry badActionMemory = Memory(M2FixedScenario.MasatsunaId,
+                NpcActionMemoryKind.Completed, DailyActionKind.Rest,
+                valid.year, valid.month, valid.day, string.Empty);
+            badActionMemory.action = 99;
+            Entry(badAction, M2FixedScenario.MasatsunaId).memories =
+                new[] { badActionMemory };
+            Assert.That(SaveDataValidator.Validate(badAction).Succeeded, Is.False);
+
+            SaveData badDate = session.CaptureSave();
+            Entry(badDate, M2FixedScenario.MasatsunaId).memories =
+                new[] { Memory(M2FixedScenario.MasatsunaId,
+                    NpcActionMemoryKind.Completed, DailyActionKind.Rest,
+                    1560, 2, 30, string.Empty) };
+            SaveOperationResult badDateResult = SaveDataValidator.Validate(badDate);
+            Assert.That(badDateResult.Succeeded, Is.False);
+            Assert.That(badDateResult.Message, Does.Contain("日期无效"));
+
+            SaveData tooMany = session.CaptureSave();
+            Entry(tooMany, M2FixedScenario.MasatsunaId).memories = new[]
+            {
+                Memory(M2FixedScenario.MasatsunaId, NpcActionMemoryKind.Completed,
+                    DailyActionKind.Rest, valid.year, valid.month, valid.day, string.Empty),
+                Memory(M2FixedScenario.MasatsunaId, NpcActionMemoryKind.Interrupted,
+                    DailyActionKind.Work, valid.year, valid.month, valid.day, "中断。"),
+                Memory(M2FixedScenario.MasatsunaId, NpcActionMemoryKind.Completed,
+                    DailyActionKind.Training, valid.year, valid.month, valid.day, string.Empty)
+            };
+            SaveOperationResult tooManyResult = SaveDataValidator.Validate(tooMany);
+            Assert.That(tooManyResult.Succeeded, Is.False);
+            Assert.That(tooManyResult.Message, Does.Contain("最多两条"));
+
+            SaveData duplicate = session.CaptureSave();
+            Entry(duplicate, M2FixedScenario.MasatsunaId).memories = new[]
+            {
+                Memory(M2FixedScenario.MasatsunaId, NpcActionMemoryKind.Completed,
+                    DailyActionKind.Rest, valid.year, valid.month, valid.day, string.Empty),
+                Memory(M2FixedScenario.MasatsunaId, NpcActionMemoryKind.Completed,
+                    DailyActionKind.Work, valid.year, valid.month, valid.day, string.Empty)
+            };
+            SaveOperationResult duplicateResult = SaveDataValidator.Validate(duplicate);
+            Assert.That(duplicateResult.Succeeded, Is.False);
+            Assert.That(duplicateResult.Message, Does.Contain("重复"));
+
+            SaveData unstable = session.CaptureSave();
+            Entry(unstable, M2FixedScenario.MasatsunaId).memories = new[]
+            {
+                Memory(M2FixedScenario.MasatsunaId, NpcActionMemoryKind.Interrupted,
+                    DailyActionKind.Work, valid.year, valid.month, valid.day, "中断。"),
+                Memory(M2FixedScenario.MasatsunaId, NpcActionMemoryKind.Completed,
+                    DailyActionKind.Rest, valid.year, valid.month, valid.day, string.Empty)
+            };
+            SaveOperationResult unstableResult = SaveDataValidator.Validate(unstable);
+            Assert.That(unstableResult.Succeeded, Is.False);
+            Assert.That(unstableResult.Message, Does.Contain("顺序"));
+        }
+
+        [TestCase("kind", ",\"kind\":0")]
+        [TestCase("action", ",\"action\":0")]
+        [TestCase("reason", ",\"reason\":\"\"")]
+        public void V12Json_RejectsMissingMemoryField(string field, string fragment)
+        {
+            GameSession session = NewSession();
+            SaveData data = session.CaptureSave();
+            var memory = Memory(M2FixedScenario.MasatsunaId, NpcActionMemoryKind.Completed,
+                DailyActionKind.Rest, data.year, data.month, data.day, string.Empty);
+            Entry(data, M2FixedScenario.MasatsunaId).memories = new[] { memory };
+            Assert.That(SaveDataValidator.Validate(data).Succeeded, Is.True);
+            string memoryJson = JsonUtility.ToJson(memory);
+            Assert.That(memoryJson, Does.Contain(fragment));
+            string json = JsonUtility.ToJson(data).Replace(memoryJson,
+                memoryJson.Replace(fragment, string.Empty));
+
+            SaveOperationResult result = SaveDataValidator.Validate(
+                JsonUtility.FromJson<SaveData>(json));
+
+            Assert.That(result.Succeeded, Is.False,
+                "missing " + field + " must not be replaced with a valid default");
+        }
+
+        [Test]
+        public void V12Presence_RejectsMissingNestedMemoryArray()
+        {
+            GameSession session = NewSession();
+            string json = JsonUtility.ToJson(session.CaptureSave(), true);
+            SaveDataPresenceProbe probe = JsonUtility.FromJson<SaveDataPresenceProbe>(json);
+            probe.npcAutonomy.persons[0].memories = null;
+
+            SaveOperationResult presence = SaveDataValidator.ValidatePresence(probe, json);
+
+            Assert.That(presence.Succeeded, Is.False);
+            Assert.That(presence.Message, Does.Contain("memories"));
+        }
+
+        private static NpcActionMemorySaveEntry Memory(PersonId personId,
+            NpcActionMemoryKind kind, DailyActionKind action, int year, int month, int day,
+            string reason) =>
+            new NpcActionMemorySaveEntry
+            {
+                personId = personId.Value,
+                kind = (int)kind,
+                action = (int)action,
+                year = year,
+                month = month,
+                day = day,
+                reason = reason
+            };
 
         [Test]
         public void DecisionLog_RecordsAcceptedInterruptedAndReplanOutcomesWithReasons()
@@ -821,7 +1233,7 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         private static string WithVersion(string json, int version) =>
-            json.Replace("\"saveFormatVersion\":11",
+            json.Replace("\"saveFormatVersion\":12",
                 "\"saveFormatVersion\":" + version.ToString());
 
         private static SaveData IdlePilotSave(GameSession session)

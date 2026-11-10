@@ -31,6 +31,13 @@ namespace SengokuChronicle.Domain
         DailyCheck = 4
     }
 
+    /// <summary>The two bounded memory kinds; at most one of each per pilot.</summary>
+    public enum NpcActionMemoryKind
+    {
+        Completed = 0,
+        Interrupted = 1
+    }
+
     /// <summary>
     /// Three clamped integer needs. Values are durable simulation state; the approved
     /// growth and completion reductions live in <see cref="NpcAutonomyRules"/>.
@@ -154,18 +161,26 @@ namespace SengokuChronicle.Domain
     /// <summary>One candidate in the approved Rest, Training, Work order.</summary>
     public readonly struct NpcActionCandidate
     {
-        public NpcActionCandidate(DailyActionKind kind, bool isEligible, int score,
-            string explanation)
+        public NpcActionCandidate(DailyActionKind kind, bool isEligible, int baseScore,
+            int memoryAdjustment, string explanation)
         {
             Kind = kind;
             IsEligible = isEligible;
-            Score = score;
+            BaseScore = baseScore;
+            MemoryAdjustment = memoryAdjustment;
+            Score = baseScore + memoryAdjustment;
             Explanation = explanation ?? string.Empty;
         }
 
         public DailyActionKind Kind { get; }
         public bool IsEligible { get; }
+
+        /// <summary>Final integer score including the current memory adjustment.</summary>
         public int Score { get; }
+
+        public int BaseScore { get; }
+        public int MemoryAdjustment { get; }
+        public int FinalScore => Score;
         public string KindName => DailyActionState.KindName(Kind);
 
         /// <summary>Score explanation for an eligible candidate or the exclusion reason.</summary>
@@ -228,6 +243,47 @@ namespace SengokuChronicle.Domain
         public string ActionName => DailyActionState.KindName(Action);
     }
 
+    /// <summary>
+    /// Immutable personal action memory. Only the kind, action, date and an optional
+    /// interruption reason are stored; display text is always generated from them.
+    /// </summary>
+    public readonly struct NpcActionMemory : IEquatable<NpcActionMemory>
+    {
+        public NpcActionMemory(PersonId personId, NpcActionMemoryKind kind,
+            DailyActionKind action, GameDate date, string reason)
+        {
+            PersonId = personId;
+            Kind = kind;
+            Action = action;
+            Date = date;
+            Reason = reason ?? string.Empty;
+        }
+
+        public PersonId PersonId { get; }
+        public NpcActionMemoryKind Kind { get; }
+        public DailyActionKind Action { get; }
+        public GameDate Date { get; }
+        public string Reason { get; }
+        public string KindName => NpcAutonomyRules.MemoryKindName(Kind);
+        public string ActionName => DailyActionState.KindName(Action);
+
+        public bool Equals(NpcActionMemory other) =>
+            PersonId == other.PersonId && Kind == other.Kind && Action == other.Action &&
+            Date == other.Date && string.Equals(Reason, other.Reason, StringComparison.Ordinal);
+
+        public override bool Equals(object obj) => obj is NpcActionMemory other && Equals(other);
+
+        public override int GetHashCode() =>
+            ((PersonId.GetHashCode() * 31 + (int)Kind) * 31 + (int)Action) * 31 +
+            Date.GetHashCode();
+
+        public static bool operator ==(NpcActionMemory left, NpcActionMemory right) =>
+            left.Equals(right);
+
+        public static bool operator !=(NpcActionMemory left, NpcActionMemory right) =>
+            !left.Equals(right);
+    }
+
     /// <summary>One bounded, session-only decision log entry.</summary>
     public readonly struct NpcAutonomyDecisionRecord
     {
@@ -277,9 +333,60 @@ namespace SengokuChronicle.Domain
             Status = NpcAutonomyStatus.Idle;
         }
 
+        private NpcActionMemory? _completedMemory;
+        private NpcActionMemory? _interruptedMemory;
+
         public PersonId PersonId { get; }
         public NpcNeedValues Needs { get; internal set; }
         public NpcAutonomyStatus Status { get; internal set; }
+
+        /// <summary>
+        /// At most two durable memories in stable kind order: last completed action,
+        /// then last interrupted action.
+        /// </summary>
+        public IReadOnlyList<NpcActionMemory> Memories
+        {
+            get
+            {
+                var snapshot = new List<NpcActionMemory>(2);
+                if (_completedMemory.HasValue)
+                    snapshot.Add(_completedMemory.Value);
+                if (_interruptedMemory.HasValue)
+                    snapshot.Add(_interruptedMemory.Value);
+                return snapshot.AsReadOnly();
+            }
+        }
+
+        /// <summary>Reads one memory kind without exposing mutable storage.</summary>
+        public bool TryGetMemory(NpcActionMemoryKind kind, out NpcActionMemory memory)
+        {
+            switch (kind)
+            {
+                case NpcActionMemoryKind.Completed when _completedMemory.HasValue:
+                    memory = _completedMemory.Value;
+                    return true;
+                case NpcActionMemoryKind.Interrupted when _interruptedMemory.HasValue:
+                    memory = _interruptedMemory.Value;
+                    return true;
+                default:
+                    memory = default;
+                    return false;
+            }
+        }
+
+        /// <summary>Replaces only the matching kind; the other kind is preserved.</summary>
+        internal void RecordMemory(NpcActionMemory memory)
+        {
+            switch (memory.Kind)
+            {
+                case NpcActionMemoryKind.Completed:
+                    _completedMemory = memory;
+                    break;
+                case NpcActionMemoryKind.Interrupted:
+                    _interruptedMemory = memory;
+                    break;
+            }
+        }
 
         /// <summary>
         /// Last evaluation used for goal selection (or the last rejection reason when
@@ -298,7 +405,9 @@ namespace SengokuChronicle.Domain
                 Status = Status,
                 LatestEvaluation = LatestEvaluation,
                 LastOutcome = LastOutcome,
-                HasLastOutcome = HasLastOutcome
+                HasLastOutcome = HasLastOutcome,
+                _completedMemory = _completedMemory,
+                _interruptedMemory = _interruptedMemory
             };
     }
 
@@ -415,8 +524,47 @@ namespace SengokuChronicle.Domain
             person.LastOutcome = new NpcAutonomyOutcomeRecord(NpcAutonomyStatus.Completed,
                 kind, date, reason);
             person.HasLastOutcome = true;
+            if (Enum.IsDefined(typeof(DailyActionKind), kind) && date.IsValid)
+                person.RecordMemory(new NpcActionMemory(personId, NpcActionMemoryKind.Completed,
+                    kind, date, string.Empty));
             return true;
         }
+
+        /// <summary>
+        /// Records one successfully committed interruption. Needs are unchanged; the
+        /// interrupted memory replaces only the previous interrupted record.
+        /// </summary>
+        public bool ApplyInterruptedAction(PersonId personId, DailyActionKind kind,
+            GameDate date, string reason)
+        {
+            if (!_persons.TryGetValue(personId.Value ?? string.Empty, out NpcAutonomyPersonState person))
+                return false;
+            person.Status = NpcAutonomyStatus.Interrupted;
+            person.LastOutcome = new NpcAutonomyOutcomeRecord(NpcAutonomyStatus.Interrupted,
+                kind, date, reason);
+            person.HasLastOutcome = true;
+            if (Enum.IsDefined(typeof(DailyActionKind), kind) && date.IsValid)
+                person.RecordMemory(new NpcActionMemory(personId, NpcActionMemoryKind.Interrupted,
+                    kind, date, reason));
+            return true;
+        }
+
+        /// <summary>Persistence support: restore one already-validated memory.</summary>
+        public bool TryRestoreMemory(PersonId personId, NpcActionMemoryKind kind,
+            DailyActionKind action, GameDate date, string reason)
+        {
+            if (!Enum.IsDefined(typeof(NpcActionMemoryKind), kind) ||
+                !Enum.IsDefined(typeof(DailyActionKind), action) || !date.IsValid ||
+                !_persons.TryGetValue(personId.Value ?? string.Empty, out NpcAutonomyPersonState person))
+                return false;
+            person.RecordMemory(new NpcActionMemory(personId, kind, action, date, reason));
+            return true;
+        }
+
+        /// <summary>Replaces one memory kind for a registered pilot.</summary>
+        public bool RecordMemory(PersonId personId, NpcActionMemoryKind kind,
+            DailyActionKind action, GameDate date, string reason) =>
+            TryRestoreMemory(personId, kind, action, date, reason);
 
         public bool SetLastOutcome(PersonId personId, NpcAutonomyOutcomeRecord outcome)
         {
@@ -491,6 +639,7 @@ namespace SengokuChronicle.Domain
             NpcAutonomyProfile profile, NpcAutonomyStatus status, DailyActionTask activeAction,
             NpcAutonomyEvaluation latestEvaluation, NpcAutonomyEvaluation currentEvaluation,
             NpcAutonomyOutcomeRecord lastOutcome, bool hasLastOutcome,
+            IReadOnlyList<NpcActionMemory> memories,
             IReadOnlyList<NpcAutonomyDecisionRecord> recentDecisions)
         {
             PersonId = personId;
@@ -503,6 +652,7 @@ namespace SengokuChronicle.Domain
             CurrentEvaluation = currentEvaluation;
             LastOutcome = lastOutcome;
             HasLastOutcome = hasLastOutcome;
+            Memories = memories ?? Array.Empty<NpcActionMemory>();
             RecentDecisions = recentDecisions ?? Array.Empty<NpcAutonomyDecisionRecord>();
         }
 
@@ -528,6 +678,7 @@ namespace SengokuChronicle.Domain
         public NpcAutonomyOutcomeRecord LastOutcome { get; }
 
         public bool HasLastOutcome { get; }
+        public IReadOnlyList<NpcActionMemory> Memories { get; }
         public IReadOnlyList<NpcAutonomyDecisionRecord> RecentDecisions { get; }
         public string StatusName => NpcAutonomyRules.StatusName(Status);
     }
@@ -546,6 +697,9 @@ namespace SengokuChronicle.Domain
         public const int DailyLearningGrowth = 3;
         public const int DailyDutyGrowth = 3;
         public const int CompletedActionNeedReduction = 40;
+        public const int MemoryEffectDays = 30;
+        public const int CompletedMemoryAdjustment = 12;
+        public const int InterruptedMemoryAdjustment = -12;
 
         public static readonly PersonId MasatsunaId = new PersonId(MasatsunaIdValue);
         public static readonly PersonId NobumasaId = new PersonId(NobumasaIdValue);
@@ -606,7 +760,13 @@ namespace SengokuChronicle.Domain
         }
 
         public static NpcAutonomyEvaluation Evaluate(PersonId personId, NpcNeedValues needs,
-            bool isRegistered, bool hasKnownLocation, bool hasActiveAction)
+            bool isRegistered, bool hasKnownLocation, bool hasActiveAction) =>
+            Evaluate(personId, needs, null, default, isRegistered, hasKnownLocation,
+                hasActiveAction);
+
+        public static NpcAutonomyEvaluation Evaluate(PersonId personId, NpcNeedValues needs,
+            IReadOnlyList<NpcActionMemory> memories, GameDate currentDate, bool isRegistered,
+            bool hasKnownLocation, bool hasActiveAction)
         {
             bool profileKnown = TryGetProfile(personId, out NpcAutonomyProfile profile);
             string exclusion = null;
@@ -625,25 +785,32 @@ namespace SengokuChronicle.Domain
             {
                 int need = needs.For(kind);
                 int weight = profileKnown ? profile.WeightFor(kind) : 0;
-                int score = need * weight;
+                int baseScore = need * weight;
+                int memoryAdjustment = MemoryAdjustmentFor(memories, kind, currentDate);
+                string memoryText = DescribeMemoryAdjustment(memories, kind, currentDate);
+                int finalScore = baseScore + memoryAdjustment;
                 if (exclusion != null)
                 {
                     // Excluded candidates never compete for selection, but their
                     // integer score remains visible for read-only diagnostics.
                     string reason = profileKnown
-                        ? exclusion + " 当前分数 " + score + "（需求 " + need +
-                          " × 偏好 " + weight + "，仅供参考）。"
+                        ? exclusion + " 当前分数 " + finalScore + "（基础分数 " + baseScore +
+                          "，需求 " + need + " × 偏好 " + weight + memoryText +
+                          "；最终分数 " + finalScore + "，仅供参考）。"
                         : exclusion;
-                    candidates.Add(new NpcActionCandidate(kind, false, score, reason));
+                    candidates.Add(new NpcActionCandidate(kind, false, baseScore,
+                        memoryAdjustment, reason));
                     continue;
                 }
 
-                candidates.Add(new NpcActionCandidate(kind, true, score,
-                    "需求 " + need + " × 偏好 " + weight + " = " + score + "。"));
+                candidates.Add(new NpcActionCandidate(kind, true, baseScore,
+                    memoryAdjustment,
+                    "基础分数 " + baseScore + "（需求 " + need + " × 偏好 " + weight + "）" +
+                    memoryText + "；最终分数 " + finalScore + "。"));
                 // CandidateKinds is ascending, so strict '>' keeps the lower kind on ties.
-                if (score > bestScore)
+                if (finalScore > bestScore)
                 {
-                    bestScore = score;
+                    bestScore = finalScore;
                     selected = candidates[candidates.Count - 1];
                     hasSelection = true;
                 }
@@ -658,6 +825,86 @@ namespace SengokuChronicle.Domain
             return new NpcAutonomyEvaluation(personId, needs, profile, isRegistered,
                 hasKnownLocation, hasActiveAction, candidates.AsReadOnly(), hasSelection,
                 selected, summary);
+        }
+
+        /// <summary>
+        /// True from the memory date through its 30th following day inclusive. The
+        /// 31st day and later are expired. A 30-day window that would pass the game
+        /// date maximum is treated as active for every representable later date.
+        /// </summary>
+        public static bool IsMemoryActive(NpcActionMemory memory, GameDate currentDate)
+        {
+            if (!memory.Date.IsValid || !currentDate.IsValid)
+                return false;
+            if (currentDate < memory.Date)
+                return false;
+            if (!GameDate.TryAddDays(memory.Date, MemoryEffectDays, out GameDate lastActiveDay))
+                return true;
+            return currentDate <= lastActiveDay;
+        }
+
+        /// <summary>Signed current contribution of one memory for one action kind.</summary>
+        public static int MemoryAdjustmentFor(NpcActionMemory memory, DailyActionKind kind,
+            GameDate currentDate)
+        {
+            if (memory.Action != kind || !IsMemoryActive(memory, currentDate))
+                return 0;
+            switch (memory.Kind)
+            {
+                case NpcActionMemoryKind.Completed: return CompletedMemoryAdjustment;
+                case NpcActionMemoryKind.Interrupted: return InterruptedMemoryAdjustment;
+                default: return 0;
+            }
+        }
+
+        private static int MemoryAdjustmentFor(IReadOnlyList<NpcActionMemory> memories,
+            DailyActionKind kind, GameDate currentDate)
+        {
+            int adjustment = 0;
+            if (memories == null)
+                return adjustment;
+            foreach (NpcActionMemory memory in memories)
+                adjustment += MemoryAdjustmentFor(memory, kind, currentDate);
+            return adjustment;
+        }
+
+        private static string DescribeMemoryAdjustment(IReadOnlyList<NpcActionMemory> memories,
+            DailyActionKind kind, GameDate currentDate)
+        {
+            var builder = new System.Text.StringBuilder();
+            if (memories != null)
+            {
+                foreach (NpcActionMemory memory in memories)
+                {
+                    if (memory.Action != kind)
+                        continue;
+                    int adjustment = MemoryAdjustmentFor(memory, kind, currentDate);
+                    builder.Append("；记忆修正 ").Append(Signed(adjustment))
+                        .Append("（").Append(memory.KindName).Append(' ')
+                        .Append(memory.ActionName).Append(' ')
+                        .Append(memory.Date.ToString());
+                    if (adjustment == 0)
+                        builder.Append("，已过期");
+                    builder.Append('）');
+                }
+            }
+            if (builder.Length == 0)
+                builder.Append("；记忆修正 +0");
+            return builder.ToString();
+        }
+
+        public static string Signed(int value) =>
+            value >= 0 ? "+" + value : value.ToString(
+                System.Globalization.CultureInfo.InvariantCulture);
+
+        public static string MemoryKindName(NpcActionMemoryKind kind)
+        {
+            switch (kind)
+            {
+                case NpcActionMemoryKind.Completed: return "完成记忆";
+                case NpcActionMemoryKind.Interrupted: return "中断记忆";
+                default: return "未知记忆";
+            }
         }
 
         public static string OutcomeName(NpcAutonomyCommandOutcomeKind outcome)

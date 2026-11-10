@@ -106,6 +106,38 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
+        public void V11ToV12Migration_AddsOnlyEmptyMemories()
+        {
+            GameSession session = GameSession.NewGame();
+            try
+            {
+                session.AdvanceOneDay();
+                SaveData legacy = session.CaptureSave();
+                string dailyActionsJson = JsonUtility.ToJson(legacy.dailyActions);
+                legacy.saveFormatVersion = 11;
+                legacy.rulesVersion = SaveData.CurrentRulesVersion;
+                foreach (NpcAutonomyPersonSaveEntry entry in legacy.npcAutonomy.persons)
+                    entry.memories = null;
+
+                Assert.That(SaveDataMigrator.TryMigrate(legacy, null, out SaveData current,
+                    out SaveOperationResult result), Is.True, result.Message);
+
+                Assert.That(current.saveFormatVersion,
+                    Is.EqualTo(SaveDataValidator.CurrentVersion));
+                Assert.That(current.npcAutonomy.persons, Has.Length.EqualTo(2));
+                foreach (NpcAutonomyPersonSaveEntry entry in current.npcAutonomy.persons)
+                    Assert.That(entry.memories, Is.Empty);
+                Assert.That(JsonUtility.ToJson(current.dailyActions),
+                    Is.EqualTo(dailyActionsJson),
+                    "v11 migration must not replay or alter daily actions");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(session.gameObject);
+            }
+        }
+
+        [Test]
         public void V6ToV8Migration_AddsResearchAndPreservesTheRest()
         {
             GameSession session = GameSession.NewGame();

@@ -237,6 +237,151 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(NpcAutonomyRules.TriggerName(trigger), Is.EqualTo(expected));
         }
 
+        [Test]
+        public void RecordMemory_ReplacesOnlySameKindAndKeepsStableOrder()
+        {
+            NpcAutonomyState state = NpcAutonomyState.CreateForRoster(
+                new[] { M2FixedScenario.MasatsunaId });
+            GameDate first = new GameDate(1560, 4, 1);
+            GameDate second = new GameDate(1560, 4, 2);
+            GameDate third = new GameDate(1560, 4, 3);
+
+            Assert.That(state.RecordMemory(M2FixedScenario.MasatsunaId,
+                NpcActionMemoryKind.Completed, DailyActionKind.Rest, first, string.Empty),
+                Is.True);
+            Assert.That(state.RecordMemory(M2FixedScenario.MasatsunaId,
+                NpcActionMemoryKind.Interrupted, DailyActionKind.Work, second, "首次中断。"),
+                Is.True);
+            Assert.That(state.RecordMemory(M2FixedScenario.MasatsunaId,
+                NpcActionMemoryKind.Completed, DailyActionKind.Training, third, string.Empty),
+                Is.True);
+
+            NpcAutonomyPersonState person = state.Persons[0];
+            Assert.That(person.Memories, Has.Count.EqualTo(2),
+                "one completed and one interrupted memory are kept, never three");
+            Assert.That(person.Memories[0].Kind, Is.EqualTo(NpcActionMemoryKind.Completed),
+                "completed memory is always first");
+            Assert.That(person.Memories[0].Action, Is.EqualTo(DailyActionKind.Training),
+                "a newer completed result replaces the older completed result");
+            Assert.That(person.Memories[0].Date, Is.EqualTo(third));
+            Assert.That(person.Memories[1].Kind, Is.EqualTo(NpcActionMemoryKind.Interrupted));
+            Assert.That(person.Memories[1].Action, Is.EqualTo(DailyActionKind.Work),
+                "replacing completed memory must not overwrite interrupted memory");
+            Assert.That(person.Memories[1].Reason, Is.EqualTo("首次中断。"));
+        }
+
+        [Test]
+        public void Evaluate_CompletedMemoryAddsOnlyToSameAction()
+        {
+            var needs = new NpcNeedValues(40, 75, 45);
+            var memory = new NpcActionMemory(M2FixedScenario.MasatsunaId,
+                NpcActionMemoryKind.Completed, DailyActionKind.Training,
+                new GameDate(1560, 4, 1), string.Empty);
+
+            NpcAutonomyEvaluation evaluation = NpcAutonomyRules.Evaluate(
+                M2FixedScenario.MasatsunaId, needs, new[] { memory },
+                new GameDate(1560, 4, 10), true, true, false);
+
+            Assert.That(evaluation.Candidates[0].BaseScore, Is.EqualTo(40));
+            Assert.That(evaluation.Candidates[0].MemoryAdjustment, Is.Zero);
+            Assert.That(evaluation.Candidates[0].FinalScore, Is.EqualTo(40));
+            Assert.That(evaluation.Candidates[1].BaseScore, Is.EqualTo(150));
+            Assert.That(evaluation.Candidates[1].MemoryAdjustment,
+                Is.EqualTo(NpcAutonomyRules.CompletedMemoryAdjustment));
+            Assert.That(evaluation.Candidates[1].FinalScore, Is.EqualTo(162));
+            Assert.That(evaluation.Candidates[2].BaseScore, Is.EqualTo(45));
+            Assert.That(evaluation.Candidates[2].MemoryAdjustment, Is.Zero);
+            Assert.That(evaluation.Selected.Kind, Is.EqualTo(DailyActionKind.Training));
+            Assert.That(evaluation.Selected.Explanation, Does.Contain("基础分数 150"));
+            Assert.That(evaluation.Selected.Explanation, Does.Contain("记忆修正 +12"));
+            Assert.That(evaluation.Selected.Explanation, Does.Contain("最终分数 162"));
+            Assert.That(evaluation.Selected.Explanation, Does.Contain("完成记忆"));
+            Assert.That(evaluation.Selected.Explanation, Does.Contain("1560-04-01"));
+        }
+
+        [Test]
+        public void Evaluate_InterruptedMemorySubtractsOnlyFromSameAction()
+        {
+            var needs = new NpcNeedValues(40, 75, 45);
+            var memory = new NpcActionMemory(M2FixedScenario.MasatsunaId,
+                NpcActionMemoryKind.Interrupted, DailyActionKind.Work,
+                new GameDate(1560, 4, 1), "行动被中断。");
+
+            NpcAutonomyEvaluation evaluation = NpcAutonomyRules.Evaluate(
+                M2FixedScenario.MasatsunaId, needs, new[] { memory },
+                new GameDate(1560, 4, 10), true, true, false);
+
+            Assert.That(evaluation.Candidates[0].FinalScore, Is.EqualTo(40));
+            Assert.That(evaluation.Candidates[1].FinalScore, Is.EqualTo(150));
+            Assert.That(evaluation.Candidates[2].BaseScore, Is.EqualTo(45));
+            Assert.That(evaluation.Candidates[2].MemoryAdjustment,
+                Is.EqualTo(NpcAutonomyRules.InterruptedMemoryAdjustment));
+            Assert.That(evaluation.Candidates[2].FinalScore, Is.EqualTo(33));
+            Assert.That(evaluation.Selected.Kind, Is.EqualTo(DailyActionKind.Training));
+
+            var completedAndInterrupted = new[]
+            {
+                new NpcActionMemory(M2FixedScenario.MasatsunaId,
+                    NpcActionMemoryKind.Completed, DailyActionKind.Work,
+                    new GameDate(1560, 4, 1), string.Empty),
+                memory
+            };
+            NpcAutonomyEvaluation mixed = NpcAutonomyRules.Evaluate(
+                M2FixedScenario.MasatsunaId, needs, completedAndInterrupted,
+                new GameDate(1560, 4, 10), true, true, false);
+            Assert.That(mixed.Candidates[2].MemoryAdjustment, Is.Zero,
+                "a completed and an interrupted memory of the same action cancel out");
+            Assert.That(mixed.Candidates[2].FinalScore, Is.EqualTo(45));
+        }
+
+        [Test]
+        public void MemoryEffect_IsActiveThroughDay30AndExpiredOnDay31()
+        {
+            var memory = new NpcActionMemory(M2FixedScenario.NobumasaId,
+                NpcActionMemoryKind.Completed, DailyActionKind.Work,
+                new GameDate(1560, 4, 1), string.Empty);
+
+            Assert.That(NpcAutonomyRules.IsMemoryActive(memory, new GameDate(1560, 4, 30)),
+                Is.True);
+            Assert.That(NpcAutonomyRules.IsMemoryActive(memory, new GameDate(1560, 5, 1)),
+                Is.True, "the 30th following day still applies across a month boundary");
+            Assert.That(NpcAutonomyRules.IsMemoryActive(memory, new GameDate(1560, 5, 2)),
+                Is.False, "the 31st following day no longer affects scoring");
+
+            NpcAutonomyEvaluation expired = NpcAutonomyRules.Evaluate(
+                M2FixedScenario.NobumasaId, new NpcNeedValues(45, 40, 75),
+                new[] { memory }, new GameDate(1560, 5, 2), true, true, false);
+            Assert.That(expired.Candidates[2].MemoryAdjustment, Is.Zero);
+            Assert.That(expired.Candidates[2].Explanation, Does.Contain("已过期"));
+        }
+
+        [Test]
+        public void MemoryEffect_HandlesLeapAndDateMaximumWithoutOverflow()
+        {
+            var leap = new NpcActionMemory(M2FixedScenario.MasatsunaId,
+                NpcActionMemoryKind.Completed, DailyActionKind.Rest,
+                new GameDate(1560, 2, 1), string.Empty);
+            Assert.That(GameDate.TryAddDays(leap.Date, 30, out GameDate leapBoundary));
+            Assert.That(leapBoundary, Is.EqualTo(new GameDate(1560, 3, 2)));
+            Assert.That(NpcAutonomyRules.IsMemoryActive(leap, leapBoundary), Is.True);
+            Assert.That(GameDate.TryNext(leapBoundary, out GameDate leapExpired));
+            Assert.That(NpcAutonomyRules.IsMemoryActive(leap, leapExpired), Is.False);
+
+            var atMaximum = new NpcActionMemory(M2FixedScenario.MasatsunaId,
+                NpcActionMemoryKind.Interrupted, DailyActionKind.Training,
+                new GameDate(GameDate.MaxYear, 12, 31), "范围上限。");
+            Assert.That(NpcAutonomyRules.IsMemoryActive(atMaximum,
+                new GameDate(GameDate.MaxYear, 12, 31)), Is.True,
+                "the supported maximum date must not overflow a 30-day window");
+
+            var nearMaximum = new NpcActionMemory(M2FixedScenario.MasatsunaId,
+                NpcActionMemoryKind.Completed, DailyActionKind.Rest,
+                new GameDate(GameDate.MaxYear, 12, 2), string.Empty);
+            Assert.That(NpcAutonomyRules.IsMemoryActive(nearMaximum,
+                new GameDate(GameDate.MaxYear, 12, 31)), Is.True,
+                "remaining supported days still count inside the 30-day window");
+        }
+
         private static void AssertCandidateReasons(NpcAutonomyEvaluation evaluation,
             string expected)
         {
