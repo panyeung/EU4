@@ -36,9 +36,10 @@
 - EditMode：全量 `1446/1446` 通过，`0` 失败、`0` 跳过；结果 XML `C:\Users\panye\AppData\LocalLow\DefaultCompany\My project\TestResults.xml`，`test-run` 统计 `total="1446" passed="1446" failed="0" skipped="0"`，写入时间 2026-11-10 10:55:53。此前四项失败均复跑通过：`DuePregnancy_DoesNotReconceiveInTheSameSettlement`、`BirthMonth_DoesNotReconceiveTheSamePair`、`InjectedSettlementFailure_RestoresEveryFamilyFactAndRetryMatchesControl`、`SpouseRoute_GuaranteedOuterRouteWhenAllStandardCandidatesAreBlocked`。前三项原因为测试使用 `1559` 年受孕日，低于 `GameDate.MinYear=1560`；已改为有效日期并在会话测试中先推进到 1561 年再设置孕期，未修改日历规则。
 - Console：该次全量运行的 `Logs/Editor.log` 区间记录 `2` 条 `LogError` 与 `29` 条 `LogWarning`；两条 error 均为既有 `FamilyFormationSessionTests` 故障注入路径的预期 `LogAssert` 消息（婚姻/收养编年史写入失败），对应测试通过，不是 M04B 回归。Console 未在测试前手动清零，因此不声称历史累计计数为零。
 - 第四个失败的定位：`FamilyTreeLayoutTests.SpouseRoute_GuaranteedOuterRouteWhenAllStandardCandidatesAreBlocked` 是 M04B 一度将 `FamilyTreeLayout.NodeHeight` 从 88 改为 112 造成的外围车道间距变化；该生产改动已完全回退（`FamilyTreeLayout.cs` 与 HEAD 一致），复跑通过。M04B 最终不修改家谱布局几何，孕期状态在标准 196×88 卡片内使用 wrap/truncate/best-fit 投影。没有改动其他家谱生产代码。
-- `FoundationSceneValidator`：没有在正确的 `FoundationScene` 上得到有效结果。本轮一次误触运行了“Create Foundation Scene”，Validator 随后对被生成器替换的最小场景报告 `FAIL; Errors: 41`；该结果不代表项目原场景验证。发现后已将磁盘 `Assets/Scenes/FoundationScene.unity` 恢复为 `HEAD` 内容并在 Editor 重新载入；正确场景 Validator 仍待运行。
-- Play Mode / 存读档（lead 于 2026-11-10 执行）：从 SC-022 固定剧本开始，在备份测试存档后注入一条怀孕记录；家族名册显示「怀孕 · 第 1/9 月」与「第 9/9 月」，保存并重新载入后仍在途孕期保持。结束月份推进到 `1561-02-01` 后产生一名新生儿；再次保存并载入后孕期已清除、人物总数为 `12`，随后退出 Play Mode。Play Mode 结束后原始存档与 `.bak` 均已恢复，SHA-256 与备份一致；截图未保留，`FoundationSceneValidator` 未运行，尚无人工里程碑验收。
-- 因此本记录声称编译、全量 EditMode 与 lead Play Mode/存读档通过；`FoundationSceneValidator` 与用户最终里程碑验收仍未完成。
+- `FoundationSceneValidator`：误触“Create Foundation Scene”后，Validator 曾对临时生成场景报告 `FAIL; Errors: 41`，该结果无效。随后磁盘 `Assets/Scenes/FoundationScene.unity` 已恢复为当前提交内容并由同一 Editor 重载；重新从 `Tools > Sengoku Chronicle > Validate Foundation Scene` 在 `FoundationScene` 实际运行，`Loaded: True; Dirty: False`，最终 `RESULT: PASS; Errors: 0`。磁盘场景复核仍与 `HEAD` 一致。
+- Play Mode / 存读档（lead 于 2026-11-10 执行）：从 SC-022 固定剧本开始，在备份测试存档后注入一条怀孕记录；家族名册显示「怀孕 · 第 1/9 月」，保存/载入后仍有孕期。逐月推进至 `1561-02-01` 后成员列表出现 `0岁` 新生儿、人口从 11 增至 12；出生后再次保存/载入，磁盘存档显示 `saveFormatVersion=13`、人物 12、孕期 0、出生人物年份 1561。退出 Play Mode 后原始存档与 `.bak` 均已恢复，SHA-256 与事前备份一致；截图在检查后删除。
+- 场景验证复验：从原生菜单实际选中 `Validate Foundation Scene`（未选生成命令），`Logs/Editor.log` 记录 `Scene: Assets/Scenes/FoundationScene.unity`、`Dirty: False` 与 `RESULT: PASS; Errors: 0`。先前 41 错误只作为误触事故记录，不计入最终验证。
+- 因此本记录声称编译、全量 EditMode、正确场景 `FoundationSceneValidator` 与 lead Play Mode/存读档技术门通过；用户最终里程碑验收仍未完成。
 
 ## 已知边界与风险
 
@@ -51,4 +52,4 @@
 
 ## 工作区
 
-M04B 的代码与测试文件、本报告及 `PROJECT_STATE.md` 的 M04 状态需要单独从混合工作区挑选。场景磁盘文件当前恢复为 `HEAD`；未改预制体、`ProjectSettings`、`Library` 或 `Temp` 内容。工作区仍含未提交的其他 M01/M02/M04–M08 WIP。
+M04B 代码、测试、设计/计划与验证报告已在 `77a9018` 提交并推送；本次场景复验仅读取场景并写入 `Logs/Editor.log`，未改场景、预制体、`ProjectSettings`、`Library` 或 `Temp`。工作区仍含未提交的其他 WIP。
