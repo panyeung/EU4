@@ -40,6 +40,52 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
+        public void CaptureSave_RoundTripsGenderAndAnInFlightPregnancy()
+        {
+            _session = FreshFamilyFormation();
+            GameDate date = _session.WorldClock.CurrentDate;
+            Assert.That(FamilyPregnancyRecord.TryCreate(SC022FamilyFormationScenario.SpouseId,
+                SC022FamilyFormationScenario.HeadId, date,
+                FamilyPregnancyRecord.AddMonths(date,
+                    FamilyPregnancyRecord.GestationMonths),
+                out FamilyPregnancyRecord record, out string error), Is.True, error);
+            Assert.That(_session.Succession.World.Pregnancies.TryAdd(record, out error),
+                Is.True, error);
+
+            SaveData data = _session.CaptureSave();
+            Assert.That(data.succession.pregnancies, Has.Length.EqualTo(1));
+            SuccessionPersonSaveEntry female = Array.Find(data.succession.persons,
+                entry => entry.personId == SC022FamilyFormationScenario.SpouseId.Value);
+            Assert.That(female, Is.Not.Null);
+            Assert.That(female.gender, Is.EqualTo((int)PersonGender.Female));
+
+            GameSession restored = GameSession.NewGame();
+            try
+            {
+                Assert.That(restored.TryApplySave(data).Succeeded, Is.True,
+                    restored.LastEventMessage);
+                Assert.That(restored.FamilyPregnancies, Has.Count.EqualTo(1));
+                Assert.That(restored.FamilyPregnancies[0], Is.EqualTo(record));
+                Assert.That(restored.Succession.World.TryGetPerson(
+                    SC022FamilyFormationScenario.SpouseId, out PersonState spouse), Is.True);
+                Assert.That(spouse.Gender, Is.EqualTo(PersonGender.Female));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(restored.gameObject);
+            }
+        }
+
+        private GameSession FreshFamilyFormation()
+        {
+            if (_session != null)
+                UnityEngine.Object.DestroyImmediate(_session.gameObject);
+            GameSession session = GameSession.NewGame();
+            session.InitFamilyFormationDemoScenario();
+            return session;
+        }
+
+        [Test]
         public void CaptureSave_AtPendingDecision_RoundTripsPhaseAndCandidates()
         {
             _session.BeginSuccessionRetirement();

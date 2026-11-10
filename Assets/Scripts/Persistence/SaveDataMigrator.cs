@@ -102,6 +102,7 @@ namespace SengokuChronicle.Persistence
 
             if (legacy.saveFormatVersion == 10 ||
                 legacy.saveFormatVersion == 11 ||
+                legacy.saveFormatVersion == 12 ||
                 legacy.saveFormatVersion == SaveDataValidator.CurrentVersion)
             {
                 int version = legacy.saveFormatVersion;
@@ -195,6 +196,8 @@ namespace SengokuChronicle.Persistence
                     current.npcAutonomy = NpcAutonomyStateSaveData.CreateMigratedV11(
                         legacy.npcAutonomy);
                 }
+                if (version < SaveDataValidator.CurrentVersion)
+                    PrepareMigratedSuccession(current);
                 result = SaveDataValidator.Validate(current);
                 if (!result.Succeeded)
                     current = null;
@@ -213,6 +216,7 @@ namespace SengokuChronicle.Persistence
                     new GameDate(legacy.year, legacy.month, legacy.day),
                     legacy.succession, legacy.locationId);
                 current.npcAutonomy = NpcAutonomyStateSaveData.CreateInitial(legacy.succession);
+                PrepareMigratedSuccession(current);
                 result = SaveDataValidator.Validate(current);
                 if (!result.Succeeded)
                     current = null;
@@ -261,6 +265,7 @@ namespace SengokuChronicle.Persistence
                     new GameDate(legacy.year, legacy.month, legacy.day),
                     current.succession, current.locationId);
                 current.npcAutonomy = NpcAutonomyStateSaveData.CreateInitial(current.succession);
+                PrepareMigratedSuccession(current);
                 result = SaveDataValidator.Validate(current);
                 if (!result.Succeeded)
                     current = null;
@@ -310,6 +315,7 @@ namespace SengokuChronicle.Persistence
                     new GameDate(legacy.year, legacy.month, legacy.day),
                     current.succession, current.locationId);
                 current.npcAutonomy = NpcAutonomyStateSaveData.CreateInitial(current.succession);
+                PrepareMigratedSuccession(current);
                 result = SaveDataValidator.Validate(current);
                 if (!result.Succeeded)
                     current = null;
@@ -351,6 +357,7 @@ namespace SengokuChronicle.Persistence
                     new GameDate(legacy.year, legacy.month, legacy.day),
                     current.succession, current.locationId);
                 current.npcAutonomy = NpcAutonomyStateSaveData.CreateInitial(current.succession);
+                PrepareMigratedSuccession(current);
                 result = SaveDataValidator.Validate(current);
                 if (!result.Succeeded)
                     current = null;
@@ -387,6 +394,7 @@ namespace SengokuChronicle.Persistence
                     new GameDate(legacy.year, legacy.month, legacy.day),
                     current.succession, current.locationId);
                 current.npcAutonomy = NpcAutonomyStateSaveData.CreateInitial(current.succession);
+                PrepareMigratedSuccession(current);
                 result = SaveDataValidator.Validate(current);
                 if (!result.Succeeded)
                     current = null;
@@ -424,6 +432,7 @@ namespace SengokuChronicle.Persistence
                     new GameDate(legacy.year, legacy.month, legacy.day),
                     current.succession, current.locationId);
                 current.npcAutonomy = NpcAutonomyStateSaveData.CreateInitial(current.succession);
+                PrepareMigratedSuccession(current);
                 result = SaveDataValidator.Validate(current);
                 if (!result.Succeeded)
                     current = null;
@@ -495,6 +504,7 @@ namespace SengokuChronicle.Persistence
                         legacy.succession != null ? legacy.succession : SuccessionSaveData.CreateDefault())
                 };
 
+                PrepareMigratedSuccession(current);
                 result = SaveDataValidator.Validate(current);
                 if (!result.Succeeded)
                     current = null;
@@ -578,6 +588,7 @@ namespace SengokuChronicle.Persistence
                         SuccessionSaveData.CreateDefault())
                 };
 
+                PrepareMigratedSuccession(current);
                 result = SaveDataValidator.Validate(current);
                 if (!result.Succeeded)
                     current = null;
@@ -588,7 +599,7 @@ namespace SengokuChronicle.Persistence
             {
                 result = SaveOperationResult.Failure(
                     SaveErrorCode.UnsupportedVersion,
-                    $"不支持的存档版本：{legacy.saveFormatVersion}（仅支持 v1–v11 迁移到 v{SaveDataValidator.CurrentVersion}）。");
+                    $"不支持的存档版本：{legacy.saveFormatVersion}（仅支持 v1–v12 迁移到 v{SaveDataValidator.CurrentVersion}）。");
                 return false;
             }
 
@@ -635,14 +646,39 @@ namespace SengokuChronicle.Persistence
                     SuccessionSaveData.CreateDefault())
             };
 
+            PrepareMigratedSuccession(current);
             result = SaveDataValidator.Validate(current);
             if (!result.Succeeded)
                 current = null;
             return result.Succeeded;
         }
 
-        private static bool ContainsMemoryPayload(NpcAutonomyStateSaveData data)
+        private static void PrepareMigratedSuccession(SaveData current)
         {
+            // Every pre-v13 source predates both fields. Start from Unspecified, resolve
+            // only explicit authored catalog IDs, and write a concrete empty pregnancy
+            // list before current-version validation. Unknown identities stay Unspecified.
+            ResolveLegacyGenders(current != null ? current.succession : null);
+            if (current != null && current.succession != null)
+                current.succession.pregnancies = new FamilyPregnancySaveEntry[0];
+        }
+
+        private static void ResolveLegacyGenders(SuccessionSaveData succession)
+        {
+            if (succession == null || succession.persons == null)
+                return;
+            foreach (SuccessionPersonSaveEntry person in succession.persons)
+            {
+                if (person == null)
+                    continue;
+                PersonGender gender = PersonGender.Unspecified;
+                if (PersonId.TryParse(person.personId, out PersonId personId))
+                    PersonGenderCatalog.TryGet(personId, out gender);
+                person.gender = (int)gender;
+            }
+        }
+
+        private static bool ContainsMemoryPayload(NpcAutonomyStateSaveData data)        {
             if (data == null || data.persons == null)
                 return false;
             foreach (NpcAutonomyPersonSaveEntry person in data.persons)

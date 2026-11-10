@@ -1,3 +1,4 @@
+using System;
 using System.Globalization;
 using NUnit.Framework;
 using SengokuChronicle.Application;
@@ -398,6 +399,164 @@ namespace SengokuChronicle.Tests.EditMode
 
             Assert.That(SaveDataValidator.Validate(data).Succeeded, Is.True);
         }
+
+        [Test]
+        public void ValidPregnancy_IsAccepted()
+        {
+            SaveData data = ValidData();
+            data.succession.pregnancies = new[]
+            {
+                Pregnancy("person.akechi.chie", "person.akechi.harunobu")
+            };
+
+            SaveOperationResult result = SaveDataValidator.Validate(data);
+
+            Assert.That(result.Succeeded, Is.True, result.Message);
+        }
+
+        [Test]
+        public void UndefinedPersonGender_IsRejected()
+        {
+            SaveData data = ValidData();
+            Person(data, "person.akechi.chie").gender = 99;
+
+            SaveOperationResult result = SaveDataValidator.Validate(data);
+
+            Assert.That(result.Succeeded, Is.False);
+            Assert.That(result.Message, Does.Contain("性别"));
+        }
+
+        [Test]
+        public void PregnancyWithUnknownParent_IsRejected()
+        {
+            SaveData data = ValidData();
+            data.succession.pregnancies = new[]
+            {
+                Pregnancy("person.akechi.chie", "person.missing")
+            };
+
+            Assert.That(SaveDataValidator.Validate(data).Succeeded, Is.False);
+        }
+
+        [Test]
+        public void PregnancyWithNonMemberGestatingParent_IsRejected()
+        {
+            SaveData data = ValidData();
+            data.succession.members = Array.FindAll(data.succession.members,
+                member => member.personId != "person.akechi.chie");
+            data.succession.pregnancies = new[]
+            {
+                Pregnancy("person.akechi.chie", "person.akechi.harunobu")
+            };
+
+            Assert.That(SaveDataValidator.Validate(data).Succeeded, Is.False);
+        }
+
+        [Test]
+        public void PregnancyWithDeadGestatingParent_IsRejected()
+        {
+            SaveData data = ValidData();
+            Person(data, "person.akechi.chie").alive = false;
+            data.succession.pregnancies = new[]
+            {
+                Pregnancy("person.akechi.chie", "person.akechi.harunobu")
+            };
+
+            Assert.That(SaveDataValidator.Validate(data).Succeeded, Is.False);
+        }
+
+        [Test]
+        public void PregnancyWithDeadOtherParent_IsAccepted()
+        {
+            SaveData data = ValidData();
+            Person(data, "person.akechi.masatsuna").alive = false;
+            data.succession.pregnancies = new[]
+            {
+                Pregnancy("person.akechi.chie", "person.akechi.masatsuna")
+            };
+
+            SaveOperationResult result = SaveDataValidator.Validate(data);
+
+            Assert.That(result.Succeeded, Is.True, result.Message);
+        }
+
+        [Test]
+        public void PregnancyWithInvalidDateOrWrongGestation_IsRejected()
+        {
+            SaveData data = ValidData();
+            FamilyPregnancySaveEntry entry = Pregnancy("person.akechi.chie",
+                "person.akechi.harunobu");
+            entry.conceptionYear = 1560;
+            entry.conceptionMonth = 2;
+            entry.conceptionDay = 30;
+            data.succession.pregnancies = new[] { entry };
+            Assert.That(SaveDataValidator.Validate(data).Succeeded, Is.False);
+
+            data = ValidData();
+            entry = Pregnancy("person.akechi.chie", "person.akechi.harunobu");
+            entry.dueMonth = 9;
+            entry.dueYear = 1560;
+            data.succession.pregnancies = new[] { entry };
+            Assert.That(SaveDataValidator.Validate(data).Succeeded, Is.False);
+        }
+
+        [Test]
+        public void DuplicatePregnancyRows_AreRejected()
+        {
+            SaveData data = ValidData();
+            data.succession.pregnancies = new[]
+            {
+                Pregnancy("person.akechi.chie", "person.akechi.harunobu"),
+                Pregnancy("person.akechi.chie", "person.akechi.harunobu")
+            };
+
+            Assert.That(SaveDataValidator.Validate(data).Succeeded, Is.False);
+        }
+
+        [Test]
+        public void UnstablePregnancyOrder_IsRejected()
+        {
+            SaveData data = ValidData();
+            data.succession.pregnancies = new[]
+            {
+                Pregnancy("person.akechi.tokihime", "person.akechi.harunobu"),
+                Pregnancy("person.akechi.chie", "person.akechi.harunobu")
+            };
+
+            SaveOperationResult result = SaveDataValidator.Validate(data);
+
+            Assert.That(result.Succeeded, Is.False);
+            Assert.That(result.Message, Does.Contain("顺序"));
+        }
+
+        [Test]
+        public void MissingPregnancyBlock_IsRejectedForCurrentVersion()
+        {
+            SaveData data = ValidData();
+            data.succession.pregnancies = null;
+
+            SaveOperationResult result = SaveDataValidator.Validate(data);
+
+            Assert.That(result.Succeeded, Is.False);
+            Assert.That(result.Message, Does.Contain("pregnancies"));
+        }
+
+        private static SuccessionPersonSaveEntry Person(SaveData data, string personId) =>
+            Array.Find(data.succession.persons, entry => entry.personId == personId) ??
+            throw new AssertionException("missing person " + personId);
+
+        private static FamilyPregnancySaveEntry Pregnancy(string gestating,
+            string otherParent) => new FamilyPregnancySaveEntry
+        {
+            gestatingPersonId = gestating,
+            otherParentId = otherParent,
+            conceptionYear = 1560,
+            conceptionMonth = 1,
+            conceptionDay = 1,
+            dueYear = 1560,
+            dueMonth = 10,
+            dueDay = 1
+        };
 
         private static EventRuntimeSaveData PendingRuntime(string eventId)
         {

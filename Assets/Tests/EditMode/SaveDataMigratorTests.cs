@@ -106,6 +106,179 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
+        public void CurrentVersionMigration_PreservesGendersAndPregnancies()
+        {
+            GameSession session = GameSession.NewGame();
+            try
+            {
+                session.InitFamilyFormationDemoScenario();
+                GameDate date = session.WorldClock.CurrentDate;
+                Assert.That(FamilyPregnancyRecord.TryCreate(
+                    SC022FamilyFormationScenario.SpouseId,
+                    SC022FamilyFormationScenario.HeadId, date,
+                    FamilyPregnancyRecord.AddMonths(date,
+                        FamilyPregnancyRecord.GestationMonths),
+                    out FamilyPregnancyRecord record, out string error), Is.True, error);
+                Assert.That(session.Succession.World.Pregnancies.TryAdd(record, out error),
+                    Is.True, error);
+
+                SaveData current = session.CaptureSave();
+                Assert.That(SaveDataMigrator.TryMigrate(current, null, out SaveData migrated,
+                    out SaveOperationResult result), Is.True, result.Message);
+
+                Assert.That(migrated.succession.pregnancies, Has.Length.EqualTo(1));
+                Assert.That(migrated.succession.pregnancies[0].gestatingPersonId,
+                    Is.EqualTo(SC022FamilyFormationScenario.SpouseId.Value));
+                Assert.That(GenderOf(migrated, SC022FamilyFormationScenario.SpouseId),
+                    Is.EqualTo(PersonGender.Female));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(session.gameObject);
+            }
+        }
+
+        [Test]
+        public void V12ToV13Migration_ResolvesOnlyAuthoredGendersAndAddsNoPregnancies()
+        {
+            GameSession session = GameSession.NewGame();
+            try
+            {
+                session.InitFamilyFormationDemoScenario();
+                var unknownId = new PersonId("person.sc022.custom.unknown");
+                Assert.That(session.Succession.World.TryAddPerson(
+                    new PersonState(unknownId, "无名氏"),
+                    new SuccessionPersonLife(1540, true, false), out string addError),
+                    Is.True, addError);
+                Assert.That(session.Development.TryAddPerson(unknownId,
+                    CharacterGrowthValues.CreateClamped(0, 0, 0, 0, 0),
+                    out string developmentError), Is.True, developmentError);
+
+                SaveData legacy = session.CaptureSave();
+                int persons = legacy.succession.persons.Length;
+                int kinship = legacy.succession.kinship.Length;
+                legacy.saveFormatVersion = 12;
+                legacy.rulesVersion = SaveData.CurrentRulesVersion;
+                foreach (SuccessionPersonSaveEntry person in legacy.succession.persons)
+                    person.gender = (int)PersonGender.Unspecified;
+                legacy.succession.pregnancies = null;
+
+                Assert.That(SaveDataMigrator.TryMigrate(legacy, null, out SaveData current,
+                    out SaveOperationResult result), Is.True, result.Message);
+
+                Assert.That(current.saveFormatVersion,
+                    Is.EqualTo(SaveDataValidator.CurrentVersion));
+                Assert.That(current.succession.persons, Has.Length.EqualTo(persons));
+                Assert.That(current.succession.kinship, Has.Length.EqualTo(kinship),
+                    "v12 migration must preserve every kinship fact");
+                Assert.That(current.succession.pregnancies, Is.Empty);
+
+                Assert.That(GenderOf(current, SC022FamilyFormationScenario.HeadId),
+                    Is.EqualTo(PersonGender.Male));
+                Assert.That(GenderOf(current, SC022FamilyFormationScenario.SpouseId),
+                    Is.EqualTo(PersonGender.Female));
+                Assert.That(GenderOf(current, SC022FamilyFormationScenario.MarriageCandidateOneId),
+                    Is.EqualTo(PersonGender.Female));
+                Assert.That(GenderOf(current, unknownId),
+                    Is.EqualTo(PersonGender.Unspecified),
+                    "unknown IDs must never be inferred from names or kinship");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(session.gameObject);
+            }
+        }
+
+        [Test]
+        public void V12ToV13Migration_InitializesEmptyPregnanciesEvenWhenBlockMaterializes()
+        {
+            GameSession session = GameSession.NewGame();
+            try
+            {
+                session.InitFamilyFormationDemoScenario();
+                SaveData legacy = session.CaptureSave();
+                legacy.saveFormatVersion = 12;
+                legacy.rulesVersion = SaveData.CurrentRulesVersion;
+                foreach (SuccessionPersonSaveEntry person in legacy.succession.persons)
+                    person.gender = (int)PersonGender.Unspecified;
+
+                Assert.That(SaveDataMigrator.TryMigrate(legacy, null, out SaveData current,
+                    out SaveOperationResult result), Is.True, result.Message);
+
+                Assert.That(current.saveFormatVersion,
+                    Is.EqualTo(SaveDataValidator.CurrentVersion));
+                Assert.That(current.succession.pregnancies, Is.Empty);
+                Assert.That(GenderOf(current, SC022FamilyFormationScenario.HeadId),
+                    Is.EqualTo(PersonGender.Male));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(session.gameObject);
+            }
+        }
+
+        [TestCase(9)]
+        [TestCase(6)]
+        public void SupportedPreV13Versions_ResolveCatalogGendersAndKeepUnknownUnspecified(
+            int version)
+        {
+            GameSession session = GameSession.NewGame();
+            try
+            {
+                session.InitFamilyFormationDemoScenario();
+                var unknownId = new PersonId("person.sc022.legacy.unknown");
+                Assert.That(session.Succession.World.TryAddPerson(
+                    new PersonState(unknownId, "旧档无名"),
+                    new SuccessionPersonLife(1540, true, false), out string addError),
+                    Is.True, addError);
+                Assert.That(session.Development.TryAddPerson(unknownId,
+                    CharacterGrowthValues.CreateClamped(0, 0, 0, 0, 0),
+                    out string developmentError), Is.True, developmentError);
+
+                SaveData legacy = session.CaptureSave();
+                legacy.saveFormatVersion = version;
+                legacy.rulesVersion = version >= 8
+                    ? SaveData.CurrentRulesVersion
+                    : 2;
+                foreach (SuccessionPersonSaveEntry person in legacy.succession.persons)
+                    person.gender = (int)PersonGender.Unspecified;
+                legacy.succession.pregnancies = null;
+                if (version == 6)
+                {
+                    legacy.development = null;
+                    legacy.research = null;
+                    legacy.familyDoctrine = null;
+                }
+
+                Assert.That(SaveDataMigrator.TryMigrate(legacy, null, out SaveData current,
+                    out SaveOperationResult result), Is.True, result.Message);
+
+                Assert.That(current.saveFormatVersion,
+                    Is.EqualTo(SaveDataValidator.CurrentVersion));
+                Assert.That(current.succession.pregnancies, Is.Empty);
+                Assert.That(GenderOf(current, SC022FamilyFormationScenario.HeadId),
+                    Is.EqualTo(PersonGender.Male), "authored ID resolves from catalog");
+                Assert.That(GenderOf(current, SC022FamilyFormationScenario.SpouseId),
+                    Is.EqualTo(PersonGender.Female));
+                Assert.That(GenderOf(current, unknownId),
+                    Is.EqualTo(PersonGender.Unspecified),
+                    "unknown IDs must not be inferred");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(session.gameObject);
+            }
+        }
+
+        private static PersonGender GenderOf(SaveData data, PersonId personId)
+        {
+            SuccessionPersonSaveEntry entry = Array.Find(data.succession.persons,
+                person => person.personId == personId.Value);
+            Assert.That(entry, Is.Not.Null, personId.Value);
+            return (PersonGender)entry.gender;
+        }
+
+        [Test]
         public void V11ToV12Migration_AddsOnlyEmptyMemories()
         {
             GameSession session = GameSession.NewGame();

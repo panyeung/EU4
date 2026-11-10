@@ -48,6 +48,10 @@ namespace SengokuChronicle.Tests.EditMode
             _nodeTemplateObject = Child("FamilyRosterNodeTemplate", _nodeLayerObject.transform,
                 typeof(Image));
             Child("Label", _nodeTemplateObject.transform, typeof(Text));
+            // The serialized scene template uses Overflow for normal cards; model that
+            // here so the pregnancy-only projection can be checked against the default.
+            _nodeTemplateObject.transform.Find("Label").GetComponent<Text>().verticalOverflow =
+                VerticalWrapMode.Overflow;
             _edgeTemplateObject = Child("FamilyRosterEdgeTemplate", _edgeLayerObject.transform,
                 typeof(Image));
             _sectionTemplateObject = Child("FamilyRosterSectionTemplate", _contentObject.transform,
@@ -446,6 +450,52 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(unknownText, Does.Not.Contain("已故"),
                 "missing life data must not be presented as a known death");
             Assert.That(unknownText, Does.Not.Contain("已隐居"));
+        }
+
+        [Test]
+        public void Pregnancy_ProjectsStatusOntoTheGestatingCardOnly()
+        {
+            GameDate date = _session.WorldClock.CurrentDate;
+            Assert.That(FamilyPregnancyRecord.TryCreate(M2FixedScenario.ChieId,
+                M2FixedScenario.HarunobuId, date,
+                FamilyPregnancyRecord.AddMonths(date,
+                    FamilyPregnancyRecord.GestationMonths),
+                out FamilyPregnancyRecord record, out string error), Is.True, error);
+            Assert.That(_session.Succession.World.Pregnancies.TryAdd(record, out error),
+                Is.True, error);
+
+            _panel.Open();
+
+            Assert.That(_panel.PregnancyLabelFor(M2FixedScenario.ChieId),
+                Is.EqualTo("怀孕 · 第 1/9 月 · 预计 1561-01"));
+            Assert.That(_panel.NodeTextFor(M2FixedScenario.ChieId),
+                Does.Contain("怀孕 · 第 1/9 月 · 预计 1561-01"));
+            Assert.That(_panel.PregnancyLabelFor(M2FixedScenario.HarunobuId), Is.Empty);
+            Assert.That(_panel.NodeTextFor(M2FixedScenario.HarunobuId),
+                Does.Not.Contain("怀孕"));
+            Assert.That(_panel.VisibleNodeCount, Is.EqualTo(6),
+                "pregnancy status must not add a scene node");
+
+            Assert.That(FamilyTreeLayout.NodeHeight, Is.EqualTo(88f),
+                "M04B must not change the shared family-tree geometry");
+            RectTransform pregnantCard = FindNode(M2FixedScenario.ChieId);
+            Assert.That(pregnantCard, Is.Not.Null);
+            Assert.That(pregnantCard.sizeDelta.y, Is.EqualTo(FamilyTreeLayout.NodeHeight));
+            Text pregnantLabel = pregnantCard.GetComponentInChildren<Text>(true);
+            Assert.That(pregnantLabel.resizeTextForBestFit, Is.True,
+                "the status is shrunk to stay inside the standard card");
+            Assert.That(pregnantLabel.horizontalOverflow,
+                Is.EqualTo(HorizontalWrapMode.Wrap));
+            Assert.That(pregnantLabel.verticalOverflow,
+                Is.EqualTo(VerticalWrapMode.Truncate),
+                "pregnancy text must never draw outside the card rect");
+            Text normalLabel = FindNode(M2FixedScenario.HarunobuId)
+                .GetComponentInChildren<Text>(true);
+            Assert.That(normalLabel.resizeTextForBestFit, Is.False,
+                "non-pregnant cards keep their existing typography");
+            Assert.That(normalLabel.verticalOverflow,
+                Is.EqualTo(VerticalWrapMode.Overflow),
+                "non-pregnant cards retain the original template overflow mode");
         }
 
         private PersonId AddPerson(string id, string name, int birthYear, FamilyMemberRole role)

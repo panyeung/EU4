@@ -138,6 +138,7 @@ namespace SengokuChronicle.Domain
             new Dictionary<PersonId, SuccessionPersonLife>();
         private readonly FamilyState _family;
         private readonly KinshipGraph _kinship = new KinshipGraph();
+        private readonly FamilyPregnancyState _pregnancies = new FamilyPregnancyState();
 
         public SuccessionWorld(FamilyId familyId, string familyName)
         {
@@ -146,6 +147,8 @@ namespace SengokuChronicle.Domain
 
         public FamilyState Family => _family;
         public KinshipGraph Kinship => _kinship;
+        /// <summary>Active M04B pregnancies, ordered by stable gestating-person ID.</summary>
+        public FamilyPregnancyState Pregnancies => _pregnancies;
         public int PersonCount => _persons.Count;
 
         /// <summary>Deterministically ordered person snapshot (ordinal person ID).</summary>
@@ -172,6 +175,11 @@ namespace SengokuChronicle.Domain
             if (life.BirthYear <= 0)
             {
                 error = "Birth year must be positive.";
+                return false;
+            }
+            if (!Enum.IsDefined(typeof(PersonGender), person.Gender))
+            {
+                error = "Person gender is undefined: " + (int)person.Gender;
                 return false;
             }
             if (_persons.ContainsKey(person.Id))
@@ -358,7 +366,8 @@ namespace SengokuChronicle.Domain
         private static void Add(SuccessionWorld world, PersonId id, string name, int birthYear,
             bool alive, bool retired, FamilyMemberRole role)
         {
-            if (!world.TryAddPerson(new PersonState(id, name),
+            if (!world.TryAddPerson(new PersonState(id, name,
+                        PersonGenderCatalog.GenderFor(id)),
                     new SuccessionPersonLife(birthYear, alive, retired), out string error))
                 throw new InvalidOperationException(error);
             if (!world.TryAddMember(id, role, out error))

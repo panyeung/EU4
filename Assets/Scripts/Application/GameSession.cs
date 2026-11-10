@@ -606,6 +606,13 @@ namespace SengokuChronicle.Application
             M2FixedScenario.BuildRoster(Succession, CurrentGameDate, Succession.DesignatedHeirId,
                 _eventScenarioId);
 
+        /// <summary>
+        /// Sorted read-only active pregnancy snapshot (M04B). Live records are owned by
+        /// <see cref="SuccessionWorld.Pregnancies"/> and change only at month settlement.
+        /// </summary>
+        public IReadOnlyList<FamilyPregnancyRecord> FamilyPregnancies =>
+            Succession.World.Pregnancies.Records;
+
         private GameDate CurrentGameDate =>
             WorldClock != null ? WorldClock.CurrentDate : SengokuChronicle.Domain.WorldClock.NewGameDate;
 
@@ -2055,6 +2062,90 @@ namespace SengokuChronicle.Application
             foreach (PersonState person in succession.World.Persons)
                 ids.Add(person.Id);
             return DailyActionState.CreateForRoster(ids, location);
+        }
+
+        /// <summary>
+        /// Applies one pure M04B plan to the working succession snapshot. Existing
+        /// pregnancies are removed before starts are added, and every newborn is
+        /// registered through the same person/member/kinship paths as the fixed rosters.
+        /// Growth rows use the existing scenario defaults; no autonomy, industry,
+        /// research, education plan or relationship value is created here.
+        /// </summary>
+        private static bool TryApplyBirthSettlement(SuccessionState succession,
+            FamilyBirthSettlementPlan plan, ref CharacterDevelopmentState development,
+            out string error)
+        {
+            error = string.Empty;
+            if (succession == null || succession.World == null || plan == null)
+            {
+                error = "出生结算状态为空。";
+                return false;
+            }
+
+            foreach (FamilyPregnancyRecord record in plan.PregnancyPlan.Cancellations)
+                if (!succession.World.Pregnancies.TryRemove(record, out error))
+                    return false;
+            foreach (FamilyPregnancyRecord record in plan.PregnancyPlan.Completions)
+                if (!succession.World.Pregnancies.TryRemove(record, out error))
+                    return false;
+            foreach (FamilyPregnancyRecord record in plan.PregnancyPlan.Starts)
+                if (!succession.World.Pregnancies.TryAdd(record, out error))
+                    return false;
+
+            if (plan.Births.Count == 0)
+                return true;
+
+            development = development != null
+                ? development.Clone()
+                : CharacterDevelopmentState.CreateEmpty();
+
+            foreach (FamilyBirthFact birth in plan.Births)
+            {
+                var person = new PersonState(birth.NewbornId, birth.DisplayName, birth.Gender);
+                if (!succession.World.TryAddPerson(person,
+                        new SuccessionPersonLife(birth.BirthDate.Year, true, false), out error))
+                    return false;
+                if (!succession.World.TryAddMember(birth.NewbornId,
+                        FamilyMemberRole.DirectKin, out error))
+                    return false;
+
+                if (!TryAddBirthKinship(succession, birth.GestatingParentId,
+                        birth.NewbornId, out error) ||
+                    !TryAddBirthKinship(succession, birth.OtherParentId,
+                        birth.NewbornId, out error))
+                    return false;
+
+                foreach (PersonId siblingId in birth.FullSiblingIds)
+                {
+                    var siblingLink = new KinshipLink(birth.NewbornId, siblingId,
+                        KinshipType.Sibling);
+                    if (succession.World.Kinship.Contains(siblingLink))
+                        continue;
+                    if (!succession.World.TryAddKinship(siblingLink, out error))
+                        return false;
+                }
+
+                CharacterGrowthValues values =
+                    EducationScenarioProvider.InitialValuesFor(succession, birth.NewbornId);
+                if (!development.TryAddPerson(birth.NewbornId, values, out error))
+                    return false;
+            }
+
+            return true;
+        }
+
+        private static bool TryAddBirthKinship(SuccessionState succession, PersonId parentId,
+            PersonId childId, out string error)
+        {
+            if (!KinshipLink.TryCreate(parentId, childId, KinshipType.ParentChild,
+                    out KinshipLink link, out error))
+                return false;
+            if (succession.World.Kinship.Contains(link))
+            {
+                error = "新生儿亲子关系已存在。";
+                return false;
+            }
+            return succession.World.TryAddKinship(link, out error);
         }
 
         private bool HasEligibleEducationLearner()
@@ -3597,6 +3688,7 @@ namespace SengokuChronicle.Application
             LocationId locationBefore = CurrentLocation;
             RandomStateSaveData rngBefore = _randomStateManager.CaptureState();
             FamilyChronicleEntry[] chronicleBefore = EnsureHistoryLedger().Capture();
+            SuccessionSaveData successionBefore = SuccessionSaveData.Capture(_succession);
             EventRuntimeState runtimeBefore = _eventRuntimeState.Clone();
             IndustryMonthReport reportBefore = LastIndustryReport;
             string industryMessageBefore = LastIndustryMessage;
@@ -3665,6 +3757,64 @@ namespace SengokuChronicle.Application
                     LastMonthTurnOutcome = MonthTurnOutcome.SchedulingFailed;
                     LastEventMessage = schedule.Message;
                     return false;
+                }
+
+                // M04B: plan conception, progress and due births with the persisted
+                // WorldSimulation stream. The plan is pure; mutation is applied to a
+                // cloned succession snapshot so any later failure leaves the live family
+                // untouched until the month commits.
+                FamilyBirthSettlementPlan birthSettlement = FamilyBirthSettlement.Plan(
+                    _succession, previousDate, nextDate,
+                    _randomStateManager.GetStream(RandomStreamKind.WorldSimulation));
+                if (!birthSettlement.Succeeded)
+                {
+                    RandomStateManager.TryRestore(rngBefore, out _randomStateManager);
+                    HistoryLedger.TryRestore(chronicleBefore, out _historyLedger, out _);
+                    LastMonthTurnOutcome = MonthTurnOutcome.SettlementFailed;
+                    LastEventMessage = "家族出生规划失败：" + birthSettlement.Error;
+                    return false;
+                }
+
+                SuccessionState nextSuccession = null;
+                if (birthSettlement.PregnancyPlan.HasChanges)
+                {
+                    if (!SuccessionSaveData.TryRestoreTransactionSnapshot(successionBefore,
+                            out nextSuccession, out string successionCloneError))
+                    {
+                        RandomStateManager.TryRestore(rngBefore, out _randomStateManager);
+                        HistoryLedger.TryRestore(chronicleBefore, out _historyLedger, out _);
+                        LastMonthTurnOutcome = MonthTurnOutcome.SettlementFailed;
+                        LastEventMessage = "家族出生状态无法应用：" + successionCloneError;
+                        return false;
+                    }
+
+                    if (!TryApplyBirthSettlement(nextSuccession, birthSettlement,
+                            ref nextDevelopment, out string birthError))
+                    {
+                        RandomStateManager.TryRestore(rngBefore, out _randomStateManager);
+                        HistoryLedger.TryRestore(chronicleBefore, out _historyLedger, out _);
+                        LastMonthTurnOutcome = MonthTurnOutcome.SettlementFailed;
+                        LastEventMessage = "家族出生结算失败：" + birthError;
+                        return false;
+                    }
+
+                    foreach (FamilyBirthChronicleFact chronicle in birthSettlement.Chronicles)
+                    {
+                        if (!EnsureHistoryLedger().TryAppendBirth(chronicle.Date.Year,
+                                chronicle.Date.Month, chronicle.NewbornId.Value,
+                                chronicle.Title, chronicle.Summary,
+                                out _, out string birthChronicleError))
+                        {
+                            RandomStateManager.TryRestore(rngBefore, out _randomStateManager);
+                            HistoryLedger.TryRestore(chronicleBefore, out _historyLedger, out _);
+                            LastMonthTurnOutcome = MonthTurnOutcome.SchedulingFailed;
+                            LastEventMessage = "家族新生编年史写入失败：" +
+                                               (string.IsNullOrEmpty(birthChronicleError)
+                                                   ? "未知原因"
+                                                   : birthChronicleError);
+                            return false;
+                        }
+                    }
                 }
 
                 bool appendMonthly = settlement.Succeeded && settlement.Report != null &&
@@ -3772,6 +3922,15 @@ namespace SengokuChronicle.Application
                     _dailyActionNotificationSuppression = suppression;
                 }
 
+                if (nextSuccession != null)
+                {
+                    // Sync the confirmed post-month location before adding the newborn
+                    // row so the new idle row does not inherit the month-start location.
+                    SyncCurrentLocationFromDailyActions();
+                    _succession = nextSuccession;
+                    EnsureDailyActions();
+                }
+
                 // Fault-injection seam: the date has already crossed, so any exception
                 // below must restore the clock as well as resources/history/RNG.
                 MonthSettlementFaultInjection?.Invoke();
@@ -3805,17 +3964,35 @@ namespace SengokuChronicle.Application
                 CurrentLocation = locationBefore;
                 LastDailyActionOutcomes = dailyOutcomesBefore;
                 LastDailyActionMessage = dailyMessageBefore;
+                bool successionRestored = true;
+                if (successionBefore != null)
+                {
+                    successionRestored =
+                        SuccessionSaveData.TryRestoreTransactionSnapshot(successionBefore,
+                            out SuccessionState restoredSuccession, out string restoreError);
+                    if (successionRestored)
+                        _succession = restoredSuccession;
+                    else if (!string.IsNullOrEmpty(restoreError))
+                        Debug.LogWarning("M04B succession rollback failed: " + restoreError);
+                }
                 RandomStateManager.TryRestore(rngBefore, out _randomStateManager);
                 HistoryLedger.TryRestore(chronicleBefore, out _historyLedger, out _);
                 LastIndustryReport = reportBefore;
-                LastIndustryMessage = "月结异常，已回滚到本月初始状态：" + exception.Message;
+                LastIndustryMessage = successionRestored
+                    ? "月结异常，已回滚到本月初始状态：" + exception.Message
+                    : "月结异常，家族快照未能恢复：" + exception.Message;
                 LastEducationMessage = educationMessageBefore;
                 LastResearchReport = researchReportBefore;
                 LastResearchMessage = researchMessageBefore;
-                LastEventMessage = "月结异常，日期、资源、成长、研究和编年史均保持不变：" +
-                                   exception.Message;
+                LastEventMessage = successionRestored
+                    ? "月结异常，日期、资源、成长、研究和编年史均保持不变：" +
+                      exception.Message
+                    : "月结异常，且家族快照恢复失败；当前家族状态可能不一致，请读取较早存档：" +
+                      exception.Message;
                 LastMonthTurnOutcome = MonthTurnOutcome.SettlementFailed;
-                Debug.LogWarning($"SC-021 month settlement rolled back: {exception.Message}");
+                Debug.LogWarning(successionRestored
+                    ? $"SC-021 month settlement rolled back: {exception.Message}"
+                    : $"M04B month settlement rollback incomplete: {exception.Message}");
                 return false;
             }
         }

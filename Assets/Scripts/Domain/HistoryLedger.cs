@@ -118,6 +118,17 @@ namespace SengokuChronicle.Domain
                 summary, 0, 0, 0, 0, 0, 0, null, null, out entry, out error);
 
         /// <summary>
+        /// Appends one committed dynamic-birth record. Subject is the stable newborn ID
+        /// and source is <see cref="FamilyChronicleEntry.BirthSourceId"/>; conception
+        /// alone never writes history.
+        /// </summary>
+        public bool TryAppendBirth(int year, int month, string newbornId,
+            string title, string summary, out FamilyChronicleEntry entry, out string error) =>
+            TryAppend(year, month, ChronicleCategory.FamilyFormation, newbornId,
+                FamilyChronicleEntry.BirthSourceId, title, summary,
+                0, 0, 0, 0, 0, 0, null, null, out entry, out error);
+
+        /// <summary>
         /// Validates a family-formation record against the next append slot without
         /// mutating the ledger. The session calls this before adding any member or
         /// kinship edge so a rejected command cannot leave a partial relationship.

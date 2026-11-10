@@ -159,6 +159,23 @@ namespace SengokuChronicle.Presentation
             return string.Empty;
         }
 
+        /// <summary>
+        /// Read-only pregnancy status for one person, projected from the game-session
+        /// snapshot. Returns an empty string when nobody is gestating that person.
+        /// </summary>
+        public string PregnancyLabelFor(PersonId personId)
+        {
+            if (gameSession == null || personId.IsEmpty)
+                return string.Empty;
+            IReadOnlyList<FamilyPregnancyRecord> records = gameSession.FamilyPregnancies;
+            for (int i = 0; i < records.Count; i++)
+            {
+                if (records[i].GestatingPersonId == personId)
+                    return FamilyPregnancyRules.StatusText(records[i], CurrentDate);
+            }
+            return string.Empty;
+        }
+
         public int NodeInstanceCount(PersonId personId)
         {
             int count = 0;
@@ -387,9 +404,25 @@ namespace SengokuChronicle.Presentation
             Text text = card.GetComponentInChildren<Text>(true);
             if (text != null)
             {
-                text.text = FormatNode(person, placement);
+                string pregnancy = PregnancyLabelFor(person.PersonId);
+                text.text = FormatNode(person, placement) +
+                            (pregnancy.Length > 0 ? "\n" + pregnancy : string.Empty);
                 text.color = SengokuUiTheme.Ink;
                 text.raycastTarget = false;
+                if (pregnancy.Length > 0)
+                {
+                    // The full status is longer than one card line. Best fit keeps the
+                    // exact text inside the standard fixed card instead of spilling
+                    // over the portrait or the neighbouring node; truncate guarantees
+                    // no drawing outside the card rect if a font is unavailable. Both
+                    // wrap settings are pregnancy-only so every normal card keeps its
+                    // original serialized template overflow mode.
+                    text.horizontalOverflow = HorizontalWrapMode.Wrap;
+                    text.verticalOverflow = VerticalWrapMode.Truncate;
+                    text.resizeTextForBestFit = true;
+                    text.resizeTextMinSize = 8;
+                    text.resizeTextMaxSize = Mathf.Max(16, text.fontSize);
+                }
                 RectTransform textRect = text.rectTransform;
                 textRect.anchorMin = Vector2.zero;
                 textRect.anchorMax = Vector2.one;

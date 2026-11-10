@@ -41,6 +41,8 @@ namespace SengokuChronicle.Domain
         public const string MarketTallyMissionId = "mission.market-tally";
         public const string MarriageSourceId = "marriage";
         public const string AdoptionSourceId = "adoption";
+        /// <summary>M04B dynamic birth; reuses the family-formation category.</summary>
+        public const string BirthSourceId = "birth";
 
         private FamilyChronicleEntry(int sequence, string entryId, int year, int month,
             ChronicleCategory category, string subjectId, string sourceId, string title, string summary,
@@ -272,9 +274,10 @@ namespace SengokuChronicle.Domain
                     }
                     break;
                 case ChronicleCategory.FamilyFormation:
-                    if (sourceId != MarriageSourceId && sourceId != AdoptionSourceId)
+                    if (sourceId != MarriageSourceId && sourceId != AdoptionSourceId &&
+                        sourceId != BirthSourceId)
                     {
-                        error = "家族关系记录来源必须是婚姻或收养。";
+                        error = "家族关系记录来源必须是婚姻、收养或新生。";
                         return false;
                     }
                     if (string.IsNullOrWhiteSpace(summary))

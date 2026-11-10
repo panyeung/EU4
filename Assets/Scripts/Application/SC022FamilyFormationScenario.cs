@@ -174,7 +174,8 @@ namespace SengokuChronicle.Application
         private static void AddMember(SuccessionWorld world, PersonId id, string name, int birthYear,
             FamilyMemberRole role)
         {
-            if (!world.TryAddPerson(new PersonState(id, name),
+            if (!world.TryAddPerson(new PersonState(id, name,
+                    PersonGenderCatalog.GenderFor(id)),
                     new SuccessionPersonLife(birthYear, true, false), out string error))
                 throw new InvalidOperationException(error);
             if (!world.TryAddMember(id, role, out error))
@@ -184,7 +185,8 @@ namespace SengokuChronicle.Application
         private static void AddCandidate(SuccessionWorld world, PersonId id, string name,
             int birthYear)
         {
-            if (!world.TryAddPerson(new PersonState(id, name),
+            if (!world.TryAddPerson(new PersonState(id, name,
+                    PersonGenderCatalog.GenderFor(id)),
                     new SuccessionPersonLife(birthYear, true, false), out string error))
                 throw new InvalidOperationException(error);
         }

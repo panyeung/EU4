@@ -371,7 +371,7 @@ namespace SengokuChronicle.Domain
             bool previousRegencyCompleted = state.RegencyCompleted;
 
             PersonId adoptedId = NextAdoptedPersonId(state);
-            var adopted = new PersonState(adoptedId, "養子 宗次");
+            var adopted = new PersonState(adoptedId, "養子 宗次", PersonGender.Male);
             var life = new SuccessionPersonLife(date.Year - 20, true, false);
             if (!state.World.TryAddPerson(adopted, life, out string error))
                 return Failure(SuccessionOutcome.InvalidState, state.Phase, adoptedId, error);

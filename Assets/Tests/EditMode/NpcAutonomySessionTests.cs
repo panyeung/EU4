@@ -1233,7 +1233,7 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         private static string WithVersion(string json, int version) =>
-            json.Replace("\"saveFormatVersion\":12",
+            json.Replace("\"saveFormatVersion\":" + SaveDataValidator.CurrentVersion,
                 "\"saveFormatVersion\":" + version.ToString());
 
         private static SaveData IdlePilotSave(GameSession session)

@@ -2035,6 +2035,7 @@ namespace SengokuChronicle.Persistence
         public SuccessionPersonSaveEntry[] persons;
         public SuccessionMemberSaveEntry[] members;
         public SuccessionKinshipSaveEntry[] kinship;
+        public FamilyPregnancySaveEntry[] pregnancies;
 
         /// <summary>Default roster used by a brand-new session and by v1/v2 migration.</summary>
         public static SuccessionSaveData CreateDefault() => Capture(SuccessionSample.CreateStandard());
@@ -2052,6 +2053,7 @@ namespace SengokuChronicle.Persistence
                 {
                     personId = person.Id.Value,
                     displayName = person.DisplayName,
+                    gender = (int)person.Gender,
                     birthYear = life.BirthYear,
                     alive = life.Alive,
                     retired = life.Retired
@@ -2076,6 +2078,11 @@ namespace SengokuChronicle.Persistence
                 });
             kinship.Sort(CompareKinshipEntries);
 
+            var pregnancies = new List<FamilyPregnancySaveEntry>();
+            foreach (FamilyPregnancyRecord record in state.World.Pregnancies.Records)
+                pregnancies.Add(FamilyPregnancySaveEntry.FromRecord(record));
+            pregnancies.Sort(ComparePregnancyEntries);
+
             return new SuccessionSaveData
             {
                 phase = (int)state.Phase,
@@ -2092,7 +2099,8 @@ namespace SengokuChronicle.Persistence
                 regencyCompleted = state.RegencyCompleted,
                 persons = persons.ToArray(),
                 members = members.ToArray(),
-                kinship = kinship.ToArray()
+                kinship = kinship.ToArray(),
+                pregnancies = pregnancies.ToArray()
             };
         }
 
@@ -2116,6 +2124,7 @@ namespace SengokuChronicle.Persistence
             clone.persons = ClonePersons(persons);
             clone.members = CloneMembers(members);
             clone.kinship = CloneKinship(kinship);
+            clone.pregnancies = ClonePregnancies(pregnancies);
             return clone;
         }
 
@@ -2154,6 +2163,8 @@ namespace SengokuChronicle.Persistence
                 previousPersonId = entry.personId;
                 if (string.IsNullOrWhiteSpace(entry.displayName))
                     return Invalid("存档继承人物名称为空。");
+                if (!Enum.IsDefined(typeof(PersonGender), entry.gender))
+                    return Invalid("存档继承人物性别无效。");
                 if (entry.birthYear < 1400 || entry.birthYear > date.Year)
                     return Invalid("存档继承人物出生年份无效。");
                 personMap.Add(personId, entry);
@@ -2274,7 +2285,83 @@ namespace SengokuChronicle.Persistence
                 previousKinship = entry;
             }
 
+            if (pregnancies != null)
+            {
+                SaveOperationResult pregnancyValidation = ValidatePregnancies(personMap, roleMap);
+                if (!pregnancyValidation.Succeeded)
+                    return pregnancyValidation;
+            }
+
             return SaveOperationResult.Success();
+        }
+
+        /// <summary>
+        /// Validates active pregnancy rows against the saved roster. The gestating parent
+        /// must still be a living family member; the other parent may be deceased but must
+        /// remain an identified family member. Ordering must be stable by gestating ID and
+        /// neither a female nor a spouse pair may appear twice.
+        /// </summary>
+        private SaveOperationResult ValidatePregnancies(
+            Dictionary<PersonId, SuccessionPersonSaveEntry> persons,
+            Dictionary<PersonId, FamilyMemberRole> roles)
+        {
+            var seenFemales = new HashSet<string>(StringComparer.Ordinal);
+            var seenPairs = new HashSet<string>(StringComparer.Ordinal);
+            string previousGestating = null;
+            foreach (FamilyPregnancySaveEntry entry in pregnancies)
+            {
+                if (entry == null)
+                    return Invalid("存档孕期记录为空。");
+                if (!PersonId.TryParse(entry.gestatingPersonId, out PersonId gestating) ||
+                    !PersonId.TryParse(entry.otherParentId, out PersonId other) ||
+                    gestating == other)
+                    return Invalid("存档孕期人物 ID 无效。");
+                if (!persons.TryGetValue(gestating, out SuccessionPersonSaveEntry gestatingEntry) ||
+                    !persons.TryGetValue(other, out SuccessionPersonSaveEntry otherEntry))
+                    return Invalid("存档孕期引用了未登记人物。");
+                if (!roles.ContainsKey(gestating) || !roles.ContainsKey(other))
+                    return Invalid("存档孕期引用了非家庭成员。");
+                if (!gestatingEntry.alive)
+                    return Invalid("存档孕期人物必须存活。");
+                if (gestatingEntry.gender != (int)PersonGender.Female ||
+                    otherEntry.gender != (int)PersonGender.Male)
+                    return Invalid("存档孕期双方性别无效。");
+                string recordError = string.Empty;
+                if (!GameDate.TryParse(entry.conceptionYear, entry.conceptionMonth,
+                        entry.conceptionDay, out GameDate conception) ||
+                    !GameDate.TryParse(entry.dueYear, entry.dueMonth, entry.dueDay,
+                        out GameDate due) ||
+                    !FamilyPregnancyRecord.TryCreate(gestating, other, conception, due,
+                        out _, out recordError))
+                    return Invalid(string.IsNullOrEmpty(recordError)
+                        ? "存档孕期日期无效。"
+                        : "存档孕期记录无效：" + recordError);
+                if (previousGestating != null &&
+                    string.CompareOrdinal(previousGestating, entry.gestatingPersonId) > 0)
+                    return Invalid("存档孕期顺序不稳定。");
+                previousGestating = entry.gestatingPersonId;
+                if (!seenFemales.Add(entry.gestatingPersonId))
+                    return Invalid("存档孕期同一女性重复。");
+                if (!seenPairs.Add(PregnancyPairKey(gestating, other)))
+                    return Invalid("存档孕期同一配偶对重复。");
+            }
+            return SaveOperationResult.Success();
+        }
+
+        private static string PregnancyPairKey(PersonId a, PersonId b)
+        {
+            string first = a.Value ?? string.Empty;
+            string second = b.Value ?? string.Empty;
+            if (string.CompareOrdinal(first, second) > 0)
+            {
+                string swap = first;
+                first = second;
+                second = swap;
+            }
+            return first.Length.ToString(System.Globalization.CultureInfo.InvariantCulture) +
+                   ":" + first + "|" +
+                   second.Length.ToString(System.Globalization.CultureInfo.InvariantCulture) +
+                   ":" + second;
         }
 
         /// <summary>
@@ -2298,6 +2385,39 @@ namespace SengokuChronicle.Persistence
                 return false;
             }
 
+            return TryBuildState(data, out state, out error);
+        }
+
+        /// <summary>
+        /// Rebuilds a succession snapshot captured by this same process for an
+        /// application transaction. It deliberately skips semantic save validation:
+        /// a live session can be temporarily outside save invariants (for example a
+        /// gestating parent marked dead), and the monthly transaction must still be
+        /// able to clone, cancel the pregnancy and roll back. Only
+        /// <see cref="Capture"/> output is a valid input.
+        /// </summary>
+        public static bool TryRestoreTransactionSnapshot(SuccessionSaveData data,
+            out SuccessionState state, out string error)
+        {
+            state = null;
+            if (data == null)
+            {
+                error = "事务继承快照为空。";
+                return false;
+            }
+            return TryBuildState(data, out state, out error);
+        }
+
+        private static bool TryBuildState(SuccessionSaveData data, out SuccessionState state,
+            out string error)
+        {
+            state = null;
+            if (data.persons == null || data.members == null || data.kinship == null)
+            {
+                error = "事务继承快照缺少人物、成员或亲属列表。";
+                return false;
+            }
+
             if (!FamilyId.TryParse(data.familyId, out FamilyId familyId))
             {
                 error = "存档继承家族 ID 无效。";
@@ -2308,7 +2428,8 @@ namespace SengokuChronicle.Persistence
             foreach (SuccessionPersonSaveEntry entry in data.persons)
             {
                 PersonId.TryParse(entry.personId, out PersonId personId);
-                if (!world.TryAddPerson(new PersonState(personId, entry.displayName),
+                if (!world.TryAddPerson(new PersonState(personId, entry.displayName,
+                        (PersonGender)entry.gender),
                         new SuccessionPersonLife(entry.birthYear, entry.alive, entry.retired),
                         out error))
                     return false;
@@ -2327,6 +2448,22 @@ namespace SengokuChronicle.Persistence
                         out KinshipLink link, out error) ||
                     !world.TryAddKinship(link, out error))
                     return false;
+            }
+            if (data.pregnancies != null)
+            {
+                foreach (FamilyPregnancySaveEntry entry in data.pregnancies)
+                {
+                    PersonId.TryParse(entry.gestatingPersonId, out PersonId gestating);
+                    PersonId.TryParse(entry.otherParentId, out PersonId other);
+                    GameDate.TryParse(entry.conceptionYear, entry.conceptionMonth,
+                        entry.conceptionDay, out GameDate conception);
+                    GameDate.TryParse(entry.dueYear, entry.dueMonth, entry.dueDay,
+                        out GameDate due);
+                    if (!FamilyPregnancyRecord.TryCreate(gestating, other, conception, due,
+                            out FamilyPregnancyRecord record, out error) ||
+                        !world.Pregnancies.TryAdd(record, out error))
+                        return false;
+                }
             }
 
             TryParseOptional(data.headPersonId, out PersonId headId, null);
@@ -2410,6 +2547,12 @@ namespace SengokuChronicle.Persistence
             SuccessionKinshipSaveEntry b) =>
             CompareKinshipKeys(a?.from, a?.to, a?.type ?? 0, b?.from, b?.to, b?.type ?? 0);
 
+        /// <summary>Stable pregnancy capture order: ordinal gestating-person ID.</summary>
+        internal static int ComparePregnancyEntries(FamilyPregnancySaveEntry a,
+            FamilyPregnancySaveEntry b) =>
+            string.CompareOrdinal(a?.gestatingPersonId ?? string.Empty,
+                b?.gestatingPersonId ?? string.Empty);
+
         private static string NormalizeKinshipKey(KinshipLink link)
         {
             string from = link.From.Value ?? string.Empty;
@@ -2440,6 +2583,7 @@ namespace SengokuChronicle.Persistence
                 {
                     personId = entry.personId,
                     displayName = entry.displayName,
+                    gender = entry.gender,
                     birthYear = entry.birthYear,
                     alive = entry.alive,
                     retired = entry.retired
@@ -2481,6 +2625,35 @@ namespace SengokuChronicle.Persistence
             return clone;
         }
 
+        /// <summary>
+        /// Clones pregnancy rows. A null legacy array becomes an empty current array:
+        /// v13 always writes a concrete list, and every migration branch ends in a
+        /// current-version snapshot that must satisfy that invariant.
+        /// </summary>
+        private static FamilyPregnancySaveEntry[] ClonePregnancies(
+            FamilyPregnancySaveEntry[] source)
+        {
+            if (source == null)
+                return new FamilyPregnancySaveEntry[0];
+            var clone = new FamilyPregnancySaveEntry[source.Length];
+            for (int i = 0; i < source.Length; i++)
+            {
+                FamilyPregnancySaveEntry entry = source[i];
+                clone[i] = entry == null ? null : new FamilyPregnancySaveEntry
+                {
+                    gestatingPersonId = entry.gestatingPersonId,
+                    otherParentId = entry.otherParentId,
+                    conceptionYear = entry.conceptionYear,
+                    conceptionMonth = entry.conceptionMonth,
+                    conceptionDay = entry.conceptionDay,
+                    dueYear = entry.dueYear,
+                    dueMonth = entry.dueMonth,
+                    dueDay = entry.dueDay
+                };
+            }
+            return clone;
+        }
+
         private static SaveOperationResult Invalid(string message) =>
             SaveOperationResult.Failure(SaveErrorCode.InvalidData, message);
     }
@@ -2490,6 +2663,7 @@ namespace SengokuChronicle.Persistence
     {
         public string personId;
         public string displayName;
+        public int gender;
         public int birthYear;
         public bool alive;
         public bool retired;
@@ -2508,6 +2682,33 @@ namespace SengokuChronicle.Persistence
         public string from;
         public string to;
         public int type;
+    }
+
+    /// <summary>Plain-data v13 pregnancy row; dates stay as explicit calendar fields.</summary>
+    [Serializable]
+    public sealed class FamilyPregnancySaveEntry
+    {
+        public string gestatingPersonId;
+        public string otherParentId;
+        public int conceptionYear;
+        public int conceptionMonth;
+        public int conceptionDay;
+        public int dueYear;
+        public int dueMonth;
+        public int dueDay;
+
+        public static FamilyPregnancySaveEntry FromRecord(FamilyPregnancyRecord record) =>
+            new FamilyPregnancySaveEntry
+            {
+                gestatingPersonId = record.GestatingPersonId.Value,
+                otherParentId = record.OtherParentId.Value,
+                conceptionYear = record.ConceptionDate.Year,
+                conceptionMonth = record.ConceptionDate.Month,
+                conceptionDay = record.ConceptionDate.Day,
+                dueYear = record.DueDate.Year,
+                dueMonth = record.DueDate.Month,
+                dueDay = record.DueDate.Day
+            };
     }
 
     /// <summary>

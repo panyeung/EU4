@@ -45,6 +45,39 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
+        public void CaptureSave_RoundTripsAnInFlightPregnancy()
+        {
+            _session = FreshFamilyFormation();
+            GameDate date = _session.WorldClock.CurrentDate;
+            Assert.That(FamilyPregnancyRecord.TryCreate(SC022FamilyFormationScenario.SpouseId,
+                SC022FamilyFormationScenario.HeadId, date,
+                FamilyPregnancyRecord.AddMonths(date,
+                    FamilyPregnancyRecord.GestationMonths),
+                out FamilyPregnancyRecord record, out string error), Is.True, error);
+            Assert.That(_session.Succession.World.Pregnancies.TryAdd(record, out error),
+                Is.True, error);
+
+            SaveData data = _session.CaptureSave();
+            Assert.That(_session.TryApplySave(data).Succeeded, Is.True,
+                _session.LastEventMessage);
+
+            Assert.That(_session.FamilyPregnancies, Has.Count.EqualTo(1));
+            Assert.That(_session.FamilyPregnancies[0], Is.EqualTo(record));
+            Assert.That(_session.Succession.World.TryGetPerson(
+                SC022FamilyFormationScenario.SpouseId, out PersonState spouse), Is.True);
+            Assert.That(spouse.Gender, Is.EqualTo(PersonGender.Female));
+        }
+
+        private GameSession FreshFamilyFormation()
+        {
+            if (_session != null)
+                UnityEngine.Object.DestroyImmediate(_session.gameObject);
+            GameSession session = GameSession.NewGame();
+            session.InitFamilyFormationDemoScenario();
+            return session;
+        }
+
+        [Test]
         public void CaptureSave_IncludesNpcNeedsAndRoundTripsThem()
         {
             Assert.That(_session.AdvanceOneDay(), Is.True);

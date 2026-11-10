@@ -10,7 +10,7 @@ namespace SengokuChronicle.Persistence
     /// </summary>
     public static class SaveDataValidator
     {
-        public const int CurrentVersion = 12;
+        public const int CurrentVersion = 13;
 
         public static SaveOperationResult Validate(SaveData data)
         {
@@ -51,6 +51,8 @@ namespace SengokuChronicle.Persistence
                 new GameDate(data.year, data.month, data.day));
             if (!succession.Succeeded)
                 return succession;
+            if (data.succession.pregnancies == null)
+                return Invalid("存档缺少孕期状态（succession.pregnancies）。");
 
             SaveOperationResult familyRelationships =
                 ValidateFamilyRelationships(data.familyRelationships, data.succession);
@@ -141,6 +143,7 @@ namespace SengokuChronicle.Persistence
                 probe.saveFormatVersion != 6 && probe.saveFormatVersion != 7 &&
                 probe.saveFormatVersion != 8 && probe.saveFormatVersion != 9 &&
                 probe.saveFormatVersion != 10 && probe.saveFormatVersion != 11 &&
+                probe.saveFormatVersion != 12 &&
                 probe.saveFormatVersion != CurrentVersion)
                 return SaveOperationResult.Failure(
                     SaveErrorCode.UnsupportedVersion,
@@ -240,6 +243,13 @@ namespace SengokuChronicle.Persistence
                             "存档缺少 NPC 行动记忆列表（npcAutonomy.persons[].memories）。");
                 }
             }
+
+            // v13 introduced person gender and active pregnancies. A v12 payload is
+            // migrated into that shape by SaveDataMigrator, so presence only requires
+            // the current-version block below.
+            if (probe.saveFormatVersion == CurrentVersion &&
+                (probe.succession == null || probe.succession.pregnancies == null))
+                return Invalid("存档缺少孕期状态（succession.pregnancies）。");
 
             return SaveOperationResult.Success();
         }
