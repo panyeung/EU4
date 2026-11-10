@@ -18,7 +18,7 @@
 
 SC-004–SC-009 已随 `demo-SC004-SC009` 推送到 `main`，并获用户 Edit Mode 与 Play Test 验收。SC-010 以提交 `af35633`、标签 `demo-SC010` 获用户验收。SC-011 已于 2026-11-02 获用户验收：用户报告编译通过、EditMode passed、Console 无错误及 Play Test 通过；EditMode 数量、Console 警告数未提供，`FoundationSceneValidator` 结果未报告。上述 SC-011 结果是用户报告，不是本协调过程取得的 Editor 日志。其余项目证据及旧序列化位置见 [PROJECT_STATE.md](PROJECT_STATE.md)。
 
-SC-012 代码/测试源已通过第三轮 OpenCode2 静态只读复审（ACCEPT）。用户随后报告 EditMode 通过、Play Test 通过并明确验收。具体 EditMode 数量、Console error/warning 计数及 `FoundationSceneValidator` 结果未单独提供。早期 Roslyn/harness 数值先于最后一次代码修复；最新修复仅报告 brace/whitespace 静态检查，不能把这些结果当作 Unity 运行证据。复审还记录 append 失败路径缺少应用层测试以及 v1 异常 chronicle 字段兼容边界，见 `PROJECT_STATE.md` 与 `SC012_DEMO.md`。
+SC-012 代码/测试源已通过第三轮 OpenCode2 静态只读复审（ACCEPT）。用户随后报告 EditMode 通过、Play Test 通过并明确验收。具体 EditMode 数量、Console error/warning 计数及 `FoundationSceneValidator` 结果未单独提供。早期 Roslyn/harness 数值先于最后一次代码修复；最新修复仅报告 brace/whitespace 静态检查，不能把这些结果当作 Unity 运行证据。复审还记录 append 失败路径缺少应用层测试以及 v1 异常 chronicle 字段兼容边界，见 `PROJECT_STATE.md` 与 [SC012_DEMO.md](docs/PLAYTEST_GUIDES.md#sc012-demo)。
 
 ## SC-013 固定三代剧本扩展
 
