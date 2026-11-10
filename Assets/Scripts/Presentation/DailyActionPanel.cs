@@ -1,9 +1,11 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Text;
 using SengokuChronicle.Application;
 using SengokuChronicle.Domain;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.Events;
 using UnityEngine.UI;
 
@@ -48,6 +50,9 @@ namespace SengokuChronicle.Presentation
         private readonly List<PersonId> _rowPersonIds = new List<PersonId>();
         private readonly List<UnityAction> _rowListeners = new List<UnityAction>();
         private bool _subscribed;
+        private BaseInputModule _imeSafeInputModule;
+        private BaseInput _previousInputOverride;
+        private BaseInput _imeSafeInput;
         private UnityAction _openListener;
         private UnityAction _closeListener;
         private UnityAction _restListener;
@@ -152,19 +157,77 @@ namespace SengokuChronicle.Presentation
 
         public void Open()
         {
-            if (panelRoot == null)
+            if (panelRoot == null || panelRoot.activeSelf)
                 return;
+            UseImeSafeInputForDuration();
             OpenCount++;
             EnsureSelection();
+            // Defer InputField activation until after the page Text gets a render frame.
+            // EditMode PreviewScenes never populate that TextGenerator, so detach the
+            // label there and restore its value after binding; Play Mode keeps live text.
+            bool previewScene = !UnityEngine.Application.isPlaying;
+            if (previewScene && durationInput != null)
+            {
+                durationInput.textComponent = null;
+                durationInput.enabled = false;
+            }
+            else if (durationInput != null)
+            {
+                // On the first Play Mode frame, the page Text has not rendered yet.
+                // Enabling InputField now makes OnEnable index an empty TextGenerator.
+                durationInput.enabled = false;
+            }
             panelRoot.SetActive(true);
+            if (durationInput != null)
+                StartCoroutine(BindDurationInputAfterLayout());
             _feedback = SessionFeedback();
             Refresh();
+        }
+
+        private IEnumerator BindDurationInputAfterLayout()
+        {
+            if (UnityEngine.Application.isPlaying)
+                yield return new WaitForEndOfFrame();
+            else
+                yield return null;
+            if (!IsOpen || durationInput == null)
+                yield break;
+
+            // Bind the label once. Reassigning textComponent unregisters and then
+            // re-registers InputField's label callbacks, so only fill a missing binding.
+            if (durationInput.textComponent == null)
+                durationInput.textComponent =
+                    durationInput.transform.Find("Text")?.GetComponent<Text>();
+
+            if (UnityEngine.Application.isPlaying)
+            {
+                // Play Mode renders the label, so OnEnable can rebuild it normally. Do not
+                // clear and restore the value here: writing text resets InputField's caret
+                // bookkeeping, and a later Append(char) with an active selection then slices
+                // past m_Text and throws ArgumentOutOfRangeException. Enabling preserves the
+                // live text, caret and selection.
+                durationInput.enabled = true;
+                yield break;
+            }
+
+            // InputField.OnEnable -> UpdateLabel -> SetDrawRangeToContainCaretPosition
+            // indexes the generated character list. A PreviewScene never renders the
+            // Text, so that list stays empty and non-empty text throws
+            // ArgumentOutOfRangeException. Enabling with empty text skips that path;
+            // SetDuration restores the value through its detached-textComponent path.
+            string value = durationInput.text;
+            durationInput.text = string.Empty;
+            durationInput.enabled = true;
+            SetDuration(value);
         }
 
         public void Close()
         {
             if (panelRoot == null)
+            {
+                RestoreInputOverride();
                 return;
+            }
 
             // This panel root is also the Character page root, so hiding it alone would
             // leave the page area blank while the Character tab stayed selected. Let the
@@ -172,9 +235,13 @@ namespace SengokuChronicle.Presentation
             // keep the plain hide behaviour.
             ReferenceGalleryNavigator navigator = GetComponentInParent<ReferenceGalleryNavigator>();
             if (navigator != null && navigator.TryReturnFromCharacterPage())
+            {
+                RestoreInputOverride();
                 return;
+            }
 
             panelRoot.SetActive(false);
+            RestoreInputOverride();
         }
 
         /// <summary>Selects a registered person and re-renders the row highlight.</summary>
@@ -199,7 +266,28 @@ namespace SengokuChronicle.Presentation
         {
             if (durationInput == null)
                 return;
-            durationInput.text = text ?? string.Empty;
+            string value = text ?? string.Empty;
+            Text textComponent = durationInput.textComponent;
+            if (textComponent == null)
+            {
+                durationInput.text = value;
+            }
+            else
+            {
+                durationInput.textComponent = null;
+                try
+                {
+                    durationInput.text = value;
+                    textComponent.text = durationInput.text;
+                }
+                finally
+                {
+                    durationInput.textComponent = textComponent;
+                }
+            }
+            durationInput.caretPosition = durationInput.text.Length;
+            if (durationInput.placeholder != null)
+                durationInput.placeholder.enabled = string.IsNullOrEmpty(durationInput.text);
         }
 
         public bool ClickRest() => Submit(DailyActionKind.Rest);
@@ -818,8 +906,36 @@ namespace SengokuChronicle.Presentation
         {
             Unsubscribe();
             ClearRows();
+            RestoreInputOverride();
             if (IsOpen && panelRoot != gameObject)
                 panelRoot.SetActive(false);
+        }
+
+        private void UseImeSafeInputForDuration()
+        {
+            if (Input.compositionString.Length == 0 || _imeSafeInputModule != null)
+                return;
+            _imeSafeInputModule = EventSystem.current != null
+                ? EventSystem.current.currentInputModule ??
+                  EventSystem.current.GetComponent<BaseInputModule>()
+                : null;
+            if (_imeSafeInputModule == null)
+                return;
+
+            _previousInputOverride = _imeSafeInputModule.inputOverride;
+            _imeSafeInput = _imeSafeInputModule.gameObject.GetComponent<NumericDurationBaseInput>();
+            if (_imeSafeInput == null)
+                _imeSafeInput = _imeSafeInputModule.gameObject.AddComponent<NumericDurationBaseInput>();
+            _imeSafeInputModule.inputOverride = _imeSafeInput;
+        }
+
+        private void RestoreInputOverride()
+        {
+            if (_imeSafeInputModule != null && _imeSafeInputModule.inputOverride == _imeSafeInput)
+                _imeSafeInputModule.inputOverride = _previousInputOverride;
+            _imeSafeInputModule = null;
+            _previousInputOverride = null;
+            _imeSafeInput = null;
         }
 
         private void ClearRows()
@@ -850,5 +966,11 @@ namespace SengokuChronicle.Presentation
             else
                 DestroyImmediate(generated);
         }
+    }
+
+    // Numeric duration input must ignore stale global IME text while it is open.
+    internal sealed class NumericDurationBaseInput : BaseInput
+    {
+        public override string compositionString => string.Empty;
     }
 }
