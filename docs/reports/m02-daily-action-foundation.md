@@ -255,3 +255,38 @@ were not edited beyond the M02 integration points.
 M01 remains Go/No-Go pending with its final milestone acceptance outstanding. The M02
 daily-action slice passed the lead-run Play Mode gate, but has not received explicit user
 milestone acceptance. It is not a claim that all of M02 is complete.
+
+## 2026-11-09 current-main verification addendum
+
+- Editor: Unity `6000.6.6f1`, PID `126040`, exact project path
+  `C:\Users\panye\My project`; active scene `Assets/Scenes/FoundationScene.unity`.
+- Compile/EditMode: OpenCode2 reported Tundra build success with no C# compiler errors.
+  The focused caret regression passed `1/1`; the full EditMode suite passed `1374/1374`,
+  with 0 failed and 0 skipped. The EditMode Console had 2 expected `LogError` entries
+  from passing `FamilyFormationSessionTests` fault-injection cases, plus 28 warnings and
+  18 logs; these are recorded separately from Play Mode.
+- Scene validator: ran `Tools/Sengoku Chronicle/Validate Foundation Scene` in the
+  existing Editor. `Logs/SceneValidationReport.txt` recorded `RESULT: PASS; Errors: 0`
+  and `PASS M02 daily-action panel hierarchy, bindings, containment, ordering, and
+  layout.` The scene was loaded and not dirty when the validator ran.
+- Play Mode: entered `FoundationScene`, continued the existing save, opened the M02
+  person/action page, changed duration to 3, closed and reopened the page, and confirmed
+  it remained 3. Refocusing and typing at the end changed it to 31 without an input error;
+  the temporary value was restored to 3. A two-day Rest action was scheduled; advancing
+  one day changed the date from 1560-05-01 to 1560-05-02 and showed progress `1/2`;
+  advancing again reached 1560-05-03 and completed the action. Travel to Atsuta showed
+  an ETA of 1560-05-04; after confirming departure, the map showed current location
+  Atsuta on 1560-05-04. No save or load was performed in this session.
+- Play Mode Console: visible Unity counters after the route were `0 logs / 0 warnings /
+  0 errors`. Play Mode was exited; no scene save was made. The existing single-slot save
+  was not overwritten.
+- Git: the M02 caret test commit `784190506f7ed1526d625bc48db87beaaf1a408b` was already
+  present on `main` and `origin/main`. Existing unrelated M04A/M03/UI worktree changes
+  were left untouched.
+
+### Status boundary
+
+The current-main M02 technical verification gate passed. This does not record user
+milestone acceptance; M02 remains awaiting the user's explicit final acceptance. This
+Play Mode session did not reverify save/load, and the separate M00 launch-scene/worktree
+cleanup items remain outside this M02 acceptance pass.

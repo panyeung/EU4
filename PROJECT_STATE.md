@@ -1,6 +1,6 @@
 # 《影之一族》项目状态
 
-更新时间：2026-11-08
+更新时间：2026-11-09
 设计权威：[GDD_v4.0.md](GDD_v4.0.md)。本文件是当前执行状态入口；当前开发节点采用整合后的 `M00`–`M08` 路线；旧《Sengoku Chronicle》M1–M7 文档仅作为历史记录，不代表新方向进度。
 
 ## 当前方向
@@ -17,7 +17,7 @@
 |---|---|---|
 | M00 | 现有工程基线与验收收敛 | 进行中：已核对 main/远端、工作树、Editor 路径和最新 EditMode；仍有一个带脏改动的 detached SC-021 工作树、启动场景与演示场景不一致，且当前场景尚无本次提交后的 Validator/Play Mode 证据 |
 | M01 | 固定三代家族可玩原型 | **已验收（2026-11-07，用户明确确认）**；当前 `main` 含 SC-024 场景接入。技术验证细节见下方历史报告，不从用户验收推断额外测试结果 |
-| M02 | 每日行动与旅行基础 | 进行中：领域、存档与 UI 已实现；2026-11-06 的 Play Mode/Validator 曾通过，但 2026-11-08 又合入 UI 与 FoundationScene 改动，需对当前 main 重跑场景 Validator 与 Play Mode；用户验收待办 |
+| M02 | 每日行动与旅行基础 | 当前 main 技术门已通过（2026-11-09）：全量 EditMode 1374/1374、FoundationSceneValidator PASS、当前 FoundationScene Play Mode 验证了持续天数关闭重开、两日休息推进与清洲→热田旅行；本轮未重测存读档，用户最终里程碑验收待办。证据见 [M02 当前 main 验收追加记录](docs/reports/m02-daily-action-foundation.md#2026-11-09-current-main-verification-addendum) |
 | M03 | 高自主 NPC 与只读 Inspector | 实现与两轮复审修正完成，待 lead Play Mode 与用户验收：纯 C# 规则、v11 存档/迁移、两名试点、逐日自主推进、只读可滚动 Inspector 与事务式场景接入；第二轮修正后历史 EditMode 1274/1274、Validator PASS；2026-11-08 全量 EditMode 1303/1303，但未取得该提交后的 M03 Validator/Play Mode 证据 |
 | M04 | 人物记忆与动态家族 | 计划中 |
 | M05 | 经营与委托纵向切片 | 计划中 |
