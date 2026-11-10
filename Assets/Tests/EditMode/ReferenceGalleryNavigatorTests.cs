@@ -429,11 +429,14 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(image.anchoredPosition.y - image.sizeDelta.y / 2f,
                 Is.GreaterThanOrEqualTo(-rootHeight / 2f - 0.1f));
 
-            // No overlap with title, date, route, or travel controls.
+            // Location markers overlay the terrain; panels and dock remain outside it.
             foreach (KeyValuePair<string, RectTransform> control in rects)
+            {
+                if (control.Key.StartsWith("DestButton_", StringComparison.Ordinal)) continue;
                 Assert.That(RectsOverlap(image.anchoredPosition, image.sizeDelta,
                         control.Value.anchoredPosition, control.Value.sizeDelta), Is.False,
                     "the map artwork must not cover " + control.Key);
+            }
             Assert.That(illustration.GetSiblingIndex(), Is.Zero,
                 "the artwork stays behind every interactive control");
             Assert.That(illustration.GetComponent<Image>().raycastTarget, Is.False);

@@ -324,6 +324,8 @@ namespace SengokuChronicle.Presentation
             SetMapContentVisible(true);
             SetFeedback($"返回地图，当前位置：{LocationId.GetChineseName(gameSession != null ? gameSession.CurrentLocation : default)}。请选择目的地。");
             RefreshAll();
+            if (_selectedDestination.HasValue)
+                SelectDestination(_selectedDestination.Value);
         }
 
         /// <summary>全量刷新 UI（当前日期、位置标记、反馈、按钮），并同步刷新 M1 面板。</summary>

@@ -1234,6 +1234,29 @@ namespace SengokuChronicle.Presentation
             Button[] buttons = mapPanelRoot.GetComponentsInChildren<Button>(true);
             for (int i = 0; i < buttons.Length; i++)
                 SetButton(buttons[i], SengokuUiTheme.ParchmentDeep, SengokuUiTheme.Ink);
+            ImmersiveWorldMapView view = mapPanelRoot.GetComponent<ImmersiveWorldMapView>();
+            if (view == null) view = mapPanelRoot.AddComponent<ImmersiveWorldMapView>();
+            view.BindNavigation(this);
+            view.Configure();
+        }
+
+        public void OpenMapFamilyRecord(bool chronicle)
+        {
+            ShowPage(ReferenceGalleryPage.Family);
+            FamilyRosterPanel roster = familyPanelRoot != null
+                ? familyPanelRoot.GetComponentInParent<FamilyRosterPanel>(true) : null;
+            FamilyChroniclePanel ledger = FindAnyObjectByType<FamilyChroniclePanel>(FindObjectsInactive.Include);
+            if (roster != null)
+            {
+                if (chronicle) roster.Close();
+                else roster.Open();
+            }
+            if (ledger != null)
+            {
+                ledger.gameObject.SetActive(true);
+                if (chronicle) ledger.Open();
+                else ledger.Close();
+            }
         }
 
         /// <summary>
