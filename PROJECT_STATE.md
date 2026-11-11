@@ -21,7 +21,7 @@
 | M03 | 高自主 NPC 与只读 Inspector | 已完成获批的双 NPC 原型技术验证（2026-11-10）：当前 Editor 全量 EditMode 1454/1454；FoundationScene Validator PASS（Errors 0）；Play Mode 观察到正纲训练、信正工作、完成后自主重排及 Inspector 决策解释；Play Mode 后 Console 0/0/0。最终用户里程碑验收待办。GDD 中伤病/资源不足条件未在本切片建模或验证，见下方风险记录。 |
 | M04 | 人物记忆与动态家族 | M04A 个人行动记忆 lead 技术签收通过（2026-11-09）：有界记忆、评分修正、v12 存档/迁移与只读显示；最终聚焦 181/181、全量 1381/1381、编译、Validator、两轮独立复审与 Play Mode（含 30/31 日、GUI 存读档）通过。M04B 动态出生 lead 技术验证通过（2026-11-10）：编译成功、全量 EditMode 1446/1446、正确场景 Validator PASS（Errors 0）、妊娠与出生存读档、逐月到期出生验证通过；用户最终里程碑验收待办。详见 [M04A 验证记录](docs/archive/verification-and-research-history.md#m04a-personal-memories)、[M04B 设计稿](docs/superpowers/specs/2026-11-10-m04b-dynamic-birth-design.md)、[实施计划](docs/superpowers/plans/2026-11-10-m04b-dynamic-birth.md) 与 [M04B 验证记录](docs/reports/m04b-pregnancy-simulation.md) |
 | M05 | 经营与委托纵向切片 | Scout 复用调研完成；OpenCode2 已在当前工作区开始实现单项可存档委托（实现/复审/Unity 验证待完成）。 |
-| M06 | 回合制潜入原型 | 计划中 |
+| M06 | 回合制潜入原型 | Scout 只读复用调研完成：本地未发现战术格网、视野/警戒或潜行系统；GitHub 候选经评估不适合直接接入，拟复用 GameSession 与版本化存档边界自建小型原型，不新增依赖。待 M05 验证 gate 后进入规则设计。详见[调研记录](docs/archive/verification-and-research-history.md#2026-11-10-m06-reuse-scout)。 |
 | M07 | 经营、个人活动与战术整合 | 计划中 |
 | M08 | 内容扩展与正式体验 | 计划中 |
 

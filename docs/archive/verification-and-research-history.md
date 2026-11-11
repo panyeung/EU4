@@ -5798,3 +5798,26 @@ Status: code and generated art are committed at `220b44f` on `origin/main`. Foun
 1. To publish the saved scene integration, compare the pre-integration backup with the saved scene and isolate only M6 changes; preserve the unrelated M02 WIP.
 2. Optionally inspect 1280×720 and the no-save Continue path in a disposable save-free setup.
 3. After scene-only verification is safely staged, update this report and push only verified task files. Wait for explicit milestone acceptance before tagging.
+
+---
+
+<a id="2026-11-10-m06-reuse-scout"></a>
+## M06 tactical stealth reuse survey (2026-11-10)
+
+Scope: read-only review before M06 design. GDD v4.0 calls for a small turn-based tactical map, a clear objective, a few ninjas and guards, movement, vision, alert, basic stealth, extraction, and success/failure/withdrawal writeback. The first version does not need a full combat simulation.
+
+### Existing project code
+
+- `GameSession`, the mission state classes (`MarketTallyMission`, `SupplyShortageMission`, and `SealedLetterMission`), `SaveData`, `SaveDataValidator`, `SaveDataMigrator`, and `SaveSlotStore` provide reusable command validation, mission state transitions, history/writeback, and versioned persistence boundaries.
+- `PlayerMovement2D` is real-time Rigidbody2D input, while `WorldMapRules` is for the campaign map. Neither provides turn-based tactical movement.
+- A source search under `Assets/Scripts` found no tactical grid/pathfinding, stealth, guard vision, alert, or extraction implementation. Those M06 rules will need to be built locally.
+
+### GitHub candidates reviewed
+
+- [YvensFaos/WavesGame](https://github.com/YvensFaos/WavesGame): its `LICENSE.md` declares MIT for code and the repository page showed 609 commits at review time. The README describes a 2D Tilemap turn-based tactics framework, but also contains an older CC-BY license statement that conflicts with `LICENSE.md`. It uses UUTils and FALLA submodules; Unity 6/URP compatibility is not established. Do not copy or add it; the framework and dependencies exceed this slice.
+- [arthurgonze/2D-Field-of-View](https://github.com/arthurgonze/2D-Field-of-View): README says it was updated from Unity 2018.3 to 2020.3; the repository has five commits and no license file was found. Unity 6 compatibility and reuse rights are unverified. Do not copy or add it.
+- [GaryJGR/silent-extraction](https://github.com/GaryJGR/silent-extraction): README describes a Unity 6000.6.5f1, 3D real-time stealth prototype; the repository has two commits and no license file was found. It uses NavMesh and CharacterController and does not match the 2D turn-based slice. Do not copy or add it.
+
+### Decision and evidence limits
+
+Build the tactical rules in the project after the M05 validation gate, reusing its existing session and save boundaries. No external code, assets, or packages were adopted. This survey is source inspection only; it does not verify Unity 6 runtime compatibility or M06 gameplay.
