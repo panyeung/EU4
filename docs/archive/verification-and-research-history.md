@@ -5821,3 +5821,14 @@ Scope: read-only review before M06 design. GDD v4.0 calls for a small turn-based
 ### Decision and evidence limits
 
 Build the tactical rules in the project after the M05 validation gate, reusing its existing session and save boundaries. No external code, assets, or packages were adopted. This survey is source inspection only; it does not verify Unity 6 runtime compatibility or M06 gameplay.
+
+<a id="m02-inputfield-lifecycle-2026-11-11"></a>
+## M02 InputField lifecycle correction (2026-11-11)
+
+- Implementation: OpenCode2 fixed the Edit Mode PreviewScene InputField binding path and preserved the Play Mode deferred binding path in `Assets/Scripts/Presentation/DailyActionPanel.cs`. Commit `bc17491` was pushed to `origin/chore/pstack-verification`.
+- Review: the read-only OpenCode reviewer confirmed the corrected Unity UI lifecycle comments are accurate and that the follow-up contains no runtime-code delta beyond the reviewed implementation.
+- Compilation: OpenCode2 reported a successful recompile with `compilationFailed=false` and zero errors; the existing Editor's subsequent `unity command recompile` reported up to date. After OpenCode2 recompile: zero errors, one pre-existing `CS0618` warning and 9 logs; the warning was already present in committed HEAD, while `ReferenceGalleryNavigator.cs` has separate existing WIP.
+- EditMode: existing Editor Test Runner full suite `SengokuChronicle.EditModeTests`: 1645 passed, 0 failed, 0 skipped. This run preceded the later comment-only corrections; both OpenCode review rounds confirmed no runtime-code delta. Two `LogError` entries during test execution were expected rollback-failure injection cases in passing family-formation tests; no M02 test emitted an error.
+- Play Mode: in the existing `FoundationScene` Editor, the M02 duration InputField was enabled with a bound label; a focused UGUI `InputField.ProcessEvent` Ctrl+A plus `2` updated both field and label; closing and reopening the panel preserved `2`. The training action was accepted and its feedback displayed, while progress remained 0/2 because no day was advanced. Physical keyboard entry was not verified. No save was made.
+- Immediately after that Play Mode run, Unity returned to ready/stopped, `FoundationScene` remained active and clean, and the Console was 0 errors / 0 warnings / 0 logs.
+- Status: this is M02 technical verification only. Final M02 user milestone acceptance remains pending.
