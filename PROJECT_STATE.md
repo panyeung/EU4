@@ -20,7 +20,7 @@
 | M02 | 每日行动与旅行基础 | 行动输入、日推进、旅行与 GUI 存读档技术路线已验证；日期刷新、人物名册遮挡、窄屏地图/家谱布局已修复。M02 专项记录的全量 EditMode 1386/1386、编译无 C# 错误、FoundationScene Validator PASS、独立只读复审 ACCEPT 与 960×720 / 1280×720 Play Mode 均为 2026-11-09 证据；2026-11-10 当前全量 EditMode 已为 1454/1454（见 M00/M03 当前核验）。用户存档哈希未变；M02 最终用户里程碑验收仍待办。见 [地图验证](docs/archive/verification-and-research-history.md#world-map-immersive-ui-2026-11-09)、[名册修复](docs/archive/verification-and-research-history.md#m02-roster-rail-visibility-2026-11-09)、[M02 记录](docs/archive/verification-and-research-history.md#m02-daily-action-foundation)及 [M04A 记录](docs/archive/verification-and-research-history.md#m04a-personal-memories) |
 | M03 | 高自主 NPC 与只读 Inspector | 已完成获批的双 NPC 原型技术验证（2026-11-10）：当前 Editor 全量 EditMode 1454/1454；FoundationScene Validator PASS（Errors 0）；Play Mode 观察到正纲训练、信正工作、完成后自主重排及 Inspector 决策解释；Play Mode 后 Console 0/0/0。最终用户里程碑验收待办。GDD 中伤病/资源不足条件未在本切片建模或验证，见下方风险记录。 |
 | M04 | 人物记忆与动态家族 | M04A 个人行动记忆 lead 技术签收通过（2026-11-09）：有界记忆、评分修正、v12 存档/迁移与只读显示；最终聚焦 181/181、全量 1381/1381、编译、Validator、两轮独立复审与 Play Mode（含 30/31 日、GUI 存读档）通过。M04B 动态出生 lead 技术验证通过（2026-11-10）：编译成功、全量 EditMode 1446/1446、正确场景 Validator PASS（Errors 0）、妊娠与出生存读档、逐月到期出生验证通过；用户最终里程碑验收待办。详见 [M04A 验证记录](docs/archive/verification-and-research-history.md#m04a-personal-memories)、[M04B 设计稿](docs/superpowers/specs/2026-11-10-m04b-dynamic-birth-design.md)、[实施计划](docs/superpowers/plans/2026-11-10-m04b-dynamic-birth.md) 与 [M04B 验证记录](docs/reports/m04b-pregnancy-simulation.md) |
-| M05 | 经营与委托纵向切片 | 计划中 |
+| M05 | 经营与委托纵向切片 | Scout 复用调研完成；OpenCode2 已在当前工作区开始实现单项可存档委托（实现/复审/Unity 验证待完成）。 |
 | M06 | 回合制潜入原型 | 计划中 |
 | M07 | 经营、个人活动与战术整合 | 计划中 |
 | M08 | 内容扩展与正式体验 | 计划中 |
@@ -35,7 +35,7 @@ M01 已于 2026-11-07 由用户明确验收通过。当前 `main` 的 `Assets/Sc
 - 自动化：当前 Editor Test Runner 全量 EditMode 为 1454/1454 passed、0 failed、0 inconclusive、0 skipped；结果文件位于 `%USERPROFILE%\AppData\LocalLow\DefaultCompany\My project\TestResults.xml`，时间 2026-11-11 00:48:24Z–00:50:20Z（当地 2026-11-10）。Unity Console 在测试结束后为 10 logs / 29 warnings / 2 errors；两条 error 对应 `FamilyFormationSessionTests` 婚姻/收养编年史故障注入用例中的 `LogAssert.Expect`，测试结果均通过。`Logs/Editor.log` 仍记录 Test Runner 调用 `EditorSceneManager.RestoreSceneManagerSetup` 时的 `IndexOutOfRangeException`；测试 XML 为全通过，FoundationScene 已恢复且场景文件未出现 Git 改动。Test Runner 底部状态仍显示 `Executing IPostBuildCleanup`，工具收尾状态需继续关注。
 - SC-021：detached worktree `C:\Users\panye\orca\workspaces\My project\sc021-scene-integration` 仍有 `.vscode/settings.json` 与 `ProjectSettings/Packages/com.unity.learn.iet-framework/Settings.json` 两处本地修改。`.vscode/settings.json` 的 diff 已读；另一文件保持原样待归属确认。没有覆盖、清理、合并或删除此 WIP。
 - 未提交工作区：除本节的 `PROJECT_STATE.md` 与启动场景设置外，`AddM02DailyActionPanel.cs`、`ReferenceGalleryNavigator.cs`、`.github/`、测试文件/结果、`graphify-out/` 与 `nul` 均为既存 WIP，未纳入本次记录或准备提交。
-- 里程碑状态：M01 用户已验收；M02、M03、M04 技术验证已推进，但各自最终用户里程碑验收仍待办；M05 Scout 调研已完成，实施即将接续；M06–M08 尚未开始。M00 技术基线证据现已齐备，仍需用户明确验收；SC-021 本地 WIP 及 Unity Editor 恢复场景异常作为已记录的开放项继续保留。
+- 里程碑状态：M01 用户已验收；M02、M03、M04 技术验证已推进，但各自最终用户里程碑验收仍待办；M05 Scout 调研完成，OpenCode2 已开始在当前工作区实施单项委托，复审/Unity 验证待完成；M06–M08 尚未开始。M00 技术基线证据现已齐备，仍需用户明确验收；SC-021 本地 WIP 及 Unity Editor 恢复场景异常作为已记录的开放项继续保留。
 
 ## M00 基线核验（2026-11-08，历史快照）
 
