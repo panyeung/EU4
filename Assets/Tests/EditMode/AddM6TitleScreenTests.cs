@@ -512,6 +512,78 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
+        public void Validator_AcceptsTacticalOverlayAboveTheTitleAndStillRejectsOtherRoots()
+        {
+            Assert.That(AddM6TitleScreen.Update(_scene), Is.EqualTo(AddM6TitleScreen.UpdateResult.Success));
+            GameObject overlay = Create(AddM6TitleScreen.TacticalOverlayName, _canvas);
+            Transform root = Find(AddM6TitleScreen.RootName);
+            Assert.That(overlay.transform.GetSiblingIndex(), Is.GreaterThan(root.GetSiblingIndex()),
+                "The tactical sheet must sit above the inactive title overlay.");
+            Assert.That(AddM6TitleScreen.Validate(_scene, out string error), Is.True, error);
+
+            GameObject hudRoot = Create("M02DailyActionRoot", _canvas);
+            hudRoot.transform.SetSiblingIndex(overlay.transform.GetSiblingIndex());
+            Assert.That(hudRoot.transform.GetSiblingIndex(), Is.GreaterThan(root.GetSiblingIndex()));
+            Assert.That(overlay.transform.GetSiblingIndex(), Is.EqualTo(_canvas.childCount - 1),
+                "Only the injected gameplay root may sit between the title and the tactical sheet.");
+            Assert.That(AddM6TitleScreen.Validate(_scene, out error), Is.False,
+                "An unrelated gameplay root above the title must still be refused.");
+            Assert.That(error, Is.Not.Empty);
+
+            Object.DestroyImmediate(hudRoot);
+            Assert.That(AddM6TitleScreen.Validate(_scene, out _), Is.True);
+        }
+
+        [Test]
+        public void Validator_AcceptsTacticalOverlayWithEventChoiceRootAdjacency()
+        {
+            GameObject eventRoot = Create(AddM6TitleScreen.EventChoiceRootName, _canvas);
+            GameObject overlay = Create(AddM6TitleScreen.TacticalOverlayName, _canvas);
+            Assert.That(AddM6TitleScreen.Update(_scene), Is.EqualTo(AddM6TitleScreen.UpdateResult.Success));
+            Transform root = Find(AddM6TitleScreen.RootName);
+
+            Assert.That(root.GetSiblingIndex(), Is.EqualTo(eventRoot.transform.GetSiblingIndex() - 1),
+                "The EventChoiceRoot adjacency rule must survive the tactical overlay.");
+            Assert.That(overlay.transform.GetSiblingIndex(), Is.EqualTo(_canvas.childCount - 1));
+            Assert.That(AddM6TitleScreen.Validate(_scene, out string error), Is.True, error);
+
+            GameObject hudRoot = Create("M02DailyActionRoot", _canvas);
+            hudRoot.transform.SetSiblingIndex(overlay.transform.GetSiblingIndex());
+            Assert.That(hudRoot.transform.GetSiblingIndex(), Is.GreaterThan(root.GetSiblingIndex()));
+            Assert.That(overlay.transform.GetSiblingIndex(), Is.EqualTo(_canvas.childCount - 1));
+            Assert.That(AddM6TitleScreen.Validate(_scene, out error), Is.False,
+                "Only the exempt tactical sheet may render above the title.");
+            Assert.That(error, Does.Contain("Only EventChoiceRoot"));
+            Object.DestroyImmediate(hudRoot);
+
+            root.SetSiblingIndex(_canvas.childCount - 1);
+            Assert.That(AddM6TitleScreen.Validate(_scene, out _), Is.False,
+                "The title must not drift above EventChoiceRoot.");
+
+            root.SetSiblingIndex(eventRoot.transform.GetSiblingIndex());
+            Assert.That(AddM6TitleScreen.Validate(_scene, out _), Is.True);
+        }
+
+        [Test]
+        public void Updater_PlacesTitleBeneathTacticalOverlayWhenEventChoiceRootIsAbsent()
+        {
+            GameObject overlay = Create(AddM6TitleScreen.TacticalOverlayName, _canvas);
+
+            Assert.That(AddM6TitleScreen.Update(_scene), Is.EqualTo(AddM6TitleScreen.UpdateResult.Success));
+
+            Transform root = Find(AddM6TitleScreen.RootName);
+            Assert.That(overlay.transform.GetSiblingIndex(), Is.EqualTo(_canvas.childCount - 1),
+                "The updater must leave the tactical sheet as the last Canvas child.");
+            Assert.That(root.GetSiblingIndex(), Is.EqualTo(overlay.transform.GetSiblingIndex() - 1),
+                "The title must sit immediately beneath the tactical sheet.");
+            Assert.That(AddM6TitleScreen.Validate(_scene, out string error), Is.True, error);
+
+            root.SetAsLastSibling();
+            Assert.That(AddM6TitleScreen.Validate(_scene, out _), Is.False,
+                "The validator must refuse a title that outranks the tactical sheet.");
+        }
+
+        [Test]
         public void Updater_RefusesWrongOrDirtyScene()
         {
             Assert.That(AddM6TitleScreen.CheckScenePreflight("Assets/Scenes/Other.unity", false),

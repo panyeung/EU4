@@ -37,6 +37,12 @@ namespace SengokuChronicle.Editor
         public const string FixedScenarioButtonName = "SC013FixedScenarioButton";
         public const string DemoSummaryTextName = "M6DemoSummaryText";
         public const string EventChoiceRootName = "EventChoiceRoot";
+
+        /// <summary>
+        /// The M06 tactical sheet is a hidden canvas-level overlay that must stay the last
+        /// Canvas child, so it legitimately sits above the inactive title overlay.
+        /// </summary>
+        public const string TacticalOverlayName = TacticalMissionPanel.OverlayObjectName;
         public const string StandardSampleButtonName = "SC013StandardSampleButton";
         public const string CrisisDemoButtonName = "SC013CrisisDemoButton";
         public const string EducationDemoButtonName = "SC020EducationDemoButton";
@@ -172,24 +178,30 @@ namespace SengokuChronicle.Editor
             if (root.parent != canvas)
                 return Invalid(out error, "M6 title root must be a direct child of Canvas.");
             Transform eventRoot = canvas.Find(EventChoiceRootName);
+            Transform tacticalOverlay = canvas.Find(TacticalOverlayName);
+            if (tacticalOverlay != null && tacticalOverlay.GetSiblingIndex() < root.GetSiblingIndex())
+                return Invalid(out error,
+                    "The M06 tactical overlay must render above the M6 title root.");
             if (eventRoot != null)
             {
                 if (root.GetSiblingIndex() != eventRoot.GetSiblingIndex() - 1)
                     return Invalid(out error,
                         "M6 title root must be immediately below EventChoiceRoot when it exists.");
             }
-            else if (root.GetSiblingIndex() != canvas.childCount - 1)
+            else if (root.GetSiblingIndex() != (tacticalOverlay != null
+                ? tacticalOverlay.GetSiblingIndex() - 1
+                : canvas.childCount - 1))
             {
                 return Invalid(out error,
-                    "M6 title root must be the last Canvas child when EventChoiceRoot is absent.");
+                    "M6 title root must be the last Canvas child beneath the M06 tactical overlay when EventChoiceRoot is absent.");
             }
             for (int i = 0; i < canvas.childCount; i++)
             {
                 Transform sibling = canvas.GetChild(i);
-                if (sibling != root && sibling != eventRoot &&
+                if (sibling != root && sibling != eventRoot && sibling != tacticalOverlay &&
                     sibling.GetSiblingIndex() > root.GetSiblingIndex())
                     return Invalid(out error,
-                        "Only EventChoiceRoot may render above the full-screen M6 title overlay.");
+                        "Only EventChoiceRoot and the M06 tactical overlay may render above the full-screen M6 title overlay.");
             }
             if (root.gameObject.activeSelf)
                 return Invalid(out error, "M6 title root must be saved inactive; Play Mode shows it.");
@@ -783,8 +795,11 @@ namespace SengokuChronicle.Editor
             Undo.RegisterCompleteObjectUndo(root.parent, UndoName);
             root.SetAsLastSibling();
             Transform eventRoot = root.parent.Find(EventChoiceRootName);
+            Transform tacticalOverlay = root.parent.Find(TacticalOverlayName);
             if (eventRoot != null)
                 root.SetSiblingIndex(eventRoot.GetSiblingIndex());
+            else if (tacticalOverlay != null)
+                root.SetSiblingIndex(tacticalOverlay.GetSiblingIndex());
             EditorUtility.SetDirty(root);
             selector.gameObject.SetActive(false);
             root.gameObject.SetActive(false);
