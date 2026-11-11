@@ -247,6 +247,7 @@ M01 已于 2026-11-07 由用户明确验收通过。当前 `main` 的 `Assets/Sc
 - SC-024 保留：场景保存前后按对象名比对无删除；既有 17 处 `SC024`/`FamilyDoctrine` 匹配、`Canvas/FamilyDoctrineRoot`、`Canvas/FamilyDoctrineOpenButton`、`M6TitleRoot/SC024FamilyDoctrineDemoButton` 均保留。未修改 SC-024 的用户 WIP 文本。
 - 证据：在 Unity 6000.6.6f1（PID 90052，`C:\Users\panye\My project`）中完成；最终 `*** Tundra build success`，无 `error CS`；聚焦 EditMode 44/44 通过（`Logs/m02-ui-focused.xml`，`M02DailyActionPanelTests` 7、`M02DailyActionTests` 11、`SC010TimePauseTests` 5、`AddSC004MonthTurnControlTests` 8、`IndustryMonthCrossingTests` 13）；`FoundationSceneValidator` 为 `RESULT: PASS; Errors: 0`（`Logs/SceneValidationReport.txt`）。Play Mode 实测六人名单、两日休息的 0/2→1/2→完成、清洲→热田途中→抵达，以及单槽存档读回未完成任务；退出后 Console 徽章为 0 logs / 0 warnings / 0 errors。详细步骤与存档恢复记录见 [m02-daily-action-foundation.md](docs/archive/verification-and-research-history.md#m02-daily-action-foundation)。
 - 状态边界（截至本节记录时）：M01 为 Go/No-Go pending；M02 每日行动切片已通过 lead Play Mode gate，仍待用户明确里程碑验收；工作区含 SC-024 WIP。本状态是 2026-11-06 历史快照，M01 已于 2026-11-07 由用户验收通过。
+- 2026-11-10 Play Mode 复核：使用 Unity 6000.6.6f1（PID 126040，`-projectPath C:\Users\panye\My project`）在 `FoundationScene` 启动未保存的 SC-013 新局。训练进行中时，地图旅行被拒绝并提示先完成或中断行动；中断后反馈记录了玩家中断原因。随后从清洲旅行到热田，预览为 1 天，抵达日期为 `1560-04-02`；另一次 1 天训练于 `1560-04-03` 完成。月末边界复核安排了 30 天训练，从 `1560-04-01` 连续推进到 `1560-04-30` 时显示 `29/30`，再按「推进一天」后到达 `1560-05-01`，行动完成提示只出现一次。另一轮从 `1560-04-04` 使用「结束月份」后直接到达 `1560-05-01`。两轮退出后 Console 均显示 0 条日志、0 条警告和 0 条错误。未执行存档或读档，未改写单槽存档；Play Mode 已退出，场景仍有未保存标记且未保存。该证据未覆盖确定性与存档测试。M02 仍待用户明确里程碑验收。
 
 ## SC-004–SC-009 已接受 checkpoint
 
