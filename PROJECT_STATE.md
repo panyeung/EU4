@@ -1,6 +1,6 @@
 # 《影之一族》项目状态
 
-更新时间：2026-11-09
+更新时间：2026-11-10
 设计权威：[GDD_v4.0.md](GDD_v4.0.md)。本文件是当前执行状态入口；当前开发节点采用整合后的 `M00`–`M08` 路线；旧《Sengoku Chronicle》M1–M7 文档仅作为历史记录，不代表新方向进度。
 
 ## 当前方向
@@ -17,8 +17,8 @@
 |---|---|---|
 | M00 | 现有工程基线与验收收敛 | 技术基线已复核，里程碑验收待办：Build Profiles 当前仅列 FoundationScene（index 0）；新游戏入口 Play Mode smoke 到达 SC-013 游戏页；FoundationScene Validator PASS；全量 EditMode 1454/1454。SC-021 detached worktree 的两处本地修改继续保留。Unity Test Runner 恢复场景时另有 Editor.log IndexOutOfRangeException，未与通过测试混为一谈。 |
 | M01 | 固定三代家族可玩原型 | **已验收（2026-11-07，用户明确确认）**；当前 `main` 含 SC-024 场景接入。技术验证细节见下方历史报告，不从用户验收推断额外测试结果 |
-| M02 | 每日行动与旅行基础 | 行动输入、日推进、旅行与 GUI 存读档技术路线已验证；日期刷新、人物名册遮挡、窄屏地图/家谱布局已修复。当前工作区全量 EditMode 1386/1386、编译无 C# 错误、FoundationScene Validator PASS、独立只读复审 ACCEPT；960×720 / 1280×720 Play Mode 已检查，用户存档哈希未变。M02 最终用户里程碑验收仍待办。见 [地图验证](docs/archive/verification-and-research-history.md#world-map-immersive-ui-2026-11-09)、[名册修复](docs/archive/verification-and-research-history.md#m02-roster-rail-visibility-2026-11-09)、[M02 记录](docs/archive/verification-and-research-history.md#m02-daily-action-foundation)及 [M04A 记录](docs/archive/verification-and-research-history.md#m04a-personal-memories) |
-| M03 | 高自主 NPC 与只读 Inspector | 实现与两轮复审修正完成，待 lead Play Mode 与用户验收：纯 C# 规则、v11 存档/迁移、两名试点、逐日自主推进、只读可滚动 Inspector 与事务式场景接入；第二轮修正后历史 EditMode 1274/1274、Validator PASS；2026-11-08 全量 EditMode 1303/1303，但未取得该提交后的 M03 Validator/Play Mode 证据 |
+| M02 | 每日行动与旅行基础 | 行动输入、日推进、旅行与 GUI 存读档技术路线已验证；日期刷新、人物名册遮挡、窄屏地图/家谱布局已修复。M02 专项记录的全量 EditMode 1386/1386、编译无 C# 错误、FoundationScene Validator PASS、独立只读复审 ACCEPT 与 960×720 / 1280×720 Play Mode 均为 2026-11-09 证据；2026-11-10 当前全量 EditMode 已为 1454/1454（见 M00/M03 当前核验）。用户存档哈希未变；M02 最终用户里程碑验收仍待办。见 [地图验证](docs/archive/verification-and-research-history.md#world-map-immersive-ui-2026-11-09)、[名册修复](docs/archive/verification-and-research-history.md#m02-roster-rail-visibility-2026-11-09)、[M02 记录](docs/archive/verification-and-research-history.md#m02-daily-action-foundation)及 [M04A 记录](docs/archive/verification-and-research-history.md#m04a-personal-memories) |
+| M03 | 高自主 NPC 与只读 Inspector | 已完成获批的双 NPC 原型技术验证（2026-11-10）：当前 Editor 全量 EditMode 1454/1454；FoundationScene Validator PASS（Errors 0）；Play Mode 观察到正纲训练、信正工作、完成后自主重排及 Inspector 决策解释；Play Mode 后 Console 0/0/0。最终用户里程碑验收待办。GDD 中伤病/资源不足条件未在本切片建模或验证，见下方风险记录。 |
 | M04 | 人物记忆与动态家族 | M04A 个人行动记忆 lead 技术签收通过（2026-11-09）：有界记忆、评分修正、v12 存档/迁移与只读显示；最终聚焦 181/181、全量 1381/1381、编译、Validator、两轮独立复审与 Play Mode（含 30/31 日、GUI 存读档）通过。M04B 动态出生 lead 技术验证通过（2026-11-10）：编译成功、全量 EditMode 1446/1446、正确场景 Validator PASS（Errors 0）、妊娠与出生存读档、逐月到期出生验证通过；用户最终里程碑验收待办。详见 [M04A 验证记录](docs/archive/verification-and-research-history.md#m04a-personal-memories)、[M04B 设计稿](docs/superpowers/specs/2026-11-10-m04b-dynamic-birth-design.md)、[实施计划](docs/superpowers/plans/2026-11-10-m04b-dynamic-birth.md) 与 [M04B 验证记录](docs/reports/m04b-pregnancy-simulation.md) |
 | M05 | 经营与委托纵向切片 | 计划中 |
 | M06 | 回合制潜入原型 | 计划中 |
@@ -29,13 +29,13 @@ M01 已于 2026-11-07 由用户明确验收通过。当前 `main` 的 `Assets/Sc
 
 ## M00 当前核验（2026-11-10）
 
-- 当前 checkout：`chore/pstack-verification`，HEAD `5a873dcf947fbfa1a5cc88750dd7f4f33e299a08`，与 `origin/chore/pstack-verification` 一致；`main`/`origin/main` 为 `663a1b02a732213a4198a6d4b30b88fca748d3ee`。未切换分支或创建 worktree；主工作区已有的未提交修改和未跟踪文件均保留。
+- 当前 checkout：`chore/pstack-verification`，HEAD `bd29863bc3b0ef383b45504bd87dea78aeb868cb`，与 `origin/chore/pstack-verification` 一致；`main`/`origin/main` 为 `663a1b02a732213a4198a6d4b30b88fca748d3ee`。未切换分支或创建 worktree；主工作区已有的未提交修改和未跟踪文件均保留。
 - 启动入口：`SampleScene` 只有相机与 2D 光照；`FoundationScene` 是当前整合场景。`ProjectSettings/EditorBuildSettings.asset` 只启用 `FoundationScene`（GUID `be44f8a18fed65944b8591b78cd6d930`）。Unity Build Profiles 确认它是唯一场景且 index 0。
 - Unity：PID `126040` 的 Editor 命令行指向当前项目，版本 `6000.6.6f1`。代理 Play Mode smoke 从标题页进入“开始新游戏”、选择 SC-013 固定三代剧本并到达游戏页；随后退出 Play Mode。该 smoke 未验证存档读写，也不是用户里程碑验收。FoundationScene Validator 报告 `Loaded: True; Dirty: False`、`RESULT: PASS; Errors: 0`。
-- 自动化：当前 Editor Test Runner 全量 EditMode 为 1454/1454 passed、0 failed、0 inconclusive、0 skipped；结果文件位于 `%USERPROFILE%\AppData\LocalLow\DefaultCompany\My project\TestResults.xml`，时间 2026-11-11 00:06:55Z–00:08:49Z（当地 2026-11-10）。Unity Console 在测试结束后为 10 logs / 29 warnings / 2 errors；两条 error 是 `FamilyFormationSessionTests` 的婚姻/收养编年史故障注入用例预期记录并捕获的 `LogError`。另有 Unity Editor.log 在 `EditorSceneManager.RestoreSceneManagerSetup` 期间记录的 `IndexOutOfRangeException`，它独立于 NUnit 通过结果，原因尚未查明。
+- 自动化：当前 Editor Test Runner 全量 EditMode 为 1454/1454 passed、0 failed、0 inconclusive、0 skipped；结果文件位于 `%USERPROFILE%\AppData\LocalLow\DefaultCompany\My project\TestResults.xml`，时间 2026-11-11 00:48:24Z–00:50:20Z（当地 2026-11-10）。Unity Console 在测试结束后为 10 logs / 29 warnings / 2 errors；两条 error 对应 `FamilyFormationSessionTests` 婚姻/收养编年史故障注入用例中的 `LogAssert.Expect`，测试结果均通过。`Logs/Editor.log` 仍记录 Test Runner 调用 `EditorSceneManager.RestoreSceneManagerSetup` 时的 `IndexOutOfRangeException`；测试 XML 为全通过，FoundationScene 已恢复且场景文件未出现 Git 改动。Test Runner 底部状态仍显示 `Executing IPostBuildCleanup`，工具收尾状态需继续关注。
 - SC-021：detached worktree `C:\Users\panye\orca\workspaces\My project\sc021-scene-integration` 仍有 `.vscode/settings.json` 与 `ProjectSettings/Packages/com.unity.learn.iet-framework/Settings.json` 两处本地修改。`.vscode/settings.json` 的 diff 已读；另一文件保持原样待归属确认。没有覆盖、清理、合并或删除此 WIP。
 - 未提交工作区：除本节的 `PROJECT_STATE.md` 与启动场景设置外，`AddM02DailyActionPanel.cs`、`ReferenceGalleryNavigator.cs`、`.github/`、测试文件/结果、`graphify-out/` 与 `nul` 均为既存 WIP，未纳入本次记录或准备提交。
-- 里程碑状态：M01 用户已验收；M02、M03、M04 的实现已有不同程度的技术验证，但各自最终用户里程碑验收仍待办；M05 Scout 调研已完成，代码实现尚未开始；M06–M08 尚未开始。M00 技术基线证据现已齐备，仍需用户明确验收；SC-021 本地 WIP 及 Unity Editor 恢复场景异常作为已记录的开放项继续保留。
+- 里程碑状态：M01 用户已验收；M02、M03、M04 技术验证已推进，但各自最终用户里程碑验收仍待办；M05 Scout 调研已完成，实施即将接续；M06–M08 尚未开始。M00 技术基线证据现已齐备，仍需用户明确验收；SC-021 本地 WIP 及 Unity Editor 恢复场景异常作为已记录的开放项继续保留。
 
 ## M00 基线核验（2026-11-08，历史快照）
 
@@ -68,7 +68,7 @@ M01 已于 2026-11-07 由用户明确验收通过。当前 `main` 的 `Assets/Sc
 | SC-019 家族产业首切片 | 代码/测试/存档/编年史/场景 UI 已实现；EditMode 923/923；协调方在用户本次临时授权下完成 Play Mode 主路线；用户正式验收待办 | 农庄 + 商馆、资金/物资/情报、当前家族成年成员任命、4 单位预算与 3 单位预留、替换/解除、确定性月结、空缺/短缺/失效、两次继承交接、v6 存档与 v5 迁移、产业编年史、uGUI 面板与事务式生成器。新局 30/12/0，晴信+千恵满员结束 1560-04 得 35/13/1；日推进/旅行跨月拒绝，结束月份唯一结算。2026-11-04 独立审查后修正：产业打开按钮移出 SC-010 的 430×210 继承 HUD 覆盖区，改为左上锚定 `(20,-250)`；`AddSC019IndustryPanel.Validate` 新增与 `SuccessionHud` 实际矩形的重叠检测（保留画布内含/编年史/名册检查）；月结回滚测试新增「故障发生在事件排程消耗随机流之后，且随机流与事件运行态均恢复到结算前」的断言。本 worker 在普通 Unity Editor Test Runner 取得 **923/923**（0 失败/跳过，`2026-11-04 04:15:29Z–04:15:35Z`，`Logs/sc019-final-correction-all.xml`），编译 `error CS` 计数 0；修正前基线为 921/921。随后用既有事务式 `Repair` 保存 `FoundationScene`，`FoundationSceneValidator` 最终 `PASS; Errors: 0`（`Logs/sc019-final-correction-validator.log` / `Logs/SceneValidationReport.txt`；SC-019 与既有 SC-009 反馈条修复均通过）。OpenCode2 worker 未运行 Play Mode；协调方在用户本次临时授权下实测主路线至 1560-07-01，资源到 45/15/3，最终 Console 为 0 errors / 0 warnings / 1 info（Unity AI `NoSubscription`）；用户正式验收仍待办；未提交/推送/合并/打 tag。详见 [SC019_DEMO.md](docs/PLAYTEST_GUIDES.md#sc019-demo) 与 [sc019-implementation.md](docs/archive/verification-and-research-history.md#sc019-implementation)。 |
 | SC-021 家族研究与技艺传承 | 代码、测试源、存档迁移、编年史、固定剧本、研究面板与事务式生成器已实现；场景已接入 `FoundationScene`；Unity Tundra 编译成功、`error CS` 0，聚焦 EditMode 126/126（含新增正向 v7 JSON 迁移回归），全量 EditMode 1103/1103，SC-021 Validator PASS，Console 最近 11 条 0 errors / 4 warnings / 7 info；Play Mode 与用户验收待办 | 纯 C# 确定性项目 `research.smoke-mixing` → 家族技艺 `technique.smoke-mixing`「烟幕调制术」；需求进度 2，每次成功月结恰好消耗 1 资金 + 1 物资并推进 1；同一家族只有一个活动项目，替换研究者保留进度；研究者须为存活、当前家族、16+、未退休且未担任产业职位；短缺/失效暂停且不扣资源/不推进；完成只记录家族知识，不授予个人掌握。月结顺序为产业→研究→教育→事件→日期/提交，研究不消耗 RNG，异常时回滚资源/进度/知识/日期/事件态/随机流/编年史。存档 v7→v8、`rulesVersion` 3→4，v7 迁移初始化空研究且不补算历史。固定影山家 `1560-01-01`、`2/2/0` 资源；UI 为 `Canvas/SC021ResearchRoot` 下的 `FamilyResearchPanel` 与标题入口；载入的暂停计划若研究者已失效，面板立即显示暂停原因，无需等待月结。生成器已实际运行并保存 `FoundationScene`，SC-021 根节点、隐藏面板与标题入口均已写入；Validator 整体仍为 `FAIL; Errors: 1`，唯一错误是既有 SC-009 反馈条位置。Play Mode 由用户执行；已验证文件推送在 `panyeung/sc021-scene-integration`，未合并 `main`、未打 tag。详见 [SC021_DEMO.md](docs/PLAYTEST_GUIDES.md#sc021-demo) 与 [sc021-implementation.md](docs/archive/verification-and-research-history.md#sc021-implementation)。 |
 
-## M03 当前实现状态（2026-11-07）
+## M03 实现与验证状态（2026-11-10）
 
 - 范围：只让固定剧本的正綱（`person.sc013.masatsuna`）与信正（`person.sc013.nobumasa`）参与自主决策；候选仅限休息、训练、工作；需求、人格权重、行动时长和同分枚举顺序全部为纯整数常量。
 - 领域：`NpcAutonomyRules` 负责需求增长/完成衰减、资格/地点/行动排除、Utility 分数与稳定同分顺序；`NpcAutonomyState` 保存耐用需求，评估、状态与最多 24 条决策日志仅为会话内数据。
@@ -79,6 +79,8 @@ M01 已于 2026-11-07 由用户明确验收通过。当前 `main` 的 `Assets/Sc
 - 第二轮独立复审修正（目标 `12b52f3`）：`AdvanceDays`/月结按每个模拟日依次推进需求、行动与决策，月结仍只有一次事务；完成与每日检查分区，阻断的重规划每日只记一条；活动日刷新不再覆盖目标选择 `LatestEvaluation`，Inspector 同时显示纯诊断 `CurrentEvaluation`；继承/名册与 `ConfirmTravel` 触发 `EligibilityChanged` 并补上未登记试点拒绝路径；完成/中断保留 `LastOutcome`；诊断区改为 `ScrollRect` + 遮罩视口 + 垂直布局/内容自适应；Inspector 读取不再调用 `Ensure`/`Reconcile`；延期记录补充下次检查时机；v11 `rulesVersion` 不匹配拒绝而非静默归一，v10 迁移仍按预期升级。
 - 场景：`AddM03NpcAiInspector` 通过单个 Undo 组创建/修复 `Canvas/M03NpcAiInspectorRoot`，保存前校验，并可替换既有生成子树；`FoundationScene` 已接入一个根、一个打开按钮与滚动诊断区，`FoundationSceneValidator` 为 `RESULT: PASS; Errors: 0`。
 - 证据（2026-11-07 第二轮复审修正，Unity `6000.6.6f1`，Editor PID `90052`，项目路径 `C:\Users\panye\My project`）：删除临时自动运行脚本后最终 Tundra 编译成功且 `error CS` 0；聚焦 EditMode `140/140` 通过、全量 EditMode `1274/1274` 通过、0 失败/跳过/不确定（`Logs/m03-fix-focused.txt` 与 `Logs/m03-fix-full.txt`）；`FoundationSceneValidator` 为 `RESULT: PASS; Errors: 0`，M03 根节点恰好 1 个（`Logs/m03-fix-scene.txt`、`Logs/SceneValidationReport.txt`）。全量后 Console 为 2 errors / 25 warnings / 16 logs，两条 error 均为通过的 `FamilyFormationSessionTests` 故障注入日志。未运行 Play Mode；用户最终验收仍待办。
+- 本轮验证（2026-11-10，Unity `6000.6.6f1`，Editor PID `126040`，项目路径 `C:\Users\panye\My project`）：FoundationScene Validator 报 `Loaded: True; Dirty: False` 与 `RESULT: PASS; Errors: 0`（`Logs/SceneValidationReport.txt`，14:40:33）。随后在 SC-013 新局 `1560-04-01` 查看 Inspector：正纲执行训练、信正执行工作；诊断展示选择分数、排除原因与只读限制。推进 3 天至 `1560-04-04` 后，观察到训练和工作分别完成、完成记录写入，并自动重新规划；未保存场景或存档。Play Mode 结束后 Console 为 0 logs / 0 warnings / 0 errors。之后 Editor Test Runner 全量 EditMode 为 1454/1454 passed、0 failed / 0 inconclusive / 0 skipped（`%USERPROFILE%\AppData\LocalLow\DefaultCompany\My project\TestResults.xml`，00:48:24Z–00:50:20Z）。测试后 Console 为 10 logs / 29 warnings / 2 errors；两条 error 都有对应 `LogAssert.Expect` 的已通过婚姻/收养编年史故障注入用例。`Logs/Editor.log` 仍出现 `RestoreSceneManagerSetup` 的 `IndexOutOfRangeException`，Test Runner 页脚仍显示 `Executing IPostBuildCleanup`；虽测试 XML 通过且 FoundationScene 恢复、场景文件无 Git 改动，Unity 测试工具收尾异常仍是开放风险。
+- GDD 边界：本次验证覆盖当前获批的两名人物、休息/训练/工作、确定性与只读 Inspector 路线；项目人物模型未发现伤病状态字段，因此 GDD 验收中的“受伤时”条件尚未实现/测试。资源短缺与职责冲突也没有作为本轮 M03 独立 Play Mode 情形验证；不能据此声称覆盖了全部 M03 条件。M03 用户最终验收仍待办。
 
 ## SC-011 当前实现状态（2026-11-02）
 
