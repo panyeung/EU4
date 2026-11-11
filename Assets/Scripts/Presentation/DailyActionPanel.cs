@@ -162,63 +162,65 @@ namespace SengokuChronicle.Presentation
             UseImeSafeInputForDuration();
             OpenCount++;
             EnsureSelection();
-            // Defer InputField activation until after the page Text gets a render frame.
-            // EditMode PreviewScenes never populate that TextGenerator, so detach the
-            // label there and restore its value after binding; Play Mode keeps live text.
+            // The generated field ships with no label bound (m_TextComponent is null), so the
+            // field stays disabled until the panel is visible and the label is bound. Play
+            // Mode defers that by one frame in BindDurationInputAfterLayout; Edit Mode does
+            // not tick MonoBehaviour coroutines, so it binds synchronously instead of waiting
+            // on a frame that never runs there.
             bool previewScene = !UnityEngine.Application.isPlaying;
-            if (previewScene && durationInput != null)
+            if (durationInput != null)
             {
-                durationInput.textComponent = null;
                 durationInput.enabled = false;
-            }
-            else if (durationInput != null)
-            {
-                // On the first Play Mode frame, the page Text has not rendered yet.
-                // Enabling InputField now makes OnEnable index an empty TextGenerator.
-                durationInput.enabled = false;
+                if (previewScene)
+                    durationInput.textComponent = null;
             }
             panelRoot.SetActive(true);
-            if (durationInput != null)
+            if (previewScene)
+                BindDurationInputForPreviewScene();
+            else if (durationInput != null)
                 StartCoroutine(BindDurationInputAfterLayout());
             _feedback = SessionFeedback();
             Refresh();
         }
 
+        /// <summary>
+        /// Edit Mode binding path. Edit Mode does not tick this component's coroutines, so a
+        /// deferred bind would never run there: bind the label, enable the field with the
+        /// value cleared, and restore the value through SetDuration's detached-label path.
+        /// </summary>
+        private void BindDurationInputForPreviewScene()
+        {
+            if (!IsOpen || durationInput == null)
+                return;
+            BindDurationLabel();
+            string value = durationInput.text;
+            durationInput.text = string.Empty;
+            durationInput.enabled = true;
+            SetDuration(value);
+        }
+
         private IEnumerator BindDurationInputAfterLayout()
         {
-            if (UnityEngine.Application.isPlaying)
-                yield return new WaitForEndOfFrame();
-            else
-                yield return null;
+            yield return new WaitForEndOfFrame();
             if (!IsOpen || durationInput == null)
                 yield break;
 
+            BindDurationLabel();
+            // Play Mode renders the label, so enabling it updates in place and the text is
+            // left untouched; rewriting the value here would only reset the field's text
+            // bookkeeping. Only the text survives this path, not the caret or selection: the
+            // hide that closed the panel ran DeactivateInputField, which clears both while
+            // the reopened field is unfocused, and a click places the caret again.
+            durationInput.enabled = true;
+        }
+
+        private void BindDurationLabel()
+        {
             // Bind the label once. Reassigning textComponent unregisters and then
             // re-registers InputField's label callbacks, so only fill a missing binding.
             if (durationInput.textComponent == null)
                 durationInput.textComponent =
                     durationInput.transform.Find("Text")?.GetComponent<Text>();
-
-            if (UnityEngine.Application.isPlaying)
-            {
-                // Play Mode renders the label, so OnEnable can rebuild it normally. Do not
-                // clear and restore the value here: writing text resets InputField's caret
-                // bookkeeping, and a later Append(char) with an active selection then slices
-                // past m_Text and throws ArgumentOutOfRangeException. Enabling preserves the
-                // live text, caret and selection.
-                durationInput.enabled = true;
-                yield break;
-            }
-
-            // InputField.OnEnable -> UpdateLabel -> SetDrawRangeToContainCaretPosition
-            // indexes the generated character list. A PreviewScene never renders the
-            // Text, so that list stays empty and non-empty text throws
-            // ArgumentOutOfRangeException. Enabling with empty text skips that path;
-            // SetDuration restores the value through its detached-textComponent path.
-            string value = durationInput.text;
-            durationInput.text = string.Empty;
-            durationInput.enabled = true;
-            SetDuration(value);
         }
 
         public void Close()
