@@ -510,6 +510,33 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(FindAll(AddM02DailyActionPanel.BackdropName).Length, Is.EqualTo(1));
         }
 
+        [Test]
+        public void Generator_KeepsTheTacticalOverlayAboveTheTitleAndEventOverlays()
+        {
+            Transform canvas = Find("Canvas");
+            Transform eventRoot = Find("EventChoiceRoot");
+            eventRoot.SetParent(canvas, false);
+            GameObject title = Create("M6TitleRoot", canvas);
+            GameObject overlay = Create("M6TacticalMissionOverlay", canvas);
+
+            // Force the transactional rebuild instead of the idempotent early return.
+            Find(AddM02DailyActionPanel.RootName).gameObject.SetActive(false);
+            Assert.That(AddM02DailyActionPanel.Update(_scene),
+                Is.EqualTo(AddM02DailyActionPanel.UpdateResult.Success));
+
+            Transform root = Find(AddM02DailyActionPanel.RootName);
+            Assert.That(root.gameObject.activeSelf, Is.True);
+            Assert.That(AddM02DailyActionPanel.Validate(_scene, out string error), Is.True, error);
+            Assert.That(root.GetSiblingIndex(), Is.LessThan(title.transform.GetSiblingIndex()),
+                "the M02 page must render beneath the title overlay");
+            Assert.That(title.transform.GetSiblingIndex(), Is.LessThan(eventRoot.GetSiblingIndex()),
+                "the title overlay must render beneath EventChoiceRoot");
+            Assert.That(eventRoot.GetSiblingIndex(), Is.LessThan(overlay.transform.GetSiblingIndex()),
+                "the M06 tactical sheet is not a gameplay root and must stay above the overlays");
+            Assert.That(overlay.transform.GetSiblingIndex(), Is.EqualTo(canvas.childCount - 1),
+                "the tactical sheet must remain the last Canvas child");
+        }
+
         [UnityTest]
         public IEnumerator Panel_BindsDurationInputAfterActivatingItsText()
         {

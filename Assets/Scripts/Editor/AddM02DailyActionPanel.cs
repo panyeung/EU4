@@ -120,6 +120,7 @@ namespace SengokuChronicle.Editor
         private const string FormationRootName = "SC022FamilyFormationRoot";
         private const string TitleRootName = "M6TitleRoot";
         private const string EventRootName = "EventChoiceRoot";
+        private const string TacticalOverlayName = AddM6TitleScreen.TacticalOverlayName;
         private const string InspectorRootName = "M03NpcAiInspectorRoot";
         private const string UndoName = "Add M02 Daily Action Panel";
 
@@ -1795,7 +1796,7 @@ namespace SengokuChronicle.Editor
             {
                 if (child == target || child.name == RootName ||
                     child.name == InspectorRootName || child.name == TitleRootName ||
-                    child.name == EventRootName)
+                    child.name == EventRootName || child.name == TacticalOverlayName)
                     continue;
                 child.SetSiblingIndex(next++);
             }
@@ -1809,6 +1810,9 @@ namespace SengokuChronicle.Editor
             Transform eventRoot = canvas.Find(EventRootName);
             if (eventRoot != null)
                 eventRoot.SetSiblingIndex(next++);
+            Transform tacticalOverlay = canvas.Find(TacticalOverlayName);
+            if (tacticalOverlay != null)
+                tacticalOverlay.SetSiblingIndex(next++);
         }
 
         private static bool IsReplaceableGeneratedRoot(Scene scene, Transform root)
