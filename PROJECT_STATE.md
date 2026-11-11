@@ -15,7 +15,7 @@
 
 | 节点 | 方向 | 当前状态 |
 |---|---|---|
-| M00 | 现有工程基线与验收收敛 | 进行中：当前 FoundationScene 的 Validator/Play Mode 已分别补入 M02、M04A 报告；历史 detached SC-021 WIP 与启动/演示场景入口仍待整体收敛，不从局部切片验证推断 M00 已完成 |
+| M00 | 现有工程基线与验收收敛 | 技术基线已复核，里程碑验收待办：Build Profiles 当前仅列 FoundationScene（index 0）；新游戏入口 Play Mode smoke 到达 SC-013 游戏页；FoundationScene Validator PASS；全量 EditMode 1454/1454。SC-021 detached worktree 的两处本地修改继续保留。Unity Test Runner 恢复场景时另有 Editor.log IndexOutOfRangeException，未与通过测试混为一谈。 |
 | M01 | 固定三代家族可玩原型 | **已验收（2026-11-07，用户明确确认）**；当前 `main` 含 SC-024 场景接入。技术验证细节见下方历史报告，不从用户验收推断额外测试结果 |
 | M02 | 每日行动与旅行基础 | 行动输入、日推进、旅行与 GUI 存读档技术路线已验证；日期刷新、人物名册遮挡、窄屏地图/家谱布局已修复。当前工作区全量 EditMode 1386/1386、编译无 C# 错误、FoundationScene Validator PASS、独立只读复审 ACCEPT；960×720 / 1280×720 Play Mode 已检查，用户存档哈希未变。M02 最终用户里程碑验收仍待办。见 [地图验证](docs/archive/verification-and-research-history.md#world-map-immersive-ui-2026-11-09)、[名册修复](docs/archive/verification-and-research-history.md#m02-roster-rail-visibility-2026-11-09)、[M02 记录](docs/archive/verification-and-research-history.md#m02-daily-action-foundation)及 [M04A 记录](docs/archive/verification-and-research-history.md#m04a-personal-memories) |
 | M03 | 高自主 NPC 与只读 Inspector | 实现与两轮复审修正完成，待 lead Play Mode 与用户验收：纯 C# 规则、v11 存档/迁移、两名试点、逐日自主推进、只读可滚动 Inspector 与事务式场景接入；第二轮修正后历史 EditMode 1274/1274、Validator PASS；2026-11-08 全量 EditMode 1303/1303，但未取得该提交后的 M03 Validator/Play Mode 证据 |
@@ -27,7 +27,17 @@
 
 M01 已于 2026-11-07 由用户明确验收通过。当前 `main` 的 `Assets/Scenes/FoundationScene.unity` 已包含 SC-024 场景接入（`SC024`/`FamilyDoctrine` 匹配 18 处）；最新 HUD 修复提交为 `18c7b4c`。用户验收记录不替代也不扩写技术证据：SC-024 历史编译、EditMode、Validator 与 Play Mode 结果及各自限制见 [SC-024 实现报告](docs/archive/verification-and-research-history.md#sc024-implementation)；M7 HUD 修复的检查结果单独记录于提交与任务记录。下方标注为 2026-11-06 的 SC-024、M02 内容保留为当时快照，不代表当前场景或验收状态。
 
-## M00 基线核验（2026-11-08）
+## M00 当前核验（2026-11-10）
+
+- 当前 checkout：`chore/pstack-verification`，HEAD `5a873dcf947fbfa1a5cc88750dd7f4f33e299a08`，与 `origin/chore/pstack-verification` 一致；`main`/`origin/main` 为 `663a1b02a732213a4198a6d4b30b88fca748d3ee`。未切换分支或创建 worktree；主工作区已有的未提交修改和未跟踪文件均保留。
+- 启动入口：`SampleScene` 只有相机与 2D 光照；`FoundationScene` 是当前整合场景。`ProjectSettings/EditorBuildSettings.asset` 只启用 `FoundationScene`（GUID `be44f8a18fed65944b8591b78cd6d930`）。Unity Build Profiles 确认它是唯一场景且 index 0。
+- Unity：PID `126040` 的 Editor 命令行指向当前项目，版本 `6000.6.6f1`。代理 Play Mode smoke 从标题页进入“开始新游戏”、选择 SC-013 固定三代剧本并到达游戏页；随后退出 Play Mode。该 smoke 未验证存档读写，也不是用户里程碑验收。FoundationScene Validator 报告 `Loaded: True; Dirty: False`、`RESULT: PASS; Errors: 0`。
+- 自动化：当前 Editor Test Runner 全量 EditMode 为 1454/1454 passed、0 failed、0 inconclusive、0 skipped；结果文件位于 `%USERPROFILE%\AppData\LocalLow\DefaultCompany\My project\TestResults.xml`，时间 2026-11-11 00:06:55Z–00:08:49Z（当地 2026-11-10）。Unity Console 在测试结束后为 10 logs / 29 warnings / 2 errors；两条 error 是 `FamilyFormationSessionTests` 的婚姻/收养编年史故障注入用例预期记录并捕获的 `LogError`。另有 Unity Editor.log 在 `EditorSceneManager.RestoreSceneManagerSetup` 期间记录的 `IndexOutOfRangeException`，它独立于 NUnit 通过结果，原因尚未查明。
+- SC-021：detached worktree `C:\Users\panye\orca\workspaces\My project\sc021-scene-integration` 仍有 `.vscode/settings.json` 与 `ProjectSettings/Packages/com.unity.learn.iet-framework/Settings.json` 两处本地修改。`.vscode/settings.json` 的 diff 已读；另一文件保持原样待归属确认。没有覆盖、清理、合并或删除此 WIP。
+- 未提交工作区：除本节的 `PROJECT_STATE.md` 与启动场景设置外，`AddM02DailyActionPanel.cs`、`ReferenceGalleryNavigator.cs`、`.github/`、测试文件/结果、`graphify-out/` 与 `nul` 均为既存 WIP，未纳入本次记录或准备提交。
+- 里程碑状态：M01 用户已验收；M02、M03、M04 的实现已有不同程度的技术验证，但各自最终用户里程碑验收仍待办；M05 Scout 调研已完成，代码实现尚未开始；M06–M08 尚未开始。M00 技术基线证据现已齐备，仍需用户明确验收；SC-021 本地 WIP 及 Unity Editor 恢复场景异常作为已记录的开放项继续保留。
+
+## M00 基线核验（2026-11-08，历史快照）
 
 - Git：当前 checkout 为 `main`，HEAD 与 `origin/main` 同为 `e298312c5100de9f715e7d74c6ad8e0930e02a65`（`Integrate reference gallery and daily actions`）；本地/远端分支列表只有 `main`。主工作树无已跟踪文件修改，尚有旧失败报告 `Assets/Scenes/TestResults_20261108_072929.xml` 及其 `.meta`、`graphify-out/` 和 `nul` 未跟踪；均保留且未纳入已推送提交。
 - 工作树：Git 与 Orca 均登记一个额外的 SC-021 场景集成工作树 `C:\Users\panye\orca\workspaces\My project\sc021-scene-integration`，HEAD `66373ee`，处于 detached 状态。该工作树的 `.vscode/settings.json` 与 `ProjectSettings/Packages/com.unity.learn.iet-framework/Settings.json` 有未提交修改；本轮未触碰或清理。它是 M00 尚未收敛的开放 WIP，不等于 Git 分支。
