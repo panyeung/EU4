@@ -80,10 +80,10 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(entry.Title, Is.EqualTo("产业月结"));
             Assert.That(entry.SourceId, Is.EqualTo("settlement"));
             Assert.That(entry.FromValue, Is.EqualTo(30));
-            Assert.That(entry.ToValue, Is.EqualTo(32));
+            Assert.That(entry.ToValue, Is.EqualTo(31));
             Assert.That(entry.Year, Is.EqualTo(1560));
             Assert.That(entry.Month, Is.EqualTo(4));
-            Assert.That(entry.Summary, Does.Contain("净 +2资金/+3物资"));
+            Assert.That(entry.Summary, Does.Contain("净 +1资金/+3物资"));
             Assert.That(_session.ChronicleEntries.Count(e => e.SubjectId == "industry.monthly"),
                 Is.EqualTo(1));
         }
@@ -154,7 +154,7 @@ namespace SengokuChronicle.Tests.EditMode
             panel.Refresh();
 
             Assert.That(panel.RowText(0), Does.Contain("产业"));
-            Assert.That(panel.RowText(0), Does.Contain("资金 30 → 32"));
+            Assert.That(panel.RowText(0), Does.Contain("资金 30 → 31"));
         }
 
         [Test]

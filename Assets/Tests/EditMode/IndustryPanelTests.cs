@@ -273,7 +273,7 @@ namespace SengokuChronicle.Tests.EditMode
             panel.Refresh();
 
             Assert.That(panel.ReportLine, Does.Contain("月末"));
-            Assert.That(panel.ReportLine, Does.Contain("32"));
+            Assert.That(panel.ReportLine, Does.Contain("31"));
         }
     }
 }

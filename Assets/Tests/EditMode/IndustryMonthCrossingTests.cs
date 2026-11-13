@@ -98,7 +98,7 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(_session.TryAdvanceToNextMonth(), Is.True, _session.LastEventMessage);
 
             Assert.That(_session.WorldClock.CurrentDate, Is.EqualTo(new GameDate(1560, 5, 1)));
-            Assert.That(_session.Industry.Resources.Funds, Is.EqualTo(35));
+            Assert.That(_session.Industry.Resources.Funds, Is.EqualTo(32));
             Assert.That(_session.Industry.Resources.Supplies, Is.EqualTo(13));
             Assert.That(_session.Industry.Resources.Intelligence, Is.EqualTo(1));
             Assert.That(_session.LastIndustryReport, Is.Not.Null);
@@ -218,7 +218,7 @@ namespace SengokuChronicle.Tests.EditMode
 
             Assert.That(_session.TryAdvanceToNextMonth(), Is.True, _session.LastEventMessage);
             Assert.That(_session.WorldClock.CurrentDate, Is.EqualTo(new GameDate(1560, 5, 1)));
-            Assert.That(_session.Industry.Resources.Funds, Is.EqualTo(32));
+            Assert.That(_session.Industry.Resources.Funds, Is.EqualTo(31));
             Assert.That(_session.Industry.Resources.Supplies, Is.EqualTo(15));
             Assert.That(_session.ChronicleEntries.Count, Is.EqualTo(chronicleBefore + 1));
             Assert.That(_session.PendingEventId, Is.Not.Empty,

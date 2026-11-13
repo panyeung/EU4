@@ -24,7 +24,7 @@ namespace SengokuChronicle.Tests.EditMode
         {
             MarketSettlementResult result = Settle(
                 Market(2), 10, 12, Household(6),
-                IndustryReport(12, 0, 12, 0));
+                0, 12, 0);
 
             Assert.That(result.Report.HouseholdMembers, Is.EqualTo(6));
             Assert.That(result.Report.FoodDemand, Is.EqualTo(2));
@@ -33,7 +33,8 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(result.Report.FoodBillFunds, Is.EqualTo(2));
             Assert.That(result.Report.FoodInventoryAfter, Is.Zero);
             Assert.That(result.NextResources.Funds, Is.EqualTo(8));
-            Assert.That(result.NextResources.Supplies, Is.EqualTo(12));
+            Assert.That(result.NextResources.Supplies, Is.Zero,
+                "the balanced materials month consumed its whole stock");
             Assert.That(result.NextMarket.FoodPriceIndexPermille, Is.EqualTo(1000));
             Assert.That(result.NextMarket.MaterialsPriceIndexPermille, Is.EqualTo(1000));
             Assert.That(result.Report.HasShortage, Is.False);
@@ -46,7 +47,7 @@ namespace SengokuChronicle.Tests.EditMode
         {
             MarketSettlementResult result = Settle(
                 Market(0), 100, 12, Household(6),
-                IndustryReport(12, 0, 12, 0));
+                0, 12, 0);
 
             Assert.That(result.Report.FoodAvailable, Is.Zero);
             Assert.That(result.Report.FoodPurchased, Is.Zero);
@@ -65,7 +66,7 @@ namespace SengokuChronicle.Tests.EditMode
         {
             MarketSettlementResult result = Settle(
                 Market(10, shortageMonths: 2), 5, 12, Household(0),
-                IndustryReport(12, 0, 12, 0));
+                0, 12, 0);
 
             Assert.That(result.Report.HouseholdMembers, Is.Zero);
             Assert.That(result.Report.FoodDemand, Is.Zero);
@@ -83,7 +84,7 @@ namespace SengokuChronicle.Tests.EditMode
         {
             MarketSettlementResult result = Settle(
                 Market(1), 100, 12, Household(6),
-                IndustryReport(12, 0, 12, 0));
+                0, 12, 0);
 
             Assert.That(result.Report.FoodPurchased, Is.EqualTo(1));
             Assert.That(result.Report.FoodUnmet, Is.EqualTo(1));
@@ -98,7 +99,7 @@ namespace SengokuChronicle.Tests.EditMode
         {
             MarketSettlementResult result = Settle(
                 Market(20), 100, 12, Household(6),
-                IndustryReport(12, 0, 12, 0));
+                0, 12, 0);
 
             Assert.That(result.Report.FoodPurchased, Is.EqualTo(2));
             Assert.That(result.NextMarket.FoodInventory, Is.EqualTo(18));
@@ -112,7 +113,7 @@ namespace SengokuChronicle.Tests.EditMode
         {
             MarketSettlementResult result = Settle(
                 Market(10, shortageMonths: 2), 100, 12, Household(6),
-                IndustryReport(12, 0, 12, 0));
+                0, 12, 0);
 
             Assert.That(result.NextMarket.ConsecutiveFoodShortageMonths, Is.Zero);
         }
@@ -122,7 +123,7 @@ namespace SengokuChronicle.Tests.EditMode
         {
             MarketSettlementResult result = Settle(
                 Market(0, foodIndex: MarketState.MaximumPriceIndexPermille), 999999, 12,
-                Household(6), IndustryReport(12, 0, 12, 0));
+                Household(6), 0, 12, 0);
 
             Assert.That(result.NextMarket.FoodPriceIndexPermille,
                 Is.EqualTo(MarketState.MaximumPriceIndexPermille));
@@ -135,7 +136,7 @@ namespace SengokuChronicle.Tests.EditMode
         {
             MarketSettlementResult result = Settle(
                 Market(100, foodIndex: MarketState.MinimumPriceIndexPermille), 999999, 12,
-                Household(6), IndustryReport(12, 0, 12, 0));
+                Household(6), 0, 12, 0);
 
             Assert.That(result.NextMarket.FoodPriceIndexPermille,
                 Is.EqualTo(MarketState.MinimumPriceIndexPermille));
@@ -145,9 +146,9 @@ namespace SengokuChronicle.Tests.EditMode
         public void Plan_MonthlyMovementIsCappedInBothDirections()
         {
             MarketSettlementResult deficit = Settle(
-                Market(0), 999999, 12, Household(6), IndustryReport(12, 0, 12, 0));
+                Market(0), 999999, 12, Household(6), 0, 12, 0);
             MarketSettlementResult surplus = Settle(
-                Market(100), 999999, 12, Household(6), IndustryReport(12, 0, 12, 0));
+                Market(100), 999999, 12, Household(6), 0, 12, 0);
 
             Assert.That(deficit.Report.Food.MovementPermille, Is.EqualTo(100));
             Assert.That(surplus.Report.Food.MovementPermille, Is.EqualTo(-100));
@@ -159,7 +160,7 @@ namespace SengokuChronicle.Tests.EditMode
             // Materials: 10 consumed vs 11 available -> −91‰ pressure -> −22‰ movement -> 978‰.
             MarketSettlementResult result = Settle(
                 Market(10), 100, 11, Household(6),
-                IndustryReport(11, 0, 10, 0));
+                0, 10, 0);
 
             Assert.That(result.Report.Materials.PressurePermille, Is.EqualTo(-91));
             Assert.That(result.Report.Materials.MovementPermille, Is.EqualTo(-22));
@@ -173,7 +174,7 @@ namespace SengokuChronicle.Tests.EditMode
             // 2 units at 1250‰ = 2.5 funds, half-up to 3.
             MarketSettlementResult result = Settle(
                 Market(5, foodIndex: 1250), 3, 12, Household(6),
-                IndustryReport(12, 0, 12, 0));
+                0, 12, 0);
 
             Assert.That(result.Report.FoodPurchased, Is.EqualTo(2));
             Assert.That(result.Report.FoodBillFunds, Is.EqualTo(3));
@@ -186,7 +187,7 @@ namespace SengokuChronicle.Tests.EditMode
             // One affordable unit at 1250‰ costs 1; the second would cost 3 total.
             MarketSettlementResult result = Settle(
                 Market(5, foodIndex: 1250), 2, 12, Household(6),
-                IndustryReport(12, 0, 12, 0));
+                0, 12, 0);
 
             Assert.That(result.Report.FoodPurchased, Is.EqualTo(1));
             Assert.That(result.Report.FoodUnmet, Is.EqualTo(1));
@@ -200,7 +201,7 @@ namespace SengokuChronicle.Tests.EditMode
         public void Plan_ZeroFundsBuysNothingAndStaysAtZero()
         {
             MarketSettlementResult result = Settle(
-                Market(5), 0, 12, Household(6), IndustryReport(12, 0, 12, 0));
+                Market(5), 0, 12, Household(6), 0, 12, 0);
 
             Assert.That(result.Report.FoodPurchased, Is.Zero);
             Assert.That(result.Report.FoodUnmet, Is.EqualTo(2));
@@ -229,7 +230,7 @@ namespace SengokuChronicle.Tests.EditMode
         {
             MarketSettlementResult result = Settle(
                 Market(10), 100, 12, Household(5, 4),
-                IndustryReport(12, 0, 12, 0));
+                0, 12, 0);
 
             Assert.That(result.Report.HouseholdMembers, Is.EqualTo(5));
             Assert.That(result.Report.FoodDemand, Is.EqualTo(1));
@@ -254,8 +255,9 @@ namespace SengokuChronicle.Tests.EditMode
             IndustryResources.TryCreate(50, 12, 4, out IndustryResources resources, out string error);
             Assert.That(error, Is.Empty);
 
-            MarketSettlementResult result = MarketSettlement.Plan(market, resources, Household(6),
-                IndustryReport(12, 0, 12, 0), Start);
+            IndustryMonthReport industryReport = IndustryReport(resources, 0, 0, 0);
+            MarketSettlementResult result = MarketSettlement.Plan(market, industryReport.After,
+                Household(6), industryReport, Start);
 
             Assert.That(result.Succeeded, Is.True, result.Message);
             Assert.That(result.NextMarket, Is.Not.SameAs(market));
@@ -274,7 +276,7 @@ namespace SengokuChronicle.Tests.EditMode
         public void Plan_SettlesGoodsInStableOrder()
         {
             MarketSettlementResult result = Settle(
-                Market(10), 100, 12, Household(6), IndustryReport(12, 4, 3, 4));
+                Market(10), 100, 12, Household(6), 4, 3, 4);
 
             Assert.That(result.Report.Lines.Count, Is.EqualTo(2));
             Assert.That(result.Report.Lines[0].GoodId, Is.EqualTo(MarketState.FoodGoodId));
@@ -287,7 +289,7 @@ namespace SengokuChronicle.Tests.EditMode
         public void Plan_MaterialsUseIndustryOutputAndMissingInputOnly()
         {
             MarketSettlementResult result = Settle(
-                Market(10), 100, 13, Household(6), IndustryReport(12, 4, 3, 4));
+                Market(10), 100, 12, Household(6), 4, 3, 4);
 
             Assert.That(result.Report.MaterialsProduced, Is.EqualTo(4));
             Assert.That(result.Report.MaterialsConsumed, Is.EqualTo(3));
@@ -307,7 +309,7 @@ namespace SengokuChronicle.Tests.EditMode
         {
             MarketSettlementResult result = Settle(
                 Market(2, foodIndex: 1101, materialsIndex: 1000), 100, 12, Household(6),
-                IndustryReport(12, 0, 12, 0));
+                0, 12, 0);
 
             Assert.That(result.NextMarket.FoodPriceIndexPermille, Is.EqualTo(1101));
             Assert.That(result.NextMarket.MaterialsPriceIndexPermille, Is.EqualTo(1000));
@@ -334,7 +336,7 @@ namespace SengokuChronicle.Tests.EditMode
                 out MarketState market, out string error), Is.True, error);
 
             MarketSettlementResult result = Settle(market, 100, 12, Household(6),
-                IndustryReport(12, 0, 12, 0));
+                0, 12, 0);
 
             Assert.That(result.NextMarket.RecentCompositeIndices.Count,
                 Is.EqualTo(MarketState.CompositeHistoryCapacity));
@@ -351,8 +353,9 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(MarketState.TryCreate(10, 1000, 1000, StartMonthIndex, 0, null,
                 out MarketState settled, out string error), Is.True, error);
 
+            IndustryMonthReport industryReport = IndustryReport(Resources(100, 12), 0, 0, 0);
             MarketSettlementResult result = MarketSettlement.Plan(settled,
-                Resources(100, 12), Household(6), IndustryReport(12, 0, 12, 0), Start);
+                industryReport.After, Household(6), industryReport, Start);
 
             Assert.That(result.Succeeded, Is.False);
             Assert.That(result.Outcome, Is.EqualTo(MarketSettlementOutcome.AlreadySettled));
@@ -365,8 +368,9 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(MarketState.TryCreate(10, 1000, 1000, StartMonthIndex - 2, 0, null,
                 out MarketState gap, out string error), Is.True, error);
 
-            MarketSettlementResult result = MarketSettlement.Plan(gap, Resources(100, 12),
-                Household(6), IndustryReport(12, 0, 12, 0), Start);
+            IndustryMonthReport industryReport = IndustryReport(Resources(100, 12), 0, 0, 0);
+            MarketSettlementResult result = MarketSettlement.Plan(gap, industryReport.After,
+                Household(6), industryReport, Start);
 
             Assert.That(result.Succeeded, Is.False);
             Assert.That(result.Outcome, Is.EqualTo(MarketSettlementOutcome.SettlementGap));
@@ -395,6 +399,120 @@ namespace SengokuChronicle.Tests.EditMode
                     new MarketIndexPoint(StartMonthIndex - 2, 1000),
                     new MarketIndexPoint(StartMonthIndex - 2, 1000)
                 }, out _, out _), Is.False, "history months must strictly increase");
+        }
+
+        [Test]
+        public void Plan_ZeroMaterialStockWithAppointedIndustryRaisesPriceAndReportsUnmetInput()
+        {
+            SuccessionState succession = M2FixedScenario.CreateSuccession();
+            IndustryState state = IndustryState.CreateInitial(Start);
+            IndustryResources.TryCreate(100, 0, 0, out IndustryResources opening, out string error);
+            Assert.That(error, Is.Empty);
+            state.TrySetResources(opening, out _);
+            IndustryService.TryAssign(state, succession, Start, IndustryCatalog.TradingHouseId, Chie);
+
+            IndustrySettlementResult industry = IndustrySettlement.Plan(state, succession, Start);
+            Assert.That(industry.Succeeded, Is.True, industry.Message);
+            Assert.That(industry.Report.Lines[1].Status, Is.EqualTo(IndustryLineStatus.Stalled));
+            Assert.That(industry.Report.Lines[1].RequiredSupplies, Is.EqualTo(2));
+
+            MarketSettlementResult result = MarketSettlement.Plan(Market(10),
+                industry.NextState.Resources, succession, industry.Report, Start);
+
+            Assert.That(result.Succeeded, Is.True, result.Message);
+            Assert.That(result.Report.MaterialsRequired, Is.EqualTo(2));
+            Assert.That(result.Report.Materials.AvailableSupply, Is.Zero);
+            Assert.That(result.Report.Materials.SettledQuantity, Is.Zero);
+            Assert.That(result.Report.Materials.UnmetDemand, Is.EqualTo(2),
+                "a stalled appointment leaves required input unmet");
+            Assert.That(result.Report.Materials.PressurePermille, Is.EqualTo(1000));
+            Assert.That(result.Report.Materials.MovementPermille, Is.EqualTo(100));
+            Assert.That(result.NextMarket.MaterialsPriceIndexPermille, Is.EqualTo(1100),
+                "material scarcity must raise the price");
+            Assert.That(result.Report.MaterialsConsumed, Is.Zero,
+                "required input stays distinct from actual consumption");
+        }
+
+        [Test]
+        public void Plan_InsufficientMaterialStockRaisesPriceAndReportsUnmetInput()
+        {
+            SuccessionState succession = M2FixedScenario.CreateSuccession();
+            IndustryState state = IndustryState.CreateInitial(Start);
+            IndustryResources.TryCreate(100, 1, 0, out IndustryResources opening, out string error);
+            Assert.That(error, Is.Empty);
+            state.TrySetResources(opening, out _);
+            IndustryService.TryAssign(state, succession, Start, IndustryCatalog.TradingHouseId, Chie);
+
+            IndustrySettlementResult industry = IndustrySettlement.Plan(state, succession, Start);
+            Assert.That(industry.Report.Lines[1].Status, Is.EqualTo(IndustryLineStatus.Stalled),
+                "one unit cannot cover the trading house's two-unit input");
+
+            MarketSettlementResult result = MarketSettlement.Plan(Market(10),
+                industry.NextState.Resources, succession, industry.Report, Start);
+
+            Assert.That(result.Report.Materials.AvailableSupply, Is.EqualTo(1));
+            Assert.That(result.Report.Materials.Demand, Is.EqualTo(2));
+            Assert.That(result.Report.Materials.UnmetDemand, Is.EqualTo(2));
+            Assert.That(result.Report.Materials.PressurePermille, Is.EqualTo(500));
+            Assert.That(result.Report.Materials.MovementPermille, Is.EqualTo(100));
+            Assert.That(result.NextMarket.MaterialsPriceIndexPermille, Is.EqualTo(1100));
+        }
+
+        [Test]
+        public void Plan_OperatingFarmKeepsOwnOutputMaintenanceWithoutDoubleCounting()
+        {
+            SuccessionState succession = M2FixedScenario.CreateSuccession();
+            IndustryState state = IndustryState.CreateInitial(Start);
+            IndustryResources.TryCreate(100, 0, 0, out IndustryResources opening, out string error);
+            Assert.That(error, Is.Empty);
+            state.TrySetResources(opening, out _);
+            IndustryService.TryAssign(state, succession, Start, IndustryCatalog.FarmId, Harunobu);
+
+            IndustrySettlementResult industry = IndustrySettlement.Plan(state, succession, Start);
+            Assert.That(industry.Report.Lines[0].Status, Is.EqualTo(IndustryLineStatus.Operated));
+            Assert.That(industry.Report.Lines[0].RequiredSupplies, Is.EqualTo(1));
+            Assert.That(industry.Report.Lines[0].UpkeepSupplies, Is.EqualTo(1));
+            Assert.That(industry.Report.Lines[0].GrossOutputSupplies, Is.EqualTo(4));
+
+            MarketSettlementResult result = MarketSettlement.Plan(Market(10),
+                industry.NextState.Resources, succession, industry.Report, Start);
+
+            Assert.That(result.Report.Materials.Demand, Is.EqualTo(1),
+                "the farm's retained unit is its only requirement");
+            Assert.That(result.Report.Materials.AvailableSupply, Is.EqualTo(4));
+            Assert.That(result.Report.Materials.SettledQuantity, Is.EqualTo(1));
+            Assert.That(result.Report.Materials.UnmetDemand, Is.Zero);
+            Assert.That(result.Report.Materials.PressurePermille, Is.EqualTo(-750));
+        }
+
+        [Test]
+        public void Plan_BalancedMonthStillReportsChangedBecauseTheMonthAdvanced()
+        {
+            MarketSettlementResult result = Settle(Market(0), 0, 0, Household(0), 0, 0, 0);
+
+            Assert.That(result.Report.FoodInventoryAfter, Is.EqualTo(result.Report.FoodInventoryBefore));
+            Assert.That(result.NextMarket.FoodPriceIndexPermille, Is.EqualTo(1000));
+            Assert.That(result.NextMarket.MaterialsPriceIndexPermille, Is.EqualTo(1000));
+            Assert.That(result.NextResources, Is.EqualTo(result.Report.ResourcesBefore));
+            Assert.That(result.Report.Changed, Is.True,
+                "the settled month and its composite history still advanced");
+            Assert.That(result.NextMarket.LastSettledMonthIndex, Is.EqualTo(StartMonthIndex));
+            Assert.That(result.NextMarket.RecentCompositeIndices.Count, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void Plan_ResourcesMismatchWithIndustryReport_IsRejected()
+        {
+            IndustryMonthReport industryReport = IndustryReport(Resources(100, 12), 0, 0, 0);
+
+            MarketSettlementResult result = MarketSettlement.Plan(Market(10),
+                Resources(100, 11), Household(6), industryReport, Start);
+
+            Assert.That(result.Succeeded, Is.False);
+            Assert.That(result.Outcome, Is.EqualTo(MarketSettlementOutcome.InvalidState));
+            Assert.That(result.Message, Does.Contain("不一致"));
+            Assert.That(result.NextResources.Supplies, Is.EqualTo(11),
+                "the rejected plan never substitutes one snapshot for another");
         }
 
         [Test]
@@ -440,9 +558,11 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         private static MarketSettlementResult Settle(MarketState market, int funds, int supplies,
-            SuccessionState succession, IndustryMonthReport industryReport)
+            SuccessionState succession, int materialsProduced, int materialsConsumed, int foodProduced)
         {
-            MarketSettlementResult result = MarketSettlement.Plan(market, Resources(funds, supplies),
+            IndustryMonthReport industryReport = IndustryReport(Resources(funds, supplies),
+                materialsProduced, materialsConsumed, foodProduced);
+            MarketSettlementResult result = MarketSettlement.Plan(market, industryReport.After,
                 succession, industryReport, Start);
             Assert.That(result.Succeeded, Is.True, result.Message);
             return result;
@@ -495,14 +615,14 @@ namespace SengokuChronicle.Tests.EditMode
             return state;
         }
 
-        private static IndustryMonthReport IndustryReport(int monthStartSupplies,
+        private static IndustryMonthReport IndustryReport(IndustryResources before,
             int materialsProduced, int materialsConsumed, int foodProduced)
         {
-            Assert.That(IndustryResources.TryCreate(0, monthStartSupplies, 0,
-                out IndustryResources before, out string error), Is.True, error);
-            Assert.That(IndustryResources.TryCreate(0,
-                monthStartSupplies - materialsConsumed + materialsProduced, 0,
-                out IndustryResources after, out error), Is.True, error);
+            Assert.That(materialsConsumed, Is.LessThanOrEqualTo(before.Supplies),
+                "a synthetic industry month cannot draw more material stock than it started with");
+            Assert.That(IndustryResources.TryCreate(before.Funds,
+                before.Supplies - materialsConsumed + materialsProduced, before.Intelligence,
+                out IndustryResources after, out string error), Is.True, error);
 
             var lines = new List<IndustryLineResult>(1);
             if (materialsProduced != 0 || materialsConsumed != 0 || foodProduced != 0)
@@ -510,7 +630,7 @@ namespace SengokuChronicle.Tests.EditMode
                 lines.Add(new IndustryLineResult("industry.test", "测试产业", default, string.Empty,
                     IndustryLineStatus.Operated, "运作中", 0, materialsConsumed, 0,
                     materialsProduced, 0, 0, materialsProduced - materialsConsumed, 0,
-                    0, 0, 0, false, foodProduced, 0));
+                    0, 0, 0, false, foodProduced, 0, materialsConsumed));
             }
 
             return new IndustryMonthReport(Start.Year, Start.Month, before, after,

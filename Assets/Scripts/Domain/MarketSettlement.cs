@@ -56,6 +56,9 @@ namespace SengokuChronicle.Domain
             if (market.LastSettledMonthIndex < currentIndex - 1)
                 return Rejected(MarketSettlementOutcome.SettlementGap, market, resources,
                     "存在未结算月份，不能静默补算多个月。");
+            if (industryReport != null && resources != industryReport.After)
+                return Rejected(MarketSettlementOutcome.InvalidState, market, resources,
+                    "市场资源快照与产业月结结果不一致，拒绝用不同快照结算。");
 
             int householdMembers = CountLivingFamilyMembers(succession);
             int foodDemand = FoodDemandForHousehold(householdMembers);
@@ -63,11 +66,13 @@ namespace SengokuChronicle.Domain
             int foodProduced = 0;
             int materialsProduced = 0;
             int materialsConsumed = 0;
+            int materialsRequired = 0;
             if (industryReport != null)
             {
                 for (int i = 0; i < industryReport.Lines.Count; i++)
                 {
                     IndustryLineResult line = industryReport.Lines[i];
+                    materialsRequired += line.RequiredSupplies;
                     if (line.Status != IndustryLineStatus.Operated)
                         continue;
                     foodProduced += line.GrossOutputFood;
@@ -86,11 +91,10 @@ namespace SengokuChronicle.Domain
                 ? industryReport.Before.Supplies
                 : resources.Supplies;
             int materialsAvailable = ClampResources((long)materialsInventoryBefore + materialsProduced);
-            int materialsSettled = Math.Min(materialsConsumed, materialsAvailable);
-            int materialsUnmet = materialsConsumed - materialsSettled;
+            int materialsUnmet = Math.Max(0, materialsRequired - materialsConsumed);
 
             int foodPressure = PressurePermille(foodDemand, foodAvailable);
-            int materialsPressure = PressurePermille(materialsConsumed, materialsAvailable);
+            int materialsPressure = PressurePermille(materialsRequired, materialsAvailable);
             int foodMovement = MovementPermille(foodPressure);
             int materialsMovement = MovementPermille(materialsPressure);
             int nextFoodPriceIndex = NextPriceIndex(market.FoodPriceIndexPermille, foodMovement);
@@ -126,12 +130,13 @@ namespace SengokuChronicle.Domain
                 new MarketGoodResult(MarketState.FoodGoodId, foodDemand, foodAvailable, foodPurchased,
                     foodUnmet, foodBill, market.FoodPriceIndexPermille, nextFoodPriceIndex,
                     foodPressure, foodMovement),
-                new MarketGoodResult(MarketState.MaterialsGoodId, materialsConsumed, materialsAvailable,
-                    materialsSettled, materialsUnmet, 0, market.MaterialsPriceIndexPermille,
+                new MarketGoodResult(MarketState.MaterialsGoodId, materialsRequired, materialsAvailable,
+                    materialsConsumed, materialsUnmet, 0, market.MaterialsPriceIndexPermille,
                     nextMaterialsPriceIndex, materialsPressure, materialsMovement)
             };
 
-            bool changed = nextMarket.FoodInventory != market.FoodInventory ||
+            bool changed = nextMarket.LastSettledMonthIndex != market.LastSettledMonthIndex ||
+                           nextMarket.FoodInventory != market.FoodInventory ||
                            nextMarket.FoodPriceIndexPermille != market.FoodPriceIndexPermille ||
                            nextMarket.MaterialsPriceIndexPermille != market.MaterialsPriceIndexPermille ||
                            nextMarket.ConsecutiveFoodShortageMonths != market.ConsecutiveFoodShortageMonths ||
@@ -139,8 +144,8 @@ namespace SengokuChronicle.Domain
             string summary = BuildSummary(householdMembers, foodDemand, foodPurchased,
                 foodUnmet, foodBill, market.FoodInventory, nextFoodInventory,
                 market.FoodPriceIndexPermille, nextFoodPriceIndex, materialsInventoryBefore,
-                nextResources.Supplies, materialsConsumed, market.MaterialsPriceIndexPermille,
-                nextMaterialsPriceIndex);
+                nextResources.Supplies, materialsRequired, materialsConsumed,
+                market.MaterialsPriceIndexPermille, nextMaterialsPriceIndex);
 
             var report = new MarketMonthReport(closedMonth.Year, closedMonth.Month, market, nextMarket,
                 resources, nextResources, householdMembers, foodProduced, materialsProduced,
@@ -175,7 +180,12 @@ namespace SengokuChronicle.Domain
             return count;
         }
 
-        /// <summary>half-up rounding for a signed numerator and a positive denominator.</summary>
+        /// <summary>
+        /// Symmetric half-up rounding for a signed numerator and a positive denominator: a
+        /// negative tie rounds away from zero (like <c>MidpointRounding.AwayFromZero</c>), which
+        /// keeps the approved formula symmetric for deficits and surpluses. Every other value
+        /// here (prices, bills, quantities) is non-negative.
+        /// </summary>
         internal static int RoundHalfUp(long numerator, long denominator)
         {
             if (denominator <= 0)
@@ -234,6 +244,11 @@ namespace SengokuChronicle.Domain
             return quantity > int.MaxValue ? int.MaxValue : (int)quantity;
         }
 
+        /// <summary>
+        /// Clamps one month's available food supply to the persisted inventory cap. Farm output
+        /// beyond 999999 is not stored (the existing resource cap semantics); purchases still
+        /// settle against the clamped supply, so the overflow cannot create hidden stock.
+        /// </summary>
         private static int ClampInventory(long value) =>
             value < MarketState.MinimumFoodInventory ? MarketState.MinimumFoodInventory
                 : value > MarketState.MaximumFoodInventory ? MarketState.MaximumFoodInventory
@@ -249,7 +264,8 @@ namespace SengokuChronicle.Domain
         private static string BuildSummary(int householdMembers, int foodDemand,
             int foodPurchased, int foodUnmet, int foodBill, int foodBefore, int foodAfter,
             int foodIndexBefore, int foodIndexAfter, int materialsBefore, int materialsAfter,
-            int materialsConsumed, int materialsIndexBefore, int materialsIndexAfter)
+            int materialsRequired, int materialsConsumed, int materialsIndexBefore,
+            int materialsIndexAfter)
         {
             var builder = new StringBuilder(192);
             builder.Append("人口 ").Append(Number(householdMembers)).Append(" 人，需粮 ")
@@ -260,7 +276,8 @@ namespace SengokuChronicle.Domain
             builder.Append("粮食 ").Append(Number(foodBefore)).Append('→').Append(Number(foodAfter))
                 .Append("，粮价 ").Append(Number(foodIndexBefore)).Append('→')
                 .Append(Number(foodIndexAfter)).Append("‰；物资 ").Append(Number(materialsBefore))
-                .Append('→').Append(Number(materialsAfter)).Append("，产业投入 ")
+                .Append('→').Append(Number(materialsAfter)).Append("，产业需求 ")
+                .Append(Number(materialsRequired)).Append("、实际投入 ")
                 .Append(Number(materialsConsumed)).Append("，物资价 ")
                 .Append(Number(materialsIndexBefore)).Append('→')
                 .Append(Number(materialsIndexAfter)).Append("‰。");

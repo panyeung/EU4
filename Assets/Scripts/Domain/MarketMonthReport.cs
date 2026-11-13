@@ -5,8 +5,9 @@ namespace SengokuChronicle.Domain
 {
     /// <summary>
     /// One good's settled result inside a market month. Food carries the household bill and
-    /// its unmet demand; materials report the industry input draw whose funds cost is already
-    /// charged by <see cref="IndustrySettlement"/>, so its <see cref="FundsCharged"/> is zero.
+    /// its unmet demand; materials demand is the required input of every validly appointed
+    /// industry line, and their funds cost is already charged by <see cref="IndustrySettlement"/>,
+    /// so <see cref="FundsCharged"/> is zero.
     /// </summary>
     public readonly struct MarketGoodResult
     {
@@ -27,9 +28,15 @@ namespace SengokuChronicle.Domain
         }
 
         public string GoodId { get; }
+        /// <summary>
+        /// Household units wanted for food; required input units for materials, including lines
+        /// that were validly appointed but stalled for lack of stock or funds.
+        /// </summary>
         public int Demand { get; }
         public int AvailableSupply { get; }
+        /// <summary>Food units bought this month; actual material units drawn by operated lines.</summary>
         public int SettledQuantity { get; }
+        /// <summary>Demand minus <see cref="SettledQuantity"/>, never negative.</summary>
         public int UnmetDemand { get; }
         public int FundsCharged { get; }
         public int PriceIndexBeforePermille { get; }
@@ -74,10 +81,12 @@ namespace SengokuChronicle.Domain
         public int HouseholdMembers { get; }
         public int FoodProduced { get; }
         public int MaterialsProduced { get; }
+        /// <summary>Actual material units drawn by lines that operated.</summary>
         public int MaterialsConsumed { get; }
 
         /// <summary>Stable good order: market.food first, then market.materials.</summary>
         public IReadOnlyList<MarketGoodResult> Lines { get; }
+        /// <summary>True when settlement advanced the month or changed a persisted market/resource value.</summary>
         public bool Changed { get; }
         public string Summary { get; }
 
@@ -95,6 +104,8 @@ namespace SengokuChronicle.Domain
         public int FoodPriceIndexAfter => After.FoodPriceIndexPermille;
         public int MaterialsInventoryBefore => ResourcesBefore.Supplies;
         public int MaterialsInventoryAfter => ResourcesAfter.Supplies;
+        /// <summary>Total required input of all validly appointed lines, operated or stalled.</summary>
+        public int MaterialsRequired => Materials.Demand;
         public int MaterialsPriceIndexBefore => Before.MaterialsPriceIndexPermille;
         public int MaterialsPriceIndexAfter => After.MaterialsPriceIndexPermille;
         public int ConsecutiveFoodShortageMonths => After.ConsecutiveFoodShortageMonths;

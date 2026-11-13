@@ -201,7 +201,7 @@ namespace SengokuChronicle.Tests.EditMode
                 Assert.That(restored.TryAdvanceToNextMonth(), Is.True, restored.LastEventMessage);
                 Assert.That(restored.Industry.LastSettledMonthIndex, Is.EqualTo(settledBefore + 1));
                 Assert.That(CountMonthly(restored), Is.EqualTo(monthlyBefore + 1));
-                Assert.That(restored.Industry.Resources.Funds, Is.EqualTo(34));
+                Assert.That(restored.Industry.Resources.Funds, Is.EqualTo(32));
             }
             finally
             {

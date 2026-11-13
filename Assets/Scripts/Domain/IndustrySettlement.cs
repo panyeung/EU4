@@ -16,7 +16,7 @@ namespace SengokuChronicle.Domain
             int grossOutputIntelligence, int netOutputFunds, int netOutputSupplies,
             int netOutputIntelligence, int appliedFundsDelta, int appliedSuppliesDelta,
             int appliedIntelligenceDelta, bool maintenanceRetainedFromOutput,
-            int grossOutputFood = 0, int materialsCostFunds = 0)
+            int grossOutputFood = 0, int materialsCostFunds = 0, int requiredSupplies = 0)
         {
             IndustryId = industryId ?? string.Empty;
             IndustryName = industryName ?? string.Empty;
@@ -38,6 +38,7 @@ namespace SengokuChronicle.Domain
             MaintenanceRetainedFromOutput = maintenanceRetainedFromOutput;
             GrossOutputFood = grossOutputFood;
             MaterialsCostFunds = materialsCostFunds;
+            RequiredSupplies = requiredSupplies;
         }
 
         public string IndustryId { get; }
@@ -62,6 +63,12 @@ namespace SengokuChronicle.Domain
         public int GrossOutputFood { get; }
         /// <summary>Added funds cost of this line's actual material input at the month's index.</summary>
         public int MaterialsCostFunds { get; }
+        /// <summary>
+        /// Material units this line needs to operate this month when it has a valid appointment,
+        /// whether it actually operated or stalled. <see cref="UpkeepSupplies"/> remains the
+        /// actual draw and is zero on a stalled line. Vacant and invalid lines require zero.
+        /// </summary>
+        public int RequiredSupplies { get; }
     }
 
     /// <summary>Immutable result of one month's industry settlement.</summary>
@@ -192,7 +199,7 @@ namespace SengokuChronicle.Domain
                     {
                         hasShortage = true;
                         lines.Add(StalledLine(definition, originalAssignee, assigneeName,
-                            (int)(materialsCost - payableFunds), 0, materialsCost));
+                            (int)(materialsCost - payableFunds), 0, materialsCost, retained));
                         continue;
                     }
 
@@ -211,7 +218,7 @@ namespace SengokuChronicle.Domain
                         definition.OutputFunds, definition.OutputSupplies,
                         definition.OutputIntelligence, netFunds, netSupplies, netIntelligence,
                         funds - beforeFunds, supplies - beforeSupplies, intelligence - beforeIntelligence,
-                        true, definition.OutputFood, materialsCost));
+                        true, definition.OutputFood, materialsCost, retained));
                     continue;
                 }
 
@@ -224,7 +231,8 @@ namespace SengokuChronicle.Domain
                 {
                     hasShortage = true;
                     lines.Add(StalledLine(definition, originalAssignee, assigneeName,
-                        missingFunds, missingSupplies, lineMaterialsCost));
+                        missingFunds, missingSupplies, lineMaterialsCost,
+                        definition.UpkeepSupplies));
                     continue;
                 }
 
@@ -245,7 +253,7 @@ namespace SengokuChronicle.Domain
                     definition.OutputSupplies - definition.UpkeepSupplies,
                     definition.OutputIntelligence,
                     funds - lineFunds, supplies - lineSupplies, intelligence - lineIntelligence,
-                    false, definition.OutputFood, lineMaterialsCost));
+                    false, definition.OutputFood, lineMaterialsCost, definition.UpkeepSupplies));
             }
 
             IndustryResources.TryCreate(funds, supplies, intelligence,
@@ -269,7 +277,8 @@ namespace SengokuChronicle.Domain
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, false);
 
         private static IndustryLineResult StalledLine(IndustryDefinition definition, PersonId assignee,
-            string assigneeName, int missingFunds, int missingSupplies, int materialsCost)
+            string assigneeName, int missingFunds, int missingSupplies, int materialsCost,
+            int requiredSupplies)
         {
             string reason = "资源不足：缺 " + Number(missingFunds) + " 资金、" +
                             Number(missingSupplies) + " 物资";
@@ -277,7 +286,8 @@ namespace SengokuChronicle.Domain
                 reason += "（其中材料成本 " + Number(materialsCost) + " 资金）";
             reason += "，本月停产";
             return new IndustryLineResult(definition.Id, definition.DisplayName, assignee, assigneeName,
-                IndustryLineStatus.Stalled, reason, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, false);
+                IndustryLineStatus.Stalled, reason, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, false,
+                0, 0, requiredSupplies);
         }
 
         /// <summary>Approved M08B input cost: ceil(units * base price 1 * index / 1000).</summary>

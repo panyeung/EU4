@@ -53,10 +53,13 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(result.Report.Lines[0].IndustryId, Is.EqualTo(IndustryCatalog.FarmId));
             Assert.That(result.Report.Lines[0].NetOutputFunds, Is.EqualTo(1));
             Assert.That(result.Report.Lines[0].GrossOutputFood, Is.EqualTo(4));
+            Assert.That(result.Report.Lines[0].RequiredSupplies, Is.EqualTo(1),
+                "the farm still requires its one self-retained input unit");
             Assert.That(result.Report.Lines[0].NetOutputSupplies, Is.EqualTo(3));
             Assert.That(result.Report.Lines[1].IndustryId, Is.EqualTo(IndustryCatalog.TradingHouseId));
             Assert.That(result.Report.Lines[1].NetOutputFunds, Is.EqualTo(1));
             Assert.That(result.Report.Lines[1].MaterialsCostFunds, Is.EqualTo(2));
+            Assert.That(result.Report.Lines[1].RequiredSupplies, Is.EqualTo(2));
             Assert.That(result.Report.Lines[1].NetOutputSupplies, Is.EqualTo(-2));
             Assert.That(result.Report.Lines[1].NetOutputIntelligence, Is.EqualTo(1));
             Assert.That(result.Report.Summary, Does.Contain("30"));
@@ -115,6 +118,9 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(trading.Status, Is.EqualTo(IndustryLineStatus.Stalled));
             Assert.That(trading.Reason, Does.Contain("3").And.Contain("资金"));
             Assert.That(trading.Reason, Does.Contain("材料成本 2"));
+            Assert.That(trading.RequiredSupplies, Is.EqualTo(2),
+                "a validly appointed stalled line still demands its input");
+            Assert.That(trading.UpkeepSupplies, Is.Zero, "actual draw stays distinct from requirement");
             Assert.That(result.NextState.Resources.Funds, Is.EqualTo(5));
             Assert.That(result.NextState.Resources.Supplies, Is.EqualTo(12));
             Assert.That(result.NextState.Resources.Intelligence, Is.Zero);
@@ -384,6 +390,7 @@ namespace SengokuChronicle.Tests.EditMode
 
             Assert.That(result.Report.Lines[0].Status, Is.EqualTo(IndustryLineStatus.Vacant));
             Assert.That(result.Report.Lines[0].GrossOutputFood, Is.Zero);
+            Assert.That(result.Report.Lines[0].RequiredSupplies, Is.Zero);
         }
 
         [Test]
