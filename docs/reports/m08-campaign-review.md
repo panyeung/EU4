@@ -216,3 +216,15 @@
 - 第 10 年检查点样本的家族人数范围 1–8、均值 2、中位数 1；平均年龄样本为 19.4–80.0 岁、均值 44.1 岁；财富样本均为 29。第 25 年两局样本均为 1 人，财富仍为 29。50/100 年没有存活样本，相关人口、年龄、财富及经济指标分母为 0，不得解读为零值或通过。
 - 重新执行 `RunStagedBatches` 后 Editor 为 `ready/stopped`、`compilationFailed=false`。两条 30 秒 Pipeline 超时日志已留存为运行证据后清空，最终 Console 样本为 0 errors / 0 warnings / 0 logs；未运行 EditMode、场景 Validator 或另一次 Play Mode。
 - 结论：分阶段批处理与当前规则摘要/CSV 数据完整性通过。结果暴露无人管理基线下极高粮荒/通胀及无 50/100 年生存样本；GDD/计划没有规定经济平衡阈值，这不是擅自改规则的授权。M08B 最终验收仍待全量 EditMode、场景 Validator、真实 UI 存读档、Play Mode 端到端和产品层生存策略决策。
+
+## 2026-11-13 M08B 当前 Editor 端到端复核
+
+- Unity Editor PID `63756`、Unity `6000.6.6f1`、项目路径 `C:\Users\panye\My project`。在当前 Editor 安静重跑全量 EditMode 后结果为 `1943/1943 passed`、0 failed、0 skipped、0 inconclusive，耗时约 206 秒。首轮曾因 Pipeline 主线程超时污染测试 SetUp 而得到 1942/1943；该轮不作为最终结果。后续安静重跑的全量结果为准。
+- 测试结束时 Console 曾有两条由故障注入回滚测试预期产生的错误日志；记录后清空。Play Mode 停止后的最终 `console_status` 为 0 errors / 0 warnings / 0 logs，`compilationFailed=false`、`compiling=false`。这表示当前缓存计数为零，不把测试故障注入日志误报为运行期游戏错误。
+- 在停止状态运行 `Tools/Sengoku Chronicle/Validate Foundation Scene`，当前 `Logs/SceneValidationReport.txt` 结尾为 `RESULT: PASS; Errors: 0`。该操作未保存或修改场景；最终 Editor 状态为 `ready/stopped`，活动场景仍是 `Assets/Scenes/FoundationScene.unity`，`dirty=false`。
+- 真实 UI Play Mode 从标题页开始新局并选择 SC-013，使用地图到达热田。4 月至 5 月月结显示六名在世家族成员需粮 2、购买 2、资金支付 2，粮食库存从 2 到 0；随后通过真实保存按钮写出 v17 存档。磁盘 JSON 读到日期 `1560-05-01`，市场状态为粮食库存 0、粮食价 1000‰、物资价 900‰、已结算月索引 18723、连续短缺 0、综合指数 950。推进一天后使用真实读档按钮，游戏状态恢复到 1560-05-01，位置热田、资金 28、物资 12；保存/载入 UI 均显示成功。
+- 读档后通过产业面板任命明智千恵负责农庄，再真实结束 5 月。6 月 1 日的产业报告显示农庄粮食毛产出 +4、物资毛产出 +4、维护消耗 1 物资，并结算为 +1 资金/+3 物资；六人需粮 2，市场报告列出购买 2、资金支出 2，粮食库存从 0 到 2，粮食价格 1000→900‰，物资价格 900→810‰，短缺月数保持 0。UI 资源文本同时显示资金 27、粮食 2、物资 15。该路线验证了真实月结、产业供给、家庭需求、价格更新和 v17 UI 存读档，不代表无人管理的 100 年经济平衡。
+- 这是面向市场规则的短期真实运行。结束 5 月后还有一项 SC-013 事件待处理，本次未继续事件路线。此前 1000 seed 无人管理基线仍是 605/1000 灭族、395/1000 停于待选继承，0/1000 到达 50 或 100 年。测试和这段短 Play Mode 不改变该风险，也没有批准任何经济平衡阈值。
+- Play Mode 结束后恢复了测试前的用户存档与备份。当前 `save-slot-1.json` SHA-256 为 `1E61ED9CAB4A5F3E5FBCCE5EDA4BD24586BE5A072EA5B749CCB3C1E280BCB92C`，`.bak` SHA-256 为 `F1C0630E5DD91BAA0B18607CA4367956DB637A8BB4DD6DA21D1E79212BDA4CBE`；二者分别与测试前复制的恢复件逐字节相同。恢复副本保留在系统临时目录 `m08b-save-backup-20261113-054506`。
+- 本轮没有截屏。临时 Computer Use 缓存内此前遗留的 12 个截图未被本轮创建；批量删除曾被自动审核拦截，仍需用户手动清理。
+- 结论：全量 EditMode、当前 FoundationScene Validator、短期真实 SC-013 市场/产业月结及 v17 UI 存读档通过。M08B 的无人管理长周期生存风险仍未解决；不据此宣告 M08B 最终里程碑验收或合并/tag。
