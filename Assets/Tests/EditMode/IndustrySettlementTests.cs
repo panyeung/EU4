@@ -41,7 +41,7 @@ namespace SengokuChronicle.Tests.EditMode
             IndustrySettlementResult result = Plan(state, succession);
 
             Assert.That(result.Outcome, Is.EqualTo(IndustrySettlementOutcome.Succeeded));
-            Assert.That(result.NextState.Resources.Funds, Is.EqualTo(35));
+            Assert.That(result.NextState.Resources.Funds, Is.EqualTo(32));
             Assert.That(result.NextState.Resources.Supplies, Is.EqualTo(13));
             Assert.That(result.NextState.Resources.Intelligence, Is.EqualTo(1));
             Assert.That(result.NextState.LastSettledMonthIndex,
@@ -51,14 +51,16 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(result.Report.HasShortage, Is.False);
             Assert.That(result.Report.Lines.Count, Is.EqualTo(2));
             Assert.That(result.Report.Lines[0].IndustryId, Is.EqualTo(IndustryCatalog.FarmId));
-            Assert.That(result.Report.Lines[0].NetOutputFunds, Is.EqualTo(2));
+            Assert.That(result.Report.Lines[0].NetOutputFunds, Is.EqualTo(1));
+            Assert.That(result.Report.Lines[0].GrossOutputFood, Is.EqualTo(4));
             Assert.That(result.Report.Lines[0].NetOutputSupplies, Is.EqualTo(3));
             Assert.That(result.Report.Lines[1].IndustryId, Is.EqualTo(IndustryCatalog.TradingHouseId));
-            Assert.That(result.Report.Lines[1].NetOutputFunds, Is.EqualTo(3));
+            Assert.That(result.Report.Lines[1].NetOutputFunds, Is.EqualTo(1));
+            Assert.That(result.Report.Lines[1].MaterialsCostFunds, Is.EqualTo(2));
             Assert.That(result.Report.Lines[1].NetOutputSupplies, Is.EqualTo(-2));
             Assert.That(result.Report.Lines[1].NetOutputIntelligence, Is.EqualTo(1));
             Assert.That(result.Report.Summary, Does.Contain("30"));
-            Assert.That(result.Report.Summary, Does.Contain("35"));
+            Assert.That(result.Report.Summary, Does.Contain("32"));
             Assert.That(result.Report.Summary, Does.Contain("13"));
         }
 
@@ -77,8 +79,10 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(farm.UpkeepSupplies, Is.EqualTo(1));
             Assert.That(farm.MaintenanceRetainedFromOutput, Is.True);
             Assert.That(farm.NetOutputSupplies, Is.EqualTo(3));
+            Assert.That(farm.MaterialsCostFunds, Is.EqualTo(1),
+                "the self-retained supply is priced at the 1000‰ base index");
             Assert.That(result.NextState.Resources.Supplies, Is.EqualTo(15));
-            Assert.That(result.NextState.Resources.Funds, Is.EqualTo(32));
+            Assert.That(result.NextState.Resources.Funds, Is.EqualTo(31));
         }
 
         [Test]
@@ -90,10 +94,12 @@ namespace SengokuChronicle.Tests.EditMode
 
             IndustrySettlementResult result = Plan(state, succession);
 
-            Assert.That(result.NextState.Resources.Funds, Is.EqualTo(2));
+            Assert.That(result.NextState.Resources.Funds, Is.EqualTo(1),
+                "the +2 harvest covers the 1-fund material cost and leaves 1");
             Assert.That(result.NextState.Resources.Supplies, Is.EqualTo(3));
             Assert.That(result.NextState.Resources.Intelligence, Is.Zero);
             Assert.That(result.Report.HasShortage, Is.False);
+            Assert.That(result.Report.Lines[0].GrossOutputFood, Is.EqualTo(4));
         }
 
         [Test]
@@ -107,7 +113,8 @@ namespace SengokuChronicle.Tests.EditMode
             IndustryLineResult trading = result.Report.Lines[1];
 
             Assert.That(trading.Status, Is.EqualTo(IndustryLineStatus.Stalled));
-            Assert.That(trading.Reason, Does.Contain("1").And.Contain("资金"));
+            Assert.That(trading.Reason, Does.Contain("3").And.Contain("资金"));
+            Assert.That(trading.Reason, Does.Contain("材料成本 2"));
             Assert.That(result.NextState.Resources.Funds, Is.EqualTo(5));
             Assert.That(result.NextState.Resources.Supplies, Is.EqualTo(12));
             Assert.That(result.NextState.Resources.Intelligence, Is.Zero);
@@ -153,8 +160,9 @@ namespace SengokuChronicle.Tests.EditMode
         public void Settle_FarmCreditsBeforeTrading()
         {
             SuccessionState succession = Succession();
-            // Trading alone needs 6 funds; the farm's same-month +2 funds makes it affordable.
-            IndustryState state = State(4, 12, 0);
+            // Trading alone needs 8 funds (6 upkeep + 2 material cost); the farm's same-month
+            // net +1 credit makes that affordable from an opening balance of 7.
+            IndustryState state = State(7, 12, 0);
             IndustryService.TryAssign(state, succession, Start, IndustryCatalog.FarmId, Harunobu);
             IndustryService.TryAssign(state, succession, Start, IndustryCatalog.TradingHouseId, Chie);
 
@@ -273,7 +281,7 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(result.NextState.Resources.Funds, Is.EqualTo(999999));
             Assert.That(result.NextState.Resources.Intelligence, Is.EqualTo(999999));
             Assert.That(result.Report.Lines[0].AppliedFundsDelta, Is.EqualTo(1));
-            Assert.That(result.Report.Lines[1].NetOutputFunds, Is.EqualTo(3));
+            Assert.That(result.Report.Lines[1].NetOutputFunds, Is.EqualTo(1));
             Assert.That(result.Report.Lines[1].AppliedFundsDelta, Is.Zero,
                 "the trading house pays upkeep then refills to the cap, so its actual net change is zero");
         }
@@ -288,8 +296,116 @@ namespace SengokuChronicle.Tests.EditMode
             IndustrySettlementResult result = Plan(state, succession);
 
             Assert.That(result.Report.Summary, Does.Contain(
-                (35 - 3).ToString(CultureInfo.InvariantCulture)).Or.Contain("32"));
+                (31 - 3).ToString(CultureInfo.InvariantCulture)).Or.Contain("31"));
             Assert.That(result.Report.Summary, Does.Not.Contain("NaN"));
+        }
+
+        [Test]
+        public void Settle_MaterialCostUsesMonthIndex()
+        {
+            SuccessionState succession = Succession();
+            IndustryState state = State(9, 12, 0);
+            IndustryService.TryAssign(state, succession, Start, IndustryCatalog.TradingHouseId, Chie);
+
+            IndustrySettlementResult result = PlanWithIndex(state, succession, 1500);
+            IndustryLineResult trading = result.Report.Lines[1];
+
+            Assert.That(trading.Status, Is.EqualTo(IndustryLineStatus.Operated));
+            Assert.That(trading.MaterialsCostFunds, Is.EqualTo(3),
+                "ceil(2 units * 1500 / 1000)");
+            Assert.That(trading.NetOutputFunds, Is.Zero);
+            Assert.That(result.NextState.Resources.Funds, Is.EqualTo(9));
+            Assert.That(result.NextState.Resources.Supplies, Is.EqualTo(10));
+            Assert.That(result.NextState.Resources.Intelligence, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void Settle_MaterialCostShortage_StallsAtomically()
+        {
+            SuccessionState succession = Succession();
+            IndustryState state = State(8, 12, 0);
+            IndustryService.TryAssign(state, succession, Start, IndustryCatalog.TradingHouseId, Chie);
+
+            IndustrySettlementResult result = PlanWithIndex(state, succession, 1500);
+            IndustryLineResult trading = result.Report.Lines[1];
+
+            Assert.That(trading.Status, Is.EqualTo(IndustryLineStatus.Stalled),
+                "6 upkeep + 3 material cost needs 9 funds");
+            Assert.That(trading.Reason, Does.Contain("1").And.Contain("材料成本 3"));
+            Assert.That(result.NextState.Resources.Funds, Is.EqualTo(8));
+            Assert.That(result.NextState.Resources.Supplies, Is.EqualTo(12));
+            Assert.That(result.NextState.Resources.Intelligence, Is.Zero);
+            Assert.That(result.Report.HasShortage, Is.True);
+        }
+
+        [Test]
+        public void Settle_HighMaterialIndex_StallsFarmWithoutFoodOrPartialCharge()
+        {
+            SuccessionState succession = Succession();
+            IndustryState state = State(0, 12, 0);
+            IndustryService.TryAssign(state, succession, Start, IndustryCatalog.FarmId, Harunobu);
+
+            IndustrySettlementResult result = PlanWithIndex(state, succession, 5000);
+            IndustryLineResult farm = result.Report.Lines[0];
+
+            Assert.That(farm.Status, Is.EqualTo(IndustryLineStatus.Stalled),
+                "ceil(1 * 5000 / 1000) = 5 funds exceeds the 2-fund harvest");
+            Assert.That(farm.GrossOutputFood, Is.Zero);
+            Assert.That(result.NextState.Resources.Funds, Is.EqualTo(0));
+            Assert.That(result.NextState.Resources.Supplies, Is.EqualTo(12));
+            Assert.That(result.Report.HasShortage, Is.True);
+        }
+
+        [Test]
+        public void Settle_FarmMaterialCostAtNonBaseIndexStillProducesFood()
+        {
+            SuccessionState succession = Succession();
+            IndustryState state = State(0, 0, 0);
+            IndustryService.TryAssign(state, succession, Start, IndustryCatalog.FarmId, Harunobu);
+
+            IndustrySettlementResult result = PlanWithIndex(state, succession, 2000);
+            IndustryLineResult farm = result.Report.Lines[0];
+
+            Assert.That(farm.Status, Is.EqualTo(IndustryLineStatus.Operated));
+            Assert.That(farm.MaterialsCostFunds, Is.EqualTo(2));
+            Assert.That(farm.NetOutputFunds, Is.Zero);
+            Assert.That(farm.GrossOutputFood, Is.EqualTo(4));
+            Assert.That(result.NextState.Resources.Funds, Is.Zero);
+            Assert.That(result.NextState.Resources.Supplies, Is.EqualTo(3));
+        }
+
+        [Test]
+        public void Settle_VacantFarmProducesNoFood()
+        {
+            SuccessionState succession = Succession();
+            IndustryState state = State(30, 12, 0);
+
+            IndustrySettlementResult result = Plan(state, succession);
+
+            Assert.That(result.Report.Lines[0].Status, Is.EqualTo(IndustryLineStatus.Vacant));
+            Assert.That(result.Report.Lines[0].GrossOutputFood, Is.Zero);
+        }
+
+        [Test]
+        public void Settle_InvalidMaterialIndex_IsInvalidState()
+        {
+            SuccessionState succession = Succession();
+            IndustryState state = State(30, 12, 0);
+
+            IndustrySettlementResult result = IndustrySettlement.Plan(state, succession, Start, 99);
+
+            Assert.That(result.Succeeded, Is.False);
+            Assert.That(result.Outcome, Is.EqualTo(IndustrySettlementOutcome.InvalidState));
+            Assert.That(result.NextState.Resources.Funds, Is.EqualTo(30));
+        }
+
+        private static IndustrySettlementResult PlanWithIndex(IndustryState state,
+            SuccessionState succession, int materialsPriceIndexPermille)
+        {
+            IndustrySettlementResult result = IndustrySettlement.Plan(state, succession, Start,
+                materialsPriceIndexPermille);
+            Assert.That(result.Succeeded, Is.True, result.Message);
+            return result;
         }
     }
 }

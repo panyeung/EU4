@@ -8,7 +8,7 @@ namespace SengokuChronicle.Domain
     {
         public IndustryDefinition(string id, string displayName, int workUnitsRequired, int capacityPosts,
             int upkeepFunds, int upkeepSupplies, int outputFunds, int outputSupplies,
-            int outputIntelligence, bool maintainsFromOutput)
+            int outputIntelligence, bool maintainsFromOutput, int outputFood = 0)
         {
             Id = id ?? string.Empty;
             DisplayName = displayName ?? string.Empty;
@@ -20,6 +20,7 @@ namespace SengokuChronicle.Domain
             OutputSupplies = outputSupplies;
             OutputIntelligence = outputIntelligence;
             MaintainsFromOutput = maintainsFromOutput;
+            OutputFood = outputFood;
         }
 
         public string Id { get; }
@@ -31,6 +32,8 @@ namespace SengokuChronicle.Domain
         public int OutputFunds { get; }
         public int OutputSupplies { get; }
         public int OutputIntelligence { get; }
+        /// <summary>Approved M08B food harvest; only the farm produces food, all others zero.</summary>
+        public int OutputFood { get; }
         /// <summary>Farm retains upkeep from its own gross harvest instead of paying from stock first.</summary>
         public bool MaintainsFromOutput { get; }
     }
@@ -46,7 +49,7 @@ namespace SengokuChronicle.Domain
 
         private static readonly IndustryDefinition[] Definitions =
         {
-            new IndustryDefinition(FarmId, "农庄", 3, 1, 0, 1, 2, 4, 0, true),
+            new IndustryDefinition(FarmId, "农庄", 3, 1, 0, 1, 2, 4, 0, true, 4),
             new IndustryDefinition(TradingHouseId, "商馆", 3, 1, 6, 2, 9, 0, 1, false)
         };
 

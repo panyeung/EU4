@@ -15,7 +15,8 @@ namespace SengokuChronicle.Domain
             int upkeepSupplies, int grossOutputFunds, int grossOutputSupplies,
             int grossOutputIntelligence, int netOutputFunds, int netOutputSupplies,
             int netOutputIntelligence, int appliedFundsDelta, int appliedSuppliesDelta,
-            int appliedIntelligenceDelta, bool maintenanceRetainedFromOutput)
+            int appliedIntelligenceDelta, bool maintenanceRetainedFromOutput,
+            int grossOutputFood = 0, int materialsCostFunds = 0)
         {
             IndustryId = industryId ?? string.Empty;
             IndustryName = industryName ?? string.Empty;
@@ -35,6 +36,8 @@ namespace SengokuChronicle.Domain
             AppliedSuppliesDelta = appliedSuppliesDelta;
             AppliedIntelligenceDelta = appliedIntelligenceDelta;
             MaintenanceRetainedFromOutput = maintenanceRetainedFromOutput;
+            GrossOutputFood = grossOutputFood;
+            MaterialsCostFunds = materialsCostFunds;
         }
 
         public string IndustryId { get; }
@@ -55,6 +58,10 @@ namespace SengokuChronicle.Domain
         public int AppliedSuppliesDelta { get; }
         public int AppliedIntelligenceDelta { get; }
         public bool MaintenanceRetainedFromOutput { get; }
+        /// <summary>Approved M08B food harvest; always zero for a line that did not operate.</summary>
+        public int GrossOutputFood { get; }
+        /// <summary>Added funds cost of this line's actual material input at the month's index.</summary>
+        public int MaterialsCostFunds { get; }
     }
 
     /// <summary>Immutable result of one month's industry settlement.</summary>
@@ -116,11 +123,22 @@ namespace SengokuChronicle.Domain
     /// </summary>
     public static class IndustrySettlement
     {
+        /// <summary>
+        /// Three-argument compatibility entry: current callers keep the 1000‰ base material
+        /// index, while M08B month-turn code passes the previous month's settled index.
+        /// </summary>
         public static IndustrySettlementResult Plan(IndustryState state, SuccessionState succession,
-            GameDate closedMonth)
+            GameDate closedMonth) =>
+            Plan(state, succession, closedMonth, MarketState.BaselinePriceIndexPermille);
+
+        public static IndustrySettlementResult Plan(IndustryState state, SuccessionState succession,
+            GameDate closedMonth, int materialsPriceIndexPermille)
         {
             if (state == null || succession == null || succession.World == null)
                 return Rejected(IndustrySettlementOutcome.InvalidState, state, "产业或继承状态为空。");
+            if (!MarketState.IsValidPriceIndex(materialsPriceIndexPermille))
+                return Rejected(IndustrySettlementOutcome.InvalidState, state,
+                    "生产物资价格指数超出允许范围 100..100000‰。");
 
             int currentIndex = IndustryCalendar.MonthIndex(closedMonth);
             if (state.LastSettledMonthIndex == currentIndex)
@@ -168,7 +186,17 @@ namespace SengokuChronicle.Domain
                 if (definition.MaintainsFromOutput)
                 {
                     int retained = Math.Min(definition.UpkeepSupplies, definition.OutputSupplies);
-                    int netFunds = definition.OutputFunds;
+                    int materialsCost = MaterialsCostFunds(retained, materialsPriceIndexPermille);
+                    long payableFunds = (long)funds + definition.OutputFunds - definition.UpkeepFunds;
+                    if (materialsCost > payableFunds)
+                    {
+                        hasShortage = true;
+                        lines.Add(StalledLine(definition, originalAssignee, assigneeName,
+                            (int)(materialsCost - payableFunds), 0, materialsCost));
+                        continue;
+                    }
+
+                    int netFunds = definition.OutputFunds - definition.UpkeepFunds - materialsCost;
                     int netSupplies = definition.OutputSupplies - retained;
                     int netIntelligence = definition.OutputIntelligence;
                     int beforeFunds = funds;
@@ -183,26 +211,27 @@ namespace SengokuChronicle.Domain
                         definition.OutputFunds, definition.OutputSupplies,
                         definition.OutputIntelligence, netFunds, netSupplies, netIntelligence,
                         funds - beforeFunds, supplies - beforeSupplies, intelligence - beforeIntelligence,
-                        true));
+                        true, definition.OutputFood, materialsCost));
                     continue;
                 }
 
-                int missingFunds = Math.Max(0, definition.UpkeepFunds - funds);
+                int lineMaterialsCost = MaterialsCostFunds(definition.UpkeepSupplies,
+                    materialsPriceIndexPermille);
+                int requiredFunds = definition.UpkeepFunds + lineMaterialsCost;
+                int missingFunds = Math.Max(0, requiredFunds - funds);
                 int missingSupplies = Math.Max(0, definition.UpkeepSupplies - supplies);
                 if (missingFunds > 0 || missingSupplies > 0)
                 {
                     hasShortage = true;
-                    lines.Add(new IndustryLineResult(definition.Id, definition.DisplayName,
-                        originalAssignee, assigneeName, IndustryLineStatus.Stalled,
-                        "资源不足：缺 " + Number(missingFunds) + " 资金、" + Number(missingSupplies) +
-                        " 物资，本月停产", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, false));
+                    lines.Add(StalledLine(definition, originalAssignee, assigneeName,
+                        missingFunds, missingSupplies, lineMaterialsCost));
                     continue;
                 }
 
                 int lineFunds = funds;
                 int lineSupplies = supplies;
                 int lineIntelligence = intelligence;
-                funds -= definition.UpkeepFunds;
+                funds -= requiredFunds;
                 supplies -= definition.UpkeepSupplies;
                 funds = Clamp(funds + (long)definition.OutputFunds);
                 supplies = Clamp(supplies + (long)definition.OutputSupplies);
@@ -212,11 +241,11 @@ namespace SengokuChronicle.Domain
                     "运作中", definition.UpkeepFunds, definition.UpkeepSupplies,
                     definition.OutputFunds, definition.OutputSupplies,
                     definition.OutputIntelligence,
-                    definition.OutputFunds - definition.UpkeepFunds,
+                    definition.OutputFunds - requiredFunds,
                     definition.OutputSupplies - definition.UpkeepSupplies,
                     definition.OutputIntelligence,
                     funds - lineFunds, supplies - lineSupplies, intelligence - lineIntelligence,
-                    false));
+                    false, definition.OutputFood, lineMaterialsCost));
             }
 
             IndustryResources.TryCreate(funds, supplies, intelligence,
@@ -238,6 +267,28 @@ namespace SengokuChronicle.Domain
             new IndustryLineResult(definition.Id, definition.DisplayName, default, string.Empty,
                 IndustryLineStatus.Vacant, "空缺：无人负责，本月无产出",
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, false);
+
+        private static IndustryLineResult StalledLine(IndustryDefinition definition, PersonId assignee,
+            string assigneeName, int missingFunds, int missingSupplies, int materialsCost)
+        {
+            string reason = "资源不足：缺 " + Number(missingFunds) + " 资金、" +
+                            Number(missingSupplies) + " 物资";
+            if (materialsCost > 0)
+                reason += "（其中材料成本 " + Number(materialsCost) + " 资金）";
+            reason += "，本月停产";
+            return new IndustryLineResult(definition.Id, definition.DisplayName, assignee, assigneeName,
+                IndustryLineStatus.Stalled, reason, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, false);
+        }
+
+        /// <summary>Approved M08B input cost: ceil(units * base price 1 * index / 1000).</summary>
+        private static int MaterialsCostFunds(int units, int materialsPriceIndexPermille)
+        {
+            if (units <= 0)
+                return 0;
+            return (int)(((long)units * materialsPriceIndexPermille +
+                          MarketState.BaselinePriceIndexPermille - 1) /
+                         MarketState.BaselinePriceIndexPermille);
+        }
 
         private static bool TryFindVacancy(IReadOnlyList<IndustryVacancy> vacated, string industryId,
             out IndustryVacancy vacancy)
@@ -280,7 +331,9 @@ namespace SengokuChronicle.Domain
                             builder.Append("收成 +").Append(Number(line.GrossOutputFunds))
                                 .Append("资金/+").Append(Number(line.GrossOutputSupplies))
                                 .Append("物资，保留 ").Append(Number(line.UpkeepSupplies))
-                                .Append("物资维护，净 +").Append(Number(line.NetOutputFunds))
+                                .Append("物资维护（材料成本 ").Append(Number(line.MaterialsCostFunds))
+                                .Append("资金），产粮 +").Append(Number(line.GrossOutputFood))
+                                .Append("，净 +").Append(Number(line.NetOutputFunds))
                                 .Append("资金/+").Append(Number(line.NetOutputSupplies))
                                 .Append("物资");
                             AppendCapNote(builder, line.NetOutputFunds, line.AppliedFundsDelta, "资金");
@@ -289,7 +342,8 @@ namespace SengokuChronicle.Domain
                         else
                         {
                             builder.Append("维护 ").Append(Number(line.UpkeepFunds)).Append("资金/")
-                                .Append(Number(line.UpkeepSupplies)).Append("物资，产出 +")
+                                .Append(Number(line.UpkeepSupplies)).Append("物资（材料成本 ")
+                                .Append(Number(line.MaterialsCostFunds)).Append("资金），产出 +")
                                 .Append(Number(line.GrossOutputFunds)).Append("资金/+")
                                 .Append(Number(line.GrossOutputIntelligence)).Append("情报");
                             AppendCapNote(builder, line.NetOutputFunds, line.AppliedFundsDelta, "资金");
