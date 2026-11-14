@@ -763,8 +763,10 @@ namespace SengokuChronicle.Tests.EditMode
             // Stats and resources come from the domain, never from concept-art numbers.
             Assert.That(view.StatLine.Split('/').Length, Is.EqualTo(4));
             IndustryResources resources = _session.Industry.Resources;
-            string people = _session.FamilyRoster.Count.ToString(
-                System.Globalization.CultureInfo.InvariantCulture);
+            string people = MarketSettlement.CountLivingFamilyMembers(_session.Succession)
+                .ToString(System.Globalization.CultureInfo.InvariantCulture);
+            Assert.That(people, Is.EqualTo("6"),
+                "the shipped six-person family keeps the approved header value");
             string merit = _session.Merit.ToString(
                 System.Globalization.CultureInfo.InvariantCulture);
             Assert.That(Find(AddM02DailyActionPanel.HeaderPeopleName).GetComponent<Text>().text,
@@ -782,6 +784,45 @@ namespace SengokuChronicle.Tests.EditMode
                 "the page profile follows the roster selection");
             Assert.That(view.RelationLine, Is.Not.EqualTo(view.ProfileNameLine),
                 "relationship cards list other family members, not the selected one");
+        }
+
+        [Test]
+        public void PageView_HeaderPeopleCountsLivingMembersBeyondTheFixedSixRows()
+        {
+            Assert.That(_session.FamilyRoster.Count, Is.EqualTo(6),
+                "the fixed SC-013 projection keeps its six rows");
+            var spouseId = new PersonId("person.m08a.header.spouse");
+            Assert.That(_session.Succession.World.TryAddPerson(
+                new PersonState(spouseId, "阿绫", PersonGender.Female),
+                new SuccessionPersonLife(1540, true, false), out string personError),
+                Is.True, personError);
+            Assert.That(_session.Succession.World.TryAddMember(spouseId,
+                FamilyMemberRole.Spouse, out string memberError), Is.True, memberError);
+
+            Assert.That(_session.FamilyRoster.Any(row => row.PersonId == spouseId), Is.False,
+                "M08A additions are not part of the fixed six-row projection");
+            Panel().Open();
+
+            Assert.That(Find(AddM02DailyActionPanel.HeaderPeopleName).GetComponent<Text>().text,
+                Is.EqualTo("7"),
+                "the header reports the living family, not the projected row count");
+        }
+
+        [Test]
+        public void PageView_HeaderPeopleExcludesADeadFamilyMember()
+        {
+            Assert.That(_session.Succession.World.TryGetLife(M2FixedScenario.SakonId,
+                out SuccessionPersonLife life), Is.True);
+            Assert.That(_session.Succession.World.TrySetLife(M2FixedScenario.SakonId,
+                new SuccessionPersonLife(life.BirthYear, false, life.Retired),
+                out string error), Is.True, error);
+            Assert.That(_session.FamilyRoster.Count, Is.EqualTo(6),
+                "a dead member keeps its recorded roster row");
+
+            Panel().Open();
+
+            Assert.That(Find(AddM02DailyActionPanel.HeaderPeopleName).GetComponent<Text>().text,
+                Is.EqualTo("5"), "the header reports living members only");
         }
 
         [Test]

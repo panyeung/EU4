@@ -237,10 +237,13 @@ namespace SengokuChronicle.Presentation
                 headerMeritText.text = session != null
                     ? session.Merit.ToString(System.Globalization.CultureInfo.InvariantCulture)
                     : "—";
+            // The M2 roster projection keeps the fixed six SC-013 rows, while M08A marriages
+            // and births add and deaths remove living members. Count the same living family
+            // M08B settles food against instead of the projection's row count.
             if (headerPeopleText != null)
-                headerPeopleText.text = session != null && session.FamilyRoster != null
-                    ? session.FamilyRoster.Count.ToString(
-                        System.Globalization.CultureInfo.InvariantCulture)
+                headerPeopleText.text = session != null
+                    ? MarketSettlement.CountLivingFamilyMembers(session.Succession)
+                        .ToString(System.Globalization.CultureInfo.InvariantCulture)
                     : "—";
             IndustryResources resources = default;
             bool hasResources = false;
