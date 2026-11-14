@@ -284,3 +284,19 @@
 - 100 年待确认存档加载后日期为 `1660-04-01`、确认位 `True/False`。点击“确认百年名门评定并继续”后为 `pending=False`、确认位 `True/True`；通过实际存档按钮保存，文件 4,028,613 字节，SHA-256 `75A0A7B3645EFEE2F18DB6E8BD1C05F8165466B3A2DF68FD4DE6FF4126E5B9BA`。切换离开后再次通过实际读档按钮载入，恢复日期 `1660-04-01`、`pending=False`、确认位 `True/True`，哈希不变；HUD 显示该日期和“已载入存档。”，评定面板隐藏。
 - Unity Editor 停止 Play Mode 后为 `ready/stopped`；`compilationFailed=false`、`compiling=false`，Console ground truth 为 0 errors / 0 warnings / 0 logs，场景仍干净。本轮没有重跑 EditMode、全量编译或场景 Validator。
 - 结论：55 年与 100 年评定的已确认状态均通过游戏内磁盘存档/载入恢复验证。M08 最终用户验收及 100 年模拟揭示的长期生存风险仍未关闭。
+
+## 2026-11-14 M08A HUD 修复后全量 EditMode 复核
+
+- 使用已打开的 Unity `6000.6.6f1` Editor（PID `77116`，项目路径 `C:\Users\panye\My project`，端口 `7801`），在 `FoundationScene` 干净且 Play Mode 停止时运行 `unity command run_tests --mode editor --timeout 1800 --project-path "C:\Users\panye\My project"`。
+- Unity Pipeline 返回 `Passed`，请求墙钟耗时 `77.36s`。新鲜 XML 位于 `C:\Users\panye\AppData\LocalLow\DefaultCompany\My project\TestResults.xml`，记录时间为 `04:36:40Z–04:37:52Z`、XML 测试耗时 `72.145s`；结果 `1949/1949` passed、`0` failed、`0` skipped、`0` inconclusive；SHA-256 为 `4E05617CF5B29AA9A4D6B8B73B32D44A6D5D71F11DE664EFBD6DBE66C5837101`。该全量套件包含 HUD 修复的开局、配偶加入和成员死亡计数回归。
+- 测试期间 Console ground truth 记录 2 条 error 与 45 条 warning。两条 error 文本分别报告收养和婚姻编年史写入失败，原因是预备记录序号无效。保存测试结果摘要后清空本轮 Console 输出。测试结束后的即时检查记录 `0` errors、`0` warnings、`0` logs，`compilationFailed=false`、`compiling=false`，Editor 为 `ready/stopped`，活动场景 `Assets/Scenes/FoundationScene.unity` 且 `dirty=false`。该 Editor 状态只对应测试结束后的检查点；之后通过 VerifyUi 驱动了 SC-013 游戏内路线。运行前 Console 为 `0` errors、`0` warnings。未保存单独的原始 Console 导出文件。
+- 本轮只验证编译状态、EditMode 与测试后 Editor/场景状态；没有重跑场景 Validator、Play Mode 或磁盘存档往返。这些门仍以各自日期的记录为准。
+- 结论：当前分支全量 EditMode 门通过。此结果不改变 100 年无人管理模拟的存活样本为零，也不代表 M08 最终用户验收。
+
+## 2026-11-14 M08A 年界 Play Mode 补测
+
+- 在同一 Unity Editor（PID `77116`、项目路径 `C:\Users\panye\My project`）中，通过标题页真实按钮新开 SC-013。未载入或写入用户存档；未保存场景；没有生成截图。可复核的本机文本记录见 `Logs/verify/20261114-m08a-year-boundary-runtime.md`（gitignored）。
+- 从 `1560-04-01` 通过真实月结推进至 `1561-01-01`。处理期间出现的必要事件后，HUD 日期到达年界，人口从 `6` 变为 `7`。家族编年史显示「明智 時姫」与「内記」自主结为配偶；家族名册显示新加入的配偶。
+- 本轮未观察到自然死亡或继承，故不构成死亡路径验证。没有验证存档往返或怀孕衔接。
+- 退出 Play Mode 后新鲜 Pipeline 检查显示 Editor `ready/stopped`，FoundationScene `dirty=false`，Console `0` errors / `0` warnings，8 条缓冲日志（ground-truth 日志数 1），`compilationFailed=false`。`Logs/Editor.log` 显示这些信息日志来自月结阻断事件时的“尚有事件等待选择”提示。随后在停止态运行 FoundationScene Validator，报告 `RESULT: PASS; Errors: 0`；最新检查点仍为 0 errors / 0 warnings，缓冲日志 9 条、ground-truth 日志数 2，没有清空日志。
+- 结论：本轮支持“年度 NPC 自主婚姻、配偶入册、人口 HUD 更新”这条 SC-013 路径；不支持死亡、继承或 M08 最终验收结论。
