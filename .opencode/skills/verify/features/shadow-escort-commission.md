@@ -9,11 +9,13 @@ Editor with the pre-existing FoundationScene integration. The 2026-11-10 partial
 route and the 2026-11-11 failure plus terminal save/load route both passed; the latter
 restored the user's save files to their recorded SHA-256 values and a fresh read-only
 FoundationScene Validator run passed with zero errors. A separate delegated full-success
-route and settle-once check passed in Play Mode on 2026-11-12; manual full success remains
-unverified. Final user milestone acceptance remains pending. See
-Logs/verify/20261110-2340-m05-shadow-escort.md and
-Logs/verify/20261111-1032-m05-failure-save-load.md and
-Logs/verify/20261112-1633-m05-full-success.md for separate route evidence.
+route and settle-once check passed in Play Mode on 2026-11-12. Manual full success and
+retired-assignee abandonment passed in separate Play Mode routes on 2026-11-14: SC-013
+settled Manual at 92 (roll 82) and stayed settled on 04-05; SC-010 retired the assignee of an
+active manual commission and abandoned it at the due date without shared rewards. Final user
+milestone acceptance remains pending. See `docs/reports/m07-runtime-verification.md` and the
+local records `Logs/verify/20261114-m05-manual-full-success.md` and
+`Logs/verify/20261114-m05-retired-assignee-abort.md`.
 The three-day window uses a close-page / return-to-map / advance / reopen round trip because
 the town menu hides the clock and `VerifyUi` only lists active buttons.
 The M07 delegated and manual entries were both exercised live on 2026-11-12 and each settled a
@@ -179,9 +181,8 @@ captured; after stopping, the scene was clean and Console `0/0/0`. This is one t
 Manual save/load route only: it does not establish corruption recovery, migration coverage,
 failure-preserves-old-slot behavior, a second settlement after loading, overall M07
 acceptance, or broader manual/delegated parity. M05 delegated full success passed a
-separate Play Mode route on 2026-11-12; manual full success and abandonment remain
-unverified in Play Mode. See
-`docs/reports/m07-runtime-verification.md`.
+separate Play Mode route on 2026-11-12. Manual full success and abandonment were verified in
+separate 2026-11-14 Play Mode routes documented in `docs/reports/m07-runtime-verification.md`.
 
 The open commission page builds two explicit runtime uGUI mode rows from the authored candidate
 template, under `CandidateContent`. No scene or prefab change is required:
