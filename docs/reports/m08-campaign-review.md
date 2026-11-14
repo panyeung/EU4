@@ -1,7 +1,7 @@
 # M08 家族评价与百年名门 — 实现与验证说明
 
 **范围：** `docs/UI_ROADMAP.md` Task 7 / GDD §10.3、§19.7 已批准部分。
-**状态：** 代码评审、FoundationScene 接入与场景 Validator 已通过。2026-11-13 的 SC-013 Play Mode 通过真实月结到达 55/100 年评定，正文分块、滚动和确认继续流程通过。M08B 当前规则集的 20/1/200/1000 seed 分阶段产物已复核；无人管理基线没有样本到达第 50/100 年，经济长期稳定性仍是风险。周年磁盘存档/读档、未知来源旧档 Play Mode、M08B 端到端最终签收和最终用户里程碑验收仍待完成。
+**状态：** 2026-11-13/14 SC-013 Play Mode 验证到达 55 年和 100 年评定。正文完整分块，滚动诊断确认首尾块均能进入视口；55 年末尾截图通过目视检查，两个评定确认后继续均通过。2026-11-14 使用专用测试槽验证了 55/100 年待确认评定的磁盘保存/载入往返；载入后确认/继续流程通过，但没有保存并重新载入已确认状态，默认用户槽未写入。未知来源旧档真实 UI 加载已通过。后续 `RunStagedBatches` 用当前 runner 与规则输入摘要验证了 1000-seed 结果：605 灭亡、395 停在待处理继承，0/1000 到达 50/100 年；粮荒、经济崩溃和极端通胀各为 999/1000。用户接受过这组风险结果，但它不是生存通过，也不代表 M08 最终验收。截图清理被自动审核拦截。
 
 ## 行为
 
@@ -143,14 +143,16 @@
 
 ### 范围与规则
 
-- 新增纯规则 `FamilyLifeCycleRules`（年度边界、六段死亡率、稳定 `PersonId` 顺序、婚姻候选过滤、15%/人/年）与 `NpcMarriageProposal`。
+- 新增纯规则 `FamilyLifeCycleRules`（年度边界、六段基础死亡率、稳定 `PersonId` 顺序、婚姻候选过滤、15%/人/年）与 `NpcMarriageProposal`。M08B 后续为死亡检定加入粮荒加成，每连续短缺 3 个月 +50‰，上限 +250‰，所以最高有效年死亡率为 50%。
 - 新增 `FamilyMarriageSettlement`（稳定配偶 ID/姓名/相反性别/成年生年/`Spouse` 关系与成长行）并复用 `FamilyBirthNaming` 的姓名表与唯一性规则。
 - `GameSession.TryAdvanceToNextMonth` 的 RNG 顺序固定为：到期出生/受孕 → 年度死亡 → 自主婚姻。死亡候选在出生前截取，新生儿不进入同一次年界死亡列表；家主死亡只调用一次既有 `BeginDeathSuccession`，产生待决继承时跳过婚姻。
 - 死者保留人员、成员、家谱与关系事实；提交后清理产业任命与进行中的日行动，未完成孕期在克隆快照内取消。死亡/婚姻编年史先按下一序号整体校验再追加；任一失败恢复日期、继承世界、成长、日行动、产业、妊娠、RNG 与编年史。
 - 编年史新增 append-only `ChronicleCategory.NaturalDeath = 8` 与来源 `natural-death`，既有枚举数值不变。家族编年史显示 `人物离世 · 享年 N 岁`；Campaign Review 的「人物死亡与重要经历」读取真实死亡/婚姻行；现有家谱已显示 `配偶` 边与 `已故` 标签，未新增面板、场景根或立绘。
-- 存档未新增字段：生成配偶复用既有人员/生命/成员/成长/日行动/亲属记录，死亡复用 `Alive`。schema 保持 v16，迁移链未改。
+- M08A 当时未新增存档字段：生成配偶复用既有人员/生命/成员/成长/日行动/亲属记录，死亡复用 `Alive`。当时 schema 为 v16；M08B 后当前 schema 为 v17，迁移链已继续演进。
 
 ### 证据（分开记录）
+
+下表前七行是 2026-11-12 的实现验证快照，使用 Editor PID `63756`；最后几行是 2026-11-13 的 lead Play Mode 门禁，使用 PID `77116`。两轮 PID 变化原因未记录，不把它们当作同一次 Editor 会话。
 
 | 检查 | 结果 | 证据 |
 |---|---|---|
@@ -161,11 +163,15 @@
 | succession sweep | `violations=0`、`self-test=PASS (4/4 broken traces caught)` | `unity command run_script --file .opencode/skills/succession-invariants/scripts/SuccessionSweep.cs --entry SuccessionSweep.Run` |
 | 场景 Validator | `Loaded: True; Dirty: False`，清单全部 PASS，`RESULT: PASS; Errors: 0` | 停止 Play Mode 状态下运行 `Tools/Sengoku Chronicle/Validate Foundation Scene` |
 | Console | 最新窗口 2 条 error，均为既有家族关系负向测试的预期 `编年史预备记录序号无效` 日志；`compilationFailed=false` | 全量 EditMode 之后 `console` |
-| Play Mode | **未运行** | 本切片实施者未进入 Play Mode；真实月结中的可见死亡/婚姻、家谱与读档由 lead 的 Play Mode 门验证 |
+| 2026-11-13 全量 EditMode | 1947/1947 passed，0 failed / 0 skipped / 0 inconclusive；四个主要 M08A 测试组分别为 28/28、8/8、25/25、4/4 | `Logs/verify/20261113-m08a-full-editmode.xml`，22:15:05Z–22:17:34Z |
+| 2026-11-13 重编译状态 | `up_to_date`，不是一次新的编译 | 本机记录 `Logs/verify/20261113-m08a-family-demography.md`；原始命令输出未保留 |
+| 2026-11-13 Validator | `RESULT: PASS; Errors: 0` | `Logs/SceneValidationReport.txt`，文件修改时间为 2026-11-13 22:20:28Z |
+| 2026-11-13 Console / Editor | 本地记录称最终为 0 errors / 0 warnings，Editor ready/stopped、FoundationScene clean；原始 `editor_status`/`console_status` 输出未保留。测试期间记录两条 `FamilyFormationSessionTests` 编年史故障注入 error 和 45 条 warning | 本机记录 `Logs/verify/20261113-m08a-family-demography.md`，状态值未独立复核 |
+| 2026-11-13 Play Mode | 两次真实年界观察到自然死亡与自主婚姻编年史。Save/Load 后确认日期与编年史行保留；未检查配偶稳定 ID、性别、生年、未完成怀孕或 RNG。死后家谱标签、家主死亡继承与出生衔接未在该路线核验 | `Logs/verify/20261113-m08a-family-demography.md`；本轮游戏存档/备份哈希比较的摘要值未保留，无法独立复核 |
 
 ### 限制
 
-- 本轮没有推进真实 55/100 年、没有做 100 年 × 1000 种子长期模拟，也没有实现 M08B 价格指数；不声称 M08 §14.2 完成。
+- 截至本节 2026-11-12 的实现快照，没有推进真实 55/100 年、没有做 100 年 × 1000 种子长期模拟，也没有实现 M08B 价格指数。后续 M08B 状态见本报告对应章节；不据此宣称 M08 §14.2 完成。
 - 全量 EditMode 通过不等于运行时行为通过；上表把编译、EditMode、Validator、Console 与 Play Mode 分开记录。
 - Play Mode 的默认种子未必在同一年界命中 15% 婚姻；确定性 EditMode 已分别覆盖命中与未命中。以代码注入种子启动的会话不得当作真实标题页 Play Mode 路线。
 - 当前分支仍有 M02–M08 混合 WIP；本切片可隔离文件的提交状态见交付记录。未创建 milestone checkpoint、未合并 `main`、未打 tag。
@@ -186,6 +192,7 @@
 - `Logs/verify/m08b/summary-1-1000-100y.json` 请求种子 1–1000、每局 100 年。该产物记录 605 局灭亡、395 局停在待处理的危机继承，完成数为 0；第 10 年到达 194/1000，第 25 年 2/1000，第 50 与第 100 年均为 0/1000。记录的粮荒、经济崩溃与极端通胀各为 999/1000，关系异常和世界推进死锁为 0。
 - 产物中的 runner `sourceSha256` 与当前 `M08BLongTermSimulationRunner.cs` 相符。产物记录 96 个规则输入；独立按当前 96 个输入重算的清单摘要与产物 `ruleInputSha256` 不同。该手动重算尚未由 Unity runner 复核，因此这批指标不能作为当前规则集的最终 1000 种子证据，需先用 runner 复核输入摘要并按当前规则重跑。
 - 本次只读旧产物，没有启动长周期运行。M08 §14.2 的当前规则集 1000 种子验收仍未完成。
+- 本节是后续复核前的历史快照。其结论由下方“2026-11-13 M08B 当前规则集 1000 种子阶段复核”更新；该节记录了当前 runner 和输入摘要验证通过的分阶段产物。
 
 ## 2026-11-13 SC-013 55 周年回顾复测（未通过）
 
@@ -204,7 +211,7 @@
 - 通过游戏继续按钮“确认百年名门评定并继续”确认。确认后日期仍为 `1660-04-01`、`HasPendingCampaignReview=false`、评定面板隐藏；SaveData 中 `stageReviewAcknowledged=true` 且 `centuryReviewAcknowledged=true`。这是运行中存档对象的读回，不等同于磁盘存档/读档往返。
 - `editor_stop` 后 Editor 为 `ready/stopped`；FoundationScene `dirty=false`。最终 `console_status` 报告 `compilationFailed=false`、`compiling=false`、当前采样错误/警告/日志均为 0，自游标 `5451` 起没有新增 Console 项。累计缓存计数仍包括旧历史，不代表本轮新增错误。
 - 本轮没有生成新截图。已删除项目内 `Assets/Logs/verify/_scratch/20261113-m08-rendering-review.png`、`m08-55yr-review.png` 及其 `.meta`，并清理空的 `Assets/Logs` 与目录 `.meta`。Computer Use 临时缓存目录 `C:\Users\panye\AppData\Local\Temp\orca-computer-use` 中仍有 12 个 `*-screenshot.png`；批量清理被自动审核拦截，我没有改用其他路径绕过。
-- 结论：本次运行通过 55 年与 100 年评定正文显示数据、滚动范围和继续确认流程。M08B 1000 seed 结果在后续章节独立复核；周年评定的磁盘保存/读档仍未验证。
+- 结论：本次运行通过百年评定正文显示数据、滚动范围和继续确认流程。55 年评定正文仍有空白视口，未通过同一运行验证。M08B 1000 seed 结果在后续章节独立复核；该轮只验证了评定确认的运行中状态，没有验证磁盘存档往返。
 
 ## 2026-11-13 M08B 当前规则集 1000 种子阶段复核
 
@@ -214,13 +221,13 @@
 - 200 seed 检查点：第 10 年 `46/200`，第 25/50/100 年均为 `0/200`；累计粮荒、经济崩溃、极端通胀均为 `200/200`，产业停摆 `0/200`，关系异常种子 `0/10`，关系不变量违规 `0/200`，推进死锁 `0/200`，停止时继承人断档 `79/79`。事件频率为 `2974/18228`，即每千月 163 个事件。
 - 1000 seed 检查点：第 10 年 `194/1000` 到达且存活，第 25 年 `2/1000`，第 50/100 年 `0/1000`。seed 级累计粮荒 `999/1000`、经济崩溃 `999/1000`、极端通胀 `999/1000`；产业停摆 `0/1000`、关系异常种子 `0/48`（48 个有可采样关系的种子）、存档关系不变量违规 `0/1000`、世界推进死锁 `0/1000`。停止状态下继承人断档为 `395/395`。全程事件频率为 `14955/88836` 个已模拟月份，即每千月 168 个事件。
 - 第 10 年检查点样本的家族人数范围 1–8、均值 2、中位数 1；平均年龄样本为 19.4–80.0 岁、均值 44.1 岁；财富样本均为 29。第 25 年两局样本均为 1 人，财富仍为 29。50/100 年没有存活样本，相关人口、年龄、财富及经济指标分母为 0，不得解读为零值或通过。
-- 重新执行 `RunStagedBatches` 后 Editor 为 `ready/stopped`、`compilationFailed=false`。两条 30 秒 Pipeline 超时日志已留存为运行证据后清空，最终 Console 样本为 0 errors / 0 warnings / 0 logs；未运行 EditMode、场景 Validator 或另一次 Play Mode。
+- 重新执行 `RunStagedBatches` 后 Editor 为 `ready/stopped`、`compilationFailed=false`。两条 30 秒 Pipeline 超时日志已留存为运行证据后清空，最终 Console 样本为 0 个错误、0 条警告、0 条日志；未运行 EditMode、场景 Validator 或另一次 Play Mode。
 - 结论：分阶段批处理与当前规则摘要/CSV 数据完整性通过。结果暴露无人管理基线下极高粮荒/通胀及无 50/100 年生存样本；GDD/计划没有规定经济平衡阈值，这不是擅自改规则的授权。M08B 最终验收仍待全量 EditMode、场景 Validator、真实 UI 存读档、Play Mode 端到端和产品层生存策略决策。
 
 ## 2026-11-13 M08B 当前 Editor 端到端复核
 
 - Unity Editor PID `63756`、Unity `6000.6.6f1`、项目路径 `C:\Users\panye\My project`。在当前 Editor 安静重跑全量 EditMode 后结果为 `1943/1943 passed`、0 failed、0 skipped、0 inconclusive，耗时约 206 秒。首轮曾因 Pipeline 主线程超时污染测试 SetUp 而得到 1942/1943；该轮不作为最终结果。后续安静重跑的全量结果为准。
-- 测试结束时 Console 曾有两条由故障注入回滚测试预期产生的错误日志；记录后清空。Play Mode 停止后的最终 `console_status` 为 0 errors / 0 warnings / 0 logs，`compilationFailed=false`、`compiling=false`。这表示当前缓存计数为零，不把测试故障注入日志误报为运行期游戏错误。
+- 测试结束时 Console 曾有两条由故障注入回滚测试预期产生的错误日志；记录后清空。Play Mode 停止后的最终 `console_status` 为 0 个错误、0 条警告、0 条日志，`compilationFailed=false`、`compiling=false`。这表示当前缓存计数为零，不把测试故障注入日志误报为运行期游戏错误。
 - 在停止状态运行 `Tools/Sengoku Chronicle/Validate Foundation Scene`，当前 `Logs/SceneValidationReport.txt` 结尾为 `RESULT: PASS; Errors: 0`。该操作未保存或修改场景；最终 Editor 状态为 `ready/stopped`，活动场景仍是 `Assets/Scenes/FoundationScene.unity`，`dirty=false`。
 - 真实 UI Play Mode 从标题页开始新局并选择 SC-013，使用地图到达热田。4 月至 5 月月结显示六名在世家族成员需粮 2、购买 2、资金支付 2，粮食库存从 2 到 0；随后通过真实保存按钮写出 v17 存档。磁盘 JSON 读到日期 `1560-05-01`，市场状态为粮食库存 0、粮食价 1000‰、物资价 900‰、已结算月索引 18723、连续短缺 0、综合指数 950。推进一天后使用真实读档按钮，游戏状态恢复到 1560-05-01，位置热田、资金 28、物资 12；保存/载入 UI 均显示成功。
 - 读档后通过产业面板任命明智千恵负责农庄，再真实结束 5 月。6 月 1 日的产业报告显示农庄粮食毛产出 +4、物资毛产出 +4、维护消耗 1 物资，并结算为 +1 资金/+3 物资；六人需粮 2，市场报告列出购买 2、资金支出 2，粮食库存从 0 到 2，粮食价格 1000→900‰，物资价格 900→810‰，短缺月数保持 0。UI 资源文本同时显示资金 27、粮食 2、物资 15。该路线验证了真实月结、产业供给、家庭需求、价格更新和 v17 UI 存读档，不代表无人管理的 100 年经济平衡。
@@ -228,3 +235,42 @@
 - Play Mode 结束后恢复了测试前的用户存档与备份。当前 `save-slot-1.json` SHA-256 为 `1E61ED9CAB4A5F3E5FBCCE5EDA4BD24586BE5A072EA5B749CCB3C1E280BCB92C`，`.bak` SHA-256 为 `F1C0630E5DD91BAA0B18607CA4367956DB637A8BB4DD6DA21D1E79212BDA4CBE`；二者分别与测试前复制的恢复件逐字节相同。恢复副本保留在系统临时目录 `m08b-save-backup-20261113-054506`。
 - 本轮没有截屏。临时 Computer Use 缓存内此前遗留的 12 个截图未被本轮创建；批量删除曾被自动审核拦截，仍需用户手动清理。
 - 结论：全量 EditMode、当前 FoundationScene Validator、短期真实 SC-013 市场/产业月结及 v17 UI 存读档通过。M08B 的无人管理长周期生存风险仍未解决；不据此宣告 M08B 最终里程碑验收或合并/tag。
+
+## 2026-11-13 周年评定磁盘存档往返（待验证）
+
+- 当前可复核的 55 年与 100 年评定记录只证明了运行中确认状态；百年评定记录明确说明没有通过磁盘存档和读档按钮往返。
+- 此前会话摘要曾报告在 `1615-04-01` 和 `1660-04-01` 保存并读档，但没有保留对应的 Unity 命令、槽位哈希或逐步验证记录。因此本报告不把该摘要当作磁盘存档通过证据。
+- 当时计划重新运行游戏内保存和读档路径，分别验证待确认与确认后的状态；2026-11-14 只完成了待确认状态往返，已确认状态的磁盘持久化仍待验证。
+- 待确认状态子项由下方 2026-11-14 的专用测试槽 Play Mode 往返记录关闭；已确认状态的磁盘往返仍未验证，用户默认存档槽未用于该测试。
+
+## 2026-11-13 未知来源旧档 Play Mode 验证（通过）
+
+- 逐步命令记录见 [M08 未知来源旧档 Play Mode 记录](../../Logs/verify/20261113-m08-unknown-origin.md)。复用 Unity Editor PID `77116`，项目路径为 `C:\Users\panye\My project`，Unity `6000.6.6f1`，Pipeline 端口 `7801`。运行时场景为 `Assets/Scenes/FoundationScene.unity`，进入测试前及退出后均 `dirty=false`。
+- 测试槽使用临时 v11 合成旧档，家族 ID 为 `family.unknown.legacy`，活动事件路线为空，日期为 `1660-04-01`。产业和研究已结算月索引均为 `19922`。为符合空路线旧档的事件校验，测试夹具将 `eventRuntime` 的待处理事件、冷却、一次性标记、历史和已提交结果设为空。测试前用户原存档和 `.bak` 已复制到系统临时备份目录。
+- 通过地图上的真实 `读档` 按钮 `Canvas/M2WorldMapRoot/M5SaveLoadRoot/M5LoadButton` 加载。界面状态为“已载入存档。”，日期为 `1660 年 4 月 1 日`。运行时 `CaptureSave()` 诊断读到 `startKnown=False`、空 `originId`、开局日期 `0-0-0`、`pendingReview=False`、阶段和百年确认状态均为 `False`。未知来源存档没有被猜测为某个剧本，也没有显示周年评定。
+- 加载后 Console ground truth 为 `0 个错误、0 条警告、0 条日志`，`compilationFailed=false`。退出 Play Mode 后 Editor 为 `ready/stopped`，`FoundationScene` 仍为干净状态。
+- 测试结束后从备份恢复用户存档；当时记录做过哈希比较，但没有保留摘要值或恢复副本，不能独立复核。本轮没有截图。
+- 结论：未知来源旧档迁移和真实 UI 加载路径通过。周年评定磁盘存档往返仍待验证。M08B 长期生存风险仍未解决，M08 最终里程碑仍未验收。1000 seed 无人管理模拟中，没有样本到达 50 年或 100 年。用户接受的是当前风险结果，不是生存率通过。
+
+## 2026-11-13 M08 55/100 年评定长正文 Play Mode 复核
+
+逐步命令和实时诊断读数见 [本机运行记录](../../Logs/verify/20261113-m08-campaign-review-live-runtime.md)。
+
+- 复用 Unity Editor PID `77116`，命令行 `-projectPath` 指向 `C:\Users\panye\My project`，版本为 `6000.6.6f1`。活动场景为 `Assets/Scenes/FoundationScene.unity`。本次从既有 SC-013 会话的 `1615-04-01` 55 年评定继续，没有保存场景或写入磁盘存档。
+- 55 年评定正文共 76,236 个字符，分为 20 个活动 Text 块，拼接结果与正文完全相同；最大块 3,990 字符、最大 TextGenerator 网格 14,400 顶点，总计 271,076 顶点。ScrollRect 内容高 25,047.33、视口高 402。滚动诊断分别把首块和末块移入视口；本次只目视检查了末尾截图，其中可见家族状态、发展维度、来源说明和“继续家族”按钮，没有保留顶部截图。
+- 通过 `Canvas/M08CampaignReviewRoot/M08CampaignReviewPage/M08CampaignReviewCard/M08CampaignReviewButtonRow/M08CampaignReviewContinueButton` 的实际按钮回调确认 55 年评定。状态读回为日期 `1615-04-01`、面板隐藏、阶段确认 `True`、百年确认 `False`。该调用执行 Unity Button 的 `onClick`，不是鼠标命中测试。
+- 继续调用真实月末按钮回调到 `1660-04-01`。过程分段推进，每月结算处理六次合法继承选择，没有灭族。100 年评定自动出现，标题为“百年名门 · 百年评定”，正文 198,657 个字符，分为 51 个活动 Text 块，拼接结果与正文完全相同；最大块 3,998 字符、最大 TextGenerator 网格 14,400 顶点，总计 270,904 顶点。ScrollRect 内容高 65,506.66、视口高 402，首块与末块均可分别滚入视口。
+- 通过同一路径上的“确认百年名门评定并继续”按钮回调确认。状态读回为日期仍是 `1660-04-01`、无待处理评定、面板隐藏，阶段和百年确认均为 `True`。这是内存中 SaveData 快照的状态检查，不是磁盘存档往返。
+- Play Mode 退出后 Editor 为 `ready/stopped`，FoundationScene `dirty=false`。最终 `console_status` 为 `compilationFailed=false`、`compiling=false`、0 个错误和 0 条警告。未运行 EditMode、场景 Validator 或磁盘存档往返。
+- 末尾视口截图保存在 `Assets/Logs/verify/_scratch/20261113-m08-review-bottom.png` 供本机目视检查；尝试删除该 PNG 和 `.meta` 时被自动审核拒绝，二者仍留在未跟踪的 `Assets/Logs` 下，未纳入 Git。Computer Use 临时缓存另有 11 个此前遗留的截图，本次没有创建这些缓存文件，也没有尝试绕过删除拦截。
+- 结论：本次运行验证 55 年和 100 年评定正文分块、滚动范围与确认后继续，但没有验证磁盘存档/读档。当前规则集 1000 seed 结果见后续 M08B 阶段复核；无人管理样本没有到达 50/100 年，人口与经济可持续性仍未通过。M08 整体验收尚未完成。
+
+## 2026-11-14 M08 周年评定磁盘存档往返（待确认状态通过）
+
+逐步命令、存档哈希与状态读回见 [本机 Play Mode 记录](../../Logs/verify/20261114-m08-anniversary-save-load.md)。
+
+- 新开 SC-013 后通过真实月末回调到达 `1615-04-01` 与 `1660-04-01`。保存与读档按钮使用专用本机测试槽 `Logs/verify/m08-campaign-review-save-test-20261114`；未触碰默认用户单槽。
+- 55 年待确认存档为 `stageAck=false`、`centuryAck=false`、评定待处理。点击继续后再读档，日期恢复为 `1615-04-01`，55 年评定重新出现，确认位恢复为 `False/False`。确认后日期不变，`stageAck=true`。
+- 100 年待确认存档为 `stageAck=true`、`centuryAck=false`、评定待处理。确认并继续后载入该待确认存档，日期恢复为 `1660-04-01`，百年评定重新出现，确认位恢复为 `True/False`；正文 253,159 字符、65 块，拼接完整，滚动诊断确认首末块可进入视口。再次确认后两位均为 `True`，面板关闭，日期不变；未将此已确认状态另存并重新载入。
+- Play Mode 后 Editor `ready/stopped`，FoundationScene `dirty=false`，Console `0/0/0`，编译状态正常。测试存档及本机日志保留在 gitignored `Logs/verify`；未生成本次截图。
+- 结论：55 年和 100 年待确认评定状态均通过游戏保存/读档回路验证；载入后确认/继续流程通过。已确认状态的磁盘存档往返仍未验证。M08 最终里程碑验收仍待用户明确确认；M08B 的 1000-seed 风险结果不等同于长期生存通过。
