@@ -31,6 +31,10 @@ namespace SengokuChronicle.Editor
             WorldMapController controller = mapRoot != null ? mapRoot.GetComponent<WorldMapController>() : null;
             TownNpcDialoguePanel panel = FindComponent<TownNpcDialoguePanel>(scene);
             SupplyShortageMissionPanel missionPanel = FindComponent<SupplyShortageMissionPanel>(scene);
+            ShadowEscortCommissionPanel commissionPanel =
+                FindComponent<ShadowEscortCommissionPanel>(scene);
+            TacticalMissionPanel tacticalMissionPanel =
+                FindComponent<TacticalMissionPanel>(scene);
             TownOverviewPanel townOverviewPanel = FindComponent<TownOverviewPanel>(scene);
             SaveLoadPanel saveLoadPanel = FindComponent<SaveLoadPanel>(scene);
             TitleScreenController titleController = FindComponent<TitleScreenController>(scene);
@@ -47,6 +51,7 @@ namespace SengokuChronicle.Editor
             FamilyDoctrinePanel doctrinePanel = FindComponent<FamilyDoctrinePanel>(scene);
             DailyActionPanel dailyActionPanel = FindComponent<DailyActionPanel>(scene);
             NpcAiInspectorPanel npcAiInspectorPanel = FindComponent<NpcAiInspectorPanel>(scene);
+            CampaignReviewPanel campaignReviewPanel = FindComponent<CampaignReviewPanel>(scene);
 
             CheckFound(report, ref errors, "Canvas", canvas);
             CheckFound(report, ref errors, "Canvas/M2WorldMapRoot", mapRoot);
@@ -54,6 +59,8 @@ namespace SengokuChronicle.Editor
             CheckFound(report, ref errors, "WorldMapController", controller);
             CheckFound(report, ref errors, "TownNpcDialoguePanel", panel);
             CheckFound(report, ref errors, "SupplyShortageMissionPanel", missionPanel);
+            CheckFound(report, ref errors, "ShadowEscortCommissionPanel", commissionPanel);
+            CheckFound(report, ref errors, "TacticalMissionPanel", tacticalMissionPanel);
             CheckFound(report, ref errors, "TownOverviewPanel", townOverviewPanel);
             CheckFound(report, ref errors, "SaveLoadPanel", saveLoadPanel);
             CheckFound(report, ref errors, "TitleScreenController", titleController);
@@ -70,10 +77,19 @@ namespace SengokuChronicle.Editor
             CheckFound(report, ref errors, "FamilyDoctrinePanel", doctrinePanel);
             CheckFound(report, ref errors, "DailyActionPanel", dailyActionPanel);
             CheckFound(report, ref errors, "NpcAiInspectorPanel", npcAiInspectorPanel);
+            CheckFound(report, ref errors, "CampaignReviewPanel", campaignReviewPanel);
             if (!AddM4SupplyShortageMissionPanel.Validate(scene, out string missionError))
                 AddError(report, ref errors, missionError);
             else
                 report.AppendLine("PASS M4a mission hierarchy, unique objects, bindings, and containment.");
+            if (!AddM5ShadowEscortCommissionPanel.Validate(scene, out string commissionError))
+                AddError(report, ref errors, commissionError);
+            else
+                report.AppendLine("PASS M05 shadow-escort commission page hierarchy, bindings, candidate list, and layout.");
+            if (!AddM06TacticalMissionPanel.Validate(scene, out string tacticalError))
+                AddError(report, ref errors, tacticalError);
+            else
+                report.AppendLine("PASS M06 tactical infiltration grid, bindings, commands, and layout.");
             if (!UpdateTownOverview.Validate(scene, out string townOverviewError))
                 AddError(report, ref errors, townOverviewError);
             else
@@ -150,6 +166,10 @@ namespace SengokuChronicle.Editor
                 AddError(report, ref errors, m03Error);
             else
                 report.AppendLine("PASS M03 read-only NPC Inspector hierarchy, bindings, containment, ordering, and layout.");
+            if (!AddM08CampaignReviewPanel.Validate(scene, out string m08Error))
+                AddError(report, ref errors, m08Error);
+            else
+                report.AppendLine("PASS M08 campaign review overlay hierarchy, sourced-history body, bindings, and layout.");
 
             if (controller != null)
             {
@@ -159,7 +179,8 @@ namespace SengokuChronicle.Editor
                     "destinationNameText", "travelTimeText", "arrivalDateText", "confirmButton", "cancelButton",
                     "returnToMapButton", "kiyosuButton", "atsutaButton", "nagoyaButton", "townMenuRoot",
                     "townMenuTitleText", "facility1Text", "facility2Text", "facility3Text",
-                    "townNpcDialoguePanel", "openNpcRosterButton", "supplyShortageMissionPanel");
+                    "townNpcDialoguePanel", "openNpcRosterButton", "supplyShortageMissionPanel",
+                    "shadowEscortCommissionPanel", "tacticalMissionPanel");
             }
 
             if (panel != null)
@@ -179,6 +200,30 @@ namespace SengokuChronicle.Editor
                     "acceptButton", "investigateButton", "negotiateButton", "reportButton",
                     "sealedLetterStageText", "sealedLetterObjectiveText", "sealedLetterFeedbackText", "sealedLetterActionButton",
                     "marketTallyStageText", "marketTallyObjectiveText", "marketTallyFeedbackText", "marketTallyActionButton");
+            }
+
+            if (commissionPanel != null)
+            {
+                report.AppendLine("\nSHADOW ESCORT COMMISSION PANEL REFERENCES:");
+                CheckReferences(report, ref errors, commissionPanel,
+                    "gameSession", "panelRoot", "openButton", "closeButton", "acceptButton",
+                    "titleText", "stateText", "dateText", "resourceText", "creedText", "offerText",
+                    "consequenceText", "assigneeText", "outcomeText", "messageText",
+                    "chronicleText", "candidateContainer", "candidateTemplate");
+            }
+
+            if (tacticalMissionPanel != null)
+            {
+                report.AppendLine("\nTACTICAL MISSION PANEL REFERENCES:");
+                CheckReferences(report, ref errors, tacticalMissionPanel,
+                    "gameSession", "panelRoot", "openButton", "closeButton", "startButton",
+                    "northButton", "eastButton", "southButton", "westButton", "moveButton",
+                    "sprintButton", "waitButton", "interactButton", "extractButton",
+                    "withdrawButton", "switchButton", "titleText", "stateText", "dateText",
+                    "resourceText", "objectiveText", "teamText", "statusText", "guardText",
+                    "resultText", "eventText", "messageText", "chronicleText",
+                    "selectionText", "gridRoot", "candidateContainer", "candidateTemplate",
+                    "candidateScroll");
             }
 
             if (saveLoadPanel != null)
@@ -320,6 +365,14 @@ namespace SengokuChronicle.Editor
                     "gameSession", "panelRoot", "openButton", "closeButton",
                     "masatsunaButton", "nobumasaButton", "titleText", "summaryText",
                     "needsText", "statusText", "candidatesText", "logText");
+            }
+
+            if (campaignReviewPanel != null)
+            {
+                report.AppendLine("\nM08 CAMPAIGN REVIEW PANEL REFERENCES:");
+                CheckReferences(report, ref errors, campaignReviewPanel,
+                    "gameSession", "panelRoot", "titleText", "contextText", "bodyText",
+                    "continueLabelText", "statusText", "continueButton");
             }
 
             report.AppendLine("\nHIERARCHY AND RECTTRANSFORMS:");

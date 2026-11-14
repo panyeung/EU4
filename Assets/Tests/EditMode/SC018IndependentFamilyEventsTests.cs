@@ -621,7 +621,19 @@ namespace SengokuChronicle.Tests.EditMode
                         delta = 5
                     }
                 });
-            Assert.That(Schedule(selfEngine, selfState, context).Succeeded, Is.True);
+            // A scene whose only effect addresses the current head is never offered: the
+            // option cannot be applied, so advertising it would only promise a rejection.
+            EventScheduleResult selfOffer = Schedule(selfEngine, new EventRuntimeState(), context);
+            Assert.That(selfOffer.Succeeded, Is.True);
+            Assert.That(selfOffer.SelectedEventId, Is.Empty,
+                "an option that targets the current head must not be advertised");
+            Assert.That(selfState.HasPendingEvents, Is.False);
+
+            // The commit guard still rejects a head target when the head changes after the
+            // scene was offered under the previous head.
+            EventRuleContext offerContext = ContextFor(M2FixedScenario.MasatsunaId);
+            Assert.That(Schedule(selfEngine, selfState, offerContext).Succeeded, Is.True);
+            Assert.That(selfState.PendingEventId, Is.EqualTo("event.test.self"));
             EventChoiceResult self = selfEngine.TryChooseEventOption("event.test.self",
                 "option.event.test.self", "result.test.self", new GameDate(1560, 5, 1),
                 npc, selfState, context, family);
@@ -640,10 +652,34 @@ namespace SengokuChronicle.Tests.EditMode
                         delta = 5
                     }
                 });
-            Assert.That(Schedule(outsiderEngine, outsiderState, context).Succeeded, Is.True);
-            EventChoiceResult outsider = outsiderEngine.TryChooseEventOption("event.test.outsider",
-                "option.event.test.outsider", "result.test.outsider", new GameDate(1560, 5, 1),
-                npc, outsiderState, context, family);
+            // A target that is not a current family member is not advertised either.
+            EventScheduleResult outsiderOffer = Schedule(outsiderEngine, new EventRuntimeState(),
+                context);
+            Assert.That(outsiderOffer.Succeeded, Is.True);
+            Assert.That(outsiderOffer.SelectedEventId, Is.Empty,
+                "an option that targets a non-member must not be advertised");
+
+            // A target that leaves the roster between offer and commit is still rejected at
+            // commit, so the transactional guard stays covered.
+            var memberState = new EventRuntimeState();
+            EventEngine memberEngine = CreateEngine("event.test.member-gone",
+                new[]
+                {
+                    new EventEffectData
+                    {
+                        type = "FamilyRelationshipDelta",
+                        targetPersonId = M2FixedScenario.TokihimeId.Value,
+                        delta = 5
+                    }
+                });
+            Assert.That(Schedule(memberEngine, memberState, context).Succeeded, Is.True);
+            Assert.That(memberState.PendingEventId, Is.EqualTo("event.test.member-gone"));
+            EventRuleContext rosterWithoutTarget = new EventRuleContext(0, 0,
+                EventScenarioIds.Sc013, M2FixedScenario.HarunobuId,
+                FamilyMemberIds().Where(id => id != M2FixedScenario.TokihimeId).ToArray());
+            EventChoiceResult outsider = memberEngine.TryChooseEventOption("event.test.member-gone",
+                "option.event.test.member-gone", "result.test.member-gone", new GameDate(1560, 5, 1),
+                npc, memberState, rosterWithoutTarget, family);
             Assert.That(outsider.Succeeded, Is.False);
             Assert.That(outsider.Message, Does.Contain("不是当前家庭成员"));
 
@@ -665,7 +701,8 @@ namespace SengokuChronicle.Tests.EditMode
                         delta = 5
                     }
                 });
-            Assert.That(Schedule(partialEngine, partialState, context).Succeeded, Is.True);
+            Assert.That(Schedule(partialEngine, partialState, offerContext).Succeeded, Is.True);
+            Assert.That(partialState.PendingEventId, Is.EqualTo("event.test.partial"));
             EventChoiceResult partial = partialEngine.TryChooseEventOption("event.test.partial",
                 "option.event.test.partial", "result.test.partial", new GameDate(1560, 5, 1),
                 npc, partialState, context, partialStore);

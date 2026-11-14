@@ -21,7 +21,9 @@ namespace SengokuChronicle.Domain
         /// <summary>One completed family research project recorded as family knowledge.</summary>
         Research = 6,
         /// <summary>One committed marriage or ordinary adoption relationship.</summary>
-        FamilyFormation = 7
+        FamilyFormation = 7,
+        /// <summary>One annual natural death of a living family member (M08A).</summary>
+        NaturalDeath = 8
     }
 
     /// <summary>
@@ -39,10 +41,15 @@ namespace SengokuChronicle.Domain
         public const string SupplyShortageMissionId = "mission.supply-shortage";
         public const string SealedLetterMissionId = "mission.sealed-letter";
         public const string MarketTallyMissionId = "mission.market-tally";
+        public const string ShadowEscortCommissionId = "mission.shadow-escort";
+        /// <summary>The single M06 tactical infiltration operation.</summary>
+        public const string TacticalMissionId = "mission.m06.intercepted-dispatch";
         public const string MarriageSourceId = "marriage";
         public const string AdoptionSourceId = "adoption";
         /// <summary>M04B dynamic birth; reuses the family-formation category.</summary>
         public const string BirthSourceId = "birth";
+        /// <summary>M08A annual natural death; own append-only category and source.</summary>
+        public const string NaturalDeathSourceId = "natural-death";
 
         private FamilyChronicleEntry(int sequence, string entryId, int year, int month,
             ChronicleCategory category, string subjectId, string sourceId, string title, string summary,
@@ -286,6 +293,18 @@ namespace SengokuChronicle.Domain
                         return false;
                     }
                     break;
+                case ChronicleCategory.NaturalDeath:
+                    if (sourceId != NaturalDeathSourceId)
+                    {
+                        error = "自然死亡记录来源必须是自然死亡。";
+                        return false;
+                    }
+                    if (string.IsNullOrWhiteSpace(summary))
+                    {
+                        error = "自然死亡记录摘要不能为空。";
+                        return false;
+                    }
+                    break;
             }
 
             entry = new FamilyChronicleEntry(sequence, entryId, year, month, category, subjectId,
@@ -314,6 +333,12 @@ namespace SengokuChronicle.Domain
                         out error);
                 case MarketTallyMissionId:
                     return TryValidateStageRange(typeof(MarketTallyStage), fromStage, toStage,
+                        out error);
+                case ShadowEscortCommissionId:
+                    return TryValidateStageRange(typeof(ShadowEscortStage), fromStage, toStage,
+                        out error);
+                case TacticalMissionId:
+                    return TryValidateStageRange(typeof(TacticalMissionStage), fromStage, toStage,
                         out error);
                 default:
                     error = "任务记录包含未知任务 ID：" + (missionId ?? string.Empty) + "。";

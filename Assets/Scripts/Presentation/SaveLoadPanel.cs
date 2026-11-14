@@ -32,12 +32,20 @@ namespace SengokuChronicle.Presentation
 
         private SaveSlotStore _store;
         private string _status = string.Empty;
+        private bool _subscribed;
+        private bool _blockedByTacticalMission;
 
         /// <summary>Result of the most recent save or load.</summary>
         public bool LastOperationSucceeded { get; private set; }
 
         /// <summary>Current status message mirrored to the UI.</summary>
         public string Status => _status;
+
+        /// <summary>Current interactability of the save control, for UI tests.</summary>
+        public bool SaveInteractable => saveButton != null && saveButton.interactable;
+
+        /// <summary>Current interactability of the load control, for UI tests.</summary>
+        public bool LoadInteractable => loadButton != null && loadButton.interactable;
 
         /// <summary>The slot store in use; exposed for tests and diagnostics.</summary>
         public SaveSlotStore Store => _store;
@@ -50,6 +58,8 @@ namespace SengokuChronicle.Presentation
             Text status,
             WorldMapController map)
         {
+            if (gameSession != session)
+                Unsubscribe();
             gameSession = session;
             if (store != null)
                 _store = store;
@@ -58,6 +68,8 @@ namespace SengokuChronicle.Presentation
             statusText = status;
             worldMapController = map;
             BindButtons(isActiveAndEnabled);
+            Subscribe();
+            RefreshTacticalGuard();
         }
 
         /// <summary>Editor generator / test seam for the slot store.</summary>
@@ -82,17 +94,67 @@ namespace SengokuChronicle.Presentation
                 _store = SaveSlotStore.CreateDefault();
 
             BindButtons(true);
+            Subscribe();
+            RefreshTacticalGuard();
             RefreshStatus();
         }
 
         private void OnEnable()
         {
             BindButtons(true);
+            Subscribe();
+            RefreshTacticalGuard();
         }
 
         private void OnDisable()
         {
             BindButtons(false);
+            Unsubscribe();
+        }
+
+        private void OnDestroy() => Unsubscribe();
+
+        private void Subscribe()
+        {
+            if (gameSession != null && !_subscribed)
+            {
+                gameSession.SessionStateChanged += OnSessionStateChanged;
+                _subscribed = true;
+            }
+        }
+
+        private void Unsubscribe()
+        {
+            if (gameSession != null && _subscribed)
+                gameSession.SessionStateChanged -= OnSessionStateChanged;
+            _subscribed = false;
+        }
+
+        private void OnSessionStateChanged() => RefreshTacticalGuard();
+
+        /// <summary>
+        /// The M06 operation owns a session-only state and must not be saved over or
+        /// replaced, so both controls are disabled while it runs and re-enabled when it
+        /// reaches a terminal result.
+        /// </summary>
+        private void RefreshTacticalGuard()
+        {
+            bool blocked = gameSession != null && gameSession.IsTacticalMissionActive;
+            if (saveButton != null)
+                saveButton.interactable = !blocked;
+            if (loadButton != null)
+                loadButton.interactable = !blocked;
+            if (blocked && !_blockedByTacticalMission)
+            {
+                _status = "潜入进行中：无法存档或读档。";
+                RefreshStatus();
+            }
+            else if (!blocked && _blockedByTacticalMission)
+            {
+                _status = string.Empty;
+                RefreshStatus();
+            }
+            _blockedByTacticalMission = blocked;
         }
 
         private void BindButtons(bool add)
@@ -121,6 +183,12 @@ namespace SengokuChronicle.Presentation
                 return;
             }
 
+            if (gameSession.IsTacticalMissionActive)
+            {
+                SetStatus(false, "潜入进行中：无法存档。请先完成或撤退。");
+                return;
+            }
+
             if (_store == null)
             {
                 SetStatus(false, "存档槽未初始化。");
@@ -137,6 +205,12 @@ namespace SengokuChronicle.Presentation
             if (gameSession == null)
             {
                 SetStatus(false, "缺少 GameSession，无法读档。");
+                return;
+            }
+
+            if (gameSession.IsTacticalMissionActive)
+            {
+                SetStatus(false, "潜入进行中：无法读档。请先完成或撤退。");
                 return;
             }
 

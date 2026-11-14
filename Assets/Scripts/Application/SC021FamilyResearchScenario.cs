@@ -25,7 +25,12 @@ namespace SengokuChronicle.Application
         public const int SpouseBirthYear = 1522;
         public const int HeirBirthYear = 1542;
 
-        public const int OpeningFunds = 2;
+        /// <summary>
+        /// The approved two-month research budget plus the approved M08B household food
+        /// bill: three members need one food unit a month, so two research months cost
+        /// 2/2 in research plus 2 funds for food.
+        /// </summary>
+        public const int OpeningFunds = 4;
         public const int OpeningSupplies = 2;
         public const int OpeningIntelligence = 0;
 
@@ -57,7 +62,8 @@ namespace SengokuChronicle.Application
 
         /// <summary>
         /// Exactly the two-month research budget. With no industry appointments the
-        /// first month costs 1/1 and the second costs the remaining 1/1.
+        /// first month costs 1/1 and the second costs the remaining 1/1, and the M08B
+        /// household food bill is paid from the same funds before research.
         /// </summary>
         public static IndustryState CreateIndustryState()
         {

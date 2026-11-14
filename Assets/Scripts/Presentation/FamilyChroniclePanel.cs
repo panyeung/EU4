@@ -203,7 +203,11 @@ namespace SengokuChronicle.Presentation
                 scrollRect.verticalNormalizedPosition = 0f;
         }
 
-        private static string FormatRow(FamilyChronicleEntry entry)
+        /// <summary>
+        /// One display row. Internal so the EditMode suite can prove the player-facing
+        /// text for every append-only category without building a preview scene.
+        /// </summary>
+        internal static string FormatRow(FamilyChronicleEntry entry)
         {
             var builder = new StringBuilder(96);
             builder.Append(entry.Year.ToString("0000")).Append('年')
@@ -231,6 +235,7 @@ namespace SengokuChronicle.Presentation
                 case ChronicleCategory.Education: return "教育";
                 case ChronicleCategory.Research: return "研究";
                 case ChronicleCategory.FamilyFormation: return "家族关系";
+                case ChronicleCategory.NaturalDeath: return "人物离世";
                 default: return category.ToString();
             }
         }
@@ -269,6 +274,8 @@ namespace SengokuChronicle.Presentation
                         : entry.SourceId == FamilyChronicleEntry.AdoptionSourceId
                             ? "普通收养"
                             : string.Empty;
+                case ChronicleCategory.NaturalDeath:
+                    return "享年 " + entry.FromValue + " 岁";
                 default:
                     return string.Empty;
             }
@@ -309,6 +316,33 @@ namespace SengokuChronicle.Presentation
                     case MarketTallyStage.Accepted: return "已接受";
                     case MarketTallyStage.Investigated: return "已调查";
                     case MarketTallyStage.RewardClaimed: return "已领取报酬";
+                }
+            }
+            else if (missionId == FamilyChronicleEntry.ShadowEscortCommissionId)
+            {
+                // ShadowEscortCommissionPanel.StageLabel adds the current location to the
+                // not-accepted label; a history row has no location, so only its
+                // location-free part is used here.
+                switch ((ShadowEscortStage)stage)
+                {
+                    case ShadowEscortStage.NotAccepted: return "待接取";
+                    case ShadowEscortStage.Accepted: return "已接取，等待指派执行人";
+                    case ShadowEscortStage.InProgress: return "执行中";
+                    case ShadowEscortStage.Succeeded: return "成功，已结算";
+                    case ShadowEscortStage.PartialSuccess: return "部分成功，已结算";
+                    case ShadowEscortStage.Failed: return "失败，已结算";
+                    case ShadowEscortStage.Abandoned: return "已中止（执行人不可用，无结算结果）";
+                }
+            }
+            else if (missionId == FamilyChronicleEntry.TacticalMissionId)
+            {
+                switch ((TacticalMissionStage)stage)
+                {
+                    case TacticalMissionStage.NotStarted: return "未开始";
+                    case TacticalMissionStage.InProgress: return "潜入进行中";
+                    case TacticalMissionStage.Succeeded: return "成功，已结算";
+                    case TacticalMissionStage.Failed: return "失败，已结算";
+                    case TacticalMissionStage.Withdrawn: return "撤退，已结算";
                 }
             }
 

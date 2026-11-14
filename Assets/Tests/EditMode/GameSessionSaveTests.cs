@@ -68,6 +68,48 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(spouse.Gender, Is.EqualTo(PersonGender.Female));
         }
 
+        [Test]
+        public void CaptureSave_RoundTripsTheSettledMarketState()
+        {
+            Assert.That(_session.TryAssignIndustry(IndustryCatalog.FarmId,
+                M2FixedScenario.HarunobuId).Succeeded, Is.True, _session.LastIndustryMessage);
+            Assert.That(_session.TryAdvanceToNextMonth(), Is.True, _session.LastEventMessage);
+            MarketState before = _session.Market;
+            int historyCount = before.RecentCompositeIndices.Count;
+
+            SaveData data = _session.CaptureSave();
+
+            Assert.That(data.saveFormatVersion, Is.EqualTo(17));
+            Assert.That(data.market, Is.Not.Null);
+            Assert.That(data.market.foodInventory, Is.EqualTo(before.FoodInventory));
+            Assert.That(data.market.foodPriceIndexPermille,
+                Is.EqualTo(before.FoodPriceIndexPermille));
+            Assert.That(data.market.materialsPriceIndexPermille,
+                Is.EqualTo(before.MaterialsPriceIndexPermille));
+            Assert.That(data.market.lastSettledMonthIndex,
+                Is.EqualTo(before.LastSettledMonthIndex));
+            Assert.That(data.market.consecutiveFoodShortageMonths,
+                Is.EqualTo(before.ConsecutiveFoodShortageMonths));
+            Assert.That(data.market.compositeHistory, Has.Length.EqualTo(historyCount));
+
+            Assert.That(_session.TryApplySave(data).Succeeded, Is.True,
+                _session.LastEventMessage);
+
+            Assert.That(_session.Market.FoodInventory, Is.EqualTo(before.FoodInventory));
+            Assert.That(_session.Market.FoodPriceIndexPermille,
+                Is.EqualTo(before.FoodPriceIndexPermille));
+            Assert.That(_session.Market.MaterialsPriceIndexPermille,
+                Is.EqualTo(before.MaterialsPriceIndexPermille));
+            Assert.That(_session.Market.LastSettledMonthIndex,
+                Is.EqualTo(before.LastSettledMonthIndex));
+            Assert.That(_session.Market.ConsecutiveFoodShortageMonths,
+                Is.EqualTo(before.ConsecutiveFoodShortageMonths));
+            Assert.That(_session.Market.RecentCompositeIndices.Count,
+                Is.EqualTo(historyCount));
+            Assert.That(_session.LastMarketReport, Is.Null,
+                "a load drops the transient month report instead of keeping a stale one");
+        }
+
         private GameSession FreshFamilyFormation()
         {
             if (_session != null)

@@ -647,6 +647,7 @@ namespace SengokuChronicle.Tests.EditMode
                 marketTallyStage = (int)MarketTallyStage.NotAccepted,
                 relationships = null,
                 industry = IndustryStateSaveData.CreateInitial(new GameDate(2000, 12, 31)),
+                market = MarketSaveData.CreateInitial(new GameDate(2000, 12, 31)),
                 research = FamilyResearchSaveData.CreateInitial(new GameDate(2000, 12, 31))
             };
         }

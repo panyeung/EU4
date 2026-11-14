@@ -304,6 +304,116 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
+        public void TacticalMissionRowsShowReadableStageNamesIncludingInProgressToFailed()
+        {
+            SaveData data = _session.CaptureSave();
+            data.chronicle = new[]
+            {
+                TacticalChronicleEntry(1, TacticalMissionStage.NotStarted,
+                    TacticalMissionStage.InProgress),
+                TacticalChronicleEntry(2, TacticalMissionStage.InProgress,
+                    TacticalMissionStage.Succeeded),
+                TacticalChronicleEntry(3, TacticalMissionStage.InProgress,
+                    TacticalMissionStage.Failed),
+                TacticalChronicleEntry(4, TacticalMissionStage.InProgress,
+                    TacticalMissionStage.Withdrawn)
+            };
+            Assert.That(_session.TryApplySave(data).Succeeded, Is.True);
+
+            FamilyChroniclePanel panel = Panel();
+            panel.Open();
+
+            Assert.That(panel.VisibleRowCount, Is.EqualTo(4));
+            Assert.That(panel.RowText(0), Does.Contain("阶段 未开始 → 潜入进行中"));
+            Assert.That(panel.RowText(1), Does.Contain("阶段 潜入进行中 → 成功，已结算"));
+            Assert.That(panel.RowText(2), Does.Contain("阶段 潜入进行中 → 失败，已结算"),
+                "the observed M06 InProgress -> Failed record must not render as 未知阶段");
+            Assert.That(panel.RowText(3), Does.Contain("阶段 潜入进行中 → 撤退，已结算"));
+            for (int i = 0; i < panel.VisibleRowCount; i++)
+                Assert.That(panel.RowText(i), Does.Not.Contain("未知阶段"),
+                    "known tactical stages must never fall through to the unknown-stage fallback");
+        }
+
+        private static ChronicleSaveEntry TacticalChronicleEntry(int sequence,
+            TacticalMissionStage fromStage, TacticalMissionStage toStage)
+        {
+            return new ChronicleSaveEntry
+            {
+                entryId = FamilyChronicleEntry.BuildEntryId(sequence),
+                sequence = sequence,
+                year = 1560,
+                month = 4,
+                category = (int)ChronicleCategory.Mission,
+                subjectId = FamilyChronicleEntry.TacticalMissionId,
+                sourceId = "settle",
+                title = "潜入密令",
+                summary = "潜入密令阶段变化",
+                fromStage = (int)fromStage,
+                toStage = (int)toStage
+            };
+        }
+
+        [Test]
+        public void ShadowEscortRowsRenderEveryLegalCommissionStageFromAnAppliedSave()
+        {
+            SaveData data = _session.CaptureSave();
+            data.chronicle = new[]
+            {
+                ShadowEscortChronicleEntry(1, ShadowEscortStage.NotAccepted,
+                    ShadowEscortStage.Accepted, "accept"),
+                ShadowEscortChronicleEntry(2, ShadowEscortStage.Accepted,
+                    ShadowEscortStage.InProgress, "assign"),
+                ShadowEscortChronicleEntry(3, ShadowEscortStage.InProgress,
+                    ShadowEscortStage.Succeeded, "settle"),
+                ShadowEscortChronicleEntry(4, ShadowEscortStage.InProgress,
+                    ShadowEscortStage.PartialSuccess, "settle"),
+                ShadowEscortChronicleEntry(5, ShadowEscortStage.InProgress,
+                    ShadowEscortStage.Failed, "settle"),
+                ShadowEscortChronicleEntry(6, ShadowEscortStage.InProgress,
+                    ShadowEscortStage.Abandoned, "abandon")
+            };
+            // Applying through the normal validator keeps this honest: every pair below
+            // must first be a legal commission record, then be readable in the panel.
+            Assert.That(_session.TryApplySave(data).Succeeded, Is.True);
+
+            FamilyChroniclePanel panel = Panel();
+            panel.Open();
+
+            Assert.That(panel.VisibleRowCount, Is.EqualTo(6));
+            Assert.That(panel.RowText(0), Does.Contain("阶段 待接取 → 已接取，等待指派执行人"));
+            Assert.That(panel.RowText(1), Does.Contain("阶段 已接取，等待指派执行人 → 执行中"));
+            Assert.That(panel.RowText(2), Does.Contain("阶段 执行中 → 成功，已结算"));
+            Assert.That(panel.RowText(3), Does.Contain("阶段 执行中 → 部分成功，已结算"));
+            Assert.That(panel.RowText(4), Does.Contain("阶段 执行中 → 失败，已结算"),
+                "the InProgress -> terminal settlement pattern must stay readable");
+            Assert.That(panel.RowText(5), Does.Contain("阶段 执行中 → 已中止（执行人不可用，无结算结果）"));
+            Assert.That(panel.RowText(5), Does.Not.Contain("已结算"),
+                "an abandoned commission has no shared result, so it must not claim a settlement");
+            for (int i = 0; i < panel.VisibleRowCount; i++)
+                Assert.That(panel.RowText(i), Does.Not.Contain("未知阶段"),
+                    "known commission stages must never fall through to the unknown-stage fallback");
+        }
+
+        private static ChronicleSaveEntry ShadowEscortChronicleEntry(int sequence,
+            ShadowEscortStage fromStage, ShadowEscortStage toStage, string actionId)
+        {
+            return new ChronicleSaveEntry
+            {
+                entryId = FamilyChronicleEntry.BuildEntryId(sequence),
+                sequence = sequence,
+                year = 1560,
+                month = 4,
+                category = (int)ChronicleCategory.Mission,
+                subjectId = FamilyChronicleEntry.ShadowEscortCommissionId,
+                sourceId = actionId,
+                title = "护送委托",
+                summary = "护送委托阶段变化",
+                fromStage = (int)fromStage,
+                toStage = (int)toStage
+            };
+        }
+
+        [Test]
         public void RefreshDoesNotDuplicateRowsOrTemplates()
         {
             Assert.That(_session.TryChangeRelationship(CharacterId.KurodaIori, 6).Succeeded, Is.True);

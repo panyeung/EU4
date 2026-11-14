@@ -45,15 +45,14 @@ namespace SengokuChronicle.Tests.EditMode
 
             AdvanceAndResolve(_session);
 
-            Assert.That(_session.Succession.World.PersonCount, Is.EqualTo(before + 1));
+            // M08A may also add one autonomous spouse at this same annual boundary;
+            // the birth itself must add exactly one person on top of that.
+            Assert.That(_session.Succession.World.PersonCount,
+                Is.GreaterThanOrEqualTo(before + 1));
             Assert.That(_session.FamilyPregnancies, Is.Empty);
             PersonState newborn = _session.Succession.World.Persons
-                .First(person => person.Id != M2FixedScenario.HarunobuId &&
-                                 person.Id != M2FixedScenario.ChieId &&
-                                 person.Id != M2FixedScenario.MasatsunaId &&
-                                 person.Id != M2FixedScenario.NobumasaId &&
-                                 person.Id != M2FixedScenario.TokihimeId &&
-                                 person.Id != M2FixedScenario.SakonId);
+                .First(person => person.Id.Value != null && person.Id.Value.StartsWith(
+                    "person.birth.", StringComparison.Ordinal));
             Assert.That(newborn.Gender == PersonGender.Male ||
                         newborn.Gender == PersonGender.Female, Is.True);
             Assert.That(IsChildOf(M2FixedScenario.HarunobuId, newborn.Id), Is.True);

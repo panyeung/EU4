@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using SengokuChronicle.Domain;
 
 namespace SengokuChronicle.Persistence
@@ -98,11 +99,36 @@ namespace SengokuChronicle.Persistence
                         "旧版存档包含 v11 NPC 自主状态（npcAutonomy）；迁移不会静默替换该数据。");
                     return false;
                 }
+                if (legacy.saveFormatVersion < 14 &&
+                    SaveDataValidator.HasRootProperty(rawJson, "commission"))
+                {
+                    result = SaveOperationResult.Failure(SaveErrorCode.InvalidData,
+                        "旧版存档包含 v14 护送委托状态（commission）；迁移不会静默替换该数据。");
+                    return false;
+                }
+                if (legacy.saveFormatVersion < 16 &&
+                    SaveDataValidator.HasRootProperty(rawJson, "campaign"))
+                {
+                    result = SaveOperationResult.Failure(SaveErrorCode.InvalidData,
+                        "旧版存档包含 M08 家族纪元状态（campaign）；迁移不会静默替换该数据。");
+                    return false;
+                }
+                if (legacy.saveFormatVersion < 17 &&
+                    SaveDataValidator.HasRootProperty(rawJson, "market"))
+                {
+                    result = SaveOperationResult.Failure(SaveErrorCode.InvalidData,
+                        "旧版存档包含 M08B 市场状态（market）；迁移不会静默替换该数据。");
+                    return false;
+                }
             }
 
             if (legacy.saveFormatVersion == 10 ||
                 legacy.saveFormatVersion == 11 ||
                 legacy.saveFormatVersion == 12 ||
+                legacy.saveFormatVersion == 13 ||
+                legacy.saveFormatVersion == 14 ||
+                legacy.saveFormatVersion == 15 ||
+                legacy.saveFormatVersion == 16 ||
                 legacy.saveFormatVersion == SaveDataValidator.CurrentVersion)
             {
                 int version = legacy.saveFormatVersion;
@@ -165,11 +191,41 @@ namespace SengokuChronicle.Persistence
                         label + " 存档缺少 NPC 自主状态（npcAutonomy）；不会用初始需求静默替换。");
                     return false;
                 }
-                if (version >= 11 && legacy.rulesVersion != SaveData.CurrentRulesVersion)
+                if (version >= 15)
+                {
+                    // v15 owns the three M07 blocks. Clone() would otherwise replace a
+                    // missing familyStanding with the initial fame/concealment, inventing
+                    // state that the raw-JSON presence guard rejects for files.
+                    if (legacy.familyStanding == null ||
+                        (!string.IsNullOrEmpty(rawJson) &&
+                         !SaveDataValidator.HasNonNullRootProperty(rawJson, "familyStanding")))
+                    {
+                        result = SaveOperationResult.Failure(SaveErrorCode.InvalidData,
+                            label + " 存档缺少 M07 家族名望状态（familyStanding）；不会用初始状态静默替换。");
+                        return false;
+                    }
+                    if (legacy.injury == null ||
+                        (!string.IsNullOrEmpty(rawJson) &&
+                         !SaveDataValidator.HasRootProperty(rawJson, "injury")))
+                    {
+                        result = SaveOperationResult.Failure(SaveErrorCode.InvalidData,
+                            label + " 存档缺少 M07 伤员状态（injury）；不会用空记录静默替换。");
+                        return false;
+                    }
+                    if (legacy.missionHistory == null ||
+                        (!string.IsNullOrEmpty(rawJson) &&
+                         !SaveDataValidator.HasRootProperty(rawJson, "missionHistory")))
+                    {
+                        result = SaveOperationResult.Failure(SaveErrorCode.InvalidData,
+                            label + " 存档缺少 M07 任务终局历史（missionHistory）；不会用空列表静默替换。");
+                        return false;
+                    }
+                }
+                if (version >= 11 && legacy.rulesVersion != ExpectedRulesVersion(version))
                 {
                     result = SaveOperationResult.Failure(SaveErrorCode.UnsupportedVersion,
                         label + " 存档规则版本不受支持：" + legacy.rulesVersion +
-                        "（当前规则版本 " + SaveData.CurrentRulesVersion + "）。");
+                        "（v" + version + " 应为 " + ExpectedRulesVersion(version) + "）。");
                     return false;
                 }
                 if (version == 11 && ContainsMemoryPayload(legacy.npcAutonomy))
@@ -196,9 +252,43 @@ namespace SengokuChronicle.Persistence
                     current.npcAutonomy = NpcAutonomyStateSaveData.CreateMigratedV11(
                         legacy.npcAutonomy);
                 }
-                if (version < SaveDataValidator.CurrentVersion)
+                if (version < 14)
+                {
+                    // v13 predates the M05 commission. Migration adds only the pristine
+                    // not-accepted row; no offer, investment or outcome is invented.
+                    current.commission = ShadowEscortCommissionSaveData.CreateInitial();
+                } else if (legacy.commission == null ||
+                           (!string.IsNullOrEmpty(rawJson) &&
+                            !SaveDataValidator.HasNonNullRootProperty(rawJson, "commission")))
+                {
+                    result = SaveOperationResult.Failure(SaveErrorCode.InvalidData,
+                        label + " 存档缺少 M05 护送委托状态（commission）；不会用初始状态静默替换。");
+                    return false;
+                }
+                if (version < 13)
+                {
+                    // v13 already owns concrete genders and pregnancy rows. Only v10-v12
+                    // need the legacy normalization; running it on v13 would wipe valid
+                    // pregnancy data and reset authored genders.
                     PrepareMigratedSuccession(current);
-                result = SaveDataValidator.Validate(current);
+                }
+                if (version < 15)
+                {
+                    result = ApplyM07Migration(current, version);
+                    if (!result.Succeeded)
+                    {
+                        current = null;
+                        return false;
+                    }
+                }
+                if (version < 16)
+                {
+                    // M08 adds only the campaign origin and empty acknowledgements.
+                    // Origin is inferred from the saved scenario identity when provable;
+                    // no elapsed time, review or historical event is manufactured.
+                    current.campaign = CampaignProgressSaveData.CreateMigrated(current, true);
+                }
+                result = FinishMigration(current, version);
                 if (!result.Succeeded)
                     current = null;
                 return result.Succeeded;
@@ -209,15 +299,15 @@ namespace SengokuChronicle.Persistence
                 // v9 owns the SC-024 doctrine and active route. Migration adds only
                 // the empty M02 daily timeline at the saved roster/location and never
                 // replays a day or a month.
-                current = Clone(legacy);
+                current = CloneLegacy(legacy);
                 current.saveFormatVersion = SaveDataValidator.CurrentVersion;
                 current.rulesVersion = SaveData.CurrentRulesVersion;
                 current.dailyActions = DailyActionStateSaveData.CreateInitial(
                     new GameDate(legacy.year, legacy.month, legacy.day),
                     legacy.succession, legacy.locationId);
                 current.npcAutonomy = NpcAutonomyStateSaveData.CreateInitial(legacy.succession);
-                PrepareMigratedSuccession(current);
-                result = SaveDataValidator.Validate(current);
+                PrepareMigratedSuccession(current, true);
+                result = FinishMigration(current, legacy.saveFormatVersion);
                 if (!result.Succeeded)
                     current = null;
                 return result.Succeeded;
@@ -254,7 +344,7 @@ namespace SengokuChronicle.Persistence
                 if (!result.Succeeded)
                     return false;
 
-                current = Clone(legacy);
+                current = CloneLegacy(legacy);
                 current.saveFormatVersion = SaveDataValidator.CurrentVersion;
                 current.rulesVersion = SaveData.CurrentRulesVersion;
                 // v8 predates SC-024. Migration adds only the approved default creed,
@@ -265,8 +355,8 @@ namespace SengokuChronicle.Persistence
                     new GameDate(legacy.year, legacy.month, legacy.day),
                     current.succession, current.locationId);
                 current.npcAutonomy = NpcAutonomyStateSaveData.CreateInitial(current.succession);
-                PrepareMigratedSuccession(current);
-                result = SaveDataValidator.Validate(current);
+                PrepareMigratedSuccession(current, true);
+                result = FinishMigration(current, legacy.saveFormatVersion);
                 if (!result.Succeeded)
                     current = null;
                 return result.Succeeded;
@@ -302,7 +392,7 @@ namespace SengokuChronicle.Persistence
                 if (!result.Succeeded)
                     return false;
 
-                current = Clone(legacy);
+                current = CloneLegacy(legacy);
                 current.saveFormatVersion = SaveDataValidator.CurrentVersion;
                 current.rulesVersion = SaveData.CurrentRulesVersion;
                 // Migration adds empty research at the legacy date. It never replays a
@@ -315,8 +405,8 @@ namespace SengokuChronicle.Persistence
                     new GameDate(legacy.year, legacy.month, legacy.day),
                     current.succession, current.locationId);
                 current.npcAutonomy = NpcAutonomyStateSaveData.CreateInitial(current.succession);
-                PrepareMigratedSuccession(current);
-                result = SaveDataValidator.Validate(current);
+                PrepareMigratedSuccession(current, true);
+                result = FinishMigration(current, legacy.saveFormatVersion);
                 if (!result.Succeeded)
                     current = null;
                 return result.Succeeded;
@@ -343,7 +433,7 @@ namespace SengokuChronicle.Persistence
                 if (!result.Succeeded)
                     return false;
 
-                current = Clone(legacy);
+                current = CloneLegacy(legacy);
                 current.saveFormatVersion = SaveDataValidator.CurrentVersion;
                 current.rulesVersion = SaveData.CurrentRulesVersion;
                 // Migration adds five zero abilities and empty education history for each
@@ -357,8 +447,8 @@ namespace SengokuChronicle.Persistence
                     new GameDate(legacy.year, legacy.month, legacy.day),
                     current.succession, current.locationId);
                 current.npcAutonomy = NpcAutonomyStateSaveData.CreateInitial(current.succession);
-                PrepareMigratedSuccession(current);
-                result = SaveDataValidator.Validate(current);
+                PrepareMigratedSuccession(current, true);
+                result = FinishMigration(current, legacy.saveFormatVersion);
                 if (!result.Succeeded)
                     current = null;
                 return result.Succeeded;
@@ -378,7 +468,7 @@ namespace SengokuChronicle.Persistence
                 if (!result.Succeeded)
                     return false;
 
-                current = Clone(legacy);
+                current = CloneLegacy(legacy);
                 current.saveFormatVersion = SaveDataValidator.CurrentVersion;
                 current.rulesVersion = SaveData.CurrentRulesVersion;
                 // Migration adds the documented opening state; it never replays
@@ -394,8 +484,8 @@ namespace SengokuChronicle.Persistence
                     new GameDate(legacy.year, legacy.month, legacy.day),
                     current.succession, current.locationId);
                 current.npcAutonomy = NpcAutonomyStateSaveData.CreateInitial(current.succession);
-                PrepareMigratedSuccession(current);
-                result = SaveDataValidator.Validate(current);
+                PrepareMigratedSuccession(current, true);
+                result = FinishMigration(current, legacy.saveFormatVersion);
                 if (!result.Succeeded)
                     current = null;
                 return result.Succeeded;
@@ -415,7 +505,7 @@ namespace SengokuChronicle.Persistence
                 if (!result.Succeeded)
                     return false;
 
-                current = Clone(legacy);
+                current = CloneLegacy(legacy);
                 current.saveFormatVersion = SaveDataValidator.CurrentVersion;
                 current.rulesVersion = SaveData.CurrentRulesVersion;
                 // Person-pair family relationships did not exist in v4. Migration must
@@ -432,8 +522,8 @@ namespace SengokuChronicle.Persistence
                     new GameDate(legacy.year, legacy.month, legacy.day),
                     current.succession, current.locationId);
                 current.npcAutonomy = NpcAutonomyStateSaveData.CreateInitial(current.succession);
-                PrepareMigratedSuccession(current);
-                result = SaveDataValidator.Validate(current);
+                PrepareMigratedSuccession(current, true);
+                result = FinishMigration(current, legacy.saveFormatVersion);
                 if (!result.Succeeded)
                     current = null;
                 return result.Succeeded;
@@ -504,8 +594,10 @@ namespace SengokuChronicle.Persistence
                         legacy.succession != null ? legacy.succession : SuccessionSaveData.CreateDefault())
                 };
 
-                PrepareMigratedSuccession(current);
-                result = SaveDataValidator.Validate(current);
+                // v3 owns a real succession block, so a known authored family identity can
+                // still prove the campaign origin. No review state is claimed.
+                PrepareMigratedSuccession(current, true);
+                result = FinishMigration(current, legacy.saveFormatVersion);
                 if (!result.Succeeded)
                     current = null;
                 return result.Succeeded;
@@ -589,7 +681,7 @@ namespace SengokuChronicle.Persistence
                 };
 
                 PrepareMigratedSuccession(current);
-                result = SaveDataValidator.Validate(current);
+                result = FinishMigration(current, legacy.saveFormatVersion);
                 if (!result.Succeeded)
                     current = null;
                 return result.Succeeded;
@@ -599,7 +691,7 @@ namespace SengokuChronicle.Persistence
             {
                 result = SaveOperationResult.Failure(
                     SaveErrorCode.UnsupportedVersion,
-                    $"不支持的存档版本：{legacy.saveFormatVersion}（仅支持 v1–v12 迁移到 v{SaveDataValidator.CurrentVersion}）。");
+                    $"不支持的存档版本：{legacy.saveFormatVersion}（仅支持 v1–v16 迁移到 v{SaveDataValidator.CurrentVersion}）。");
                 return false;
             }
 
@@ -647,13 +739,192 @@ namespace SengokuChronicle.Persistence
             };
 
             PrepareMigratedSuccession(current);
-            result = SaveDataValidator.Validate(current);
+            result = FinishMigration(current, legacy.saveFormatVersion);
             if (!result.Succeeded)
                 current = null;
             return result.Succeeded;
         }
 
-        private static void PrepareMigratedSuccession(SaveData current)
+        private static int ExpectedRulesVersion(int version) =>
+            version >= 15 ? SaveData.CurrentRulesVersion : 7;
+
+        /// <summary>
+        /// Completes every pre-v17 migration path. The market block is derived once from
+        /// the already-migrated clone (its industry stock and living roster), then the final
+        /// shape is validated. A current-version payload keeps its own market block.
+        /// </summary>
+        private static SaveOperationResult FinishMigration(SaveData current, int sourceVersion)
+        {
+            if (sourceVersion < SaveDataValidator.CurrentVersion)
+                current.market = MarketSaveData.CreateMigrated(current);
+            return SaveDataValidator.Validate(current);
+        }
+
+        /// <summary>
+        /// Adds the M07 blocks to a pre-v15 payload without replaying a settlement.
+        /// Standing starts at the approved initial values; the M05 commission gets a
+        /// stable legacy run ID and, when already settled, one history row linked to its
+        /// unique chronicle line. Legacy M06 rows are derived only from explicit M06
+        /// chronicle rows and never infer people from free text.
+        /// </summary>
+        private static SaveOperationResult ApplyM07Migration(SaveData current, int version)
+        {
+            current.familyStanding = FamilyStandingSaveData.CreateInitial();
+            current.injury = MissionInjurySaveData.CreateEmpty();
+            current.missionHistory = new MissionHistorySaveEntry[0];
+            if (current.commission == null)
+                current.commission = ShadowEscortCommissionSaveData.CreateInitial();
+
+            ShadowEscortStage stage = (ShadowEscortStage)current.commission.stage;
+            bool settled = stage == ShadowEscortStage.Succeeded ||
+                           stage == ShadowEscortStage.PartialSuccess ||
+                           stage == ShadowEscortStage.Failed;
+            bool executing = stage == ShadowEscortStage.InProgress || settled;
+            if (executing)
+            {
+                // The mode of a pre-M07 run is unknown; the plan forbids guessing it.
+                current.commission.runId = "legacy.m05.current";
+                current.commission.mode = (int)MissionOperationMode.LegacyUnknown;
+            }
+            else
+            {
+                current.commission.runId = string.Empty;
+                current.commission.mode = (int)MissionOperationMode.Delegated;
+            }
+
+            var entries = new List<ChronicleSaveEntry>();
+            if (current.chronicle != null)
+                entries.AddRange(current.chronicle);
+
+            var records = new List<MissionRecord>();
+            if (settled)
+            {
+                var matches = new List<ChronicleSaveEntry>();
+                foreach (ChronicleSaveEntry entry in entries)
+                    if (entry != null &&
+                        entry.category == (int)ChronicleCategory.Mission &&
+                        string.Equals(entry.subjectId,
+                            FamilyChronicleEntry.ShadowEscortCommissionId,
+                            System.StringComparison.Ordinal) &&
+                        string.Equals(entry.sourceId, "settle",
+                            System.StringComparison.Ordinal))
+                        matches.Add(entry);
+                if (matches.Count > 1)
+                    return SaveOperationResult.Failure(SaveErrorCode.InvalidData,
+                        "旧版存档包含多条护送委托结算编年史，无法唯一归属 M07 终局记录。");
+
+                ChronicleSaveEntry link = matches.Count == 1 ? matches[0] : null;
+                if (link == null)
+                {
+                    int sequence = entries.Count + 1;
+                    link = new ChronicleSaveEntry
+                    {
+                        entryId = FamilyChronicleEntry.BuildEntryId(sequence),
+                        sequence = sequence,
+                        year = current.commission.startYear,
+                        month = current.commission.startMonth,
+                        category = (int)ChronicleCategory.Mission,
+                        subjectId = FamilyChronicleEntry.ShadowEscortCommissionId,
+                        sourceId = "settle",
+                        title = "护送委托（旧版导入）",
+                        summary = "旧版存档导入的护送委托终局记录。",
+                        fromStage = (int)ShadowEscortStage.InProgress,
+                        toStage = current.commission.stage
+                    };
+                    entries.Add(link);
+                }
+
+                if (!PersonId.TryParse(current.commission.assigneePersonId,
+                        out PersonId assignee) || assignee.IsEmpty)
+                    return SaveOperationResult.Failure(SaveErrorCode.InvalidData,
+                        "旧版已结算委托缺少有效执行人，无法回填 M07 终局记录。");
+                if (!GameDate.TryParse(current.commission.startYear,
+                        current.commission.startMonth, current.commission.startDay,
+                        out GameDate date))
+                    return SaveOperationResult.Failure(SaveErrorCode.InvalidData,
+                        "旧版已结算委托的开始日期无效。");
+                if (!ShadowEscortOutcomeRules.TryMap(
+                        (CommissionOutcome)current.commission.outcome,
+                        out SharedMissionOutcome mapped, out string mapError))
+                    return SaveOperationResult.Failure(SaveErrorCode.InvalidData, mapError);
+
+                if (!MissionRecord.TryCreate("legacy.m05.current",
+                        FamilyChronicleEntry.ShadowEscortCommissionId,
+                        MissionKind.ShadowEscort, MissionOperationMode.LegacyUnknown, date,
+                        mapped, assignee, new[] { assignee }, new PersonId[0],
+                        MissionPreparation.None, 0, 0, 0, 0, current.commission.roll,
+                        current.commission.score, FamilyStandingState.InitialFame,
+                        FamilyStandingState.InitialFame,
+                        FamilyStandingState.InitialConcealment,
+                        FamilyStandingState.InitialConcealment,
+                        new MissionStandingChange[0], current.commission.rewardFunds,
+                        current.commission.rewardSupplies, 0,
+                        new[]
+                        {
+                            new MissionParticipantState(assignee, true, false, true, false)
+                        }, link.entryId, out MissionRecord commissionRecord,
+                        out string recordError))
+                    return SaveOperationResult.Failure(SaveErrorCode.InvalidData, recordError);
+                records.Add(commissionRecord);
+            }
+
+            foreach (ChronicleSaveEntry entry in entries)
+            {
+                if (entry == null ||
+                    entry.category != (int)ChronicleCategory.Mission ||
+                    !string.Equals(entry.subjectId, FamilyChronicleEntry.TacticalMissionId,
+                        System.StringComparison.Ordinal))
+                    continue;
+                if (!GameDate.TryParse(entry.year, entry.month, 1, out GameDate date))
+                    return SaveOperationResult.Failure(SaveErrorCode.InvalidData,
+                        "旧版潜入编年史日期无效。");
+                SharedMissionOutcome mapped;
+                switch ((TacticalMissionStage)entry.toStage)
+                {
+                    case TacticalMissionStage.Succeeded:
+                        mapped = SharedMissionOutcome.FullSuccess;
+                        break;
+                    case TacticalMissionStage.Withdrawn:
+                        mapped = SharedMissionOutcome.SafeFailure;
+                        break;
+                    case TacticalMissionStage.Failed:
+                        mapped = SharedMissionOutcome.SevereFailure;
+                        break;
+                    default:
+                        return SaveOperationResult.Failure(SaveErrorCode.InvalidData,
+                            "旧版潜入编年史没有可映射的终局阶段。");
+                }
+                string runId = "legacy.m06." + entry.entryId;
+                if (!MissionRecord.TryCreate(runId, FamilyChronicleEntry.TacticalMissionId,
+                        MissionKind.TacticalInfiltration, MissionOperationMode.LegacyUnknown,
+                        date, mapped, default, new PersonId[0], new PersonId[0],
+                        MissionPreparation.None, 0, 0, 0, 0, 0, 0,
+                        FamilyStandingState.InitialFame, FamilyStandingState.InitialFame,
+                        FamilyStandingState.InitialConcealment,
+                        FamilyStandingState.InitialConcealment,
+                        new MissionStandingChange[0], 0, 0, 0,
+                        new MissionParticipantState[0], entry.entryId,
+                        out MissionRecord tacticalRecord, out string tacticalError))
+                    return SaveOperationResult.Failure(SaveErrorCode.InvalidData, tacticalError);
+                records.Add(tacticalRecord);
+            }
+
+            records.Sort((a, b) =>
+            {
+                int byDate = a.Date.CompareTo(b.Date);
+                return byDate != 0
+                    ? byDate
+                    : string.CompareOrdinal(a.RunId, b.RunId);
+            });
+            var history = new MissionHistorySaveEntry[records.Count];
+            for (int i = 0; i < records.Count; i++)
+                history[i] = MissionHistorySaveEntry.Capture(records[i]);
+            current.missionHistory = history;
+            current.chronicle = entries.ToArray();
+            return SaveOperationResult.Success();
+        }
+
+        private static void PrepareMigratedSuccession(SaveData current, bool originProvable = false)
         {
             // Every pre-v13 source predates both fields. Start from Unspecified, resolve
             // only explicit authored catalog IDs, and write a concrete empty pregnancy
@@ -661,6 +932,12 @@ namespace SengokuChronicle.Persistence
             ResolveLegacyGenders(current != null ? current.succession : null);
             if (current != null && current.succession != null)
                 current.succession.pregnancies = new FamilyPregnancySaveEntry[0];
+            if (current != null)
+            {
+                // M08 adds only the campaign origin when the saved scenario identity proves
+                // it. A manufactured default roster (v1/v2) never proves one.
+                current.campaign = CampaignProgressSaveData.CreateMigrated(current, originProvable);
+            }
         }
 
         private static void ResolveLegacyGenders(SuccessionSaveData succession)
@@ -678,13 +955,30 @@ namespace SengokuChronicle.Persistence
             }
         }
 
-        private static bool ContainsMemoryPayload(NpcAutonomyStateSaveData data)        {
+        private static bool ContainsMemoryPayload(NpcAutonomyStateSaveData data)
+        {
             if (data == null || data.persons == null)
                 return false;
             foreach (NpcAutonomyPersonSaveEntry person in data.persons)
                 if (person != null && person.memories != null)
                     return true;
             return false;
+        }
+
+        /// <summary>
+        /// Clone used by the pre-v10 branches. Those versions predate the M05 commission,
+        /// so the row is normalized to pristine even when the source object still carries
+        /// the current class's field (for example a downgraded current capture).
+        /// </summary>
+        private static SaveData CloneLegacy(SaveData source)
+        {
+            SaveData clone = Clone(source);
+            clone.commission = ShadowEscortCommissionSaveData.CreateInitial();
+            clone.familyStanding = FamilyStandingSaveData.CreateInitial();
+            clone.injury = MissionInjurySaveData.CreateEmpty();
+            clone.missionHistory = new MissionHistorySaveEntry[0];
+            clone.market = null;
+            return clone;
         }
 
         private static SaveData Clone(SaveData source)
@@ -718,8 +1012,36 @@ namespace SengokuChronicle.Persistence
                 familyDoctrine = source.familyDoctrine != null ? source.familyDoctrine.Clone() : null,
                 activeEventScenarioId = source.activeEventScenarioId,
                 dailyActions = source.dailyActions != null ? source.dailyActions.Clone() : null,
-                npcAutonomy = source.npcAutonomy != null ? source.npcAutonomy.Clone() : null
+                npcAutonomy = source.npcAutonomy != null ? source.npcAutonomy.Clone() : null,
+                // Legacy payloads predate M05. Their documented migration default is the
+                // pristine not-accepted row; a current-version payload must carry its own.
+                commission = source.commission != null
+                    ? source.commission.Clone()
+                    : ShadowEscortCommissionSaveData.CreateInitial(),
+                familyStanding = source.familyStanding != null
+                    ? source.familyStanding.Clone()
+                    : FamilyStandingSaveData.CreateInitial(),
+                // Preserve a malformed null so validation rejects it, matching the
+                // neighbouring industry and missionHistory blocks instead of silently
+                // repairing it with an empty injury list.
+                injury = source.injury != null ? source.injury.Clone() : null,
+                missionHistory = CloneMissionHistory(source.missionHistory),
+                // Current-version payloads keep their own campaign block; legacy branches
+                // replace it through their documented migration default.
+                campaign = source.campaign != null ? source.campaign.Clone() : null,
+                market = source.market != null ? source.market.Clone() : null
             };
+            return clone;
+        }
+
+        private static MissionHistorySaveEntry[] CloneMissionHistory(
+            MissionHistorySaveEntry[] source)
+        {
+            if (source == null)
+                return null;
+            var clone = new MissionHistorySaveEntry[source.Length];
+            for (int i = 0; i < source.Length; i++)
+                clone[i] = MissionHistorySaveEntry.Clone(source[i]);
             return clone;
         }
 

@@ -199,11 +199,26 @@ namespace SengokuChronicle.Presentation
                 tradingAssigneeText, tradingUnassignButton, tradingCandidateContainer);
             RebuildCandidateLayout();
 
-            reportText.text = !string.IsNullOrEmpty(view.LastReport?.Summary)
+            reportText.text = BuildReportLine(view);
+        }
+
+        /// <summary>
+        /// Reuses the existing report label: the committed industry month, then the committed
+        /// market month, then the persisted shortage status. A load clears both reports, so the
+        /// shortage line keeps the last durable state visible instead of an expired report.
+        /// </summary>
+        private static string BuildReportLine(IndustryView view)
+        {
+            string line = !string.IsNullOrEmpty(view.LastReport?.Summary)
                 ? view.LastReport.Summary
                 : !string.IsNullOrWhiteSpace(view.LastChronicleSummary)
                     ? view.LastChronicleSummary
                     : "本月尚未结算。";
+            if (!string.IsNullOrEmpty(view.MarketSummary))
+                line += " " + view.MarketSummary;
+            if (!string.IsNullOrEmpty(view.ShortageLine))
+                line += " " + view.ShortageLine;
+            return line;
         }
 
         private void RefreshRow(string industryId, IndustryView view, GameObject row, Text statusText,

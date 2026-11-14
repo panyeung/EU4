@@ -265,23 +265,41 @@ namespace SengokuChronicle.Presentation
                 .Append(current != null ? current.Summary : "尚无评估。");
             if (current == null)
                 return builder.ToString();
-            foreach (NpcActionCandidate candidate in current.Candidates)
+            AppendCandidateLines(builder, current, "　→ 当前选中");
+            if (latest != null && !ReferenceEquals(latest, current))
+            {
+                builder.Append("\n最近目标评估候选：").Append(latest.Summary);
+                AppendCandidateLines(builder, latest, null);
+            }
+            return builder.ToString();
+        }
+
+        /// <summary>
+        /// One line per candidate: the score for an eligible action, or the recorded
+        /// exclusion reason. Rendering the last goal evaluation too keeps a blocked Work
+        /// candidate's reason visible after the fallback action has already started.
+        /// </summary>
+        private static void AppendCandidateLines(StringBuilder builder,
+            NpcAutonomyEvaluation evaluation, string selectionMarker)
+        {
+            if (evaluation == null)
+                return;
+            foreach (NpcActionCandidate candidate in evaluation.Candidates)
             {
                 builder.Append('\n').Append("- ").Append(candidate.KindName).Append("：");
                 if (candidate.IsEligible)
                 {
                     builder.Append("分数 ").Append(candidate.Score).Append("（")
                         .Append(candidate.Explanation).Append('）');
-                    if (current.HasSelection &&
-                        current.Selected.Kind == candidate.Kind)
-                        builder.Append("　→ 当前选中");
+                    if (selectionMarker != null && evaluation.HasSelection &&
+                        evaluation.Selected.Kind == candidate.Kind)
+                        builder.Append(selectionMarker);
                 }
                 else
                 {
                     builder.Append("排除：").Append(candidate.Explanation);
                 }
             }
-            return builder.ToString();
         }
 
         private static string BuildLog(NpcAutonomySnapshot snapshot)

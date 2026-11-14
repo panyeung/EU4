@@ -27,7 +27,8 @@ namespace SengokuChronicle.Tests.EditMode
             }
 
             IndustryState industry = SC021FamilyResearchScenario.CreateIndustryState();
-            Assert.That(industry.Resources.Funds, Is.EqualTo(2));
+            Assert.That(industry.Resources.Funds, Is.EqualTo(4),
+                "two research months plus the approved household food bill");
             Assert.That(industry.Resources.Supplies, Is.EqualTo(2));
             Assert.That(industry.Resources.Intelligence, Is.Zero);
             Assert.That(industry.LastSettledMonthIndex,
@@ -46,7 +47,7 @@ namespace SengokuChronicle.Tests.EditMode
                 Assert.That(SC021FamilyResearchScenario.IsActive(session.Succession), Is.True);
                 Assert.That(session.WorldClock.CurrentDate,
                     Is.EqualTo(SC021FamilyResearchScenario.StartDate));
-                Assert.That(session.Industry.Resources.Funds, Is.EqualTo(2));
+                Assert.That(session.Industry.Resources.Funds, Is.EqualTo(4));
                 Assert.That(session.Industry.Resources.Supplies, Is.EqualTo(2));
                 Assert.That(session.ResearchState.HasPlan, Is.False);
                 Assert.That(session.Research.EligibleResearchers, Has.Count.EqualTo(3));

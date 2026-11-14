@@ -134,8 +134,12 @@ namespace SengokuChronicle.Tests.EditMode
                 Assert.That(restored.TryAdvanceToNextMonth(), Is.True, restored.LastEventMessage);
                 ResolvePending(restored);
 
-                Assert.That(restored.Industry.Resources, Is.EqualTo(resources),
-                    "a paused plan must not charge either resource");
+                Assert.That(restored.Industry.Resources.Supplies,
+                    Is.EqualTo(resources.Supplies),
+                    "a paused plan must not charge supplies");
+                Assert.That(restored.Industry.Resources.Funds,
+                    Is.EqualTo(resources.Funds - restored.LastMarketReport.FoodBillFunds),
+                    "only the household food bill may charge funds, never the paused plan");
                 Assert.That(restored.ResearchState.Progress, Is.Zero,
                     "a paused plan must not progress");
                 Assert.That(restored.ResearchState.KnownTechniqueIds, Is.Empty);

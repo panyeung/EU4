@@ -63,7 +63,6 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(session.ResearchState.Progress, Is.EqualTo(1));
 
             SaveData legacy = session.CaptureSave();
-            string industry = JsonUtility.ToJson(legacy.industry);
             string development = JsonUtility.ToJson(legacy.development);
             string research = JsonUtility.ToJson(legacy.research);
             string succession = JsonUtility.ToJson(legacy.succession);
@@ -91,7 +90,14 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(current.activeEventScenarioId, Is.Empty,
                 "a v8 save must not invent an SC-024 route");
 
-            Assert.That(JsonUtility.ToJson(current.industry), Is.EqualTo(industry));
+            Assert.That(JsonUtility.ToJson(current.industry.slots),
+                Is.EqualTo(JsonUtility.ToJson(legacy.industry.slots)));
+            Assert.That(current.industry.funds, Is.EqualTo(legacy.industry.funds));
+            Assert.That(current.industry.intelligence,
+                Is.EqualTo(legacy.industry.intelligence));
+            Assert.That(current.industry.supplies,
+                Is.EqualTo(legacy.industry.supplies - current.market.foodInventory),
+                "v17 migration moves one month of food out of the existing stock");
             Assert.That(JsonUtility.ToJson(current.development), Is.EqualTo(development));
             Assert.That(JsonUtility.ToJson(current.research), Is.EqualTo(research));
             Assert.That(JsonUtility.ToJson(current.succession), Is.EqualTo(succession));
@@ -532,12 +538,17 @@ namespace SengokuChronicle.Tests.EditMode
             data.rulesVersion = 4;
             data.eventContentVersion = 2;
             string json = JsonUtility.ToJson(data);
+            // v8 predates every M07 block; a historical fixture cannot carry them.
+            json = RemoveRootProperty(RemoveRootProperty(RemoveRootProperty(json,
+                "familyStanding"), "injury"), "missionHistory");
+            json = RemoveRootProperty(json, "campaign");
+            json = RemoveRootProperty(json, "market");
             if (includeV9Fields)
                 return json;
 
             return RemoveRootProperty(RemoveRootProperty(RemoveRootProperty(RemoveRootProperty(
-                json, "familyDoctrine"), "activeEventScenarioId"), "dailyActions"),
-                "npcAutonomy");
+                RemoveRootProperty(json, "familyDoctrine"), "activeEventScenarioId"),
+                "dailyActions"), "npcAutonomy"), "commission");
         }
 
         private static string InsertRootProperty(string json, string property)

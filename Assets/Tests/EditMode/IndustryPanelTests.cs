@@ -74,7 +74,9 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(panel.FarmStatus, Does.Contain("空缺"));
             Assert.That(panel.TradingStatus, Does.Contain("空缺"));
             Assert.That(panel.FarmAssignee, Is.EqualTo("负责人：空缺"));
-            Assert.That(panel.ReportLine, Is.EqualTo("本月尚未结算。"));
+            Assert.That(panel.ReportLine, Does.StartWith("本月尚未结算。"));
+            Assert.That(panel.ReportLine, Does.Contain("粮食连续短缺 0 个月"),
+                "a zero consecutive shortage is a real state and stays visible");
             Assert.That(panel.MessageVisible, Is.False);
             Assert.That(panel.FarmCandidateCount, Is.EqualTo(6));
         }
@@ -257,6 +259,127 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(panel.MessageVisible, Is.True);
             Assert.That(panel.MessageLine, Does.Contain("已移除失效产业任命"));
             Assert.That(panel.FarmAssignee, Is.EqualTo("负责人：空缺"));
+        }
+
+        [Test]
+        public void IndustryPanel_ShowsMarketInventoryPricesAndHouseholdShortage()
+        {
+            Assert.That(_session.TryAssignIndustry(IndustryCatalog.TradingHouseId,
+                M2FixedScenario.ChieId).Succeeded, Is.True, _session.LastIndustryMessage);
+            SaveData shortStock = _session.CaptureSave();
+            shortStock.market.foodInventory = 1;
+            Assert.That(_session.TryApplySave(shortStock).Succeeded, Is.True, _session.LastEventMessage);
+            Assert.That(_session.TryAdvanceToNextMonth(), Is.True, _session.LastEventMessage);
+
+            MarketMonthReport report = _session.LastMarketReport;
+            Assert.That(report, Is.Not.Null, "a settled month publishes its market report");
+            Assert.That(report.FoodDemand, Is.EqualTo(2));
+            Assert.That(report.FoodPurchased, Is.EqualTo(1),
+                "one stocked unit is affordable and the second is a shortage");
+            Assert.That(report.FoodUnmet, Is.EqualTo(1));
+            Assert.That(report.Materials.Demand, Is.GreaterThan(0),
+                "the operating trading house still needs material input");
+
+            IndustryPanel panel = Panel();
+            panel.Open();
+
+            Assert.That(panel.ResourceLine,
+                Does.Contain("资金 " + _session.Industry.Resources.Funds),
+                "the pre-settlement SC-019 resource values stay visible");
+            Assert.That(panel.ResourceLine,
+                Does.Contain("粮食 " + _session.Market.FoodInventory));
+            Assert.That(panel.ResourceLine,
+                Does.Contain("粮价 " + _session.Market.FoodPriceIndexPermille + "‰"));
+            Assert.That(panel.ResourceLine,
+                Does.Contain("物资 " + _session.Industry.Resources.Supplies));
+            Assert.That(panel.ResourceLine,
+                Does.Contain("物资价 " + _session.Market.MaterialsPriceIndexPermille + "‰"));
+            Assert.That(panel.ResourceLine,
+                Does.Contain("情报 " + _session.Industry.Resources.Intelligence));
+
+            Assert.That(panel.ReportLine, Does.Contain("需粮 2"));
+            Assert.That(panel.ReportLine, Does.Contain("购入 1"));
+            Assert.That(panel.ReportLine, Does.Contain("缺粮 1"));
+            Assert.That(panel.ReportLine, Does.Contain("材料成本 2资金"));
+            Assert.That(panel.ReportLine, Does.Contain("粮食连续短缺 1 个月"),
+                "the shortage status comes from the settled market state");
+        }
+
+        [Test]
+        public void IndustryPanel_ShowsZeroShortageStatusAfterLoad()
+        {
+            SaveData settled = _session.CaptureSave();
+            settled.market.foodInventory = 4;
+            settled.market.consecutiveFoodShortageMonths = 0;
+            Assert.That(_session.TryApplySave(settled).Succeeded, Is.True, _session.LastEventMessage);
+            Assert.That(_session.LastMarketReport, Is.Null);
+            Assert.That(_session.Market.ConsecutiveFoodShortageMonths, Is.Zero);
+
+            IndustryPanel panel = Panel();
+            panel.Open();
+            panel.Refresh();
+
+            Assert.That(panel.ReportLine, Does.Contain("粮食连续短缺 0 个月"),
+                "a persisted zero count must not disappear from the panel");
+            Assert.That(panel.ReportLine, Does.Not.Contain("缺粮"),
+                "the current-month unmet quantity is a separate value from the shortage duration");
+        }
+
+        [Test]
+        public void IndustryPanel_ShowsPersistedMarketStateAfterLoad()
+        {
+            SaveData stressed = _session.CaptureSave();
+            stressed.market.foodInventory = 0;
+            stressed.market.foodPriceIndexPermille = 1234;
+            stressed.market.materialsPriceIndexPermille = 789;
+            stressed.market.consecutiveFoodShortageMonths = 2;
+            Assert.That(_session.TryApplySave(stressed).Succeeded, Is.True, _session.LastEventMessage);
+            Assert.That(_session.LastMarketReport, Is.Null);
+            Assert.That(_session.LastIndustryReport, Is.Null);
+
+            IndustryPanel panel = Panel();
+            panel.Open();
+            panel.Refresh();
+
+            Assert.That(panel.ResourceLine, Does.Contain("粮食 0"));
+            Assert.That(panel.ResourceLine, Does.Contain("粮价 1234‰"));
+            Assert.That(panel.ResourceLine, Does.Contain("物资价 789‰"));
+            Assert.That(panel.ResourceLine,
+                Does.Contain("物资 " + _session.Industry.Resources.Supplies));
+            Assert.That(panel.ReportLine, Does.Contain("粮食连续短缺 2 个月"),
+                "shortage status is derived from the persisted market state, not a report");
+        }
+
+        [Test]
+        public void IndustryPanel_PredictsStalledForMaterialCostShortfall()
+        {
+            Assert.That(_session.TryAssignIndustry(IndustryCatalog.TradingHouseId,
+                M2FixedScenario.ChieId).Succeeded, Is.True, _session.LastIndustryMessage);
+
+            // Funds 8 cover the trading house's fixed upkeep 6 but not the M08B
+            // material cost ceil(2 * 1500 / 1000) = 3, so settlement stalls by 1 fund.
+            SaveData stressed = _session.CaptureSave();
+            stressed.industry.funds = 8;
+            stressed.industry.supplies = 12;
+            stressed.market.materialsPriceIndexPermille = 1500;
+            Assert.That(_session.TryApplySave(stressed).Succeeded, Is.True, _session.LastEventMessage);
+
+            IndustryPanel panel = Panel();
+            panel.Open();
+            panel.Refresh();
+
+            Assert.That(panel.TradingStatus, Does.Contain("资源不足"));
+            Assert.That(panel.TradingStatus, Does.Contain("缺 1 资金"));
+            Assert.That(panel.TradingStatus, Does.Contain("材料成本 3 资金"));
+            Assert.That(panel.TradingStatus, Does.Not.Contain("运作中"),
+                "the preview cannot promise production the settlement will refuse");
+
+            Assert.That(_session.TryAdvanceToNextMonth(), Is.True, _session.LastEventMessage);
+            IndustryMonthReport report = _session.LastIndustryReport;
+            Assert.That(report, Is.Not.Null);
+            Assert.That(report.Lines.First(line => line.IndustryId == IndustryCatalog.TradingHouseId).Status,
+                Is.EqualTo(IndustryLineStatus.Stalled),
+                "the settled line must match the previewed status");
         }
 
         [Test]

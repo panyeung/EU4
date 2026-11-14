@@ -201,7 +201,8 @@ namespace SengokuChronicle.Tests.EditMode
                 Assert.That(restored.TryAdvanceToNextMonth(), Is.True, restored.LastEventMessage);
                 Assert.That(restored.Industry.LastSettledMonthIndex, Is.EqualTo(settledBefore + 1));
                 Assert.That(CountMonthly(restored), Is.EqualTo(monthlyBefore + 1));
-                Assert.That(restored.Industry.Resources.Funds, Is.EqualTo(32));
+                Assert.That(restored.Industry.Resources.Funds, Is.EqualTo(28),
+                    "only the settled industry month and the household food bill move funds");
             }
             finally
             {
@@ -221,7 +222,8 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(SaveDataMigrator.TryMigrate(legacy, null, out SaveData current,
                 out SaveOperationResult result), Is.True, result.Message);
             Assert.That(current.industry.funds, Is.EqualTo(30));
-            Assert.That(current.industry.supplies, Is.EqualTo(12));
+            Assert.That(current.industry.supplies, Is.EqualTo(10),
+                "two food units are carved out of the legacy stock");
             Assert.That(current.industry.intelligence, Is.Zero);
             Assert.That(current.industry.slots[0].assignedPersonId, Is.Empty);
             Assert.That(current.industry.slots[1].assignedPersonId, Is.Empty);

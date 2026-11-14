@@ -101,6 +101,39 @@ namespace SengokuChronicle.Application
             return FamilyBirthName.Success(new PersonId(personId), displayName);
         }
 
+        /// <summary>
+        /// Creates the stable identity of one autonomous-marriage spouse. The ID derives
+        /// only from the candidate's permanent ID and the annual settlement year, and the
+        /// given name reuses the same original tables and collision rules as a newborn.
+        /// Only <see cref="PersonGender.Male"/> and <see cref="PersonGender.Female"/> are
+        /// accepted, and the candidate must already be registered.
+        /// </summary>
+        internal static FamilyBirthName CreateSpouse(SuccessionState state, PersonId candidateId,
+            GameDate date, PersonGender gender, ICollection<string> reservedIds,
+            ICollection<string> reservedNames)
+        {
+            if (state == null || state.World == null)
+                return FamilyBirthName.Failure("家族状态为空，无法生成配偶。");
+            if (candidateId.IsEmpty)
+                return FamilyBirthName.Failure("配偶候选人 ID 不能为空。");
+            if (!state.World.TryGetPerson(candidateId, out _))
+                return FamilyBirthName.Failure("配偶候选人不是已登记人物。");
+            if (!date.IsValid)
+                return FamilyBirthName.Failure("婚姻日期无效。");
+            if (gender != PersonGender.Male && gender != PersonGender.Female)
+                return FamilyBirthName.Failure("生成配偶的性别必须是男或女。");
+
+            string baseId = "person.marriage." + Sanitize(candidateId.Value) + "." +
+                            date.Year.ToString("D4", CultureInfo.InvariantCulture);
+            string personId = UniqueId(state, baseId, reservedIds);
+
+            string[] table = gender == PersonGender.Male ? MaleGivenNames : FemaleGivenNames;
+            int index = (int)(StableHash(personId) % (uint)table.Length);
+            string displayName = UniqueName(state, table[index], reservedNames);
+
+            return FamilyBirthName.Success(new PersonId(personId), displayName);
+        }
+
         private static string UniqueId(SuccessionState state, string baseId,
             ICollection<string> reservedIds)
         {

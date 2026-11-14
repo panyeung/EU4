@@ -196,8 +196,17 @@ namespace SengokuChronicle.Events
             return new EventScheduleResult(true, selected.eventId, string.Empty);
         }
 
+        /// <summary>
+        /// Reports whether one option could be committed right now. The answer is the same
+        /// preflight the commit runs, so an option is never advertised as available and then
+        /// rejected because its family target, NPC target or value range no longer applies.
+        /// A family target equal to the current head is reported unavailable here instead of
+        /// failing only after the player chooses it.
+        /// </summary>
         public bool TryGetOptionAvailability(string eventId, string optionId,
-            CharacterRelationships relationships, out bool enabled, out string reason)
+            CharacterRelationships relationships, EventRuleContext context,
+            FamilyRelationships familyRelationships, FamilyDoctrineState familyDoctrine,
+            out bool enabled, out string reason)
         {
             enabled = false;
             reason = string.Empty;
@@ -206,7 +215,15 @@ namespace SengokuChronicle.Events
                 reason = "事件选项当前不可用。";
                 return false;
             }
-            enabled = AreRequirementsMet(option, relationships, out reason);
+            if (!AreRequirementsMet(option, relationships, out reason))
+                return true;
+            if (!TryPreflightEffects(option, relationships, familyRelationships, context,
+                    familyDoctrine, out _, out _, out string effectError))
+            {
+                reason = string.IsNullOrWhiteSpace(effectError) ? "事件选项当前不可用。" : effectError;
+                return true;
+            }
+            enabled = true;
             return true;
         }
 
@@ -391,6 +408,14 @@ namespace SengokuChronicle.Events
                     (ParseOnceScope(definition.onceScope) == EventOnceScope.PerGame && state.HasOccurredOnce(definition.eventId)) ||
                     !AreConditionsMet(definition, relationships, state, context, true, currentCreed))
                     continue;
+                // Offer-time pass. Succession-count conditions are commit-stable: they are
+                // checked here and not re-checked at commit, so a queued scene stays
+                // resolvable after its succession context moves on. Family effect targets
+                // are revalidated at commit against the current head, so this pass applies
+                // the same head rule; otherwise an option could be offered and then rejected.
+                // A context without a head cannot answer that, so it never excludes an event.
+                if (HasFamilyContext(context) && !HasApplicableOption(definition, relationships, context))
+                    continue;
                 candidates.Add(definition);
             }
             candidates.Sort((left, right) =>
@@ -498,6 +523,51 @@ namespace SengokuChronicle.Events
                 }
             }
             return true;
+        }
+
+        /// <summary>
+        /// True when the snapshot carries a current head, which is the minimum family fact an
+        /// applicability answer needs. A null head means the family context is unavailable and
+        /// the gate stays off; a head with an empty roster is a complete, head-only family, so
+        /// every family effect target is invalid and the scene is excluded.
+        /// </summary>
+        private static bool HasFamilyContext(EventRuleContext context) =>
+            !context.HeadPersonId.IsEmpty;
+
+        /// <summary>
+        /// Structural applicability: at least one option meets its requirements and every
+        /// family effect it declares targets a current non-head family member. Value ranges
+        /// and doctrine state stay commit-time checks because they can change with play.
+        /// </summary>
+        private static bool HasApplicableOption(EventDefinitionData definition,
+            CharacterRelationships relationships, EventRuleContext context)
+        {
+            if (definition == null || definition.options == null)
+                return false;
+            foreach (EventOptionData option in definition.options)
+            {
+                if (option == null || !AreRequirementsMet(option, relationships, out _))
+                    continue;
+                bool applicable = true;
+                if (option.effects != null)
+                {
+                    foreach (EventEffectData effect in option.effects)
+                    {
+                        if (effect == null || !string.Equals(effect.type,
+                                nameof(EventEffectKind.FamilyRelationshipDelta),
+                                StringComparison.Ordinal))
+                            continue;
+                        if (!TryFamilyTarget(effect, context, out _, out _))
+                        {
+                            applicable = false;
+                            break;
+                        }
+                    }
+                }
+                if (applicable)
+                    return true;
+            }
+            return false;
         }
 
         private static bool TryPreflightEffects(EventOptionData option, CharacterRelationships relationships,

@@ -241,7 +241,6 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(session.WorldClock.CurrentDate, Is.EqualTo(new GameDate(1560, 4, 29)));
 
             Assert.That(session.TryAssignIndustry(IndustryCatalog.FarmId, person).Succeeded, Is.True);
-            int fundsBeforeAprilSettlement = session.Industry.Resources.Funds;
             Assert.That(session.TryPlanRestAction(person, 4, out string reason), Is.True, reason);
 
             // Apr 29 -> Apr 30 stays inside the month.
@@ -261,8 +260,14 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(session.Industry.LastSettledMonthIndex,
                 Is.EqualTo(IndustryCalendar.MonthIndex(new GameDate(1560, 5, 1)) - 1));
             int fundsAfterApril = session.Industry.Resources.Funds;
-            int aprilFundsDelta = fundsAfterApril - fundsBeforeAprilSettlement;
-            Assert.That(aprilFundsDelta, Is.GreaterThan(0));
+            int industryDelta =
+                session.LastIndustryReport.After.Funds - session.LastIndustryReport.Before.Funds;
+            Assert.That(industryDelta, Is.GreaterThan(0),
+                "the farm month itself still earns funds");
+            Assert.That(fundsAfterApril,
+                Is.EqualTo(session.LastIndustryReport.After.Funds -
+                             session.LastMarketReport.FoodBillFunds),
+                "the household food bill is applied once on top of the industry month");
 
             if (!string.IsNullOrEmpty(session.PendingEventId))
                 Choose(session, M2FixedScenario.PledgeEventId, M2FixedScenario.KeepPromiseOptionId);
@@ -283,7 +288,11 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(session.WorldClock.CurrentDate, Is.EqualTo(new GameDate(1560, 6, 1)));
             Assert.That(session.LastIndustryReport.Month, Is.EqualTo(5));
             Assert.That(session.Industry.Resources.Funds,
-                Is.EqualTo(fundsAfterApril + aprilFundsDelta));
+                Is.EqualTo(fundsAfterApril +
+                           (session.LastIndustryReport.After.Funds -
+                            session.LastIndustryReport.Before.Funds) -
+                           session.LastMarketReport.FoodBillFunds),
+                "only the next month's own industry and food values are applied");
         }
 
         [Test]

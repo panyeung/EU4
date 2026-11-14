@@ -10,7 +10,7 @@ namespace SengokuChronicle.Persistence
     /// </summary>
     public static class SaveDataValidator
     {
-        public const int CurrentVersion = 13;
+        public const int CurrentVersion = 17;
 
         public static SaveOperationResult Validate(SaveData data)
         {
@@ -40,6 +40,9 @@ namespace SengokuChronicle.Persistence
                 return Invalid("密信任务阶段无效。");
             if (!Enum.IsDefined(typeof(MarketTallyStage), data.marketTallyStage))
                 return Invalid("市集账目任务阶段无效。");
+            SaveOperationResult commission = ValidateCommission(data.commission);
+            if (!commission.Succeeded)
+                return commission;
 
             SaveOperationResult relationships = ValidateRelationships(data.relationships);
             if (!relationships.Succeeded)
@@ -65,6 +68,13 @@ namespace SengokuChronicle.Persistence
                 new GameDate(data.year, data.month, data.day), data.succession);
             if (!industry.Succeeded)
                 return industry;
+
+            if (data.market == null)
+                return Invalid("存档缺少市场状态（market）。");
+            SaveOperationResult market = data.market.ValidateForSave(
+                new GameDate(data.year, data.month, data.day));
+            if (!market.Succeeded)
+                return market;
 
             if (data.development == null)
                 return Invalid("存档缺少人物成长状态（development）。");
@@ -95,12 +105,47 @@ namespace SengokuChronicle.Persistence
             if (!dailyActions.Succeeded)
                 return dailyActions;
 
+            // M05 cross-block rule: an in-progress commission must name one living
+            // current-family member who is not simultaneously busy elsewhere. Settled
+            // historical rows are exempt so a completed result stays loadable after
+            // the assignee later dies or leaves the roster.
+            SaveOperationResult commissionReferences = ValidateCommissionReferences(data, date);
+            if (!commissionReferences.Succeeded)
+                return commissionReferences;
+
             if (data.npcAutonomy == null)
                 return Invalid("存档缺少 NPC 自主状态（npcAutonomy）。");
             SaveOperationResult npcAutonomy = data.npcAutonomy.ValidateForSave(
                 data.succession, date);
             if (!npcAutonomy.Succeeded)
                 return npcAutonomy;
+
+            if (data.familyStanding == null)
+                return Invalid("存档缺少家族名望状态（familyStanding）。");
+            SaveOperationResult standing = data.familyStanding.ValidateForSave();
+            if (!standing.Succeeded)
+                return standing;
+
+            if (data.injury == null)
+                return Invalid("存档缺少伤员状态（injury）。");
+            if (!data.injury.TryRestore(out MissionInjuryState injuries, out string injuryError))
+                return Invalid(injuryError);
+            for (int i = 0; i < injuries.Injured.Count; i++)
+            {
+                PersonId injured = injuries.Injured[i];
+                if (!IsLivingFamilyMember(data.succession, injured))
+                    return Invalid("存档伤员必须是当前在世的家族成员。");
+            }
+
+            SaveOperationResult history = ValidateMissionHistory(data, date);
+            if (!history.Succeeded)
+                return history;
+
+            if (data.campaign == null)
+                return Invalid("存档缺少家族纪元状态（campaign）。");
+            SaveOperationResult campaign = data.campaign.ValidateForSave(date);
+            if (!campaign.Succeeded)
+                return campaign;
 
             SaveOperationResult route = ValidateEventScenarioRoute(data.activeEventScenarioId);
             if (!route.Succeeded)
@@ -115,6 +160,264 @@ namespace SengokuChronicle.Persistence
 
             return ValidateEventRuntimeSnapshot(data.eventRuntime,
                 new GameDate(data.year, data.month, data.day));
+        }
+
+        /// <summary>
+        /// M05: the commission row must describe exactly one legal lifecycle position.
+        /// Timing, investment, assignee and outcome are only accepted where the stage
+        /// can own them, so a corrupt row never restores a free reward or a phantom
+        /// assignee.
+        /// </summary>
+        internal static SaveOperationResult ValidateCommission(ShadowEscortCommissionSaveData data)
+        {
+            if (data == null)
+                return Invalid("存档缺少 M05 护送委托状态（commission）。");
+
+            ShadowEscortCommission restored = ShadowEscortCommission.TryRestore(
+                (ShadowEscortStage)data.stage, data.assigneePersonId, data.durationDays,
+                data.elapsedDays, data.startYear, data.startMonth, data.startDay,
+                (CommissionOutcome)data.outcome, data.score, data.roll, data.rewardFunds,
+                data.rewardSupplies, data.investedFunds, data.lastFeedback, data.runId,
+                true, (MissionOperationMode)data.mode, out string error);
+            if (restored == null)
+                return Invalid(string.IsNullOrEmpty(error) ? "存档 M05 护送委托状态无效。" : error);
+            return SaveOperationResult.Success();
+        }
+
+        /// <summary>
+        /// M05 cross-block rule shared by save validation and load. Only an in-progress
+        /// commission constrains its assignee: that person must be a living current
+        /// family member who is not simultaneously executing a daily action or holding
+        /// an industry post. Settled rows keep their historical assignee regardless of
+        /// later death or departure, so a completed result never becomes unloadable.
+        ///
+        /// Work-duty eligibility (adult, not retired) is enforced when an assignee is
+        /// chosen, not here; that matches <c>GameSession.CommissionAssigneeBlockReason</c>,
+        /// so a person who retires while escorting finishes the trip. Rejecting retirement
+        /// here would strand a save produced by the legal retire-then-save order, and
+        /// rejecting age here would strand an in-progress row written before that rule
+        /// existed. Both rules live at the assignment boundary instead.
+        /// </summary>
+        internal static SaveOperationResult ValidateCommissionReferences(SaveData data,
+            GameDate currentDate)
+        {
+            if (data == null || data.commission == null)
+                return SaveOperationResult.Success();
+
+            // Historical rows may name a person who has since died or left, but no row
+            // can claim an execution window that starts in the future.
+            GameDate startDate = default;
+            bool hasStart = false;
+            if (data.commission.stage != (int)ShadowEscortStage.NotAccepted &&
+                data.commission.stage != (int)ShadowEscortStage.Accepted)
+            {
+                if (!GameDate.TryParse(data.commission.startYear, data.commission.startMonth,
+                        data.commission.startDay, out startDate))
+                    return Invalid("存档委托开始日期无效。");
+                hasStart = true;
+                if (startDate > currentDate)
+                    return Invalid("存档委托开始日期晚于存档日期。");
+            }
+
+            if (data.commission.stage != (int)ShadowEscortStage.InProgress)
+                return SaveOperationResult.Success();
+
+            // An executing commission consumes exactly one elapsed day per simulated
+            // calendar day since it started, capped at the fixed window so a due row can
+            // still be retried after its settlement failed. A same-day row with elapsed
+            // progress would otherwise settle after fewer simulated days than the rule.
+            if (!hasStart)
+                return Invalid("存档委托开始日期无效。");
+            int simulatedDays = CalendarDaysBetween(startDate, currentDate);
+            int expectedElapsed = Math.Min(ShadowEscortCommission.DurationDays, simulatedDays);
+            if (data.commission.elapsedDays != expectedElapsed)
+                return Invalid("存档委托已用天数与开始日期以来的模拟天数不一致。");
+            if (!PersonId.TryParse(data.commission.assigneePersonId, out PersonId assignee) ||
+                assignee.IsEmpty)
+                return Invalid("存档委托执行人 ID 无效。");
+            if (data.succession == null || !IsLivingFamilyMember(data.succession, assignee))
+                return Invalid("存档委托执行人必须是当前在世的家族成员。");
+            if (HasActiveDailyAction(data.dailyActions, assignee))
+                return Invalid("存档委托执行人同时正在执行每日行动。");
+            if (HasIndustryPost(data.industry, assignee))
+                return Invalid("存档委托执行人同时担任产业职务。");
+            if (HasResearchDuty(data.research, assignee))
+                return Invalid("存档委托执行人同时负责家族研究。");
+            if (HasEducationMentorDuty(data.development, assignee))
+                return Invalid("存档委托执行人同时担任培养导师。");
+            return SaveOperationResult.Success();
+        }
+
+        /// <summary>
+        /// M07 terminal mission history. Every row must be structurally valid, run IDs
+        /// are unique, rows are date-ordered and each linked chronicle entry must exist.
+        /// A settled M05 commission must have exactly one matching history row, while an
+        /// in-progress run must not have one yet.
+        /// </summary>
+        private static SaveOperationResult ValidateMissionHistory(SaveData data, GameDate date)
+        {
+            if (data.missionHistory == null)
+                return Invalid("存档缺少任务终局历史（missionHistory）。");
+
+            var history = new MissionHistoryState();
+            var chronicleIds = new HashSet<string>(StringComparer.Ordinal);
+            if (data.chronicle != null)
+                foreach (ChronicleSaveEntry entry in data.chronicle)
+                    if (entry != null && !string.IsNullOrEmpty(entry.entryId))
+                        chronicleIds.Add(entry.entryId);
+
+            GameDate previousDate = default;
+            for (int i = 0; i < data.missionHistory.Length; i++)
+            {
+                MissionHistorySaveEntry entry = data.missionHistory[i];
+                if (entry == null)
+                    return Invalid("存档任务终局历史包含空行。");
+                if (!entry.TryRestore(out MissionRecord record, out string recordError))
+                    return Invalid(recordError);
+                if (!history.TryAppend(record, out string appendError))
+                    return Invalid(appendError);
+                if (previousDate.IsValid && record.Date < previousDate)
+                    return Invalid("存档任务终局历史未按日期排序。");
+                if (record.Date > date)
+                    return Invalid("存档任务终局历史日期晚于存档日期。");
+                previousDate = record.Date;
+                if (!chronicleIds.Contains(record.ChronicleEntryId))
+                    return Invalid("存档任务终局历史引用了不存在的编年史记录。");
+                for (int p = 0; p < record.ParticipantStates.Count; p++)
+                {
+                    MissionParticipantState state = record.ParticipantStates[p];
+                    bool savedAlive = IsLivingFamilyMember(data.succession, state.PersonId);
+                    bool known = HasPerson(data.succession, state.PersonId);
+                    if (!known)
+                        return Invalid("存档任务终局历史引用了未登记人物。");
+                    if (state.AliveBefore && !state.AliveAfter && savedAlive)
+                        return Invalid("存档任务终局历史记录队员阵亡，但人物仍存活。");
+                }
+            }
+
+            if (data.commission != null)
+            {
+                ShadowEscortStage stage = (ShadowEscortStage)data.commission.stage;
+                bool executing = stage == ShadowEscortStage.InProgress;
+                bool settled = stage == ShadowEscortStage.Succeeded ||
+                               stage == ShadowEscortStage.PartialSuccess ||
+                               stage == ShadowEscortStage.Failed;
+                if (executing && !string.IsNullOrEmpty(data.commission.runId) &&
+                    history.Contains(data.commission.runId))
+                    return Invalid("执行中的委托不得已有终局记录。");
+                if (settled)
+                {
+                    if (string.IsNullOrEmpty(data.commission.runId) ||
+                        !history.Contains(data.commission.runId))
+                        return Invalid("已结算的委托缺少匹配的任务终局记录。");
+                }
+            }
+            return SaveOperationResult.Success();
+        }
+
+        private static bool HasPerson(SuccessionSaveData succession, PersonId personId)
+        {
+            if (succession == null || succession.persons == null)
+                return false;
+            foreach (SuccessionPersonSaveEntry person in succession.persons)
+                if (person != null && person.personId == personId.Value)
+                    return true;
+            return false;
+        }
+
+        private static int CalendarDaysBetween(GameDate from, GameDate to)
+        {
+            // Only the capped distance matters: once the fixed window is reached, a
+            // settlement retry keeps the row at DurationDays regardless of how many
+            // later days have passed, so there is no reason to count years of days.
+            int days = 0;
+            GameDate cursor = from;
+            while (days < ShadowEscortCommission.DurationDays && cursor < to &&
+                   GameDate.TryNext(cursor, out GameDate next))
+            {
+                cursor = next;
+                days++;
+            }
+            return days;
+        }
+
+        private static bool HasResearchDuty(FamilyResearchSaveData research, PersonId personId) =>
+            research != null && !string.IsNullOrEmpty(research.researchId) &&
+            research.researcherPersonId == personId.Value;
+
+        /// <summary>
+        /// True when the person mentors an annual education plan whose year has not
+        /// settled yet; a retained plan for an already settled year is historical.
+        /// </summary>
+        private static bool HasEducationMentorDuty(CharacterDevelopmentSaveData development,
+            PersonId personId)
+        {
+            if (development == null || development.persons == null)
+                return false;
+            foreach (CharacterDevelopmentPersonSaveEntry person in development.persons)
+            {
+                if (person == null || person.plans == null)
+                    continue;
+                foreach (EducationPlanSaveEntry plan in person.plans)
+                {
+                    if (plan == null || plan.mentorPersonId != personId.Value)
+                        continue;
+                    bool settled = false;
+                    if (person.results != null)
+                        foreach (EducationResultSaveEntry result in person.results)
+                            if (result != null && result.ageYear == plan.ageYear)
+                            {
+                                settled = true;
+                                break;
+                            }
+                    if (!settled)
+                        return true;
+                }
+            }
+            return false;
+        }
+
+        private static bool IsLivingFamilyMember(SuccessionSaveData succession, PersonId personId)
+        {
+            if (succession.persons == null || succession.members == null)
+                return false;
+            bool alive = false;
+            foreach (SuccessionPersonSaveEntry person in succession.persons)
+            {
+                if (person != null && person.personId == personId.Value)
+                {
+                    alive = person.alive;
+                    break;
+                }
+            }
+            if (!alive)
+                return false;
+            foreach (SuccessionMemberSaveEntry member in succession.members)
+                if (member != null && member.personId == personId.Value)
+                    return true;
+            return false;
+        }
+
+        private static bool HasActiveDailyAction(DailyActionStateSaveData dailyActions,
+            PersonId personId)
+        {
+            if (dailyActions == null || dailyActions.persons == null)
+                return false;
+            foreach (DailyActionPersonSaveEntry person in dailyActions.persons)
+                if (person != null && person.personId == personId.Value && person.hasAction)
+                    return true;
+            return false;
+        }
+
+        private static bool HasIndustryPost(IndustryStateSaveData industry, PersonId personId)
+        {
+            if (industry == null || industry.slots == null)
+                return false;
+            foreach (IndustrySlotSaveEntry slot in industry.slots)
+                if (slot != null && !string.IsNullOrEmpty(slot.assignedPersonId) &&
+                    slot.assignedPersonId == personId.Value)
+                    return true;
+            return false;
         }
 
         /// <summary>
@@ -144,6 +447,10 @@ namespace SengokuChronicle.Persistence
                 probe.saveFormatVersion != 8 && probe.saveFormatVersion != 9 &&
                 probe.saveFormatVersion != 10 && probe.saveFormatVersion != 11 &&
                 probe.saveFormatVersion != 12 &&
+                probe.saveFormatVersion != 13 &&
+                probe.saveFormatVersion != 14 &&
+                probe.saveFormatVersion != 15 &&
+                probe.saveFormatVersion != 16 &&
                 probe.saveFormatVersion != CurrentVersion)
                 return SaveOperationResult.Failure(
                     SaveErrorCode.UnsupportedVersion,
@@ -184,6 +491,26 @@ namespace SengokuChronicle.Persistence
             if (probe.saveFormatVersion >= 2 && probe.saveFormatVersion < 11 &&
                 HasRootProperty(json, "npcAutonomy"))
                 return Invalid("旧版存档包含 v11 NPC 自主状态（npcAutonomy）；迁移不会静默替换该数据。");
+            if (probe.saveFormatVersion >= 2 && probe.saveFormatVersion < 14 &&
+                HasRootProperty(json, "commission"))
+                return Invalid("旧版存档包含 v14 护送委托状态（commission）；迁移不会静默替换该数据。");
+            if (probe.saveFormatVersion >= 2 && probe.saveFormatVersion < 15)
+            {
+                if (HasRootProperty(json, "familyStanding"))
+                    return Invalid("旧版存档包含 M07 家族名望状态（familyStanding）；迁移不会静默替换该数据。");
+                if (HasRootProperty(json, "injury"))
+                    return Invalid("旧版存档包含 M07 伤员状态（injury）；迁移不会静默替换该数据。");
+                if (HasRootProperty(json, "missionHistory"))
+                    return Invalid("旧版存档包含 M07 任务终局历史（missionHistory）；迁移不会静默替换该数据。");
+            }
+            if (probe.saveFormatVersion >= 2 && probe.saveFormatVersion < 16 &&
+                HasRootProperty(json, "campaign"))
+                return Invalid("旧版存档包含 M08 家族纪元状态（campaign）；迁移不会静默替换该数据。");
+            // v17 introduced the market block. A pre-v17 file that already carries one
+            // cannot own it, so migration must refuse instead of overwriting the data.
+            if (probe.saveFormatVersion >= 2 && probe.saveFormatVersion < CurrentVersion &&
+                HasRootProperty(json, "market"))
+                return Invalid("旧版存档包含 M08B 市场状态（market）；迁移不会静默替换该数据。");
 
             if (string.IsNullOrWhiteSpace(probe.gameVersion) || probe.rulesVersion <= 0 ||
                 probe.eventContentVersion <= 0)
@@ -245,11 +572,40 @@ namespace SengokuChronicle.Persistence
             }
 
             // v13 introduced person gender and active pregnancies. A v12 payload is
-            // migrated into that shape by SaveDataMigrator, so presence only requires
-            // the current-version block below.
-            if (probe.saveFormatVersion == CurrentVersion &&
+            // migrated into that shape by SaveDataMigrator. v13 already owns the
+            // pregnancy list, so a v13 payload that omits it is malformed and must be
+            // rejected instead of being silently replaced with an empty list.
+            if (probe.saveFormatVersion >= 13 &&
                 (probe.succession == null || probe.succession.pregnancies == null))
                 return Invalid("存档缺少孕期状态（succession.pregnancies）。");
+            if (probe.saveFormatVersion >= 14 &&
+                (probe.commission == null ||
+                 (!string.IsNullOrEmpty(json) && !HasNonNullRootProperty(json, "commission"))))
+                return Invalid("存档缺少 M05 护送委托状态（commission）。");
+            if (probe.saveFormatVersion >= 15)
+            {
+                if (probe.familyStanding == null ||
+                    (!string.IsNullOrEmpty(json) && !HasNonNullRootProperty(json, "familyStanding")))
+                    return Invalid("存档缺少 M07 家族名望状态（familyStanding）。");
+                if (probe.injury == null ||
+                    (!string.IsNullOrEmpty(json) && !HasRootProperty(json, "injury")))
+                    return Invalid("存档缺少 M07 伤员状态（injury）。");
+                if (probe.missionHistory == null ||
+                    (!string.IsNullOrEmpty(json) && !HasRootProperty(json, "missionHistory")))
+                    return Invalid("存档缺少 M07 任务终局历史（missionHistory）。");
+            }
+            if (probe.saveFormatVersion >= 16)
+            {
+                if (probe.campaign == null ||
+                    (!string.IsNullOrEmpty(json) && !HasNonNullRootProperty(json, "campaign")))
+                    return Invalid("存档缺少 M08 家族纪元状态（campaign）。");
+            }
+            if (probe.saveFormatVersion >= CurrentVersion)
+            {
+                if (probe.market == null ||
+                    (!string.IsNullOrEmpty(json) && !HasNonNullRootProperty(json, "market")))
+                    return Invalid("存档缺少 M08B 市场状态（market）。");
+            }
 
             return SaveOperationResult.Success();
         }

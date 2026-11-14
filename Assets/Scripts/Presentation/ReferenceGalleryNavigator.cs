@@ -266,6 +266,9 @@ namespace SengokuChronicle.Presentation
             FamilyRosterPanel familyRoster = familyPanelRoot != null
                 ? familyPanelRoot.GetComponentInParent<FamilyRosterPanel>()
                 : null;
+            DailyActionPanel dailyAction = characterPanelRoot != null
+                ? characterPanelRoot.GetComponentInParent<DailyActionPanel>(true)
+                : null;
             if (page != ReferenceGalleryPage.Family && familyRoster != null)
                 familyRoster.Close();
             if (pageRoots != null)
@@ -274,7 +277,10 @@ namespace SengokuChronicle.Presentation
                     GameObject root = pageRoots[i].Root;
                     if (root != null)
                     {
-                        root.SetActive((pageRoots[i].VisibleOn & mask) != 0);
+                        bool visible = (pageRoots[i].VisibleOn & mask) != 0;
+                        if (root == characterPanelRoot && dailyAction != null)
+                            visible = false;
+                        root.SetActive(visible);
                         if (root.name == "M03NpcAiInspectorRoot")
                         {
                             Transform opener = root.transform.Find("M03NpcAiInspectorOpenButton");
@@ -294,7 +300,8 @@ namespace SengokuChronicle.Presentation
                 }
 
             SetPanel(launcherButton != null ? launcherButton.gameObject : null, false);
-            SetPanel(characterPanelRoot, page == ReferenceGalleryPage.Character);
+            SetPanel(characterPanelRoot,
+                page == ReferenceGalleryPage.Character && dailyAction == null);
             SetPanel(familyPanelRoot, page == ReferenceGalleryPage.Family);
             SetPanel(householdPanelRoot, page == ReferenceGalleryPage.Household);
             SetPanel(mapPanelRoot, page == ReferenceGalleryPage.Map);
@@ -314,9 +321,6 @@ namespace SengokuChronicle.Presentation
             SetEventsEmptyState(page == ReferenceGalleryPage.Events && !HasPendingEvent());
             if (page == ReferenceGalleryPage.Character)
             {
-                DailyActionPanel dailyAction = characterPanelRoot != null
-                    ? characterPanelRoot.GetComponentInParent<DailyActionPanel>()
-                    : null;
                 if (dailyAction != null)
                     dailyAction.Open();
             }
@@ -389,7 +393,8 @@ namespace SengokuChronicle.Presentation
                 for (int i = 0; i < pageRoots.Length; i++)
                 {
                     GameObject root = pageRoots[i].Root;
-                    if (root != null && (pageRoots[i].VisibleOn & mask) != 0 &&
+                    if (root != null && root != characterPanelRoot &&
+                        (pageRoots[i].VisibleOn & mask) != 0 &&
                         !root.activeSelf)
                     {
                         root.SetActive(true);
@@ -1325,16 +1330,23 @@ namespace SengokuChronicle.Presentation
             if (clockRoot != null)
                 clockRoot.SetAsLastSibling();
 
+            // The map root also hosts the M5 commission page, which draws its own indigo
+            // sheet, so the recursive dark-map restyle stops at that subtree.
+            Transform commissionRoot =
+                FindDeep(mapPanelRoot.transform, ShadowEscortCommissionPanel.RootObjectName);
+
             SetText(mapPanelRoot.transform, "TitleText", SengokuUiTheme.Vermilion);
             foreach (Text label in mapPanelRoot.GetComponentsInChildren<Text>(true))
-                if (label.gameObject.name != "TitleText")
+                if (label.gameObject.name != "TitleText" &&
+                    !IsUnder(label.transform, commissionRoot))
                     label.color = SengokuUiTheme.Ink;
             SetText(mapPanelRoot.transform, "CurrentDateText", SengokuUiTheme.Parchment);
             SetText(mapPanelRoot.transform, "LocationMarkerText", SengokuUiTheme.Parchment);
             SetText(mapPanelRoot.transform, "FeedbackText", SengokuUiTheme.Parchment);
             Button[] buttons = mapPanelRoot.GetComponentsInChildren<Button>(true);
             for (int i = 0; i < buttons.Length; i++)
-                SetButton(buttons[i], SengokuUiTheme.ParchmentDeep, SengokuUiTheme.Ink);
+                if (!IsUnder(buttons[i].transform, commissionRoot))
+                    SetButton(buttons[i], SengokuUiTheme.ParchmentDeep, SengokuUiTheme.Ink);
             ImmersiveWorldMapView view = mapPanelRoot.GetComponent<ImmersiveWorldMapView>();
             if (view == null) view = mapPanelRoot.AddComponent<ImmersiveWorldMapView>();
             view.BindNavigation(this);
@@ -1638,6 +1650,17 @@ namespace SengokuChronicle.Presentation
             Text[] labels = button.GetComponentsInChildren<Text>(true);
             for (int i = 0; i < labels.Length; i++)
                 labels[i].color = foreground;
+        }
+
+        /// <summary>True when <paramref name="transform"/> sits inside (or is) the styled subtree.</summary>
+        private static bool IsUnder(Transform transform, Transform ancestor)
+        {
+            if (ancestor == null)
+                return false;
+            for (Transform current = transform; current != null; current = current.parent)
+                if (current == ancestor)
+                    return true;
+            return false;
         }
 
         private static void SetChildTextRect(Transform parent, string name, Vector2 position,

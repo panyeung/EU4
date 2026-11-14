@@ -155,13 +155,35 @@ M04A 个人记忆 UI 已包含在单独的 M04A 实施任务中，不与本计�
 
 **Files:**
 - Modify: `Assets/Scripts/Presentation/TitleScreenController.cs`、`DemoSummaryPanel.cs`、`SaveLoadPanel.cs`、共享 `SengokuUiTheme.cs`（仅限已支持的显示设置）。
-- Test: `Assets/Tests/EditMode/TitleScreenControllerTests.cs`、`DemoSummaryPanelTests.cs`、`SaveLoadPanelTests.cs` 与场景验证。
+- Extend domain/application/persistence only where needed for the GDD stage and chronicle; inspect existing `GameSession`, chronicle, save schema and migrator before choosing owners.
+- Test: `Assets/Tests/EditMode/TitleScreenControllerTests.cs`、`DemoSummaryPanelTests.cs`、`SaveLoadPanelTests.cs`、`GameSessionSaveTests.cs`、`SaveDataMigratorTests.cs`、`WorldClockTests.cs` 与场景验证；新增规则应在现有测试文件合适时扩展，不另造重复覆盖。
 - Integrate: `Assets/Scenes/FoundationScene.unity`；若需要设置页只复用真实可配置选项。
 
-**Interfaces:** 读取已发布剧本列表、阶段结局结果和现有存档 API；不增加未经实现的自由剧本、评分或设置字段。
+**GDD runtime scope (§10.3, §19.7):**
+- The 1560 historical campaign reaches its preliminary stage review in 1615. This review is non-terminal: the player can continue, and later world changes follow implemented rules without promising further scripted historical events.
+- Evaluate “百年名门” after 100 continuous years from the campaign's actual start date; this is a separate long-term milestone, not the 1615 ending.
+- The final family chronicle includes the GDD categories: rulers, wealth changes, ninjutsu achievements, deaths and important experiences, allies and enemies, major historical events, and final standing. Use recorded game facts; identify missing source data and add the minimum tracking needed rather than inventing values or a composite score.
+- Persist the campaign start and stage/continuation state needed to resume accurately. Migration must not manufacture elapsed time or claim an evaluation that the save cannot prove.
+
+**Current source audit:** succession handoffs, industry settlements, research completions, event choices and mission outcomes already have dated records; M07 mission history includes participant death state and external-relation deltas, while family standing stores current stable-ID relation values. The save currently stores the current date, but no campaign start date or historical-stage continuation state. No separate world-history event stream, explicit ally/enemy classification rule, or numeric family-stability value was found. The implementation plan must add the minimum records or content needed to fulfill every GDD chronicle category; a missing source leaves that acceptance item unmet. Where GDD does not define a numeric score or classification threshold, present factual history without inventing one.
+
+**Date convention for implementation:** derive the non-terminal historical review at the 55th anniversary of a campaign's actual start date (1560-04-01 → 1615-04-01), and the separate “百年名门” evaluation at its 100th anniversary (→ 1660-04-01). Show each milestone once, allow the historical campaign to continue after the first, and persist enough state to preserve that behavior across save/load. For a legacy save whose start date cannot be proven from its saved scenario, keep the origin unknown and do not claim either milestone. For the five GDD development dimensions, show their source facts; use elapsed continuous years and recorded ruler handoffs as stability evidence, not a fabricated score. External relation values can be listed by stable ID and sign; do not imply a formal alliance system absent from gameplay.
+
+**Interfaces:** 读取已发布剧本列表、阶段结局结果和现有存档 API；不增加 GDD 未定义的额外自定义剧本、综合评分或设置字段。历史剧本继续游玩与百年评定属于本任务要实现的 GDD 规则，不得用 Phase 1 的 `IsDemoComplete` 代替。
+
+**Compatibility boundary:** Keep `DemoSummaryPanel`'s existing Phase 1 three-mission completion behavior intact. Historical-stage and century reviews are separate campaign milestones and must not cause Phase 1 completion to be mistaken for an ending or vice versa; preserve a distinct, readable review state and continue action in the campaign UI.
+
+**Implementation order:**
+1. Add a small domain contract for the 55-year and 100-year milestones, capture the actual new-campaign start date, and persist whether each review was acknowledged. For legacy saves, migrate only origin data that is provable; otherwise retain an explicit unknown origin and keep date-based evaluations unclaimed.
+2. Build the family review from the saved succession/chronicle, industry, research, mission-history and standing sources. Add minimal persisted records for any GDD §10.3 category that those sources cannot reconstruct; never synthesize old history during migration.
+3. Expose milestone state and a continue command through a separate campaign review view. Preserve the existing Phase 1 `DemoSummaryPanel`; reuse the title and save/load UI only for real campaign availability and errors.
+4. Test exact boundary dates, one-time presentation, continue and save/load at both milestones, legacy origin-unknown behavior, every GDD chronicle category, empty-slot behavior and save failure preservation. Then integrate in `FoundationScene` and complete the full Play Mode route.
 
 - [ ] 为已开放/未开放剧本、结局历史和无旧存档状态编写清楚可用性断言。
-- [ ] 按时间轴展示已发生继承与后果；所有评价维度映射至 GDD 已批准数据。
+- [ ] 实现并保存 1615 阶段评估、评估后继续游玩、满 100 年后的独立百年名门评定；旧存档迁移不得伪造开始日期或已达成状态。
+- [ ] 按时间轴回顾 GDD §10.3 的全部结算类别和继承后果；缺失的权威数据来源须在计划中列明并补上最小必要记录。
+- [ ] 不生成未经 GDD 确认的综合评分；五项发展维度只显示各自已有且有来源的数据。
+- [ ] 覆盖第 55/100 年边界、里程碑只触发一次、阶段后继续、跨存读档续接，以及无法证明开局日期的旧档不误判。
 - [ ] 检查 1280×720 与较窄窗口、安全边距、键盘焦点、文字放大/对比能力；不能提供的选项不展示。
 - [ ] 验证保存失败时旧档案保留、存档迁移提示清楚；运行所有相关 EditMode 测试和 FoundationScene Validator。
 - [ ] 完成多代完整 Play Mode、Console 零错误、存读档与用户验收后，只提交该阶段验证文件；用户明确验收后才可做最终 checkpoint/merge/tag。
@@ -357,8 +379,8 @@ flowchart LR
 ## 待未来节点确认的产品决定
 
 - 动态家族人物由哪些世界规则生成、NPC 可自主执行哪些婚姻/离家/委托行为。
-- 委托的确切选择空间、属性检定、时间/资源成本与失败后果。
-- 手动战术与自动委派的操作流程及自动结算细节仍待 M07 确认；已确定所有任务都可手动或自动完成，且不设强制手动任务，两种方式奖励相同（见 GDD §19.8）。
+- M05 护送委托与 M06 潜入任务之外的新增委托类型，其选项、属性检定、时间/资源成本和失败后果。
+- 手动战术与自动委派的具体操作和自动检定已由 M07 规则确定；所有任务均可手动或自动执行，不设强制手动任务，两种方式按同一结果共享结算（见 GDD §19.8 和 M07 实施计划）。
 - M08 自由剧本、长线内容容量、结局指标与设置选项。
 
 在对应 M## 开始前由用户按该节点设计稿确认，不在本 UI 总设计中猜定。

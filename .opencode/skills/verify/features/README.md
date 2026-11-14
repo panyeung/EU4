@@ -60,4 +60,26 @@ exactly four H2 sections in this order: `Sub-features`, `How to get to it (user 
 - [World map travel](./world-map-travel.md) covers destination preview, departure, and cancel.
 - [Succession](./succession.md) covers retiring the head, the candidate list, the handoff,
   and the no-heir crisis path.
+- [NPC autonomy](./m03-npc-autonomy.md) covers the two pilots' daily choices, eligibility
+  exclusions and read-only Inspector.
+- [Shadow escort commission](./shadow-escort-commission.md) covers the M05 offer, the
+  work-duty assignee list, the three-day execution window, settlement and its chronicle row.
+- [Tactical mission](./tactical-mission.md) covers the M06 infiltration entry, the operative
+  selection and briefing, the turn plus guard response, the terminal outcomes, and terminal
+  save/load.
+- [M08A family demography](./m08a-family-demography.md) covers the annual boundary check,
+  natural deaths, NPC autonomous marriage, the new chronicle rows, the family tree and the
+  save/load round-trip.
 - [Save and load](./save-load.md) covers saving, loading, and state fidelity across a load.
+
+## Design references
+
+- [M07 three-layer integration design](../../../../docs/superpowers/specs/2026-11-11-m07-three-layer-integration-design.md)
+  records the approved rules and values.
+- [M07 implementation plan](../../../../docs/superpowers/plans/2026-11-11-m07-three-layer-integration.md)
+  records the approved result table, save migration and verification scope.
+- [M07 runtime verification](../../../../docs/reports/m07-runtime-verification.md) records the
+  2026-11-12 compile, EditMode, scene and Play Mode evidence with its limits.
+- [M08A demography design](../../../../docs/superpowers/specs/2026-11-12-m08-demography-design.md)
+  and [M08 campaign review report](../../../../docs/reports/m08-campaign-review.md#m08a-家族人口动态切片2026-11-12)
+  record the approved demographic rules and the current slice evidence.

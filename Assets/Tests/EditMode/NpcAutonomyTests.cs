@@ -382,6 +382,96 @@ namespace SengokuChronicle.Tests.EditMode
                 "remaining supported days still count inside the 30-day window");
         }
 
+        [Test]
+        public void Evaluate_InjuredPilotKeepsRestAndRejectsTrainingAndWork()
+        {
+            NpcAutonomyEvaluation evaluation = NpcAutonomyRules.Evaluate(
+                M2FixedScenario.MasatsunaId, new NpcNeedValues(40, 75, 45), null, default,
+                true, true, false, new NpcActionEligibility(true, false, false));
+
+            Assert.That(evaluation.HasSelection, Is.True);
+            Assert.That(evaluation.Selected.Kind, Is.EqualTo(DailyActionKind.Rest),
+                "an injured pilot may still rest");
+            Assert.That(evaluation.Candidates[0].IsEligible, Is.True);
+            Assert.That(evaluation.Candidates[1].IsEligible, Is.False);
+            Assert.That(evaluation.Candidates[2].IsEligible, Is.False);
+            Assert.That(evaluation.Candidates[1].Explanation, Does.Contain("伤员"));
+            Assert.That(evaluation.Candidates[2].Explanation, Does.Contain("伤员"));
+            Assert.That(evaluation.Candidates[2].Score, Is.EqualTo(45),
+                "a rejected candidate still reports its diagnostic score");
+        }
+
+        [Test]
+        public void Evaluate_IndustryDutyRejectsWorkBeforeRanking()
+        {
+            // Nobumasa prefers Work (150); the duty rule must still reject it first.
+            NpcAutonomyEvaluation evaluation = NpcAutonomyRules.Evaluate(
+                M2FixedScenario.NobumasaId, new NpcNeedValues(45, 40, 75), null, default,
+                true, true, false, new NpcActionEligibility(false, true, false));
+
+            NpcActionCandidate work = evaluation.Candidates[2];
+            Assert.That(work.Kind, Is.EqualTo(DailyActionKind.Work));
+            Assert.That(work.IsEligible, Is.False);
+            Assert.That(work.Explanation, Does.Contain("已担任产业职务"));
+            Assert.That(work.Score, Is.EqualTo(150));
+            Assert.That(evaluation.Selected.Kind, Is.EqualTo(DailyActionKind.Rest));
+            Assert.That(evaluation.Selected.Score, Is.EqualTo(45));
+            Assert.That(evaluation.Selected.Score, Is.LessThan(work.Score),
+                "a higher-scoring blocked Work must lose to the eligible fallback");
+        }
+
+        [Test]
+        public void Evaluate_ZeroSuppliesRejectsWorkBeforeRanking()
+        {
+            NpcAutonomyEvaluation evaluation = NpcAutonomyRules.Evaluate(
+                M2FixedScenario.NobumasaId, new NpcNeedValues(45, 40, 75), null, default,
+                true, true, false, new NpcActionEligibility(false, false, true));
+
+            NpcActionCandidate work = evaluation.Candidates[2];
+            Assert.That(work.IsEligible, Is.False);
+            Assert.That(work.Explanation, Does.Contain("物资为 0"));
+            Assert.That(work.Score, Is.EqualTo(150));
+            Assert.That(evaluation.Selected.Kind, Is.EqualTo(DailyActionKind.Rest),
+                "Work must not be selected while supplies are zero");
+        }
+
+        [Test]
+        public void Evaluate_RestStaysEligibleWhenEveryEligibilityFactApplies()
+        {
+            NpcAutonomyEvaluation evaluation = NpcAutonomyRules.Evaluate(
+                M2FixedScenario.MasatsunaId, new NpcNeedValues(40, 75, 45), null, default,
+                true, true, false, new NpcActionEligibility(true, true, true));
+
+            Assert.That(evaluation.Candidates[0].IsEligible, Is.True);
+            Assert.That(evaluation.Candidates[0].Explanation, Does.Not.Contain("排除"));
+            Assert.That(evaluation.Selected.Kind, Is.EqualTo(DailyActionKind.Rest));
+            Assert.That(evaluation.Candidates[1].IsEligible, Is.False);
+            Assert.That(evaluation.Candidates[2].IsEligible, Is.False);
+        }
+
+        [Test]
+        public void Evaluate_UnrestrictedFactsKeepWorkEligible()
+        {
+            NpcAutonomyEvaluation evaluation = NpcAutonomyRules.Evaluate(
+                M2FixedScenario.NobumasaId, new NpcNeedValues(45, 40, 75), null, default,
+                true, true, false, NpcActionEligibility.Unrestricted);
+
+            Assert.That(evaluation.Candidates[2].IsEligible, Is.True);
+            Assert.That(evaluation.Selected.Kind, Is.EqualTo(DailyActionKind.Work));
+            Assert.That(evaluation.Selected.Score, Is.EqualTo(150));
+        }
+
+        [TestCase(DailyActionKind.Rest, false)]
+        [TestCase(DailyActionKind.Training, true)]
+        [TestCase(DailyActionKind.Work, true)]
+        public void BlockReasonFor_InjuryBlocksEverythingExceptRest(DailyActionKind kind,
+            bool expectedBlocked)
+        {
+            string reason = NpcAutonomyRules.BlockReasonFor(kind, new NpcActionEligibility(
+                true, false, false));
+            Assert.That(reason != null, Is.EqualTo(expectedBlocked));
+        }
+
         private static void AssertCandidateReasons(NpcAutonomyEvaluation evaluation,
             string expected)
         {

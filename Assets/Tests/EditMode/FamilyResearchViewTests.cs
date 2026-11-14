@@ -25,7 +25,7 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(view.ProgressLine, Does.Contain("0/2"));
             Assert.That(view.ProgressLine, Does.Contain("每次月结推进 1 点"),
                 "the initial view must show the monthly rate once, before a plan starts");
-            Assert.That(view.ResourceLine, Does.Contain("资金 2").And.Contain("物资 2"));
+            Assert.That(view.ResourceLine, Does.Contain("资金 4").And.Contain("物资 2"));
             Assert.That(view.CostLine, Does.Contain("1 资金").And.Contain("1 物资"));
             Assert.That(view.CostLine, Does.Not.Contain("推进"),
                 "the rate belongs to the progress line, not the monthly cost line");

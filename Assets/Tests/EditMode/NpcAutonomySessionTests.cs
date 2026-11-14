@@ -380,9 +380,17 @@ namespace SengokuChronicle.Tests.EditMode
             SaveData captured = session.CaptureSave();
             string dailyActionsJson = JsonUtility.ToJson(captured.dailyActions);
             string v11Json = JsonUtility.ToJson(captured);
-            string v10Json = WithVersion(RemoveRootProperty(v11Json, "npcAutonomy"), 10);
+            // A historical v10 payload predates the v14 commission block entirely.
+            string v10Json = WithVersion(
+                RemoveRootProperty(RemoveRootProperty(RemoveRootProperty(
+                    RemoveRootProperty(RemoveRootProperty(RemoveRootProperty(
+                        RemoveRootProperty(v11Json,
+                        "npcAutonomy"), "commission"),
+                    "familyStanding"), "injury"), "missionHistory"), "campaign"), "market"), 10);
 
             Assert.That(v10Json, Does.Not.Contain("\"npcAutonomy\":"));
+            Assert.That(v10Json, Does.Not.Contain("\"commission\":"),
+                "a historical v10 fixture must not carry the v14 commission block");
             SaveDataPresenceProbe probe =
                 JsonUtility.FromJson<SaveDataPresenceProbe>(v10Json);
             Assert.That(probe.saveFormatVersion, Is.EqualTo(10));
@@ -662,6 +670,7 @@ namespace SengokuChronicle.Tests.EditMode
             SaveData legacy = session.CaptureSave();
             string dailyActionsJson = JsonUtility.ToJson(legacy.dailyActions);
             legacy.saveFormatVersion = 11;
+            legacy.rulesVersion = 7;
             foreach (NpcAutonomyPersonSaveEntry entry in legacy.npcAutonomy.persons)
                 entry.memories = null;
 
@@ -689,6 +698,7 @@ namespace SengokuChronicle.Tests.EditMode
             SaveData legacy = session.CaptureSave();
             Assert.That(Entry(legacy, M2FixedScenario.MasatsunaId).memories, Is.Not.Empty);
             legacy.saveFormatVersion = 11;
+            legacy.rulesVersion = 7;
 
             Assert.That(SaveDataMigrator.TryMigrate(legacy, null, out SaveData current,
                 out SaveOperationResult result), Is.False);
@@ -1283,17 +1293,149 @@ namespace SengokuChronicle.Tests.EditMode
         /// </summary>
         private static string RemoveRootProperty(string json, string propertyName)
         {
-            Assert.That(json, Does.EndWith("}"));
-            string token = "\"" + propertyName + "\":";
-            int index = json.LastIndexOf(token, StringComparison.Ordinal);
-            Assert.That(index, Is.GreaterThan(0), "missing root property " + propertyName);
-            int comma = index - 1;
-            while (comma >= 0 && char.IsWhiteSpace(json[comma]))
-                comma--;
-            Assert.That(comma, Is.GreaterThan(0));
-            Assert.That(json[comma], Is.EqualTo(','),
-                propertyName + " must be the last root property");
-            return json.Substring(0, comma) + "}";
+            int depth = 0;
+            int index = 0;
+            while (index < json.Length)
+            {
+                char current = json[index];
+                if (current == '"')
+                {
+                    int keyStart = index;
+                    int contentStart = ++index;
+                    bool escaped = false;
+                    while (index < json.Length)
+                    {
+                        char character = json[index];
+                        if (escaped)
+                            escaped = false;
+                        else if (character == '\\')
+                            escaped = true;
+                        else if (character == '"')
+                            break;
+                        index++;
+                    }
+                    if (index >= json.Length)
+                        break;
+
+                    int contentLength = index - contentStart;
+                    index++;
+                    if (depth == 1 && contentLength == propertyName.Length &&
+                        string.CompareOrdinal(json, contentStart, propertyName, 0,
+                            contentLength) == 0)
+                    {
+                        int lookahead = index;
+                        while (lookahead < json.Length && char.IsWhiteSpace(json[lookahead]))
+                            lookahead++;
+                        if (lookahead < json.Length && json[lookahead] == ':')
+                        {
+                            int valueStart = lookahead + 1;
+                            while (valueStart < json.Length && char.IsWhiteSpace(json[valueStart]))
+                                valueStart++;
+                            int valueEnd = SkipJsonValue(json, valueStart);
+                            int removeStart = keyStart;
+                            int before = keyStart - 1;
+                            while (before >= 0 && char.IsWhiteSpace(json[before]))
+                                before--;
+                            if (before >= 0 && json[before] == ',')
+                            {
+                                removeStart = before;
+                            }
+                            else
+                            {
+                                int after = valueEnd;
+                                while (after < json.Length && char.IsWhiteSpace(json[after]))
+                                    after++;
+                                if (after < json.Length && json[after] == ',')
+                                    valueEnd = after + 1;
+                            }
+
+                            return json.Substring(0, removeStart) + json.Substring(valueEnd);
+                        }
+                    }
+                    continue;
+                }
+
+                if (current == '{' || current == '[')
+                    depth++;
+                else if (current == '}' || current == ']')
+                    depth--;
+                index++;
+            }
+
+            throw new InvalidOperationException("Root property was not found: " + propertyName);
+        }
+
+        private static int SkipJsonValue(string json, int index)
+        {
+            while (index < json.Length && char.IsWhiteSpace(json[index]))
+                index++;
+            if (index >= json.Length)
+                return index;
+
+            if (json[index] == '"')
+            {
+                index++;
+                bool escaped = false;
+                while (index < json.Length)
+                {
+                    char character = json[index];
+                    if (escaped)
+                        escaped = false;
+                    else if (character == '\\')
+                        escaped = true;
+                    else if (character == '"')
+                        return index + 1;
+                    index++;
+                }
+                return index;
+            }
+
+            if (json[index] == '{' || json[index] == '[')
+            {
+                int depth = 0;
+                while (index < json.Length)
+                {
+                    char character = json[index];
+                    if (character == '"')
+                    {
+                        index = SkipJsonString(json, index);
+                        continue;
+                    }
+                    if (character == '{' || character == '[')
+                        depth++;
+                    else if (character == '}' || character == ']')
+                    {
+                        depth--;
+                        if (depth == 0)
+                            return index + 1;
+                    }
+                    index++;
+                }
+                return index;
+            }
+
+            while (index < json.Length && json[index] != ',' && json[index] != '}' &&
+                   json[index] != ']')
+                index++;
+            return index;
+        }
+
+        private static int SkipJsonString(string json, int index)
+        {
+            index++;
+            bool escaped = false;
+            while (index < json.Length)
+            {
+                char character = json[index];
+                if (escaped)
+                    escaped = false;
+                else if (character == '\\')
+                    escaped = true;
+                else if (character == '"')
+                    return index + 1;
+                index++;
+            }
+            return index;
         }
     }
 }

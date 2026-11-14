@@ -29,7 +29,7 @@ namespace SengokuChronicle.Application
     /// 新局固定从 1560-04-01 开始，当前位置固定为清洲。
     /// </summary>
     [DisallowMultipleComponent]
-    public sealed class GameSession : MonoBehaviour
+    public sealed partial class GameSession : MonoBehaviour
     {
         /// <summary>Documented fixed sample seed used by the reproducible FoundationScene demo.</summary>
         public const ulong DefaultRandomSeed = 0x5343414E4B4F3031UL;
@@ -40,6 +40,129 @@ namespace SengokuChronicle.Application
         public SealedLetterStage SealedLetterStage => _sealedLetterMission.Stage;
         public MarketTallyStage MarketTallyStage => _marketTallyMission.Stage;
         public int Merit => _supplyShortageMission.Merit + _sealedLetterMission.Merit + _marketTallyMission.Merit;
+
+        // ---- M05 commission surface -------------------------------------------------
+        public ShadowEscortStage CommissionStage => _commission.Stage;
+        public CommissionOutcome CommissionOutcome => _commission.Outcome;
+        public PersonId CommissionAssignee => _commission.AssigneeId;
+        public int CommissionElapsedDays => _commission.ElapsedDays;
+        public int CommissionRemainingDays => _commission.Stage == ShadowEscortStage.InProgress
+            ? _commission.RemainingDays
+            : 0;
+        public int CommissionInvestedFunds => _commission.InvestedFunds;
+
+        /// <summary>
+        /// Assigned execution window; 0 before an assignee exists, so the UI can tell an
+        /// unstarted commission apart from a countdown.
+        /// </summary>
+        public int CommissionDurationDays => _commission.DurationDaysValue;
+
+        /// <summary>Last M05 commission command or settlement feedback.</summary>
+        public string LastCommissionMessage { get; private set; } = string.Empty;
+
+        /// <summary>Immutable read-only commission snapshot for the upcoming panel.</summary>
+        public ShadowEscortCommissionStatus CommissionStatus => new ShadowEscortCommissionStatus(
+            _commission.Stage, _commission.Outcome, _commission.AssigneeId, CommissionDurationDays,
+            _commission.ElapsedDays, CommissionRemainingDays, _commission.InvestedFunds,
+            _commission.Score, _commission.Roll, _commission.RewardFunds,
+            _commission.RewardSupplies,
+            // A settled or abandoned outcome keeps its own readable feedback across
+            // save/load; the transient command message only covers the offer, assignment
+            // and rejections. Abandonment is terminal without being a shared result, so
+            // its reason must survive the same round trip.
+            (_commission.IsSettled || _commission.Stage == ShadowEscortStage.Abandoned) &&
+            !string.IsNullOrEmpty(_commission.LastFeedback)
+                ? _commission.LastFeedback
+                : LastCommissionMessage);
+
+        /// <summary>
+        /// Read-only assignee candidates in stable family order. Every living current-family
+        /// member appears, and each row's eligibility and short reason come from the same
+        /// check that gates <see cref="TryAssignCommission"/>, including the shared
+        /// work-duty rule (adult, not retired).
+        /// </summary>
+        public IReadOnlyList<CommissionAssigneeOption> CommissionAssignees
+        {
+            get
+            {
+                var options = new List<CommissionAssigneeOption>();
+                EnsureSuccession();
+                if (_succession.World == null)
+                    return options.AsReadOnly();
+                foreach (FamilyMembership membership in _succession.World.Family.Members)
+                {
+                    if (!_succession.World.IsLiving(membership.PersonId))
+                        continue;
+                    CommissionAssigneeCheck check = CheckCommissionAssignee(membership.PersonId);
+                    options.Add(new CommissionAssigneeOption(membership.PersonId,
+                        IndustryService.PersonName(_succession, membership.PersonId),
+                        check.Eligible, check.Reason));
+                }
+                return options.AsReadOnly();
+            }
+        }
+
+        // ---- M06 tactical infiltration surface -------------------------------------
+
+        /// <summary>True while the session-owning tactical operation is running.</summary>
+        public bool IsTacticalMissionActive =>
+            _tacticalMission != null && _tacticalMission.Stage == TacticalMissionStage.InProgress;
+
+        /// <summary>
+        /// The saved family chronicle is the completion authority: any recorded M06
+        /// mission row makes the one-time operation unavailable, across save and load.
+        /// </summary>
+        public bool IsTacticalMissionCompleted => FindTacticalMissionRecord() != null;
+
+        /// <summary>
+        /// Read-only projection for the panel; null before the operation starts in this
+        /// session. Rebuilding it never advances a turn or moves a guard.
+        /// </summary>
+        public TacticalMissionSnapshot TacticalMissionStatus =>
+            _tacticalMission != null ? _tacticalMission.CreateSnapshot() : null;
+
+        /// <summary>Last M06 command, rejection or settlement feedback.</summary>
+        public string LastTacticalMessage { get; private set; } = string.Empty;
+
+        /// <summary>Resources actually applied by the one terminal settlement.</summary>
+        public int TacticalAppliedFunds { get; private set; }
+        public int TacticalAppliedSupplies { get; private set; }
+        public int TacticalAppliedIntelligence { get; private set; }
+
+        /// <summary>
+        /// True when two eligible operatives, the clan seat, supplies for the announced
+        /// cost and an unfinished operation all allow a fresh start.
+        /// </summary>
+        public bool CanBeginTacticalMission =>
+            !IsTacticalMissionActive && !IsTacticalMissionCompleted &&
+            CurrentLocation == LocationId.Kiyosu &&
+            CountEligibleTacticalOperatives() >= TacticalMissionScenario.OperativeCount &&
+            EnsureIndustryState().Resources.Supplies >= TacticalMissionScenario.SupplyCost;
+
+        /// <summary>
+        /// Read-only candidate list in stable family order. Each row's eligibility and
+        /// short reason come from the same check that gates <see cref="TryBeginTacticalMission"/>.
+        /// </summary>
+        public IReadOnlyList<CommissionAssigneeOption> TacticalOperativeOptions
+        {
+            get
+            {
+                var options = new List<CommissionAssigneeOption>();
+                EnsureSuccession();
+                if (_succession.World == null)
+                    return options.AsReadOnly();
+                foreach (FamilyMembership membership in _succession.World.Family.Members)
+                {
+                    if (!_succession.World.IsLiving(membership.PersonId))
+                        continue;
+                    CommissionAssigneeCheck check = CheckTacticalOperative(membership.PersonId);
+                    options.Add(new CommissionAssigneeOption(membership.PersonId,
+                        IndustryService.PersonName(_succession, membership.PersonId),
+                        check.Eligible, check.Reason));
+                }
+                return options.AsReadOnly();
+            }
+        }
 
         /// <summary>Phase 1 演示收尾条件：三项任务均已到达结算（RewardClaimed）阶段。</summary>
         public bool IsDemoComplete =>
@@ -56,6 +179,8 @@ namespace SengokuChronicle.Application
         private SealedLetterMission _sealedLetterMission = new SealedLetterMission();
         private MarketTallyMission _marketTallyMission = new MarketTallyMission();
         private SupplyShortageMission _supplyShortageMission = new SupplyShortageMission();
+        private ShadowEscortCommission _commission = new ShadowEscortCommission();
+        private TacticalMissionState _tacticalMission;
         private CharacterRelationships _relationships;
         private FamilyRelationships _familyRelationships;
         private RandomStateManager _randomStateManager;
@@ -104,7 +229,8 @@ namespace SengokuChronicle.Application
         /// <summary>Read-only SC-019 industry snapshot for the panel and tests.</summary>
         public IndustryView Industry => IndustryView.Build(EnsureIndustryState(), Succession,
             CurrentGameDate, LastIndustryReport, LastIndustryChronicleSummary,
-            CanEditIndustryAssignments, IndustryBlockReason, LastIndustryMessage);
+            CanEditIndustryAssignments, IndustryBlockReason, LastIndustryMessage,
+            EnsureMarket(), LastMarketReport);
 
         /// <summary>True only at a management stable point with no pending event or succession decision.</summary>
         public bool CanEditIndustryAssignments
@@ -377,6 +503,14 @@ namespace SengokuChronicle.Application
         /// </summary>
         internal Action<HistoryLedger> Sc024ChronicleAppendFaultInjection { get; set; }
 
+        /// <summary>
+        /// Test-only hook invoked after the M06 terminal result is prepared but before it
+        /// is appended. Tests advance the ledger here so the prepared append genuinely
+        /// fails, proving resources roll back and the operation stays retryable. Never
+        /// set by production code.
+        /// </summary>
+        internal Action<HistoryLedger> TacticalChronicleAppendFaultInjection { get; set; }
+
         /// <summary>True only when one more day stays inside the current month and settlement is consistent.</summary>
         public bool CanAdvanceOneDayWithinMonth
         {
@@ -467,7 +601,8 @@ namespace SengokuChronicle.Application
             bool hasKnownLocation = _dailyActions != null &&
                 _dailyActions.TryGetLocation(personId, out _);
             NpcAutonomyEvaluation current = NpcAutonomyRules.Evaluate(personId, person.Needs,
-                person.Memories, CurrentGameDate, true, hasKnownLocation, hasActiveAction);
+                person.Memories, CurrentGameDate, true, hasKnownLocation, hasActiveAction,
+                NpcEligibilityFor(personId));
             NpcAutonomyEvaluation latest = person.LatestEvaluation ?? current;
             string displayName = profile.DisplayName;
             if (_succession != null && _succession.World != null &&
@@ -498,10 +633,50 @@ namespace SengokuChronicle.Application
         public bool IsTravelBlockedBySuccession => SuccessionBlocksTimeAdvance;
 
         /// <summary>
-        /// True only while the session still holds the pristine pre-succession standard
-        /// roster; the fixed crisis demo must never replace completed family history.
+        /// Interaction gate for the crisis-demo entry: true only while the session still
+        /// holds the pristine pre-succession standard roster, so the fixed demo never
+        /// replaces completed family history. Reference validity is checked by
+        /// <see cref="StartCrisisDemo"/> instead of here, so the entry stays clickable and
+        /// can explain why a swap would orphan an injury or a terminal-history row.
         /// </summary>
         public bool CanStartCrisisDemo => IsPristineStandardSuccession(Succession);
+
+        /// <summary>
+        /// Reason the crisis roster swap would orphan an M07 person reference, or null
+        /// when every injured person and every terminal-history participant survives the
+        /// replacement. The swap is refused rather than deleting an injury or rewriting
+        /// terminal history, so the player keeps the record and can retry later. The
+        /// replacement is derived from the same factory the swap installs, so the check
+        /// cannot drift from the roster it installs.
+        /// </summary>
+        private string CrisisRosterOrphanReason()
+        {
+            SuccessionState crisis = SuccessionSample.CreateCrisis();
+            IReadOnlyList<PersonId> injured = EnsureInjuries().Injured;
+            for (int i = 0; i < injured.Count; i++)
+                if (!CrisisRosterKeeps(crisis, injured[i]))
+                    return "伤员 " + PersonNameOf(injured[i]) +
+                           " 不在危机示范名单中：切换会丢失伤势记录，请先在下一次月结后恢复，再进入危机示范。";
+            IReadOnlyList<MissionRecord> records = EnsureMissionHistory().Records;
+            for (int i = 0; i < records.Count; i++)
+            {
+                IReadOnlyList<PersonId> participants = records[i].Participants;
+                for (int p = 0; p < participants.Count; p++)
+                    if (!CrisisRosterKeeps(crisis, participants[p]))
+                        return "任务终局历史包含危机示范名单之外的人物 " +
+                               PersonNameOf(participants[p]) +
+                               "：切换会孤立终局记录，无法进入危机示范。";
+            }
+            return null;
+        }
+
+        private static bool CrisisRosterKeeps(SuccessionState crisis, PersonId personId)
+        {
+            foreach (PersonState person in crisis.World.Persons)
+                if (person.Id == personId)
+                    return true;
+            return false;
+        }
 
         /// <summary>True while the session owns the approved SC-013 fixed three-generation roster.</summary>
         public bool IsM2ScenarioActive => M2FixedScenario.IsActive(Succession);
@@ -518,11 +693,41 @@ namespace SengokuChronicle.Application
                 EnsureSuccession();
                 if (IsFamilyExtinct || _succession.Phase != SuccessionPhase.None)
                     return false;
+                if (HasPendingEventForSuccessionGate())
+                    return false;
                 if (!M2FixedScenario.IsActive(_succession))
                     return true;
                 return M2FixedScenario.CanBeginRetirement(_succession, EnsureEventRuntimeState(),
                     CurrentGameDate, _eventScenarioId, out _);
             }
+        }
+
+        /// <summary>
+        /// A queued event must be chosen before any command can hand the head to a new person.
+        /// The event panel resolves its options against the current head, exactly like the
+        /// month turn that refuses to advance while an event is pending; confirming first would
+        /// leave a family scene addressed to the outgoing head with no selectable option, and
+        /// the player could neither choose nor advance. The gate changes only the order of two
+        /// player decisions: it never retargets an effect and never changes a succession rule.
+        /// </summary>
+        private bool RejectSuccessionWhileEventPending(out SuccessionResult rejection)
+        {
+            rejection = default;
+            if (!HasPendingEventForSuccessionGate())
+                return false;
+            const string message = "尚有事件待处理：请先作出事件选择，再处理继承交接。";
+            LastSuccessionMessage = message;
+            SessionStateChanged?.Invoke();
+            rejection = new SuccessionResult(SuccessionOutcome.BlockedByPendingEvent, false, message,
+                _succession != null ? _succession.Phase : SuccessionPhase.None,
+                _succession != null ? _succession.HeadPersonId : default);
+            return true;
+        }
+
+        private bool HasPendingEventForSuccessionGate()
+        {
+            EnsureEventRuntimeState();
+            return _eventRuntimeState != null && _eventRuntimeState.HasPendingEvents;
         }
 
         /// <summary>Visible reason when <see cref="CanBeginSuccessionRetirement"/> is false.</summary>
@@ -535,6 +740,8 @@ namespace SengokuChronicle.Application
                     return "家族已经灭亡，无法继续交接。";
                 if (_succession.Phase != SuccessionPhase.None)
                     return "尚有继承决策待处理，请先完成当前选择。";
+                if (HasPendingEventForSuccessionGate())
+                    return "尚有事件待处理：请先作出事件选择，再处理继承交接。";
                 if (!M2FixedScenario.IsActive(_succession))
                     return "当前可按通常继承规则安排交接。";
                 M2FixedScenario.CanBeginRetirement(_succession, EnsureEventRuntimeState(),
@@ -589,13 +796,40 @@ namespace SengokuChronicle.Application
                 if (!M2FixedScenario.IsActive(Succession) || IsM2FinaleCommitted)
                     return candidates;
 
-                PersonId heir = M2FixedScenario.ExpectedHeir(Succession, _eventScenarioId);
+                // The fixed line only narrows a real choice. A dead or unavailable
+                // fixed heir, or a last-generation head with no fixed heir, must leave
+                // the ordinary eligible living candidates instead of an empty list that
+                // the death/crisis decision cannot resolve.
+                PersonId heir = AvailableFixedHeir();
+                if (heir.IsEmpty)
+                    return candidates;
+
                 var filtered = new List<SuccessionCandidate>(1);
                 foreach (SuccessionCandidate candidate in candidates)
                     if (candidate.PersonId == heir)
                         filtered.Add(candidate);
                 return filtered.AsReadOnly();
             }
+        }
+
+        /// <summary>
+        /// The SC-013 fixed heir while that person is still a normal eligible candidate.
+        /// An empty result means the fixed line cannot narrow the current choice, so the
+        /// callers use the ordinary eligible living list.
+        /// </summary>
+        private PersonId AvailableFixedHeir()
+        {
+            if (!M2FixedScenario.IsActive(Succession))
+                return default;
+            PersonId heir = M2FixedScenario.ExpectedHeir(Succession, _eventScenarioId);
+            if (heir.IsEmpty)
+                return default;
+            IReadOnlyList<SuccessionCandidate> candidates =
+                SuccessionService.GetCandidates(Succession, CurrentGameDate);
+            for (int i = 0; i < candidates.Count; i++)
+                if (candidates[i].PersonId == heir)
+                    return heir;
+            return default;
         }
 
         public IReadOnlyList<SuccessionCandidate> SuccessionRegentCandidates =>
@@ -689,14 +923,16 @@ namespace SengokuChronicle.Application
 
         /// <summary>Starts the default SC-013 fixed three-generation scenario.</summary>
         public void InitNewGame(ulong initialSeed) =>
-            InitSession(initialSeed, M2FixedScenario.CreateSuccession());
+            InitSession(initialSeed, M2FixedScenario.CreateSuccession(), WorldClock.NewGameDate,
+                null, null, null, CampaignOriginCatalog.Sc013OriginId);
 
         /// <summary>Starts the separate SC-010 standard sample used by regression demos.</summary>
         public void InitStandardDemo() => InitStandardDemo(DefaultRandomSeed);
 
         /// <summary>Starts the separate SC-010 standard sample with a caller-selected seed.</summary>
         public void InitStandardDemo(ulong initialSeed) =>
-            InitSession(initialSeed, SuccessionSample.CreateStandard());
+            InitSession(initialSeed, SuccessionSample.CreateStandard(), WorldClock.NewGameDate,
+                null, null, null, CampaignOriginCatalog.Sc010OriginId);
 
         /// <summary>Starts the separate fixed SC-020 child-education demonstration.</summary>
         public void InitEducationDemoScenario() => InitEducationDemoScenario(DefaultRandomSeed);
@@ -705,7 +941,8 @@ namespace SengokuChronicle.Application
         public void InitEducationDemoScenario(ulong initialSeed)
         {
             InitSession(initialSeed, SC020EducationScenario.CreateSuccession(),
-                SC020EducationScenario.StartDate, SC020EducationScenario.CreateDevelopmentState());
+                SC020EducationScenario.StartDate, SC020EducationScenario.CreateDevelopmentState(),
+                null, null, CampaignOriginCatalog.Sc020OriginId);
         }
 
         /// <summary>Starts the separate fixed SC-023 seclusion and mentorship demonstration.</summary>
@@ -715,7 +952,8 @@ namespace SengokuChronicle.Application
         public void InitSeclusionDemoScenario(ulong initialSeed)
         {
             InitSession(initialSeed, SC023SeclusionScenario.CreateSuccession(),
-                SC023SeclusionScenario.StartDate, SC023SeclusionScenario.CreateDevelopmentState());
+                SC023SeclusionScenario.StartDate, SC023SeclusionScenario.CreateDevelopmentState(),
+                null, null, CampaignOriginCatalog.Sc023OriginId);
         }
 
         /// <summary>Starts the separate fixed SC-021 family-research demonstration.</summary>
@@ -726,7 +964,8 @@ namespace SengokuChronicle.Application
         {
             InitSession(initialSeed, SC021FamilyResearchScenario.CreateSuccession(),
                 SC021FamilyResearchScenario.StartDate, null,
-                SC021FamilyResearchScenario.CreateIndustryState());
+                SC021FamilyResearchScenario.CreateIndustryState(), null,
+                CampaignOriginCatalog.Sc021OriginId);
         }
 
         /// <summary>Starts the separate fixed SC-022 marriage and adoption demonstration.</summary>
@@ -737,7 +976,8 @@ namespace SengokuChronicle.Application
         public void InitFamilyFormationDemoScenario(ulong initialSeed)
         {
             InitSession(initialSeed, SC022FamilyFormationScenario.CreateSuccession(),
-                SC022FamilyFormationScenario.StartDate, null);
+                SC022FamilyFormationScenario.StartDate, null, null, null,
+                CampaignOriginCatalog.Sc022OriginId);
         }
 
         /// <summary>Starts the separate fixed SC-024 family-creed demonstration.</summary>
@@ -753,26 +993,17 @@ namespace SengokuChronicle.Application
         {
             InitSession(initialSeed, SC024FamilyDoctrineScenario.CreateSuccession(),
                 SC024FamilyDoctrineScenario.StartDate, null, null,
-                SC024FamilyDoctrineScenario.ScenarioId);
+                SC024FamilyDoctrineScenario.ScenarioId, CampaignOriginCatalog.Sc024OriginId);
             EnsureFamilyDoctrine().TrySetCreed(FamilyCreedKind.RighteousnessFirst, out _);
             TryStartCurrentHeadAmbition(FamilyAmbitionKind.DevelopHousehold);
         }
 
-        private void InitSession(ulong initialSeed, SuccessionState succession) =>
-            InitSession(initialSeed, succession, WorldClock.NewGameDate, null);
-
         private void InitSession(ulong initialSeed, SuccessionState succession, GameDate startDate,
-            CharacterDevelopmentState development) =>
-            InitSession(initialSeed, succession, startDate, development, null);
-
-        private void InitSession(ulong initialSeed, SuccessionState succession, GameDate startDate,
-            CharacterDevelopmentState development, IndustryState industry) =>
-            InitSession(initialSeed, succession, startDate, development, industry, null);
-
-        private void InitSession(ulong initialSeed, SuccessionState succession, GameDate startDate,
-            CharacterDevelopmentState development, IndustryState industry, string eventScenarioId)
+            CharacterDevelopmentState development, IndustryState industry, string eventScenarioId,
+            string campaignOriginId)
         {
             WorldClock = new WorldClock(startDate);
+            _campaignProgress = CreateCampaignProgress(startDate, campaignOriginId);
             CurrentLocation = LocationId.Kiyosu;
             _relationships = new CharacterRelationships();
             _familyRelationships = FamilyRelationships.CreateEmpty();
@@ -782,16 +1013,31 @@ namespace SengokuChronicle.Application
             _supplyShortageMission = new SupplyShortageMission();
             _sealedLetterMission = new SealedLetterMission();
             _marketTallyMission = new MarketTallyMission();
+            _commission = new ShadowEscortCommission();
+            _tacticalMission = null;
+            _tacticalRequest = null;
+            _standing = FamilyStandingState.CreateInitial();
+            _injuries = MissionInjuryState.TryCreate(null, out MissionInjuryState initialInjuries, out _)
+                ? initialInjuries
+                : new MissionInjuryState();
+            _missionHistory = new MissionHistoryState();
             _succession = succession ?? throw new ArgumentNullException(nameof(succession));
             M2FixedScenario.SyncDesignation(_succession, eventScenarioId);
             _dailyActions = CreateDailyActionsFor(_succession, CurrentLocation);
             _npcAutonomy = null;
             _development = development ?? CreateDevelopmentFor(_succession);
             _industryState = industry ?? IndustryState.CreateInitial(WorldClock.CurrentDate);
+            _marketState = CreateInitialMarket(WorldClock.CurrentDate, _succession);
+            _lastMarketReport = null;
             _researchState = FamilyResearchState.CreateInitial(WorldClock.CurrentDate);
             _familyDoctrine = new FamilyDoctrineState();
             _eventScenarioId = eventScenarioId ?? string.Empty;
             LastFamilyDoctrineMessage = string.Empty;
+            LastCommissionMessage = string.Empty;
+            LastTacticalMessage = string.Empty;
+            TacticalAppliedFunds = 0;
+            TacticalAppliedSupplies = 0;
+            TacticalAppliedIntelligence = 0;
             LastIndustryReport = null;
             LastIndustryMessage = string.Empty;
             LastEducationMessage = string.Empty;
@@ -799,6 +1045,7 @@ namespace SengokuChronicle.Application
             LastResearchMessage = string.Empty;
             LastFamilyFormationMessage = string.Empty;
             LastTravelBlockReason = string.Empty;
+            LastCampaignReviewMessage = string.Empty;
             _historyLedger = HistoryLedger.CreateEmpty();
             LastSuccessionMessage = string.Empty;
             _dialogues.Clear();
@@ -812,13 +1059,61 @@ namespace SengokuChronicle.Application
         /// <summary>
         /// Starts the fixed SC-010 crisis roster only from the pristine pre-succession
         /// standard state. A completed succession, crisis adoption or regency must not
-        /// be silently erased by replacing the permanent family snapshot.
+        /// be silently erased by replacing the permanent family snapshot. The swap is
+        /// also refused while a running task or an M06 operation holds old-roster people,
+        /// and when it would orphan an injured person or a terminal-history participant,
+        /// because those blocks validate against the current roster.
         /// </summary>
         public bool StartCrisisDemo()
         {
             EnsureSuccession();
-            if (!CanStartCrisisDemo)
+            if (IsTacticalMissionActive)
+            {
+                // The M06 operation lives in session state and names two old-roster
+                // operatives. Replacing the family snapshot would leave a live mission
+                // pointing at people the crisis roster does not contain, so the entry
+                // refuses until the operation reaches its terminal result.
+                LastSuccessionMessage =
+                    "潜入密令正在进行中：请先完成或撤退，再切换到危机示范。";
+                LastEventMessage = LastSuccessionMessage;
+                SessionStateChanged?.Invoke();
                 return false;
+            }
+            if (_commission.Stage == ShadowEscortStage.Accepted ||
+                _commission.Stage == ShadowEscortStage.InProgress)
+            {
+                // The crisis roster replaces the whole family snapshot. Swapping it while
+                // an accepted-but-unsettled commission (waiting for an assignee or still
+                // executing) holds an old-roster assignee would silently strand the paid
+                // investment and its chronicle entry, so require settlement first. A
+                // settled result is historical and does not block the demo.
+                LastSuccessionMessage = _commission.Stage == ShadowEscortStage.Accepted
+                    ? "存在已接取但尚未结算的护送委托（待指派执行人）：请先完成或结算，再切换到危机示范。"
+                    : "存在已接取但尚未结算的护送委托（执行中）：请先结算，再切换到危机示范。";
+                LastEventMessage = LastSuccessionMessage;
+                SessionStateChanged?.Invoke();
+                return false;
+            }
+            if (!IsPristineStandardSuccession(Succession))
+            {
+                // The entry stays clickable so a refusal can explain itself instead of
+                // silently disabling the button.
+                LastSuccessionMessage = "只能在尚未完成任何继承的新局进入固定危机示范。";
+                LastEventMessage = LastSuccessionMessage;
+                SessionStateChanged?.Invoke();
+                return false;
+            }
+            string orphan = CrisisRosterOrphanReason();
+            if (orphan != null)
+            {
+                // The replacement roster is smaller than the standard one. Refuse the
+                // swap instead of deleting an injury or rewriting terminal history, and
+                // say why so the player can recover first and retry.
+                LastSuccessionMessage = orphan;
+                LastEventMessage = orphan;
+                SessionStateChanged?.Invoke();
+                return false;
+            }
             _succession = SuccessionSample.CreateCrisis();
             // The crisis roster replaces the standard family snapshot, so any
             // appointment held by a person outside the new roster is invalid.
@@ -872,6 +1167,8 @@ namespace SengokuChronicle.Application
         {
             EnsureSuccession();
             EnsureEventRuntimeState();
+            if (RejectSuccessionWhileEventPending(out SuccessionResult blocked))
+                return blocked;
             if (M2FixedScenario.IsActive(_succession) &&
                 _succession.Phase == SuccessionPhase.None &&
                 !M2FixedScenario.CanBeginRetirement(_succession, _eventRuntimeState,
@@ -896,8 +1193,11 @@ namespace SengokuChronicle.Application
                 _succession.Phase != SuccessionPhase.None &&
                 !IsM2FinaleCommitted)
             {
-                PersonId expected = M2FixedScenario.ExpectedHeir(_succession, _eventScenarioId);
-                if (personId != expected)
+                // Only narrow the selection while the fixed heir can actually succeed.
+                // Once that person is dead or unavailable the ordinary eligible living
+                // list is the only legal path, matching SuccessionCandidates.
+                PersonId expected = AvailableFixedHeir();
+                if (!expected.IsEmpty && personId != expected)
                 {
                     const string message = "SC-013 固定剧本只允许选择当前固定继承人。";
                     LastSuccessionMessage = message;
@@ -923,6 +1223,9 @@ namespace SengokuChronicle.Application
         public SuccessionResult ConfirmSuccession()
         {
             EnsureSuccession();
+            EnsureEventRuntimeState();
+            if (RejectSuccessionWhileEventPending(out SuccessionResult blocked))
+                return blocked;
             SuccessionSnapshot before = SuccessionSnapshot.Capture(_succession);
             return ApplySuccessionResult(before,
                 SuccessionService.ConfirmSuccession(_succession, CurrentGameDate));
@@ -931,6 +1234,9 @@ namespace SengokuChronicle.Application
         public SuccessionResult AcceptCrisisAdoption()
         {
             EnsureSuccession();
+            EnsureEventRuntimeState();
+            if (RejectSuccessionWhileEventPending(out SuccessionResult blocked))
+                return blocked;
             SuccessionSnapshot before = SuccessionSnapshot.Capture(_succession);
             return ApplySuccessionResult(before,
                 SuccessionService.AcceptCrisisAdoption(_succession, CurrentGameDate));
@@ -991,6 +1297,12 @@ namespace SengokuChronicle.Application
         {
             EnsureSuccession();
             EnsureIndustryState();
+            if (IsTacticalOperative(personId))
+            {
+                LastIndustryMessage = "该人物正在执行潜入密令：请先完成或撤退，再任命产业职务。";
+                return new IndustryAssignmentResult(false, IndustryAssignmentOutcome.Blocked,
+                    LastIndustryMessage, default, default);
+            }
             if (!CanEditIndustryAssignments)
             {
                 LastIndustryMessage = string.IsNullOrEmpty(IndustryBlockReason)
@@ -1000,7 +1312,16 @@ namespace SengokuChronicle.Application
                     LastIndustryMessage, default, default);
             }
 
-            IndustryAssignmentResult result = IndustryService.TryAssign(_industryState, _succession,
+            IndustryAssignmentResult result;
+            if (_commission.Stage == ShadowEscortStage.InProgress &&
+                _commission.AssigneeId == personId)
+            {
+                LastIndustryMessage = "该人物正在执行家族委托：请等待委托结算，再任命产业职务。";
+                return new IndustryAssignmentResult(false, IndustryAssignmentOutcome.Blocked,
+                    LastIndustryMessage, default, default);
+            }
+
+            result = IndustryService.TryAssign(_industryState, _succession,
                 CurrentGameDate, industryId, personId);
             LastIndustryMessage = result.Message;
             if (result.Succeeded)
@@ -1105,6 +1426,14 @@ namespace SengokuChronicle.Application
         {
             EnsureSuccession();
             EnsureDevelopment();
+            // The active-mission duty is checked before learner eligibility so an operative
+            // can never be silently reused as a mentor, whatever the learner's age.
+            if (IsTacticalOperative(mentor))
+            {
+                LastEducationMessage = "该人物正在执行潜入密令：请先完成或撤退，再担任培养导师。";
+                return EducationPlanCommandResult.Failure(EducationPlanOutcome.InvalidMentor,
+                    LastEducationMessage);
+            }
             if (learner.IsEmpty || !_development.Contains(learner) ||
                 !_succession.World.Family.IsMember(learner))
             {
@@ -1154,6 +1483,13 @@ namespace SengokuChronicle.Application
                     return EducationPlanCommandResult.Failure(EducationPlanOutcome.InvalidMentor,
                         LastEducationMessage);
                 }
+            }
+            else if (_commission.Stage == ShadowEscortStage.InProgress &&
+                     _commission.AssigneeId == mentor)
+            {
+                LastEducationMessage = "该人物正在执行家族委托：请等待委托结算，再担任培养导师。";
+                return EducationPlanCommandResult.Failure(EducationPlanOutcome.InvalidMentor,
+                    LastEducationMessage);
             }
             else if (!TryMentorSpecialty(mentor, learner, CurrentGameDate, out _))
             {
@@ -1206,6 +1542,12 @@ namespace SengokuChronicle.Application
             EnsureSuccession();
             EnsureIndustryState();
             EnsureResearch();
+            if (IsTacticalOperative(researcherId))
+            {
+                LastResearchMessage = "该人物正在执行潜入密令：请先完成或撤退，再安排研究工作。";
+                return FamilyResearchPlanCommandResult.Failure(FamilyResearchPlanOutcome.Blocked,
+                    LastResearchMessage, researchId, researcherId);
+            }
             if (!FamilyResearchCatalog.TryGet(researchId, out FamilyResearchDefinition definition))
             {
                 LastResearchMessage = "未知研究项目：" + (researchId ?? "(null)") + "。";
@@ -1235,6 +1577,14 @@ namespace SengokuChronicle.Application
                     : ResearchBlockReason;
                 return FamilyResearchPlanCommandResult.Failure(FamilyResearchPlanOutcome.Blocked,
                     LastResearchMessage, researchId, researcherId);
+            }
+            if (_commission.Stage == ShadowEscortStage.InProgress &&
+                _commission.AssigneeId == researcherId)
+            {
+                LastResearchMessage = "该人物正在执行家族委托：请等待委托结算，再安排研究。";
+                return FamilyResearchPlanCommandResult.Failure(
+                    FamilyResearchPlanOutcome.InvalidResearcher, LastResearchMessage, researchId,
+                    researcherId);
             }
             if (!FamilyResearchSettlement.IsEligibleResearcher(Succession, researcherId,
                     CurrentGameDate, _industryState, out string reason))
@@ -1726,6 +2076,31 @@ namespace SengokuChronicle.Application
             return ids.AsReadOnly();
         }
 
+        /// <summary>
+        /// M03 eligibility facts read straight from the live session. The injury and
+        /// industry ledgers are never created here, so the read-only Inspector projection
+        /// stays a pure read: an absent ledger means "no injury" and "no duty".
+        /// </summary>
+        private NpcActionEligibility NpcEligibilityFor(PersonId personId)
+        {
+            bool isInjured = _injuries != null && _injuries.IsInjured(personId);
+            bool hasNoSupplies = _industryState != null &&
+                                 _industryState.Resources.Supplies == 0;
+            return new NpcActionEligibility(isInjured, HasIndustryDuty(personId),
+                hasNoSupplies);
+        }
+
+        /// <summary>True while the person holds any industry post; never creates state.</summary>
+        private bool HasIndustryDuty(PersonId personId)
+        {
+            if (_industryState == null || personId.IsEmpty)
+                return false;
+            for (int i = 0; i < _industryState.Assignments.Count; i++)
+                if (_industryState.Assignments[i].PersonId == personId)
+                    return true;
+            return false;
+        }
+
         private NpcAutonomyEvaluation BuildNpcEvaluation(PersonId personId, NpcNeedValues needs,
             IReadOnlyList<NpcActionMemory> memories)
         {
@@ -1733,7 +2108,7 @@ namespace SengokuChronicle.Application
             bool hasLocation = actions.TryGetLocation(personId, out _);
             bool hasActive = actions.HasActiveAction(personId);
             return NpcAutonomyRules.Evaluate(personId, needs, memories, CurrentGameDate,
-                true, hasLocation, hasActive);
+                true, hasLocation, hasActive, NpcEligibilityFor(personId));
         }
 
         private NpcAutonomyEvaluation BuildNpcEvaluation(PersonId personId, NpcNeedValues needs,
@@ -1742,7 +2117,7 @@ namespace SengokuChronicle.Application
             DailyActionState actions = EnsureDailyActions();
             bool hasLocation = actions.TryGetLocation(personId, out _);
             return NpcAutonomyRules.Evaluate(personId, needs, memories, CurrentGameDate,
-                true, hasLocation, hasActiveAction);
+                true, hasLocation, hasActiveAction, NpcEligibilityFor(personId));
         }
 
         /// <summary>Initial plan for a new session; never runs during save restore.</summary>
@@ -1933,7 +2308,8 @@ namespace SengokuChronicle.Application
 
             bool hasLocation = EnsureDailyActions().TryGetLocation(personId, out _);
             NpcAutonomyEvaluation evaluation = NpcAutonomyRules.Evaluate(personId,
-                person.Needs, person.Memories, CurrentGameDate, true, hasLocation, false);
+                person.Needs, person.Memories, CurrentGameDate, true, hasLocation, false,
+                NpcEligibilityFor(personId));
             state.SetLatestEvaluation(personId, evaluation);
             if (!evaluation.HasSelection)
             {
@@ -2249,6 +2625,7 @@ namespace SengokuChronicle.Application
                 supplyShortageStage = (int)_supplyShortageMission.Stage,
                 sealedLetterStage = (int)_sealedLetterMission.Stage,
                 marketTallyStage = (int)_marketTallyMission.Stage,
+                commission = _commission.Capture(),
                 relationships = CaptureRelationships(),
                 familyRelationships = CaptureFamilyRelationships(),
                 randomState = _randomStateManager.CaptureState(),
@@ -2256,12 +2633,17 @@ namespace SengokuChronicle.Application
                 succession = SuccessionSaveData.Capture(Succession),
                 chronicle = ChronicleSaveCodec.Capture(EnsureHistoryLedger()),
                 industry = IndustryStateSaveData.Capture(EnsureIndustryState()),
+                market = MarketSaveData.Capture(EnsureMarket()),
                 development = CharacterDevelopmentSaveData.Capture(EnsureDevelopment()),
                 research = FamilyResearchSaveData.Capture(EnsureResearch()),
                 familyDoctrine = FamilyDoctrineSaveData.Capture(EnsureFamilyDoctrine()),
                 activeEventScenarioId = _eventScenarioId ?? string.Empty,
                 dailyActions = DailyActionStateSaveData.Capture(EnsureDailyActions()),
-                npcAutonomy = NpcAutonomyStateSaveData.Capture(EnsureNpcAutonomy())
+                npcAutonomy = NpcAutonomyStateSaveData.Capture(EnsureNpcAutonomy()),
+                familyStanding = FamilyStandingSaveData.Capture(EnsureStanding()),
+                injury = MissionInjurySaveData.Capture(EnsureInjuries()),
+                missionHistory = CaptureMissionHistory(),
+                campaign = CampaignProgressSaveData.Capture(EnsureCampaignProgress())
             };
         }
 
@@ -2282,6 +2664,11 @@ namespace SengokuChronicle.Application
         /// </summary>
         public SaveOperationResult TryApplySave(SaveData data)
         {
+            // A public apply is a load boundary too: replacing the campaign would drop the
+            // session-only operation without a terminal cost or chronicle row.
+            if (IsTacticalMissionActive)
+                return SaveOperationResult.Failure(SaveErrorCode.InvalidData,
+                    "潜入正在进行：无法读档。请先完成或撤退。");
             SaveOperationResult validation = SaveDataValidator.Validate(data);
             if (!validation.Succeeded)
                 return validation;
@@ -2300,6 +2687,10 @@ namespace SengokuChronicle.Application
             if (!IndustryStateSaveData.TryRestore(data.industry, data.succession, date,
                     out IndustryState industry, out string industryError))
                 return InvalidSave(string.IsNullOrEmpty(industryError) ? "存档产业状态无效。" : industryError);
+            if (data.market == null)
+                return InvalidSave("存档缺少市场状态（market）。");
+            if (!data.market.TryRestore(out MarketState market, out string marketError))
+                return InvalidSave(string.IsNullOrEmpty(marketError) ? "存档市场状态无效。" : marketError);
             if (!CharacterDevelopmentSaveData.TryRestore(data.development, succession,
                     out CharacterDevelopmentState development, out string developmentError))
                 return InvalidSave(string.IsNullOrEmpty(developmentError)
@@ -2326,6 +2717,32 @@ namespace SengokuChronicle.Application
                 return InvalidSave(string.IsNullOrEmpty(npcError)
                     ? "存档 NPC 自主状态无效。"
                     : npcError);
+            if (data.familyStanding == null)
+                return InvalidSave("存档缺少家族名望状态（familyStanding）。");
+            if (!data.familyStanding.TryRestore(out FamilyStandingState standing,
+                    out string standingError))
+                return InvalidSave(string.IsNullOrEmpty(standingError)
+                    ? "存档家族名望状态无效。"
+                    : standingError);
+            if (data.injury == null)
+                return InvalidSave("存档缺少伤员状态（injury）。");
+            if (!data.injury.TryRestore(out MissionInjuryState injuries,
+                    out string injuryError))
+                return InvalidSave(string.IsNullOrEmpty(injuryError)
+                    ? "存档伤员状态无效。"
+                    : injuryError);
+            if (!TryRestoreMissionHistory(data.missionHistory, data.succession,
+                    out MissionHistoryState missionHistory, out string historyError))
+                return InvalidSave(string.IsNullOrEmpty(historyError)
+                    ? "存档任务终局历史无效。"
+                    : historyError);
+            if (data.campaign == null)
+                return InvalidSave("存档缺少家族纪元状态（campaign）。");
+            if (!data.campaign.TryRestore(out CampaignProgress campaign,
+                    out string campaignError))
+                return InvalidSave(string.IsNullOrEmpty(campaignError)
+                    ? "存档家族纪元状态无效。"
+                    : campaignError);
 
             // Resolve and validate the saved route before the event runtime, so SC-024
             // history is accepted only in the matching sc024 route. SC-024 reuses the
@@ -2353,6 +2770,20 @@ namespace SengokuChronicle.Application
                 MarketTallyMission.TryRestore((MarketTallyStage)data.marketTallyStage);
             if (supplyShortage == null || sealedLetter == null || marketTally == null)
                 return InvalidSave("存档任务阶段无效。");
+            if (data.commission == null)
+                return InvalidSave("存档缺少 M05 护送委托状态（commission）。");
+            ShadowEscortCommission commission = ShadowEscortCommission.TryRestore(
+                (ShadowEscortStage)data.commission.stage, data.commission.assigneePersonId,
+                data.commission.durationDays, data.commission.elapsedDays,
+                data.commission.startYear, data.commission.startMonth, data.commission.startDay,
+                (CommissionOutcome)data.commission.outcome, data.commission.score,
+                data.commission.roll, data.commission.rewardFunds, data.commission.rewardSupplies,
+                data.commission.investedFunds, data.commission.lastFeedback, data.commission.runId,
+                true, (MissionOperationMode)data.commission.mode, out string commissionError);
+            if (commission == null)
+                return InvalidSave(string.IsNullOrEmpty(commissionError)
+                    ? "存档 M05 护送委托状态无效。"
+                    : commissionError);
 
             var relationships = new CharacterRelationships();
             if (data.relationships != null)
@@ -2397,6 +2828,7 @@ namespace SengokuChronicle.Application
             _supplyShortageMission = supplyShortage;
             _sealedLetterMission = sealedLetter;
             _marketTallyMission = marketTally;
+            _commission = commission;
             _relationships = relationships;
             _familyRelationships = familyRelationships;
             _randomStateManager = randomState;
@@ -2404,13 +2836,29 @@ namespace SengokuChronicle.Application
             _succession = succession;
             M2FixedScenario.SyncDesignation(_succession, eventScenarioId);
             _industryState = industry;
+            _marketState = market;
+            _lastMarketReport = null;
             _development = development;
             _researchState = research;
             _familyDoctrine = familyDoctrine;
             _dailyActions = dailyActions;
             _npcAutonomy = npcAutonomy;
+            _standing = standing;
+            _injuries = injuries;
+            _missionHistory = missionHistory;
+            _campaignProgress = campaign;
+            _tacticalRequest = null;
             _eventScenarioId = eventScenarioId;
+            // In-progress tactical state is session-only and never part of a save. A
+            // successful load after a terminal result replaces the whole campaign, so the
+            // finished operation display state is dropped with it.
+            _tacticalMission = null;
             LastFamilyDoctrineMessage = string.Empty;
+            LastCommissionMessage = string.Empty;
+            LastTacticalMessage = string.Empty;
+            TacticalAppliedFunds = 0;
+            TacticalAppliedSupplies = 0;
+            TacticalAppliedIntelligence = 0;
             LastIndustryReport = null;
             LastIndustryMessage = string.Empty;
             LastEducationMessage = string.Empty;
@@ -2418,6 +2866,7 @@ namespace SengokuChronicle.Application
             LastResearchMessage = string.Empty;
             LastFamilyFormationMessage = string.Empty;
             LastTravelBlockReason = string.Empty;
+            LastCampaignReviewMessage = string.Empty;
             LastDailyActionOutcomes = new DailyActionResult[0];
             LastDailyActionMessage = string.Empty;
             _historyLedger = historyLedger;
@@ -2434,6 +2883,9 @@ namespace SengokuChronicle.Application
         /// <summary>Saves the current session to the supplied single slot.</summary>
         public SaveOperationResult SaveTo(SaveSlotStore store)
         {
+            if (IsTacticalMissionActive)
+                return SaveOperationResult.Failure(SaveErrorCode.WriteFailed,
+                    "潜入正在进行：无法存档。请先完成或撤退。");
             if (store == null)
                 return SaveOperationResult.Failure(SaveErrorCode.WriteFailed, "存档槽为空。");
 
@@ -2443,6 +2895,9 @@ namespace SengokuChronicle.Application
         /// <summary>Loads the supplied single slot and applies it atomically.</summary>
         public SaveOperationResult LoadFrom(SaveSlotStore store)
         {
+            if (IsTacticalMissionActive)
+                return SaveOperationResult.Failure(SaveErrorCode.ReadFailed,
+                    "潜入正在进行：无法读档。请先完成或撤退。");
             if (store == null)
                 return SaveOperationResult.Failure(SaveErrorCode.ReadFailed, "存档槽为空。");
 
@@ -2575,6 +3030,636 @@ namespace SengokuChronicle.Application
             return result;
         }
 
+        /// <summary>
+        /// M05: accepts the single hardcoded escort commission at the clan seat and pays
+        /// the creed-dependent investment out of the industry funds exactly once.
+        /// </summary>
+        public ShadowEscortActionResult TryAcceptCommission()
+        {
+            EnsureIndustryState();
+            EnsureFamilyDoctrine();
+            IndustryResources before = _industryState.Resources;
+            ShadowEscortStage stageBefore = _commission.Stage;
+            ShadowEscortCommission commissionBefore = _commission.Clone();
+            ShadowEscortActionResult result = _commission.TryAccept(CurrentLocation,
+                CurrentFamilyCreed, before, out IndustryResources after);
+            LastCommissionMessage = result.Feedback;
+            if (!result.Succeeded)
+                return result;
+
+            if (!_industryState.TrySetResources(after, out string error))
+            {
+                _commission = commissionBefore;
+                LastCommissionMessage = string.IsNullOrEmpty(error) ? "委托预付资源无效。" : error;
+                return new ShadowEscortActionResult(false, stageBefore, CommissionOutcome.None,
+                    LastCommissionMessage);
+            }
+
+            RecordMission(FamilyChronicleEntry.ShadowEscortCommissionId, "accept", "护送委托",
+                (int)stageBefore, (int)result.Stage, true, result.Feedback);
+            return result;
+        }
+
+        /// <summary>
+        /// M05: assigns one free family member and starts the timed execution. A person
+        /// with a daily action, an industry assignment, or an unknown location is
+        /// rejected, so the commission competes with existing duties instead of
+        /// running beside them.
+        /// </summary>
+        public ShadowEscortActionResult TryAssignCommission(PersonId assigneeId)
+        {
+            EnsureSuccession();
+            DailyActionState actions = EnsureDailyActions();
+            EnsureIndustryState();
+            ShadowEscortStage stageBefore = _commission.Stage;
+            ShadowEscortCommission commissionBefore = _commission.Clone();
+            CommissionAssigneeCheck check = CheckCommissionAssignee(assigneeId);
+            ShadowEscortActionResult result;
+            if (!check.Eligible)
+            {
+                result = new ShadowEscortActionResult(false, stageBefore, _commission.Outcome,
+                    check.Message);
+            }
+            else
+            {
+                result = _commission.TryAssign(assigneeId, actions.HasActiveAction(assigneeId),
+                    IsIndustryAssignee(assigneeId),
+                    actions.TryGetLocation(assigneeId, out _), CurrentGameDate);
+            }
+
+            LastCommissionMessage = result.Feedback;
+            if (!result.Succeeded)
+                return result;
+
+            if (!_commission.TryAssignRunId(CommissionRunId, out string runIdError))
+            {
+                _commission = commissionBefore;
+                LastCommissionMessage = string.IsNullOrEmpty(runIdError)
+                    ? "委托运行 ID 分配失败。"
+                    : runIdError;
+                return new ShadowEscortActionResult(false, stageBefore,
+                    CommissionOutcome.None, LastCommissionMessage);
+            }
+
+            RecordMission(FamilyChronicleEntry.ShadowEscortCommissionId, "assign", "护送委托",
+                (int)stageBefore, (int)result.Stage, true, result.Feedback);
+            return result;
+        }
+
+        /// <summary>
+        /// One person-level eligibility check shared by the read-only assignee list and
+        /// <see cref="TryAssignCommission"/>. The full message is returned so a rejected
+        /// command keeps its established feedback; the short reason labels a list row.
+        ///
+        /// New work follows the project work-duty rule
+        /// (<see cref="IndustryService.CanWork"/>): a living current-family member must be
+        /// an adult and not retired. That rule is enforced at the assignment boundary
+        /// only. A commission that is already executing keeps running when its assignee
+        /// later retires, so <see cref="CommissionAssigneeBlockReason"/> and
+        /// <see cref="SengokuChronicle.Persistence.SaveDataValidator.ValidateCommissionReferences"/>
+        /// stay mutually consistent and an in-progress save is never stranded.
+        /// </summary>
+        private CommissionAssigneeCheck CheckCommissionAssignee(PersonId personId)
+        {
+            EnsureSuccession();
+            DailyActionState actions = EnsureDailyActions();
+            EnsureIndustryState();
+            if (_succession.World == null ||
+                !_succession.World.TryGetPerson(personId, out _) ||
+                !_succession.World.IsLiving(personId) ||
+                !_succession.World.Family.IsMember(personId))
+            {
+                return new CommissionAssigneeCheck(false, "已离世或离开家族",
+                    "必须指定一名在世的家族成员。");
+            }
+            if (IsTacticalOperative(personId))
+            {
+                return new CommissionAssigneeCheck(false, "正在执行潜入密令",
+                    "该人物正在执行潜入密令：请先完成或撤退，再指派护送委托。");
+            }
+            if (EnsureInjuries().IsInjured(personId))
+            {
+                return new CommissionAssigneeCheck(false, "负伤休养",
+                    "该人物负伤休养：下一次月结前不能参加体力或潜入任务。");
+            }
+            // Reuse the shared duty rule instead of a second age/retirement copy, so long
+            // as the preview label and the command feedback read from the same reason.
+            if (!IndustryService.CanWork(_succession, personId, CurrentGameDate,
+                    out string workReason))
+            {
+                string label = workReason.TrimEnd('。');
+                return new CommissionAssigneeCheck(false, label,
+                    "该人物" + label + "，无法执行护送委托。");
+            }
+            if (IsResearchResearcher(personId))
+            {
+                return new CommissionAssigneeCheck(false, "负责家族研究",
+                    "该人物正在负责家族研究：请先更换研究者，再指派委托。");
+            }
+            if (IsEducationMentor(personId))
+            {
+                return new CommissionAssigneeCheck(false, "担任培养导师",
+                    "该人物正在担任培养导师：请先改派导师，再指派委托。");
+            }
+            if (actions.HasActiveAction(personId))
+            {
+                return new CommissionAssigneeCheck(false, "有进行中的每日行动",
+                    "该人物有进行中的每日行动：请先完成或中断，再指派委托。");
+            }
+            if (IsIndustryAssignee(personId))
+            {
+                return new CommissionAssigneeCheck(false, "负责产业",
+                    "该人物正在负责产业：请先改派产业负责人，再指派委托。");
+            }
+            if (!actions.TryGetLocation(personId, out _))
+            {
+                return new CommissionAssigneeCheck(false, "在旅途中",
+                    "该人物正在旅途中或地点未知，无法立刻开始委托。");
+            }
+            return new CommissionAssigneeCheck(true, "可指派", string.Empty);
+        }
+
+        private readonly struct CommissionAssigneeCheck
+        {
+            public CommissionAssigneeCheck(bool eligible, string reason, string message)
+            {
+                Eligible = eligible;
+                Reason = reason ?? string.Empty;
+                Message = message ?? string.Empty;
+            }
+
+            public bool Eligible { get; }
+            public string Reason { get; }
+            public string Message { get; }
+        }
+
+        /// <summary>
+        /// Returns why an in-progress assignee cannot execute, or null when eligible.
+        /// This is the same rule SaveDataValidator applies to an in-progress row. It is
+        /// evaluated at explicit state-transition boundaries (day/month advancement), not
+        /// during capture, so a snapshot never mutates gameplay state.
+        ///
+        /// Work-duty eligibility (adult, not retired) is deliberately absent from this
+        /// day-step rule: retirement alone does not interrupt the trip, and the save
+        /// validator mirrors that choice, so an in-progress row stays writable and
+        /// loadable. Settlement is where unavailability resolves: an assignee who can no
+        /// longer work is closed once through the approved Abandoned semantics instead of
+        /// failing every retry.
+        /// </summary>
+        private string CommissionAssigneeBlockReason()
+        {
+            EnsureSuccession();
+            DailyActionState actions = EnsureDailyActions();
+            EnsureIndustryState();
+            PersonId assignee = _commission.AssigneeId;
+            if (assignee.IsEmpty)
+                return "委托记录缺少执行人，委托失败。";
+            if (_succession.World == null ||
+                !_succession.World.TryGetPerson(assignee, out _) ||
+                !_succession.World.IsLiving(assignee) ||
+                !_succession.World.Family.IsMember(assignee))
+                return CommissionAbandonedByDeathReason;
+            if (actions.HasActiveAction(assignee))
+                return "委托执行人同时被安排了每日行动，委托失败。";
+            if (IsIndustryAssignee(assignee))
+                return "委托执行人同时担任产业职务，委托失败。";
+            if (IsResearchResearcher(assignee))
+                return "委托执行人同时负责家族研究，委托失败。";
+            if (IsEducationMentor(assignee))
+                return "委托执行人同时担任培养导师，委托失败。";
+            return null;
+        }
+
+        /// <summary>True when the person currently leads the family research project.</summary>
+        private bool IsResearchResearcher(PersonId personId)
+        {
+            EnsureResearch();
+            return _researchState.HasPlan && _researchState.ResearcherId == personId;
+        }
+
+        /// <summary>True when the person mentors any unsettled annual education plan.</summary>
+        private bool IsEducationMentor(PersonId personId)
+        {
+            CharacterDevelopmentState development = EnsureDevelopment();
+            foreach (PersonId learner in development.PersonIds)
+                foreach (int ageYear in development.PlannedAgeYears(learner))
+                    if (!development.HasResult(learner, ageYear) &&
+                        development.TryGetPlan(learner, ageYear, out EducationYearPlan plan) &&
+                        !plan.IsFreeGrowth && plan.Mentor == personId)
+                        return true;
+            return false;
+        }
+
+        /// <summary>True when the person is the named assignee of any industry line.</summary>
+        private bool IsIndustryAssignee(PersonId personId)
+        {
+            IndustryState industry = EnsureIndustryState();
+            for (int i = 0; i < industry.Assignments.Count; i++)
+                if (industry.Assignments[i].PersonId == personId)
+                    return true;
+            return false;
+        }
+
+        /// <summary>
+        /// Advances the commission by one simulated day. When the window closes it uses
+        /// the frozen operation mode: manual leaves the due row for the explicit settle
+        /// button, delegated settles once here. Both call the same M07 settlement.
+        /// </summary>
+        private bool AdvanceCommissionDay(GameDate simulatedDate)
+        {
+            if (_commission.Stage != ShadowEscortStage.InProgress)
+                return false;
+
+            string block = CommissionAssigneeBlockReason();
+            if (block != null)
+            {
+                // An explicit day/month transition is the boundary that closes an
+                // unexecutable commission; capture never does this. Abandonment is not a
+                // shared M07 result: it keeps its action chronicle row and writes no
+                // terminal history, no standing effect and no reward.
+                return TryAbandonCommission(simulatedDate, block);
+            }
+
+            if (!_commission.AdvanceOneDay(out bool due))
+                return false;
+            if (!due)
+                return true; // the elapsed day changed, so countdown observers must refresh
+
+            if (_commission.Mode == MissionOperationMode.Manual)
+            {
+                LastCommissionMessage = "委托已到期：请点击「结算委托」完成手动结算。";
+                return true;
+            }
+
+            MissionSettlementResult settlement =
+                SettleCommission(simulatedDate, _commission.Mode);
+            if (!settlement.Succeeded)
+            {
+                LastCommissionMessage = settlement.Message;
+                return false;
+            }
+            return true;
+        }
+
+        // ---- M06 tactical infiltration -------------------------------------------------
+
+        /// <summary>
+        /// Opens the single M06 operation with exactly two eligible family members. The
+        /// announced supply cost is not spent here: it is applied once with the terminal
+        /// result, so an abandoned session costs the saved campaign nothing.
+        /// </summary>
+        public TacticalActionResult TryBeginTacticalMission(PersonId first, PersonId second) =>
+            TryBeginTacticalMission(first, second, first, MissionPreparation.None);
+
+        /// <summary>
+        /// M07 manual entry: the captain and preparation choice are frozen into the
+        /// briefing request and the tactical board then decides the terminal result.
+        /// </summary>
+        public TacticalActionResult TryBeginTacticalMission(PersonId first, PersonId second,
+            PersonId captain, MissionPreparation preparation)
+        {
+            string startError = ValidateTacticalStart(first, second, captain, preparation);
+            if (!string.IsNullOrEmpty(startError))
+                return TacticalReject(startError);
+
+            PersonId[] ordered = OrderTacticalOperatives(first, second);
+            PersonId orderedCaptain = captain.IsEmpty ? ordered[0] : captain;
+            if (!TacticalMissionState.TryCreate(ordered[0], ordered[1], orderedCaptain,
+                    preparation, CurrentGameDate, out TacticalMissionState state,
+                    out string error))
+                return TacticalReject(string.IsNullOrEmpty(error) ? "潜入无法开始。" : error);
+
+            EnsureDevelopment();
+            if (!_development.TryGetValues(ordered[0], out CharacterGrowthValues firstValues) ||
+                !_development.TryGetValues(ordered[1], out CharacterGrowthValues secondValues))
+                return TacticalReject("出发成员缺少成长记录，无法冻结任务简报。");
+            var participants = new[] { ordered[0], ordered[1] };
+            if (!MissionRequest.TryCreate(TacticalRunId,
+                    FamilyChronicleEntry.TacticalMissionId, MissionKind.TacticalInfiltration,
+                    MissionOperationMode.Manual, preparation, CurrentGameDate, orderedCaptain,
+                    participants, participants, firstValues.Ninjutsu, secondValues.Ninjutsu,
+                    FrozenMissionIntelligence(),
+                    TacticalMissionResolutionRules.Difficulty,
+                    TacticalMissionResolutionRules.BaseSupplyCost,
+                    TacticalMissionResolutionRules.PreparationSupplyCost(preparation),
+                    0, 0, out MissionRequest request, out string requestError))
+                return TacticalReject(string.IsNullOrEmpty(requestError)
+                    ? "潜入简报无法冻结。"
+                    : requestError);
+
+            _tacticalMission = state;
+            _tacticalRequest = request;
+            TacticalAppliedFunds = 0;
+            TacticalAppliedSupplies = 0;
+            TacticalAppliedIntelligence = 0;
+            LastTacticalMessage = state.Feedback;
+            SessionStateChanged?.Invoke();
+            return new TacticalActionResult(true, state.Stage, state.Outcome, state.Feedback,
+                state.Turn, state.LastEvent);
+        }
+
+        public TacticalActionResult TryTacticalMove(PersonId operativeId,
+            TacticalDirection direction) =>
+            RunTacticalCommand(state => state.TryMove(operativeId, direction));
+
+        public TacticalActionResult TryTacticalSprint(PersonId operativeId,
+            TacticalDirection direction) =>
+            RunTacticalCommand(state => state.TrySprint(operativeId, direction));
+
+        public TacticalActionResult TryTacticalWait(PersonId operativeId) =>
+            RunTacticalCommand(state => state.TryWait(operativeId));
+
+        public TacticalActionResult TryTacticalInteract(PersonId operativeId) =>
+            RunTacticalCommand(state => state.TryInteract(operativeId));
+
+        public TacticalActionResult TryTacticalExtract() =>
+            RunTacticalCommand(state => state.TryExtract());
+
+        public TacticalActionResult TryTacticalWithdraw() =>
+            RunTacticalCommand(state => state.TryWithdraw());
+
+        private TacticalActionResult RunTacticalCommand(
+            Func<TacticalMissionState, TacticalActionResult> command)
+        {
+            if (_tacticalMission == null)
+                return TacticalReject("尚未开始潜入。");
+            if (!_tacticalMission.IsActive)
+                return TacticalReject("潜入已经结束。");
+
+            TacticalActionResult result = command(_tacticalMission);
+            LastTacticalMessage = result.Feedback;
+            if (_tacticalMission.IsTerminal && !CommitTacticalOutcome())
+                return new TacticalActionResult(false, _tacticalMission.Stage,
+                    _tacticalMission.Outcome, LastTacticalMessage, _tacticalMission.Turn,
+                    _tacticalMission.LastEvent);
+
+            SessionStateChanged?.Invoke();
+            return result;
+        }
+
+        /// <summary>
+        /// Applies the one terminal settlement for manual play: maps the tactical result
+        /// to the shared M07 result, charges base plus selected preparation cost, applies
+        /// the disclosed death checks and commits resources, standing, life, one chronicle
+        /// row and one history row in a single transaction.
+        /// </summary>
+        private bool CommitTacticalOutcome()
+        {
+            if (_tacticalMission == null)
+            {
+                RevertTerminal("潜入状态缺失。");
+                return false;
+            }
+
+            if (!TacticalMissionResolutionRules.TryMapManual(_tacticalMission.Outcome,
+                    _tacticalMission.AlertTriggered, out SharedMissionOutcome outcome,
+                    out string mapError))
+            {
+                RevertTerminal(mapError);
+                return false;
+            }
+
+            MissionRequest request = _tacticalRequest;
+            if (request == null)
+            {
+                EnsureDevelopment();
+                PersonId first = _tacticalMission.OperativeId(0);
+                PersonId second = _tacticalMission.OperativeId(1);
+                if (!_development.TryGetValues(first, out CharacterGrowthValues firstValues) ||
+                    !_development.TryGetValues(second, out CharacterGrowthValues secondValues))
+                {
+                    RevertTerminal("出发成员缺少成长记录。");
+                    return false;
+                }
+                var participants = new[] { first, second };
+                if (!MissionRequest.TryCreate(TacticalRunId,
+                        FamilyChronicleEntry.TacticalMissionId, MissionKind.TacticalInfiltration,
+                        MissionOperationMode.Manual, _tacticalMission.Preparation,
+                        _tacticalMission.LaunchDate, _tacticalMission.CaptainId, participants,
+                        participants, firstValues.Ninjutsu, secondValues.Ninjutsu,
+                        FrozenMissionIntelligence(),
+                        TacticalMissionResolutionRules.Difficulty,
+                        TacticalMissionResolutionRules.BaseSupplyCost,
+                        TacticalMissionResolutionRules.PreparationSupplyCost(
+                            _tacticalMission.Preparation), 0, 0,
+                        out MissionRequest rebuilt, out string requestError))
+                {
+                    RevertTerminal(requestError);
+                    return false;
+                }
+                request = rebuilt;
+            }
+
+            int rewardFunds = IsTacticalSuccess(outcome)
+                ? TacticalMissionResolutionRules.SuccessFunds
+                : 0;
+            int rewardIntelligence = IsTacticalSuccess(outcome)
+                ? TacticalMissionResolutionRules.SuccessIntelligence
+                : 0;
+            if (!TryCommitMissionSettlement(request, outcome, rewardFunds, 0, rewardIntelligence,
+                    _tacticalMission.LaunchDate,
+                    TacticalOutcomeActionId(_tacticalMission.Outcome),
+                    (int)TacticalMissionStage.InProgress, TacticalChronicleStageFor(outcome),
+                    out MissionRecord record, out string commitError))
+            {
+                RevertTerminal(commitError);
+                return false;
+            }
+
+            TacticalAppliedFunds = record.FundsDelta;
+            TacticalAppliedSupplies = record.SuppliesDelta;
+            TacticalAppliedIntelligence = record.IntelligenceDelta;
+            LastTacticalMessage = "潜入结算（" + MissionOutcomeTable.OutcomeName(outcome) +
+                                  "）：" + record.FameBefore + "→" + record.FameAfter +
+                                  " 名望，" + record.ConcealmentBefore + "→" +
+                                  record.ConcealmentAfter + " 隐蔽度；资金 " +
+                                  Signed(record.FundsDelta) + "、物资 " +
+                                  Signed(record.SuppliesDelta) + "、情报 " +
+                                  Signed(record.IntelligenceDelta) + "。";
+            return true;
+        }
+
+        private void RevertTerminal(string message)
+        {
+            _tacticalMission?.RevertTerminalResultForRetry();
+            LastTacticalMessage = string.IsNullOrEmpty(message) ? "潜入结果结算失败。" : message;
+        }
+
+        /// <summary>
+        /// True when the person is one of the two operatives of the running operation.
+        /// Campaign duties that would claim the same person are refused while active.
+        /// </summary>
+        private bool IsTacticalOperative(PersonId personId) =>
+            IsTacticalMissionActive && _tacticalMission != null &&
+            _tacticalMission.IsOperative(personId);
+
+        /// <summary>
+        /// The campaign calendar must not advance during the operation. The tactical page
+        /// is not a modal screen, so the application boundary refuses day, month and
+        /// travel commands until the operation reaches a terminal result.
+        /// </summary>
+        private bool RejectWhileTacticalMissionActive()
+        {
+            if (!IsTacticalMissionActive)
+                return false;
+            LastTacticalMessage = "潜入正在进行：请先完成或撤退。";
+            LastEventMessage = LastTacticalMessage;
+            return true;
+        }
+
+        private TacticalActionResult TacticalReject(string message)
+        {
+            LastTacticalMessage = message;
+            SessionStateChanged?.Invoke();
+            return new TacticalActionResult(false,
+                _tacticalMission != null ? _tacticalMission.Stage : TacticalMissionStage.NotStarted,
+                _tacticalMission != null ? _tacticalMission.Outcome : TacticalMissionOutcome.None,
+                message,
+                _tacticalMission != null ? _tacticalMission.Turn : 0,
+                _tacticalMission != null ? _tacticalMission.LastEvent : string.Empty);
+        }
+
+        /// <summary>
+        /// One person-level gate shared by the read-only list and the start command. It
+        /// reuses the project work-duty rule (adult, not retired) and the existing
+        /// location record, and additionally requires the person to be at 清洲.
+        /// </summary>
+        private CommissionAssigneeCheck CheckTacticalOperative(PersonId personId)
+        {
+            EnsureSuccession();
+            DailyActionState actions = EnsureDailyActions();
+            EnsureIndustryState();
+            if (_succession.World == null ||
+                !_succession.World.TryGetPerson(personId, out _) ||
+                !_succession.World.IsLiving(personId) ||
+                !_succession.World.Family.IsMember(personId))
+            {
+                return new CommissionAssigneeCheck(false, "已离世或离开家族",
+                    "必须选择两名在世的家族成员。");
+            }
+            if (_commission.Stage == ShadowEscortStage.InProgress &&
+                _commission.AssigneeId == personId)
+            {
+                return new CommissionAssigneeCheck(false, "正在执行护送委托",
+                    "该人物正在执行护送委托：请等待结算，再参加潜入。");
+            }
+            if (EnsureInjuries().IsInjured(personId))
+            {
+                return new CommissionAssigneeCheck(false, "负伤休养",
+                    "该人物负伤休养：下一次月结前不能参加体力或潜入任务。");
+            }
+            if (!IndustryService.CanWork(_succession, personId, CurrentGameDate,
+                    out string workReason))
+            {
+                string label = workReason.TrimEnd('。');
+                return new CommissionAssigneeCheck(false, label,
+                    "该人物" + label + "，无法参加潜入。");
+            }
+            if (IsResearchResearcher(personId))
+            {
+                return new CommissionAssigneeCheck(false, "负责家族研究",
+                    "该人物正在负责家族研究：请先更换研究者，再参加潜入。");
+            }
+            if (IsEducationMentor(personId))
+            {
+                return new CommissionAssigneeCheck(false, "担任培养导师",
+                    "该人物正在担任培养导师：请先改派导师，再参加潜入。");
+            }
+            if (actions.HasActiveAction(personId))
+            {
+                return new CommissionAssigneeCheck(false, "有进行中的每日行动",
+                    "该人物有进行中的每日行动：请先完成或中断，再参加潜入。");
+            }
+            if (IsIndustryAssignee(personId))
+            {
+                return new CommissionAssigneeCheck(false, "负责产业",
+                    "该人物正在负责产业：请先改派产业负责人，再参加潜入。");
+            }
+            if (!actions.TryGetLocation(personId, out LocationId location))
+            {
+                return new CommissionAssigneeCheck(false, "在旅途中",
+                    "该人物正在旅途中或地点未知，无法立刻参加潜入。");
+            }
+            if (location != LocationId.Kiyosu)
+            {
+                return new CommissionAssigneeCheck(false, "不在清洲",
+                    "该人物不在清洲：请先在清洲集合，再开始潜入。");
+            }
+            return new CommissionAssigneeCheck(true, "可参加", string.Empty);
+        }
+
+        private int CountEligibleTacticalOperatives()
+        {
+            EnsureSuccession();
+            if (_succession.World == null)
+                return 0;
+            int count = 0;
+            foreach (FamilyMembership membership in _succession.World.Family.Members)
+            {
+                if (!_succession.World.IsLiving(membership.PersonId))
+                    continue;
+                if (CheckTacticalOperative(membership.PersonId).Eligible)
+                    count++;
+            }
+            return count;
+        }
+
+        /// <summary>Orders the two chosen operatives by stable family roster position.</summary>
+        private PersonId[] OrderTacticalOperatives(PersonId first, PersonId second)
+        {
+            EnsureSuccession();
+            var ordered = new List<PersonId>(2);
+            if (_succession.World != null)
+            {
+                foreach (FamilyMembership membership in _succession.World.Family.Members)
+                {
+                    if (membership.PersonId == first || membership.PersonId == second)
+                        ordered.Add(membership.PersonId);
+                    if (ordered.Count == 2)
+                        break;
+                }
+            }
+            if (ordered.Count != 2)
+            {
+                ordered.Clear();
+                ordered.Add(first);
+                ordered.Add(second);
+            }
+            return ordered.ToArray();
+        }
+
+        private FamilyChronicleEntry FindTacticalMissionRecord()
+        {
+            IReadOnlyList<FamilyChronicleEntry> entries = EnsureHistoryLedger().Entries;
+            for (int i = entries.Count - 1; i >= 0; i--)
+            {
+                FamilyChronicleEntry entry = entries[i];
+                if (entry.Category == ChronicleCategory.Mission &&
+                    string.Equals(entry.SubjectId, FamilyChronicleEntry.TacticalMissionId,
+                        StringComparison.Ordinal))
+                    return entry;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Stable chronicle action ID for a manual or delegated terminal result. Both
+        /// entry points resolve through this one mapping, so equal frozen input writes
+        /// equal chronicle data.
+        /// </summary>
+        private static string TacticalOutcomeActionId(TacticalMissionOutcome outcome)
+        {
+            switch (outcome)
+            {
+                case TacticalMissionOutcome.Succeeded: return "succeeded";
+                case TacticalMissionOutcome.Failed: return "failed";
+                default: return "withdrawn";
+            }
+        }
+
+        private static string Signed(int value) =>
+            (value >= 0 ? "+" : string.Empty) + value.ToString(CultureInfo.InvariantCulture);
+
         /// <summary>Reads the player's relationship with a known NPC.</summary>
         public RelationshipResult TryGetRelationship(CharacterId npcId)
         {
@@ -2706,14 +3791,32 @@ namespace SengokuChronicle.Application
         /// the session once so an open chronicle panel updates.
         /// </summary>
         private void RecordMission(string missionId, string actionId, string missionName,
-            int beforeStage, int afterStage, bool succeeded, string feedback)
+            int beforeStage, int afterStage, bool succeeded, string feedback) =>
+            RecordMission(CurrentGameDate, missionId, actionId, missionName, beforeStage,
+                afterStage, succeeded, feedback);
+
+        /// <summary>
+        /// Appends one mission record for an explicit simulated date. Commission
+        /// settlement inside a month turn must use the day the window actually closed,
+        /// not the next month's first day still held by the clock at commit time.
+        /// </summary>
+        private void RecordMission(GameDate date, string missionId, string actionId,
+            string missionName, int beforeStage, int afterStage, bool succeeded, string feedback)
         {
             if (!succeeded || beforeStage == afterStage)
                 return;
 
-            GameDate date = CurrentGameDate;
+            // The chronicle stores year/month only. Commission records get the exact
+            // simulated day appended so a month-turn settlement can be audited to its
+            // due date; every other mission summary keeps its original text byte-for-byte.
+            string summary = feedback ?? string.Empty;
+            if (string.Equals(missionId, FamilyChronicleEntry.ShadowEscortCommissionId,
+                    StringComparison.Ordinal))
+                summary += "（" + date.Year.ToString(CultureInfo.InvariantCulture) + "-" +
+                           date.Month.ToString("00", CultureInfo.InvariantCulture) + "-" +
+                           date.Day.ToString("00", CultureInfo.InvariantCulture) + "）";
             if (!EnsureHistoryLedger().TryAppendMission(date.Year, date.Month, missionId, actionId,
-                    beforeStage, afterStage, missionName, feedback, out _, out string error))
+                    beforeStage, afterStage, missionName, summary, out _, out string error))
                 ReportChronicleAppendFailure("任务", error);
             SessionStateChanged?.Invoke();
         }
@@ -2794,6 +3897,30 @@ namespace SengokuChronicle.Application
                 _randomStateManager = RandomStateManager.Create(DefaultRandomSeed);
         }
 
+        /// <summary>
+        /// Restores a captured random state only when the snapshot is valid. A rejected
+        /// snapshot must never replace the live manager with a null out value.
+        /// </summary>
+        private bool TryRestoreRandomState(RandomStateSaveData snapshot)
+        {
+            if (!RandomStateManager.TryRestore(snapshot, out RandomStateManager restored))
+                return false;
+            _randomStateManager = restored;
+            return true;
+        }
+
+        /// <summary>
+        /// Restores a captured chronicle list only when every snapshot row is valid, so a
+        /// rejected snapshot cannot drop the live ledger.
+        /// </summary>
+        private bool TryRestoreHistoryLedger(FamilyChronicleEntry[] snapshot)
+        {
+            if (!HistoryLedger.TryRestore(snapshot, out HistoryLedger restored, out _))
+                return false;
+            _historyLedger = restored;
+            return true;
+        }
+
         private EventRuntimeState EnsureEventRuntimeState()
         {
             if (_eventRuntimeState == null)
@@ -2842,7 +3969,10 @@ namespace SengokuChronicle.Application
                 reason = LastEventMessage;
                 return false;
             }
-            return _eventEngine.TryGetOptionAvailability(eventId, optionId, _relationships, out enabled, out reason);
+            EnsureRelationships();
+            return _eventEngine.TryGetOptionAvailability(eventId, optionId, _relationships,
+                BuildEventRuleContext(), _familyRelationships, EnsureFamilyDoctrine(),
+                out enabled, out reason);
         }
 
         public EventChoiceResult TryChooseEventOption(string eventId, string optionId, string committedResultId)
@@ -2912,7 +4042,7 @@ namespace SengokuChronicle.Application
                 foreach (FamilyRelationshipEntry entry in familyBefore)
                     restored.TryChange(entry.HeadId, entry.MemberId, entry.Value);
             _familyRelationships = restored;
-            HistoryLedger.TryRestore(chronicleBefore, out _historyLedger, out _);
+            TryRestoreHistoryLedger(chronicleBefore);
             _eventRuntimeState = runtimeBefore;
         }
 
@@ -3075,9 +4205,20 @@ namespace SengokuChronicle.Application
                 reason = "只有当前在世的家族成员才能安排每日行动。";
                 return false;
             }
+            if (IsTacticalOperative(personId))
+            {
+                reason = "该人物正在执行潜入密令：请先完成或撤退，再安排每日行动。";
+                return false;
+            }
             if (EnsureDailyActions().HasActiveAction(personId))
             {
                 reason = "该人物已有进行中的行动；不能同时执行两个行动。";
+                return false;
+            }
+            if (_commission.Stage == ShadowEscortStage.InProgress &&
+                _commission.AssigneeId == personId)
+            {
+                reason = "该人物正在执行家族委托：请等待委托结算，再安排新的行动。";
                 return false;
             }
             return true;
@@ -3308,6 +4449,8 @@ namespace SengokuChronicle.Application
         /// <summary>推进一天。成功返回 true；失败返回 false 且状态不变，并通过既有结果/消息通道说明原因。</summary>
         public bool AdvanceOneDay()
         {
+            if (RejectWhileTacticalMissionActive())
+                return false;
             if (WorldClock == null)
                 InitNewGame();
             if (IsFamilyExtinct)
@@ -3350,8 +4493,9 @@ namespace SengokuChronicle.Application
                 out IReadOnlyList<DailyActionResult> outcomes);
             PublishDailyActionReport(outcomes);
             SyncCurrentLocationFromDailyActions();
+            bool commissionChanged = AdvanceCommissionDay(WorldClock.CurrentDate);
             LastMonthTurnOutcome = MonthTurnOutcome.Succeeded;
-            if (NoticeRegencyHandoffIfDue() || autonomyChanged)
+            if (NoticeRegencyHandoffIfDue() || autonomyChanged || commissionChanged)
                 SessionStateChanged?.Invoke();
             return true;
         }
@@ -3359,6 +4503,8 @@ namespace SengokuChronicle.Application
         /// <summary>推进多天。count 必须为正整数；失败返回 false 且状态不变，并说明原因。</summary>
         public bool AdvanceDays(int count)
         {
+            if (RejectWhileTacticalMissionActive())
+                return false;
             if (WorldClock == null)
                 InitNewGame();
             if (IsFamilyExtinct)
@@ -3401,6 +4547,7 @@ namespace SengokuChronicle.Application
             _dailyActionNotificationSuppression++;
             var allOutcomes = new List<DailyActionResult>();
             bool autonomyChanged = false;
+            bool commissionChanged = false;
             GameDate cursor = previousDate;
             try
             {
@@ -3414,6 +4561,7 @@ namespace SengokuChronicle.Application
                     autonomyChanged |= AdvanceAutonomyDay(cursor,
                         out IReadOnlyList<DailyActionResult> dayOutcomes);
                     allOutcomes.AddRange(dayOutcomes);
+                    commissionChanged |= AdvanceCommissionDay(WorldClock.CurrentDate);
                     cursor = WorldClock.CurrentDate;
                 }
             }
@@ -3425,7 +4573,7 @@ namespace SengokuChronicle.Application
             PublishDailyActionReport(allOutcomes);
             SyncCurrentLocationFromDailyActions();
             LastMonthTurnOutcome = MonthTurnOutcome.Succeeded;
-            if (NoticeRegencyHandoffIfDue() || autonomyChanged)
+            if (NoticeRegencyHandoffIfDue() || autonomyChanged || commissionChanged)
                 SessionStateChanged?.Invoke();
             return true;
         }
@@ -3644,6 +4792,8 @@ namespace SengokuChronicle.Application
         /// </summary>
         public bool TryAdvanceToNextMonth()
         {
+            if (RejectWhileTacticalMissionActive())
+                return false;
             if (WorldClock == null)
                 InitNewGame();
             if (IsFamilyExtinct)
@@ -3685,22 +4835,33 @@ namespace SengokuChronicle.Application
             FamilyDoctrineState doctrineBefore = EnsureFamilyDoctrine().Clone();
             DailyActionState dailyBefore = EnsureDailyActions().Clone();
             NpcAutonomyState autonomyBefore = CloneNpcAutonomy();
+            ShadowEscortCommission commissionBefore = _commission.Clone();
+            FamilyStandingState standingBefore = EnsureStanding().Clone();
+            MissionInjuryState injuriesBefore = EnsureInjuries().Clone();
+            MissionHistoryState missionHistoryBefore = EnsureMissionHistory().Clone();
             LocationId locationBefore = CurrentLocation;
             RandomStateSaveData rngBefore = _randomStateManager.CaptureState();
             FamilyChronicleEntry[] chronicleBefore = EnsureHistoryLedger().Capture();
             SuccessionSaveData successionBefore = SuccessionSaveData.Capture(_succession);
             EventRuntimeState runtimeBefore = _eventRuntimeState.Clone();
             IndustryMonthReport reportBefore = LastIndustryReport;
+            MarketState marketBefore = EnsureMarket().Clone();
+            MarketMonthReport marketReportBefore = LastMarketReport;
             string industryMessageBefore = LastIndustryMessage;
             string educationMessageBefore = LastEducationMessage;
             FamilyResearchMonthReport researchReportBefore = LastResearchReport;
             string researchMessageBefore = LastResearchMessage;
             IReadOnlyList<DailyActionResult> dailyOutcomesBefore = LastDailyActionOutcomes;
             string dailyMessageBefore = LastDailyActionMessage;
+            string commissionMessageBefore = LastCommissionMessage;
             try
             {
+                // M08B: the industry month is priced with the previously settled
+                // production-material index carried by the month-start market snapshot,
+                // exactly like the household pays the previously settled food index.
                 IndustrySettlementResult settlement = IndustrySettlement.Plan(
-                    _industryState, Succession, previousDate);
+                    _industryState, Succession, previousDate,
+                    marketBefore.MaterialsPriceIndexPermille);
                 if (settlement.Outcome == IndustrySettlementOutcome.SettlementGap ||
                     settlement.Outcome == IndustrySettlementOutcome.InvalidState)
                 {
@@ -3710,6 +4871,38 @@ namespace SengokuChronicle.Application
                 }
 
                 IndustryState nextIndustry = settlement.NextState ?? industryBefore.Clone();
+
+                // M08B: the market settles inside this same month transaction, right after
+                // industry production and material costs. The household still reads the
+                // month-start roster here (births and deaths apply to a later clone) and
+                // pays the previously settled food index. Any rejection or failure below
+                // leaves market, resources, population, date, RNG and chronicle untouched.
+                MarketSettlementResult marketSettlement = MarketSettlement.Plan(
+                    marketBefore, nextIndustry.Resources, Succession, settlement.Report,
+                    previousDate);
+                bool industryAlreadySettled =
+                    settlement.Outcome == IndustrySettlementOutcome.AlreadySettled;
+                if (marketSettlement.Outcome == MarketSettlementOutcome.AlreadySettled)
+                {
+                    if (!industryAlreadySettled)
+                    {
+                        LastMonthTurnOutcome = MonthTurnOutcome.SettlementFailed;
+                        LastEventMessage = marketSettlement.Message;
+                        return false;
+                    }
+                }
+                else if (!marketSettlement.Succeeded)
+                {
+                    LastMonthTurnOutcome = MonthTurnOutcome.SettlementFailed;
+                    LastEventMessage = marketSettlement.Message;
+                    return false;
+                }
+                else
+                {
+                    nextIndustry.TrySetResources(marketSettlement.NextResources, out _);
+                }
+                MarketState nextMarket = marketSettlement.NextMarket ?? marketBefore;
+
                 FamilyResearchSettlementResult researchSettlement = FamilyResearchSettlement.Plan(
                     _researchState, nextIndustry.Resources, Succession, previousDate, nextIndustry);
                 if (researchSettlement.Outcome == FamilyResearchOutcome.SettlementGap ||
@@ -3739,7 +4932,7 @@ namespace SengokuChronicle.Application
                     if (!TryAppendEducationChronicles(educationRecords, previousDate,
                             out string educationChronicleError))
                     {
-                        HistoryLedger.TryRestore(chronicleBefore, out _historyLedger, out _);
+                        TryRestoreHistoryLedger(chronicleBefore);
                         LastMonthTurnOutcome = MonthTurnOutcome.SchedulingFailed;
                         LastEventMessage = educationChronicleError;
                         return false;
@@ -3752,8 +4945,8 @@ namespace SengokuChronicle.Application
                     BuildEventRuleContext(), EnsureFamilyDoctrine().Creed);
                 if (!schedule.Succeeded)
                 {
-                    RandomStateManager.TryRestore(rngBefore, out _randomStateManager);
-                    HistoryLedger.TryRestore(chronicleBefore, out _historyLedger, out _);
+                    TryRestoreRandomState(rngBefore);
+                    TryRestoreHistoryLedger(chronicleBefore);
                     LastMonthTurnOutcome = MonthTurnOutcome.SchedulingFailed;
                     LastEventMessage = schedule.Message;
                     return false;
@@ -3763,41 +4956,78 @@ namespace SengokuChronicle.Application
                 // WorldSimulation stream. The plan is pure; mutation is applied to a
                 // cloned succession snapshot so any later failure leaves the live family
                 // untouched until the month commits.
+                DeterministicRandomStream worldStream =
+                    _randomStateManager.GetStream(RandomStreamKind.WorldSimulation);
                 FamilyBirthSettlementPlan birthSettlement = FamilyBirthSettlement.Plan(
-                    _succession, previousDate, nextDate,
-                    _randomStateManager.GetStream(RandomStreamKind.WorldSimulation));
+                    _succession, previousDate, nextDate, worldStream);
                 if (!birthSettlement.Succeeded)
                 {
-                    RandomStateManager.TryRestore(rngBefore, out _randomStateManager);
-                    HistoryLedger.TryRestore(chronicleBefore, out _historyLedger, out _);
+                    TryRestoreRandomState(rngBefore);
+                    TryRestoreHistoryLedger(chronicleBefore);
                     LastMonthTurnOutcome = MonthTurnOutcome.SettlementFailed;
                     LastEventMessage = "家族出生规划失败：" + birthSettlement.Error;
                     return false;
                 }
 
+                // M08A: both annual candidate lists are frozen before any birth is
+                // applied, so a newborn can never enter the same mortality settlement and
+                // a person widowed by this settlement keeps the living spouse it had when
+                // the settlement began. The RNG consumption order is fixed for the whole
+                // month: due births and conceptions, then annual deaths, then autonomous
+                // marriages.
+                bool annualBoundary = FamilyLifeCycleRules.IsAnnualBoundary(previousDate,
+                    nextDate);
+                IReadOnlyList<PersonId> deathCandidates = annualBoundary
+                    ? FamilyLifeCycleRules.CaptureDeathCandidateIds(_succession)
+                    : Array.Empty<PersonId>();
+                IReadOnlyList<PersonId> marriageCandidates = annualBoundary
+                    ? FamilyLifeCycleRules.CaptureMarriageCandidateIds(_succession, nextDate)
+                    : Array.Empty<PersonId>();
+                IReadOnlyList<PersonId> naturalDeaths = FamilyLifeCycleRules.PlanNaturalDeaths(
+                    deathCandidates, _succession, previousDate, nextDate, worldStream,
+                    FamilyLifeCycleRules.MortalityBonusForFoodShortage(
+                        nextMarket.ConsecutiveFoodShortageMonths));
+
                 SuccessionState nextSuccession = null;
-                if (birthSettlement.PregnancyPlan.HasChanges)
+                bool headDied = false;
+                string headDeathMessage = string.Empty;
+                if (birthSettlement.PregnancyPlan.HasChanges || naturalDeaths.Count > 0)
                 {
                     if (!SuccessionSaveData.TryRestoreTransactionSnapshot(successionBefore,
                             out nextSuccession, out string successionCloneError))
                     {
-                        RandomStateManager.TryRestore(rngBefore, out _randomStateManager);
-                        HistoryLedger.TryRestore(chronicleBefore, out _historyLedger, out _);
+                        TryRestoreRandomState(rngBefore);
+                        TryRestoreHistoryLedger(chronicleBefore);
                         LastMonthTurnOutcome = MonthTurnOutcome.SettlementFailed;
                         LastEventMessage = "家族出生状态无法应用：" + successionCloneError;
                         return false;
                     }
 
-                    if (!TryApplyBirthSettlement(nextSuccession, birthSettlement,
+                    if (birthSettlement.PregnancyPlan.HasChanges &&
+                        !TryApplyBirthSettlement(nextSuccession, birthSettlement,
                             ref nextDevelopment, out string birthError))
                     {
-                        RandomStateManager.TryRestore(rngBefore, out _randomStateManager);
-                        HistoryLedger.TryRestore(chronicleBefore, out _historyLedger, out _);
+                        TryRestoreRandomState(rngBefore);
+                        TryRestoreHistoryLedger(chronicleBefore);
                         LastMonthTurnOutcome = MonthTurnOutcome.SettlementFailed;
                         LastEventMessage = "家族出生结算失败：" + birthError;
                         return false;
                     }
 
+                    if (naturalDeaths.Count > 0 &&
+                        !TryApplyNaturalDeaths(nextSuccession, naturalDeaths, nextDate,
+                            out headDied, out headDeathMessage, out string deathError))
+                    {
+                        TryRestoreRandomState(rngBefore);
+                        TryRestoreHistoryLedger(chronicleBefore);
+                        LastMonthTurnOutcome = MonthTurnOutcome.SettlementFailed;
+                        LastEventMessage = "家族自然死亡结算失败：" + deathError;
+                        return false;
+                    }
+                }
+
+                if (birthSettlement.PregnancyPlan.HasChanges)
+                {
                     foreach (FamilyBirthChronicleFact chronicle in birthSettlement.Chronicles)
                     {
                         if (!EnsureHistoryLedger().TryAppendBirth(chronicle.Date.Year,
@@ -3805,8 +5035,8 @@ namespace SengokuChronicle.Application
                                 chronicle.Title, chronicle.Summary,
                                 out _, out string birthChronicleError))
                         {
-                            RandomStateManager.TryRestore(rngBefore, out _randomStateManager);
-                            HistoryLedger.TryRestore(chronicleBefore, out _historyLedger, out _);
+                            TryRestoreRandomState(rngBefore);
+                            TryRestoreHistoryLedger(chronicleBefore);
                             LastMonthTurnOutcome = MonthTurnOutcome.SchedulingFailed;
                             LastEventMessage = "家族新生编年史写入失败：" +
                                                (string.IsNullOrEmpty(birthChronicleError)
@@ -3815,6 +5045,69 @@ namespace SengokuChronicle.Application
                             return false;
                         }
                     }
+                }
+
+                // M08A: autonomous marriages apply the settlement-start candidate snapshot
+                // to the post-death clone and are skipped whenever the month produced a
+                // pending succession decision, because the player must resolve the head's
+                // death first.
+                FamilyMarriagePlan marriagePlan = FamilyMarriagePlan.Empty;
+                bool familyEnded = nextSuccession != null &&
+                                   nextSuccession.Phase == SuccessionPhase.Extinct;
+                if (annualBoundary && !familyEnded &&
+                    !(nextSuccession != null && nextSuccession.IsPending))
+                {
+                    IReadOnlyList<NpcMarriageProposal> marriageProposals =
+                        FamilyLifeCycleRules.PlanNpcMarriages(marriageCandidates,
+                            nextSuccession ?? _succession, previousDate, nextDate, worldStream);
+                    if (marriageProposals.Count > 0)
+                    {
+                        if (nextSuccession == null &&
+                            !SuccessionSaveData.TryRestoreTransactionSnapshot(successionBefore,
+                                out nextSuccession, out string marriageCloneError))
+                        {
+                            TryRestoreRandomState(rngBefore);
+                            TryRestoreHistoryLedger(chronicleBefore);
+                            LastMonthTurnOutcome = MonthTurnOutcome.SettlementFailed;
+                            LastEventMessage = "家族婚姻状态无法应用：" + marriageCloneError;
+                            return false;
+                        }
+
+                        marriagePlan = FamilyMarriageSettlement.Plan(nextSuccession,
+                            marriageProposals, nextDate);
+                        if (!marriagePlan.Succeeded)
+                        {
+                            TryRestoreRandomState(rngBefore);
+                            TryRestoreHistoryLedger(chronicleBefore);
+                            LastMonthTurnOutcome = MonthTurnOutcome.SettlementFailed;
+                            LastEventMessage = "家族婚姻规划失败：" + marriagePlan.Error;
+                            return false;
+                        }
+
+                        if (!FamilyMarriageSettlement.TryApply(nextSuccession, marriagePlan,
+                                ref nextDevelopment, out string marriageError))
+                        {
+                            TryRestoreRandomState(rngBefore);
+                            TryRestoreHistoryLedger(chronicleBefore);
+                            LastMonthTurnOutcome = MonthTurnOutcome.SettlementFailed;
+                            LastEventMessage = "家族婚姻结算失败：" + marriageError;
+                            return false;
+                        }
+                    }
+                }
+
+                if (!TryAppendFamilyLifeCycleChronicles(nextSuccession ?? _succession,
+                        naturalDeaths, marriagePlan.Chronicles, nextDate,
+                        out string lifeCycleChronicleError))
+                {
+                    TryRestoreRandomState(rngBefore);
+                    TryRestoreHistoryLedger(chronicleBefore);
+                    LastMonthTurnOutcome = MonthTurnOutcome.SchedulingFailed;
+                    LastEventMessage = "家族人口编年史写入失败：" +
+                                       (string.IsNullOrEmpty(lifeCycleChronicleError)
+                                           ? "未知原因"
+                                           : lifeCycleChronicleError);
+                    return false;
                 }
 
                 bool appendMonthly = settlement.Succeeded && settlement.Report != null &&
@@ -3827,8 +5120,8 @@ namespace SengokuChronicle.Application
                             "产业月结", settlement.Report.Summary,
                             out _, out string chronicleError))
                     {
-                        RandomStateManager.TryRestore(rngBefore, out _randomStateManager);
-                        HistoryLedger.TryRestore(chronicleBefore, out _historyLedger, out _);
+                        TryRestoreRandomState(rngBefore);
+                        TryRestoreHistoryLedger(chronicleBefore);
                         LastMonthTurnOutcome = MonthTurnOutcome.SchedulingFailed;
                         LastEventMessage = "产业月结编年史写入失败：" +
                                            (string.IsNullOrEmpty(chronicleError) ? "未知原因" : chronicleError);
@@ -3844,8 +5137,8 @@ namespace SengokuChronicle.Application
                             researchSettlement.BeforeProgress, researchSettlement.AfterProgress,
                             "家族研究", summary, out _, out string researchChronicleError))
                     {
-                        RandomStateManager.TryRestore(rngBefore, out _randomStateManager);
-                        HistoryLedger.TryRestore(chronicleBefore, out _historyLedger, out _);
+                        TryRestoreRandomState(rngBefore);
+                        TryRestoreHistoryLedger(chronicleBefore);
                         LastMonthTurnOutcome = MonthTurnOutcome.SchedulingFailed;
                         LastEventMessage = "研究编年史写入失败：" +
                                            (string.IsNullOrEmpty(researchChronicleError)
@@ -3864,8 +5157,8 @@ namespace SengokuChronicle.Application
                     !TryAppendAmbitionCompletion(previousDate, _succession.HeadPersonId,
                         completedAmbition, out string ambitionChronicleError))
                 {
-                    RandomStateManager.TryRestore(rngBefore, out _randomStateManager);
-                    HistoryLedger.TryRestore(chronicleBefore, out _historyLedger, out _);
+                    TryRestoreRandomState(rngBefore);
+                    TryRestoreHistoryLedger(chronicleBefore);
                     LastMonthTurnOutcome = MonthTurnOutcome.SchedulingFailed;
                     LastEventMessage = "抱负达成编年史写入失败：" +
                                        (string.IsNullOrEmpty(ambitionChronicleError)
@@ -3887,6 +5180,7 @@ namespace SengokuChronicle.Application
                     if (elapsedDays <= 0)
                     {
                         _industryState = nextIndustry;
+                        _marketState = nextMarket;
                         _eventRuntimeState = nextRuntime;
                         _development = nextDevelopment;
                         _researchState = researchSettlement.NextState ?? researchBefore;
@@ -3906,6 +5200,7 @@ namespace SengokuChronicle.Application
                             // event runtime see the settled month exactly as the
                             // equivalent daily path would.
                             _industryState = nextIndustry;
+                            _marketState = nextMarket;
                             _eventRuntimeState = nextRuntime;
                             _development = nextDevelopment;
                             _researchState = researchSettlement.NextState ?? researchBefore;
@@ -3922,6 +5217,34 @@ namespace SengokuChronicle.Application
                     _dailyActionNotificationSuppression = suppression;
                 }
 
+                // M05: the commission consumes the same skipped calendar days, but it
+                // settles only after the month's industry state is committed so its
+                // reward is never overwritten by the monthly settlement snapshot. Each
+                // step is stamped with the day it actually simulated, not the next
+                // month's day 1 that the clock already holds at commit time.
+                GameDate commissionCursor = previousDate;
+                for (int day = 0; day < elapsedDays; day++)
+                {
+                    if (!GameDate.TryNext(commissionCursor, out GameDate commissionDay))
+                        break;
+                    commissionCursor = commissionDay;
+
+                    // M08A: natural death takes effect at the Jan 1 annual boundary. A
+                    // commission still running when the simulated date reaches that
+                    // boundary is abandoned before the day advances or resolves, so
+                    // death wins: no mission result, standing, history row or Missions
+                    // roll can be produced for an assignee who died in this settlement.
+                    // A commission already terminal on Dec 31 never reaches this branch.
+                    if (commissionDay == nextDate && naturalDeaths.Count > 0 &&
+                        !TryCloseCommissionForAnnualDeath(commissionDay, naturalDeaths,
+                            out string annualDeathCommissionError))
+                    {
+                        throw new InvalidOperationException(annualDeathCommissionError);
+                    }
+
+                    AdvanceCommissionDay(commissionDay);
+                }
+
                 if (nextSuccession != null)
                 {
                     // Sync the confirmed post-month location before adding the newborn
@@ -3931,15 +5254,32 @@ namespace SengokuChronicle.Application
                     EnsureDailyActions();
                 }
 
+                // M08A: a dead person keeps every recorded family fact but can no longer
+                // hold an industry post, continue an in-flight daily action or execute a
+                // running M05 commission.
+                if (naturalDeaths.Count > 0)
+                {
+                    ReconcileFamilyLifeCycleAfterCommit(nextDate);
+                    LastSuccessionMessage = string.IsNullOrEmpty(headDeathMessage)
+                        ? LastSuccessionMessage
+                        : headDeathMessage;
+                }
+
                 // Fault-injection seam: the date has already crossed, so any exception
                 // below must restore the clock as well as resources/history/RNG.
                 MonthSettlementFaultInjection?.Invoke();
+
+                // M07: injuries recover only here, after the month date transition has
+                // committed. A rejected or rolled-back month leaves the date unchanged and
+                // therefore preserves the pre-boundary injury state.
+                EnsureInjuries().RecoverAll();
 
                 PublishDailyActionReport(allOutcomes);
                 SyncCurrentLocationFromDailyActions();
                 LastIndustryReport = settlement.Report;
                 if (settlement.Report != null)
                     LastIndustryMessage = settlement.Report.Summary;
+                LastMarketReport = marketSettlement.Report;
                 LastResearchReport = researchSettlement.Report;
                 LastResearchMessage = researchSettlement.Message;
                 if (educationRecords != null && educationRecords.Count > 0)
@@ -3955,12 +5295,18 @@ namespace SengokuChronicle.Application
             {
                 WorldClock.TryRestoreDate(previousDate);
                 _industryState = industryBefore;
+                _marketState = marketBefore;
                 _eventRuntimeState = runtimeBefore;
                 _development = developmentBefore;
                 _researchState = researchBefore;
                 _familyDoctrine = doctrineBefore;
                 _dailyActions = dailyBefore;
                 _npcAutonomy = autonomyBefore;
+                _commission = commissionBefore;
+                EnsureStanding().CopyFrom(standingBefore);
+                EnsureInjuries().CopyFrom(injuriesBefore);
+                EnsureMissionHistory().CopyFrom(missionHistoryBefore);
+                LastCommissionMessage = commissionMessageBefore;
                 CurrentLocation = locationBefore;
                 LastDailyActionOutcomes = dailyOutcomesBefore;
                 LastDailyActionMessage = dailyMessageBefore;
@@ -3975,9 +5321,10 @@ namespace SengokuChronicle.Application
                     else if (!string.IsNullOrEmpty(restoreError))
                         Debug.LogWarning("M04B succession rollback failed: " + restoreError);
                 }
-                RandomStateManager.TryRestore(rngBefore, out _randomStateManager);
-                HistoryLedger.TryRestore(chronicleBefore, out _historyLedger, out _);
+                TryRestoreRandomState(rngBefore);
+                TryRestoreHistoryLedger(chronicleBefore);
                 LastIndustryReport = reportBefore;
+                LastMarketReport = marketReportBefore;
                 LastIndustryMessage = successionRestored
                     ? "月结异常，已回滚到本月初始状态：" + exception.Message
                     : "月结异常，家族快照未能恢复：" + exception.Message;
@@ -4031,6 +5378,12 @@ namespace SengokuChronicle.Application
                 LastTravelBlockReason = "当前家主已有进行中的行动；请先完成或中断行动，再直接旅行。";
                 return null;
             }
+            if (_commission.Stage == ShadowEscortStage.InProgress &&
+                _commission.AssigneeId == _succession.HeadPersonId)
+            {
+                LastTravelBlockReason = "当前家主正在执行家族委托：请等待委托结算，再直接旅行。";
+                return null;
+            }
 
             if (!destination.IsValid)
                 return null;
@@ -4057,6 +5410,11 @@ namespace SengokuChronicle.Application
         public bool ConfirmTravel(TravelPreview preview)
         {
             LastTravelBlockReason = string.Empty;
+            if (RejectWhileTacticalMissionActive())
+            {
+                LastTravelBlockReason = LastEventMessage;
+                return false;
+            }
             if (WorldClock == null)
                 InitNewGame();
             if (IsFamilyExtinct)
@@ -4081,6 +5439,12 @@ namespace SengokuChronicle.Application
             if (HasActiveDailyAction(_succession.HeadPersonId))
             {
                 LastTravelBlockReason = "当前家主已有进行中的行动；请先完成或中断行动，再直接旅行。";
+                return false;
+            }
+            if (_commission.Stage == ShadowEscortStage.InProgress &&
+                _commission.AssigneeId == _succession.HeadPersonId)
+            {
+                LastTravelBlockReason = "当前家主正在执行家族委托：请等待委托结算，再直接旅行。";
                 return false;
             }
 
@@ -4108,6 +5472,7 @@ namespace SengokuChronicle.Application
             _dailyActionNotificationSuppression++;
             var allOutcomes = new List<DailyActionResult>();
             bool needsGrown = false;
+            bool commissionChanged = false;
             GameDate cursor = previousDate;
             try
             {
@@ -4120,6 +5485,9 @@ namespace SengokuChronicle.Application
                         EnsureDailyActions().AdvanceDays(cursor, 1);
                     allOutcomes.AddRange(outcomes);
                     ApplyNpcActionCompletions(outcomes);
+                    // A direct trip simulates each travel day, so the commission must
+                    // consume the same days and settle on the due day, exactly once.
+                    commissionChanged |= AdvanceCommissionDay(WorldClock.CurrentDate);
                     cursor = WorldClock.CurrentDate;
                 }
 
@@ -4138,7 +5506,8 @@ namespace SengokuChronicle.Application
             PublishDailyActionReport(allOutcomes);
             SyncCurrentLocationFromDailyActions();
             LastTravelBlockReason = string.Empty;
-            if (NoticeRegencyHandoffIfDue() || allOutcomes.Count > 0 || needsGrown)
+            if (NoticeRegencyHandoffIfDue() || allOutcomes.Count > 0 || needsGrown ||
+                commissionChanged)
                 SessionStateChanged?.Invoke();
             return true;
         }
@@ -4159,6 +5528,17 @@ namespace SengokuChronicle.Application
                 IndustryCalendar.MonthIndex(WorldClock.CurrentDate) - 1, out _);
             EnsureResearch().TrySetLastSettledMonthIndex(
                 IndustryCalendar.MonthIndex(WorldClock.CurrentDate) - 1, out _);
+            // M08B: this fixture seam skips whole months for the market exactly as it does
+            // for the industry and research ledgers. Stock and both price indices are kept;
+            // no skipped month's consumption, shortage or basket history is replayed.
+            MarketState marketBeforeJump = EnsureMarket();
+            if (MarketState.TryCreate(marketBeforeJump.FoodInventory,
+                    marketBeforeJump.FoodPriceIndexPermille,
+                    marketBeforeJump.MaterialsPriceIndexPermille,
+                    IndustryCalendar.MonthIndex(WorldClock.CurrentDate) - 1, 0, null,
+                    out MarketState marketAfterJump, out _))
+                _marketState = marketAfterJump;
+            LastMarketReport = null;
             LastIndustryReport = null;
             LastIndustryMessage = string.Empty;
             LastResearchReport = null;

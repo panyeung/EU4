@@ -10,6 +10,9 @@
 - [美术资产工作流](docs/ART_ASSET_WORKFLOW.md)
 - [M04B 动态出生设计](docs/superpowers/specs/2026-11-10-m04b-dynamic-birth-design.md)
 - [M04B 实施计划](docs/superpowers/plans/2026-11-10-m04b-dynamic-birth.md)
+- [M06 回合制潜入设计稿](docs/superpowers/specs/2026-11-10-m06-tactical-infiltration.md)
+- [M07 三层玩法整合设计稿](docs/superpowers/specs/2026-11-11-m07-three-layer-integration-design.md)
+- [M07 三层玩法整合实施计划](docs/superpowers/plans/2026-11-11-m07-three-layer-integration.md)
 
 ## 开发与验证
 

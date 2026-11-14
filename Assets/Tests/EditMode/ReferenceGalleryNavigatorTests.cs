@@ -486,6 +486,76 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
+        public void ShowPage_Map_KeepsShadowEscortCommissionColorsInsideMapRoot()
+        {
+            GameObject host = Create("CanvasHost", typeof(RectTransform));
+            ((RectTransform)host.transform).sizeDelta = new Vector2(1280f, 720f);
+            ReferenceGalleryNavigator navigator = Create("Navigator", typeof(RectTransform))
+                .AddComponent<ReferenceGalleryNavigator>();
+            navigator.transform.SetParent(host.transform, false);
+
+            GameObject mapRoot = Create("MapRoot", typeof(RectTransform), typeof(CanvasRenderer),
+                typeof(Image));
+            mapRoot.transform.SetParent(host.transform, false);
+
+            Text mapHint = CreateTextChild("MapRouteHintText", mapRoot.transform);
+            // Nested map-owned label: the dark-map restyle must still reach it.
+            GameObject mapColumn = Create("MapRouteColumn", typeof(RectTransform));
+            mapColumn.transform.SetParent(mapRoot.transform, false);
+            mapHint.transform.SetParent(mapColumn.transform, false);
+            Button mapButton = CreateButton("MapRouteButton");
+            mapButton.transform.SetParent(mapRoot.transform, false);
+            Text mapButtonLabel = CreateTextChild("Label", mapButton.transform);
+
+            // The M5 commission panel is hosted under the map root as root -> page and
+            // draws its own indigo sheet, so it keeps the light colors authored in the
+            // scene instead of the recursive dark-map restyle.
+            GameObject townRoot = Create("TownMenuRoot", typeof(RectTransform));
+            townRoot.transform.SetParent(mapRoot.transform, false);
+            GameObject commissionRoot = Create(
+                ShadowEscortCommissionPanel.RootObjectName, typeof(RectTransform));
+            commissionRoot.transform.SetParent(townRoot.transform, false);
+            GameObject commissionPage = Create(
+                ShadowEscortCommissionPanel.PageObjectName, typeof(RectTransform));
+            commissionPage.transform.SetParent(commissionRoot.transform, false);
+            Text commissionBody = CreateTextChild("M5CommissionOfferText",
+                commissionPage.transform);
+            Button commissionButton = CreateButton("M5CommissionAcceptButton");
+            commissionButton.transform.SetParent(commissionPage.transform, false);
+            Text commissionLabel = CreateTextChild("Label", commissionButton.transform);
+            var commissionButtonBackground = new Color(0.24f, 0.32f, 0.42f, 1f);
+            commissionBody.color = SengokuUiTheme.Parchment;
+            commissionLabel.color = SengokuUiTheme.ParchmentLight;
+            commissionButton.targetGraphic.color = commissionButtonBackground;
+
+            Button[] buttons = new Button[ReferenceGalleryNavigator.PageCount];
+            for (int i = 0; i < buttons.Length; i++)
+                buttons[i] = CreateButton("Tab" + i);
+            navigator.BindReferences(new[]
+            {
+                new ReferenceGalleryPageRoot(mapRoot, ReferenceGalleryPageMask.Map)
+            }, buttons, mapRoot, mapRoot, mapRoot, mapRoot, buttons[0],
+                Create("Navigation", typeof(RectTransform), typeof(Image)), Create("Header"));
+
+            navigator.ShowPage(ReferenceGalleryPage.Map);
+
+            Assert.That(commissionBody.color, Is.EqualTo(SengokuUiTheme.Parchment),
+                "the map restyle must not paint M5 body text with the dark map ink");
+            Assert.That(commissionLabel.color, Is.EqualTo(SengokuUiTheme.ParchmentLight),
+                "the map restyle must not repaint M5 button labels");
+            Assert.That(commissionButton.targetGraphic.color,
+                Is.EqualTo(commissionButtonBackground),
+                "the map restyle must not repaint M5 commission buttons");
+
+            Assert.That(mapHint.color, Is.EqualTo(SengokuUiTheme.Ink),
+                "map-owned text keeps the dark map ink");
+            Assert.That(mapButtonLabel.color, Is.EqualTo(SengokuUiTheme.Ink),
+                "map-owned button labels keep the dark map ink");
+            Assert.That(mapButton.targetGraphic.color, Is.EqualTo(SengokuUiTheme.ParchmentDeep),
+                "map-owned buttons keep the parchment surface");
+        }
+
+        [Test]
         public void ShowPage_Events_ReflowsLivePendingEventIntoReferenceCardGeometry()
         {
             GameSession session = GameSession.NewGame();

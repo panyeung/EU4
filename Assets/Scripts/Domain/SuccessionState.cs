@@ -40,7 +40,12 @@ namespace SengokuChronicle.Domain
         NotDue = 11,
         Extinction = 12,
         InvalidState = 13,
-        RegentUnavailable = 14
+        RegentUnavailable = 14,
+        /// <summary>
+        /// A queued event must be chosen before a command can hand the head to a new person;
+        /// otherwise the event's own options would stop addressing the current head.
+        /// </summary>
+        BlockedByPendingEvent = 15
     }
 
     /// <summary>

@@ -12,8 +12,8 @@ namespace SengokuChronicle.Tests.EditMode
     /// <summary>
     /// M01/SC-024 regression tests: route-specific retirement, the approved
     /// SC-024-only fourth-generation child, its education target, the save round trip,
-    /// the shared third-generation finale, and the rule that SC-024 family data must not
-    /// change ordinary SC-013/no-route behavior.
+    /// the shared third-generation finale, the offer gate on the creed council row, and
+    /// the rule that SC-024 family data must not change ordinary SC-013/no-route behavior.
     /// They were executed in the open Unity Editor for the M01 finale routing repair and
     /// again for the M01/SC-024 route-boundary repair.
     /// </summary>
@@ -364,6 +364,41 @@ namespace SengokuChronicle.Tests.EditMode
                 Does.Not.Contain(SC013EventIds.FinaleEventId));
             Assert.That(EligibleEventIds(engine, session, "sc020"),
                 Does.Not.Contain(SC013EventIds.FinaleEventId));
+        }
+
+        /// <summary>
+        /// The generic offer gate reaches SC-024 too. Every creed council option applies a
+        /// <c>FamilyRelationshipDelta</c> to Masatsuna and Nobumasa, so the row is offered
+        /// while the head is someone else and is withheld the moment either effect target
+        /// becomes the head — the same rule the SC-018 rows follow. Nothing about this scene
+        /// is retargeted or dropped from the catalog.
+        /// </summary>
+        [Test]
+        public void Sc024_CouncilRowIsWithheldOnlyWhenAFamilyTargetIsTheHead()
+        {
+            GameSession session = NewSc024Session();
+            var engine = new EventEngine(session.EventCatalog, session.EventText);
+            Assert.That(engine.IsReady, Is.True, engine.ValidationMessage);
+
+            Assert.That(CouncilEventOffered(engine, session, M2FixedScenario.HarunobuId), Is.True,
+                "the opening head is not a council effect target");
+            Assert.That(CouncilEventOffered(engine, session, ChildId), Is.True,
+                "the SC-024 heir is not a council effect target");
+
+            Assert.That(CouncilEventOffered(engine, session, M2FixedScenario.MasatsunaId), Is.False,
+                "the council options target Masatsuna, who is now the head");
+            Assert.That(CouncilEventOffered(engine, session, M2FixedScenario.NobumasaId), Is.False,
+                "the council options target Nobumasa, who is now the head");
+        }
+
+        private static bool CouncilEventOffered(EventEngine engine, GameSession session, PersonId head)
+        {
+            var context = new EventRuleContext(0, 0, SC024FamilyDoctrineScenario.ScenarioId, head,
+                session.Succession.World.Family.Members.Select(member => member.PersonId).ToArray());
+            IReadOnlyList<string> eligible = engine.GetEligibleEventIds(new GameDate(1560, 6, 1),
+                new CharacterRelationships(), new EventRuntimeState(), context,
+                FamilyCreedKind.RighteousnessFirst);
+            return eligible.Contains(SC024EventIds.RighteousnessCouncilEventId);
         }
 
         private static IReadOnlyList<string> EligibleEventIds(EventEngine engine, GameSession session,

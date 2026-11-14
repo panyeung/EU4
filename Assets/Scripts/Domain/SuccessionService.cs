@@ -352,7 +352,7 @@ namespace SengokuChronicle.Domain
                     "没有在世成年保荐人，无法危机收养；家族灭亡。");
             }
 
-            if (!TryGetLivingHead(state, out PersonState head, out string headError))
+            if (!TryGetHandoffHead(state, out PersonState head, out string headError))
                 return Failure(SuccessionOutcome.InvalidHead, state.Phase, state.HeadPersonId, headError);
             if (!state.World.TryGetLife(head.Id, out SuccessionPersonLife oldHeadLife))
                 return Failure(SuccessionOutcome.InvalidState, state.Phase, head.Id,
@@ -459,7 +459,7 @@ namespace SengokuChronicle.Domain
         private static SuccessionResult PerformHandoff(SuccessionState state, PersonId successorId,
             PersonId regentId, GameDate date, bool crisis)
         {
-            if (!TryGetLivingHead(state, out PersonState oldHead, out string error))
+            if (!TryGetHandoffHead(state, out PersonState oldHead, out string error))
                 return Failure(SuccessionOutcome.InvalidHead, state.Phase, state.HeadPersonId, error);
             if (!state.World.TryGetPerson(successorId, out PersonState successor))
                 return Failure(SuccessionOutcome.InvalidCandidate, state.Phase, successorId,
@@ -620,6 +620,88 @@ namespace SengokuChronicle.Domain
                     return id;
                 sequence++;
             }
+        }
+
+        /// <summary>
+        /// M07 death transition. A head who died on a disclosed severe-failure check
+        /// cannot retire, so this enters the ordinary succession phases without requiring
+        /// a living head. Multiple adult candidates always wait for the player's choice;
+        /// no heir is picked automatically.
+        /// </summary>
+        public static SuccessionResult BeginDeathSuccession(SuccessionState state, GameDate date)
+        {
+            if (state == null)
+                return Failure(SuccessionOutcome.InvalidState, SuccessionPhase.None, default,
+                    "继承状态为空。");
+            if (state.Phase == SuccessionPhase.Extinct)
+                return Failure(SuccessionOutcome.Extinction, state.Phase, state.HeadPersonId,
+                    "家族已经灭亡。");
+            if (!state.World.TryGetLife(state.HeadPersonId, out SuccessionPersonLife headLife) ||
+                headLife.Alive)
+                return Failure(SuccessionOutcome.InvalidHead, state.Phase, state.HeadPersonId,
+                    "家主仍然存活：不能按身故进入继承。");
+
+            state.PendingSuccessorId = default;
+            state.PendingRegentId = default;
+            state.DesignatedHeirId = default;
+
+            IReadOnlyList<SuccessionCandidate> candidates = GetCandidates(state, date);
+            if (candidates.Count == 0)
+            {
+                return EnterCrisisOrExtinct(state, date,
+                    "家主身故且没有合法继承人。可进行一次危机收养/重建：需要至少一名在世成年成员作保荐人。",
+                    "家主身故且没有合法继承人，也没有危机重建条件；家族灭亡。");
+            }
+
+            state.Phase = SuccessionPhase.AwaitingSuccessionChoice;
+            return Success(SuccessionOutcome.Succeeded, state.Phase, default,
+                "家主身故：请从合法候选人中选择继承人。");
+        }
+
+        /// <summary>
+        /// Handoff head lookup. Retirement keeps requiring a living, non-retired head;
+        /// only the explicit death phases accept a dead head so the family can continue.
+        /// </summary>
+        private static bool TryGetHandoffHead(SuccessionState state, out PersonState head,
+            out string error)
+        {
+            head = null;
+            if (state.HeadPersonId.IsEmpty)
+            {
+                error = "当前家主 ID 为空。";
+                return false;
+            }
+            if (!state.World.TryGetPerson(state.HeadPersonId, out head))
+            {
+                error = "当前家主不是已登记人物。";
+                return false;
+            }
+            if (!state.World.TryGetLife(state.HeadPersonId, out SuccessionPersonLife life))
+            {
+                error = "当前家主生命状态缺失。";
+                return false;
+            }
+            if (life.Retired)
+            {
+                error = "当前家主已经退休，不能再次退休。";
+                return false;
+            }
+            if (!state.World.Family.TryGetRole(state.HeadPersonId, out FamilyMemberRole role) ||
+                role != FamilyMemberRole.Head)
+            {
+                error = "当前家主没有 Head 家族身份。";
+                return false;
+            }
+            if (life.Alive)
+            {
+                error = string.Empty;
+                return true;
+            }
+            bool deathPhase = state.Phase == SuccessionPhase.AwaitingSuccessionChoice ||
+                              state.Phase == SuccessionPhase.AwaitingRegentChoice ||
+                              state.Phase == SuccessionPhase.CrisisDecision;
+            error = deathPhase ? string.Empty : "当前家主已死亡或生命状态缺失。";
+            return deathPhase;
         }
 
         private static bool TryGetLivingHead(SuccessionState state, out PersonState head, out string error)

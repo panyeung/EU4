@@ -15,7 +15,7 @@ namespace SengokuChronicle.Persistence
         public const int CurrentGameSchemaVersion = SaveDataValidator.CurrentVersion;
 
         /// <summary>Rules contract version shared by capture, validation and migration.</summary>
-        public const int CurrentRulesVersion = 7;
+        public const int CurrentRulesVersion = 8;
 
         /// <summary>
         /// Fallback event-content version used only when no catalog is loaded. The
@@ -58,6 +58,17 @@ namespace SengokuChronicle.Persistence
         public string activeEventScenarioId;
         public DailyActionStateSaveData dailyActions;
         public NpcAutonomyStateSaveData npcAutonomy;
+        public ShadowEscortCommissionSaveData commission;
+        /// <summary>M07 family fame, concealment and stable employer/faction relations.</summary>
+        public FamilyStandingSaveData familyStanding;
+        /// <summary>M07 injured roster; recovery happens at the next month boundary.</summary>
+        public MissionInjurySaveData injury;
+        /// <summary>M07 terminal mission history; one row per settled run ID.</summary>
+        public MissionHistorySaveEntry[] missionHistory;
+        /// <summary>M08 campaign origin and one-time review acknowledgements (v16).</summary>
+        public CampaignProgressSaveData campaign;
+        /// <summary>M08B food stock, game price indices and settled basket history (v17).</summary>
+        public MarketSaveData market;
 
         public SaveData()
         {
@@ -82,6 +93,12 @@ namespace SengokuChronicle.Persistence
             dailyActions = DailyActionStateSaveData.CreateInitial(WorldClock.NewGameDate,
                 succession, LocationId.Kiyosu.Value);
             npcAutonomy = NpcAutonomyStateSaveData.CreateInitial(succession);
+            commission = ShadowEscortCommissionSaveData.CreateInitial();
+            familyStanding = FamilyStandingSaveData.CreateInitial();
+            injury = MissionInjurySaveData.CreateEmpty();
+            missionHistory = new MissionHistorySaveEntry[0];
+            campaign = CampaignProgressSaveData.CreateUnknownOrigin();
+            market = MarketSaveData.CreateInitial(WorldClock.NewGameDate);
         }
     }
 
@@ -113,6 +130,12 @@ namespace SengokuChronicle.Persistence
         public string activeEventScenarioId;
         public DailyActionStateSaveData dailyActions;
         public NpcAutonomyStateSaveData npcAutonomy;
+        public ShadowEscortCommissionSaveData commission;
+        public FamilyStandingSaveData familyStanding;
+        public MissionInjurySaveData injury;
+        public MissionHistorySaveEntry[] missionHistory;
+        public CampaignProgressSaveData campaign;
+        public MarketSaveData market;
     }
 
     /// <summary>One player-to-NPC relationship value, keyed by stable character ID.</summary>
@@ -2204,7 +2227,17 @@ namespace SengokuChronicle.Persistence
                 headRole != FamilyMemberRole.Head)
                 return Invalid("存档继承家主 ID 与 Head 身份不一致。");
             if (!personMap.TryGetValue(headId, out SuccessionPersonSaveEntry headEntry) ||
-                !headEntry.alive || headEntry.retired)
+                headEntry.retired)
+                return Invalid("存档继承家主必须是未退休的人物。");
+            // M07: a head killed on a disclosed severe-failure check stays the recorded
+            // head while the family is inside an explicit succession phase. Outside
+            // those phases a dead or retired head is still invalid.
+            bool headDeathPhase =
+                (SuccessionPhase)phase == SuccessionPhase.AwaitingSuccessionChoice ||
+                (SuccessionPhase)phase == SuccessionPhase.AwaitingRegentChoice ||
+                (SuccessionPhase)phase == SuccessionPhase.CrisisDecision ||
+                (SuccessionPhase)phase == SuccessionPhase.Extinct;
+            if (!headEntry.alive && !headDeathPhase)
                 return Invalid("存档继承家主必须是存活且未退休的人物。");
 
             PersonId designated = default;

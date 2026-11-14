@@ -239,7 +239,9 @@ namespace SengokuChronicle.Presentation
             bool started = gameSession.StartCrisisDemo();
             Refresh();
             if (!started)
-                feedbackText.text = "只能在尚未完成任何继承的新局进入固定危机示范。";
+                feedbackText.text = string.IsNullOrEmpty(gameSession.LastSuccessionMessage)
+                    ? "只能在尚未完成任何继承的新局进入固定危机示范。"
+                    : gameSession.LastSuccessionMessage;
         }
 
         private string BuildStatus(SuccessionState state, GameDate date)

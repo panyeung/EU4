@@ -129,6 +129,17 @@ namespace SengokuChronicle.Domain
                 0, 0, 0, 0, 0, 0, null, null, out entry, out error);
 
         /// <summary>
+        /// Appends one committed annual natural-death record. Subject is the stable
+        /// person ID; the value pair carries the age at death so a reader never has to
+        /// infer it from the settlement date.
+        /// </summary>
+        public bool TryAppendNaturalDeath(int year, int month, string personId, int age,
+            string title, string summary, out FamilyChronicleEntry entry, out string error) =>
+            TryAppend(year, month, ChronicleCategory.NaturalDeath, personId,
+                FamilyChronicleEntry.NaturalDeathSourceId, title, summary,
+                age, 0, 0, 0, 0, 0, null, null, out entry, out error);
+
+        /// <summary>
         /// Validates a family-formation record against the next append slot without
         /// mutating the ledger. The session calls this before adding any member or
         /// kinship edge so a rejected command cannot leave a partial relationship.

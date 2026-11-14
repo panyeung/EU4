@@ -420,6 +420,7 @@ namespace SengokuChronicle.Editor
             Text summaryText = summary.GetComponent<Text>();
             Text emptyText = empty.GetComponent<Text>();
             Text selectedText = selected.GetComponent<Text>();
+            Text durationValueText = durationInputTransform.Find("Text")?.GetComponent<Text>();
             Text durationLabelText = durationLabel.GetComponent<Text>();
             Text feedbackText = feedback.GetComponent<Text>();
             InputField durationInput = durationInputTransform.GetComponent<InputField>();
@@ -435,14 +436,13 @@ namespace SengokuChronicle.Editor
             Button inspectorButton = inspectorOpen.GetComponent<Button>();
             if (titleText == null || summaryText == null || emptyText == null ||
                 selectedText == null || durationLabelText == null || feedbackText == null ||
-                durationInput == null || restButton == null || trainingButton == null ||
+                durationInput == null || durationValueText == null || restButton == null || trainingButton == null ||
                 workButton == null || travelKiyosuButton == null || travelAtsutaButton == null ||
                 travelNagoyaButton == null || interruptButton == null || closeButton == null ||
                 travelCardButton == null || inspectorButton == null ||
                 titleText.font == null || summaryText.font == null || emptyText.font == null ||
                 selectedText.font == null || durationLabelText.font == null ||
-                feedbackText.font == null || durationInput.textComponent == null ||
-                durationInput.textComponent.font == null || durationInput.placeholder == null ||
+                feedbackText.font == null || durationValueText.font == null || durationInput.placeholder == null ||
                 !HasButtonVisual(restButton) || !HasButtonVisual(trainingButton) ||
                 !HasButtonVisual(workButton) || !HasButtonVisual(travelKiyosuButton) ||
                 !HasButtonVisual(travelAtsutaButton) || !HasButtonVisual(travelNagoyaButton) ||
@@ -465,6 +465,9 @@ namespace SengokuChronicle.Editor
                 durationInput.text != "1")
                 return Invalid(out error,
                     "The M02 duration input must be an integer field starting at 1.");
+            if (durationInput.placeholder.enabled != string.IsNullOrEmpty(durationInput.text))
+                return Invalid(out error,
+                    "The M02 duration placeholder visibility must match the input value.");
             if (!titleText.text.Contains("每日行动"))
                 return Invalid(out error, "The M02 title must contain 每日行动.");
             if (feedbackText.verticalOverflow != VerticalWrapMode.Truncate)
@@ -1507,13 +1510,19 @@ namespace SengokuChronicle.Editor
             text.supportRichText = false;
             text.raycastTarget = false;
             text.color = SengokuUiTheme.Ink;
-            input.textComponent = text;
             Text placeholder = CreateText(scene, (RectTransform)go.transform, "Placeholder",
                 font, "天数", 0f, 0f, width - 10f, height - 4f, 10, TextAnchor.MiddleCenter);
             placeholder.color = SengokuUiTheme.InkFaint;
             placeholder.raycastTarget = false;
-            input.placeholder = placeholder;
-            input.text = value;
+            placeholder.enabled = string.IsNullOrEmpty(value);
+            var serializedInput = new SerializedObject(input);
+            SerializedProperty placeholderValue = serializedInput.FindProperty("m_Placeholder");
+            SerializedProperty textValue = serializedInput.FindProperty("m_Text");
+            if (placeholderValue == null || textValue == null)
+                throw new InvalidOperationException("InputField is missing serialized UI fields.");
+            placeholderValue.objectReferenceValue = placeholder;
+            textValue.stringValue = value;
+            serializedInput.ApplyModifiedPropertiesWithoutUndo();
             return input;
         }
 
@@ -1786,7 +1795,8 @@ namespace SengokuChronicle.Editor
         private static void PlaceAboveGameHud(Transform canvas, Transform target)
         {
             // The page is a full-screen view: every game HUD root must render beneath it,
-            // while the title/event overlays and the read-only M03 inspector stay above.
+            // while the title/event overlays, the M06 tactical sheet, and the read-only M03
+            // inspector stay above.
             var children = new List<Transform>();
             for (int i = 0; i < canvas.childCount; i++)
                 children.Add(canvas.GetChild(i));

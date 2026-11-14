@@ -220,7 +220,8 @@ namespace SengokuChronicle.Tests.EditMode
 
             Assert.That(SC021FamilyResearchScenario.IsActive(_session.Succession), Is.True);
             Assert.That(_session.WorldClock.CurrentDate, Is.EqualTo(new GameDate(1560, 1, 1)));
-            Assert.That(_session.Industry.Resources.Funds, Is.EqualTo(2));
+            Assert.That(_session.Industry.Resources.Funds, Is.EqualTo(4),
+                "opening funds cover two research months plus the M08B food bill");
             Assert.That(_session.Industry.Resources.Supplies, Is.EqualTo(2));
             Assert.That(_session.ResearchState.HasPlan, Is.False);
             Assert.That(_titleController.IsTitleVisible, Is.False);

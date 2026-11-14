@@ -97,6 +97,12 @@ namespace SengokuChronicle.Presentation
         [Header("Supply Shortage Mission")]
         [SerializeField] private SupplyShortageMissionPanel supplyShortageMissionPanel;
 
+        [Header("M05 Shadow Escort Commission")]
+        [SerializeField] private ShadowEscortCommissionPanel shadowEscortCommissionPanel;
+
+        [Header("M06 Tactical Infiltration")]
+        [SerializeField] private TacticalMissionPanel tacticalMissionPanel;
+
         [Header("Town Overview")]
         [SerializeField] private TownOverviewPanel townOverviewPanel;
 
@@ -119,6 +125,12 @@ namespace SengokuChronicle.Presentation
         public bool HasSupplyShortageMissionPanel => supplyShortageMissionPanel != null;
         public bool IsSupplyShortageMissionOpen =>
             supplyShortageMissionPanel != null && supplyShortageMissionPanel.IsOpen;
+        public bool HasShadowEscortCommissionPanel => shadowEscortCommissionPanel != null;
+        public bool IsShadowEscortCommissionOpen =>
+            shadowEscortCommissionPanel != null && shadowEscortCommissionPanel.IsOpen;
+        public bool HasTacticalMissionPanel => tacticalMissionPanel != null;
+        public bool IsTacticalMissionOpen =>
+            tacticalMissionPanel != null && tacticalMissionPanel.IsOpen;
 
         /// <summary>城镉菜单根对象（初始隐藏）。</summary>
         public GameObject GetTownMenuRoot() => townMenuRoot;
@@ -149,6 +161,8 @@ namespace SengokuChronicle.Presentation
             if (townNpcDialoguePanel != null)
                 townNpcDialoguePanel.BindWorldMapController(this);
             BindSupplyShortageMissionPanel(supplyShortageMissionPanel);
+            BindShadowEscortCommissionPanel(shadowEscortCommissionPanel);
+            BindTacticalMissionPanel(tacticalMissionPanel);
             if (townOverviewPanel != null)
                 townOverviewPanel.Bind(this);
             SubscribeSession();
@@ -317,6 +331,10 @@ namespace SengokuChronicle.Presentation
                 worldClockPanel.gameObject.SetActive(true);
             if (supplyShortageMissionPanel != null)
                 supplyShortageMissionPanel.Close();
+            if (shadowEscortCommissionPanel != null)
+                shadowEscortCommissionPanel.Close();
+            if (tacticalMissionPanel != null)
+                tacticalMissionPanel.Close();
             if (townNpcDialoguePanel != null)
                 townNpcDialoguePanel.Close();
             if (townMenuRoot != null)
@@ -346,6 +364,10 @@ namespace SengokuChronicle.Presentation
                 worldClockPanel.Refresh();
             if (supplyShortageMissionPanel != null)
                 supplyShortageMissionPanel.Refresh();
+            if (shadowEscortCommissionPanel != null)
+                shadowEscortCommissionPanel.Refresh();
+            if (tacticalMissionPanel != null)
+                tacticalMissionPanel.Refresh();
             if (townOverviewPanel != null)
                 townOverviewPanel.Refresh();
         }
@@ -567,6 +589,16 @@ namespace SengokuChronicle.Presentation
                 else
                     supplyShortageMissionPanel.Open();
             }
+            if (shadowEscortCommissionPanel != null)
+            {
+                shadowEscortCommissionPanel.Bind(gameSession);
+                shadowEscortCommissionPanel.Close();
+            }
+            if (tacticalMissionPanel != null)
+            {
+                tacticalMissionPanel.Bind(gameSession);
+                tacticalMissionPanel.Close();
+            }
             SetMapContentVisible(false);
             if (townNpcDialoguePanel != null)
                 townNpcDialoguePanel.Close();
@@ -616,11 +648,88 @@ namespace SengokuChronicle.Presentation
             panel.Close();
         }
 
+        public void BindShadowEscortCommissionPanel(ShadowEscortCommissionPanel panel)
+        {
+            if (shadowEscortCommissionPanel != null && shadowEscortCommissionPanel != panel)
+            {
+                shadowEscortCommissionPanel.BindController(null);
+                shadowEscortCommissionPanel.Close();
+            }
+            shadowEscortCommissionPanel = panel;
+            if (panel == null)
+                return;
+            panel.BindController(this);
+            panel.Bind(gameSession);
+            panel.Close();
+        }
+
+        /// <summary>
+        /// Opens or closes the M05 commission page inside the town menu. It only changes
+        /// UI visibility: the date, location, resources and commission row are untouched.
+        /// </summary>
+        public void ToggleShadowEscortCommissionPanel()
+        {
+            if (!_inTownMenu || shadowEscortCommissionPanel == null)
+                return;
+
+            if (shadowEscortCommissionPanel.IsOpen)
+            {
+                shadowEscortCommissionPanel.Close();
+            }
+            else
+            {
+                shadowEscortCommissionPanel.Bind(gameSession);
+                shadowEscortCommissionPanel.Open();
+                shadowEscortCommissionPanel.transform.SetAsLastSibling();
+            }
+            if (townOverviewPanel != null)
+                townOverviewPanel.Refresh();
+        }
+
         public void BindTownOverviewPanel(TownOverviewPanel panel)
         {
             townOverviewPanel = panel;
             if (panel != null)
                 panel.Bind(this);
+        }
+
+        public void BindTacticalMissionPanel(TacticalMissionPanel panel)
+        {
+            if (tacticalMissionPanel != null && tacticalMissionPanel != panel)
+            {
+                tacticalMissionPanel.BindController(null);
+                tacticalMissionPanel.Close();
+            }
+            tacticalMissionPanel = panel;
+            if (panel == null)
+                return;
+            panel.BindController(this);
+            panel.Bind(gameSession);
+            panel.Close();
+        }
+
+        /// <summary>
+        /// Opens or closes the M06 infiltration page inside the town menu. It only changes
+        /// UI visibility: the date, location, resources and operation state are untouched.
+        /// </summary>
+        public void ToggleTacticalMissionPanel()
+        {
+            if (!_inTownMenu || tacticalMissionPanel == null)
+                return;
+
+            if (tacticalMissionPanel.IsOpen)
+            {
+                tacticalMissionPanel.Close();
+            }
+            else
+            {
+                tacticalMissionPanel.Bind(gameSession);
+                // The page is a canvas-level modal, so it raises its own overlay in Open().
+                // Reordering the town-rooted panel component here would be inert.
+                tacticalMissionPanel.Open();
+            }
+            if (townOverviewPanel != null)
+                townOverviewPanel.Refresh();
         }
 
         public void ToggleSupplyShortageMissionPanel()

@@ -54,7 +54,7 @@ namespace SengokuChronicle.Tests.EditMode
 
             Assert.That(panel.IsOpen, Is.True);
             Assert.That(panel.TitleLine, Does.Contain("家族研究"));
-            Assert.That(panel.ResourceLine, Does.Contain("资金 2").And.Contain("物资 2"));
+            Assert.That(panel.ResourceLine, Does.Contain("资金 4").And.Contain("物资 2"));
             Assert.That(panel.TechniqueLine, Does.Contain("烟幕调制术"));
             Assert.That(panel.TechniqueLine, Does.Not.Contain("已记录"));
             Assert.That(panel.ProgressLine, Does.Contain("0/2"));

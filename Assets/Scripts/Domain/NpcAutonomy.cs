@@ -684,6 +684,33 @@ namespace SengokuChronicle.Domain
     }
 
     /// <summary>
+    /// Facts outside one pilot's needs and memories that decide daily-action eligibility:
+    /// an injury, an existing industry duty and an empty supply stock. Every false value
+    /// means "no restriction", so the default value never blocks Work.
+    /// </summary>
+    public readonly struct NpcActionEligibility
+    {
+        public NpcActionEligibility(bool isInjured, bool hasIndustryDuty, bool hasNoSupplies)
+        {
+            IsInjured = isInjured;
+            HasIndustryDuty = hasIndustryDuty;
+            HasNoSupplies = hasNoSupplies;
+        }
+
+        /// <summary>Not injured, no industry duty and supplies available.</summary>
+        public static NpcActionEligibility Unrestricted => default;
+
+        /// <summary>An injured pilot may only select Rest.</summary>
+        public bool IsInjured { get; }
+
+        /// <summary>The pilot already holds an industry post, so Work conflicts with it.</summary>
+        public bool HasIndustryDuty { get; }
+
+        /// <summary>Industry supplies are exactly zero, so Work is unavailable.</summary>
+        public bool HasNoSupplies { get; }
+    }
+
+    /// <summary>
     /// Pure deterministic Utility rules for the two approved pilots. Scores are the
     /// matching need multiplied by the fixed integer profile weight; equal scores break
     /// by <see cref="DailyActionKind"/> ascending. No randomness or floating point.
@@ -766,7 +793,18 @@ namespace SengokuChronicle.Domain
 
         public static NpcAutonomyEvaluation Evaluate(PersonId personId, NpcNeedValues needs,
             IReadOnlyList<NpcActionMemory> memories, GameDate currentDate, bool isRegistered,
-            bool hasKnownLocation, bool hasActiveAction)
+            bool hasKnownLocation, bool hasActiveAction) =>
+            Evaluate(personId, needs, memories, currentDate, isRegistered, hasKnownLocation,
+                hasActiveAction, NpcActionEligibility.Unrestricted);
+
+        /// <summary>
+        /// Evaluation with the pilot's outside eligibility facts. Blocked candidates are
+        /// rejected here, before ranking, so a high-scoring Work candidate that is
+        /// unavailable falls back to the best eligible action instead of being selected.
+        /// </summary>
+        public static NpcAutonomyEvaluation Evaluate(PersonId personId, NpcNeedValues needs,
+            IReadOnlyList<NpcActionMemory> memories, GameDate currentDate, bool isRegistered,
+            bool hasKnownLocation, bool hasActiveAction, NpcActionEligibility eligibility)
         {
             bool profileKnown = TryGetProfile(personId, out NpcAutonomyProfile profile);
             string exclusion = null;
@@ -789,15 +827,16 @@ namespace SengokuChronicle.Domain
                 int memoryAdjustment = MemoryAdjustmentFor(memories, kind, currentDate);
                 string memoryText = DescribeMemoryAdjustment(memories, kind, currentDate);
                 int finalScore = baseScore + memoryAdjustment;
-                if (exclusion != null)
+                string blockedReason = exclusion ?? BlockReasonFor(kind, eligibility);
+                if (blockedReason != null)
                 {
                     // Excluded candidates never compete for selection, but their
                     // integer score remains visible for read-only diagnostics.
                     string reason = profileKnown
-                        ? exclusion + " 当前分数 " + finalScore + "（基础分数 " + baseScore +
+                        ? blockedReason + " 当前分数 " + finalScore + "（基础分数 " + baseScore +
                           "，需求 " + need + " × 偏好 " + weight + memoryText +
                           "；最终分数 " + finalScore + "，仅供参考）。"
-                        : exclusion;
+                        : blockedReason;
                     candidates.Add(new NpcActionCandidate(kind, false, baseScore,
                         memoryAdjustment, reason));
                     continue;
@@ -825,6 +864,25 @@ namespace SengokuChronicle.Domain
             return new NpcAutonomyEvaluation(personId, needs, profile, isRegistered,
                 hasKnownLocation, hasActiveAction, candidates.AsReadOnly(), hasSelection,
                 selected, summary);
+        }
+
+        /// <summary>
+        /// Per-kind eligibility reason, or null when the kind is available. Rest stays
+        /// available to an injured pilot; Work is additionally blocked by an industry
+        /// duty or an empty supply stock. Rules are evaluated before ranking.
+        /// </summary>
+        public static string BlockReasonFor(DailyActionKind kind,
+            NpcActionEligibility eligibility)
+        {
+            if (eligibility.IsInjured && kind != DailyActionKind.Rest)
+                return "伤员只能选择休息：训练与工作暂不可用。";
+            if (kind != DailyActionKind.Work)
+                return null;
+            if (eligibility.HasNoSupplies)
+                return "产业物资为 0，工作暂不可用。";
+            if (eligibility.HasIndustryDuty)
+                return "已担任产业职务，工作与产业职责冲突。";
+            return null;
         }
 
         /// <summary>

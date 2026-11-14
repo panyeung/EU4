@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
 using SengokuChronicle.Application;
+using SengokuChronicle.Domain;
 using SengokuChronicle.Persistence;
 
 namespace SengokuChronicle.Presentation
@@ -443,7 +444,7 @@ namespace SengokuChronicle.Presentation
                 else
                 {
                     canContinue = true;
-                    message = "检测到存档，可继续上次进度。";
+                    message = "检测到存档，可继续上次进度。" + DescribeLoadedCampaign(loaded.Data);
                 }
             }
 
@@ -652,6 +653,23 @@ namespace SengokuChronicle.Presentation
             _status = message ?? string.Empty;
             if (statusText != null)
                 statusText.text = _status;
+        }
+
+        /// <summary>
+        /// Adds the persisted campaign origin to the continue hint. A migrated legacy save
+        /// with an unprovable origin says so instead of implying a start date.
+        /// </summary>
+        private static string DescribeLoadedCampaign(SaveData data)
+        {
+            if (data == null || data.campaign == null)
+                return " 旧档开局日期未知：不判定五十五周年评价或百年名门。";
+            if (!data.campaign.TryRestore(out CampaignProgress progress, out _))
+                return " 存档家族纪元状态无效。";
+            GameDate today = GameDate.TryParse(data.year, data.month, data.day,
+                out GameDate date)
+                ? date
+                : default;
+            return " " + CampaignReviewView.DescribeCampaign(progress, today);
         }
     }
 }

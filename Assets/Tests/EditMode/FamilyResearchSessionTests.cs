@@ -109,7 +109,8 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(_session.TryAdvanceToNextMonth(), Is.True, _session.LastEventMessage);
 
             Assert.That(_session.WorldClock.CurrentDate, Is.EqualTo(new GameDate(1560, 2, 1)));
-            Assert.That(_session.Industry.Resources.Funds, Is.EqualTo(1));
+            Assert.That(_session.Industry.Resources.Funds, Is.EqualTo(2),
+                "the opening budget pays the household food bill before the research month");
             Assert.That(_session.Industry.Resources.Supplies, Is.EqualTo(1));
             Assert.That(_session.ResearchState.Progress, Is.EqualTo(1));
             Assert.That(_session.LastResearchReport, Is.Not.Null);
@@ -129,7 +130,8 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(_session.ResearchState.KnownTechniqueIds, Has.Count.EqualTo(1));
             Assert.That(_session.ResearchState.KnownTechniqueIds[0],
                 Is.EqualTo(FamilyResearchCatalog.SmokeMixingTechniqueId));
-            Assert.That(_session.Industry.Resources.Funds, Is.Zero);
+            Assert.That(_session.Industry.Resources.Funds, Is.EqualTo(1),
+                "the second month has no stocked food to buy, so its food money stays unspent");
             Assert.That(_session.Industry.Resources.Supplies, Is.Zero);
 
             FamilyChronicleEntry[] researchEntries = _session.ChronicleEntries
@@ -245,7 +247,8 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(_session.TryAdvanceToNextMonth(), Is.True, _session.LastEventMessage);
             ResolvePending(_session);
             Assert.That(_session.WorldClock.CurrentDate, Is.EqualTo(new GameDate(1560, 2, 1)));
-            Assert.That(_session.Industry.Resources.Funds, Is.EqualTo(1));
+            Assert.That(_session.Industry.Resources.Funds, Is.EqualTo(2),
+                "the family food bill is paid before the research month is charged");
             Assert.That(_session.Industry.Resources.Supplies, Is.EqualTo(1));
             Assert.That(_session.ResearchState.Progress, Is.EqualTo(1));
 
