@@ -52,13 +52,13 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
-        public void CatalogAndTextVersionThreeValidate()
+        public void CatalogAndTextVersionFourValidate()
         {
             EventCatalogData catalog = LoadCatalog();
             EventTextCatalog text = LoadText();
 
-            Assert.That(catalog.contentVersion, Is.EqualTo(3));
-            Assert.That(text.contentVersion, Is.EqualTo(3));
+            Assert.That(catalog.contentVersion, Is.EqualTo(4));
+            Assert.That(text.contentVersion, Is.EqualTo(4));
             EventCatalogValidationResult result = EventCatalogValidator.Validate(catalog, text);
             Assert.That(result.Succeeded, Is.True, result.Message);
         }

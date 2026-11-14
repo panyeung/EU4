@@ -1,5 +1,5 @@
 {
-  "contentVersion": 3,
+  "contentVersion": 4,
   "chains": [
     {
       "chainId": "chain.rainy-arrival",
@@ -1433,6 +1433,216 @@
       "cooldownMonths": 0,
       "onceScope": "PerGame",
       "priority": 1000
+    },
+    {
+      "eventId": "event.m08c.history.iga-first.rumor",
+      "scenario": "sc010",
+      "trigger": "Monthly",
+      "conditions": [
+        { "type": "CampaignDateIs", "year": 1578, "month": 1 }
+      ],
+      "weight": 1,
+      "textId": "event.m08c.history.iga-first.rumor",
+      "options": [
+        {
+          "optionId": "option.m08c.history.iga-first.rumor.acknowledge",
+          "textId": "option.m08c.history.iga-first.rumor.acknowledge",
+          "requirements": [ { "type": "Always" } ],
+          "effects": []
+        }
+      ],
+      "cooldownMonths": 0,
+      "onceScope": "PerGame",
+      "priority": 2000
+    },
+    {
+      "eventId": "event.m08c.history.iga-first.node",
+      "scenario": "sc010",
+      "trigger": "Monthly",
+      "conditions": [
+        { "type": "CampaignDateIs", "year": 1579, "month": 1 }
+      ],
+      "weight": 1,
+      "textId": "event.m08c.history.iga-first.node",
+      "options": [
+        {
+          "optionId": "option.m08c.history.iga-first.node.acknowledge",
+          "textId": "option.m08c.history.iga-first.node.acknowledge",
+          "requirements": [ { "type": "Always" } ],
+          "effects": []
+        }
+      ],
+      "cooldownMonths": 0,
+      "onceScope": "PerGame",
+      "priority": 2000
+    },
+    {
+      "eventId": "event.m08c.history.iga-second.rumor",
+      "scenario": "sc010",
+      "trigger": "Monthly",
+      "conditions": [
+        { "type": "CampaignDateIs", "year": 1580, "month": 1 }
+      ],
+      "weight": 1,
+      "textId": "event.m08c.history.iga-second.rumor",
+      "options": [
+        {
+          "optionId": "option.m08c.history.iga-second.rumor.acknowledge",
+          "textId": "option.m08c.history.iga-second.rumor.acknowledge",
+          "requirements": [ { "type": "Always" } ],
+          "effects": []
+        }
+      ],
+      "cooldownMonths": 0,
+      "onceScope": "PerGame",
+      "priority": 2000
+    },
+    {
+      "eventId": "event.m08c.history.iga-second.node",
+      "scenario": "sc010",
+      "trigger": "Monthly",
+      "conditions": [
+        { "type": "CampaignDateIs", "year": 1581, "month": 1 }
+      ],
+      "weight": 1,
+      "textId": "event.m08c.history.iga-second.node",
+      "options": [
+        {
+          "optionId": "option.m08c.history.iga-second.node.acknowledge",
+          "textId": "option.m08c.history.iga-second.node.acknowledge",
+          "requirements": [ { "type": "Always" } ],
+          "effects": []
+        }
+      ],
+      "cooldownMonths": 0,
+      "onceScope": "PerGame",
+      "priority": 2000
+    },
+    {
+      "eventId": "event.m08c.history.sekigahara.rumor",
+      "scenario": "sc010",
+      "trigger": "Monthly",
+      "conditions": [
+        { "type": "CampaignDateIs", "year": 1599, "month": 1 }
+      ],
+      "weight": 1,
+      "textId": "event.m08c.history.sekigahara.rumor",
+      "options": [
+        {
+          "optionId": "option.m08c.history.sekigahara.rumor.acknowledge",
+          "textId": "option.m08c.history.sekigahara.rumor.acknowledge",
+          "requirements": [ { "type": "Always" } ],
+          "effects": []
+        }
+      ],
+      "cooldownMonths": 0,
+      "onceScope": "PerGame",
+      "priority": 2000
+    },
+    {
+      "eventId": "event.m08c.history.sekigahara.node",
+      "scenario": "sc010",
+      "trigger": "Monthly",
+      "conditions": [
+        { "type": "CampaignDateIs", "year": 1600, "month": 1 }
+      ],
+      "weight": 1,
+      "textId": "event.m08c.history.sekigahara.node",
+      "options": [
+        {
+          "optionId": "option.m08c.history.sekigahara.node.acknowledge",
+          "textId": "option.m08c.history.sekigahara.node.acknowledge",
+          "requirements": [ { "type": "Always" } ],
+          "effects": []
+        }
+      ],
+      "cooldownMonths": 0,
+      "onceScope": "PerGame",
+      "priority": 2000
+    },
+    {
+      "eventId": "event.m08c.history.osaka-winter.rumor",
+      "scenario": "sc010",
+      "trigger": "Monthly",
+      "conditions": [
+        { "type": "CampaignDateIs", "year": 1613, "month": 1 }
+      ],
+      "weight": 1,
+      "textId": "event.m08c.history.osaka-winter.rumor",
+      "options": [
+        {
+          "optionId": "option.m08c.history.osaka-winter.rumor.acknowledge",
+          "textId": "option.m08c.history.osaka-winter.rumor.acknowledge",
+          "requirements": [ { "type": "Always" } ],
+          "effects": []
+        }
+      ],
+      "cooldownMonths": 0,
+      "onceScope": "PerGame",
+      "priority": 2000
+    },
+    {
+      "eventId": "event.m08c.history.osaka-winter.node",
+      "scenario": "sc010",
+      "trigger": "Monthly",
+      "conditions": [
+        { "type": "CampaignDateIs", "year": 1614, "month": 1 }
+      ],
+      "weight": 1,
+      "textId": "event.m08c.history.osaka-winter.node",
+      "options": [
+        {
+          "optionId": "option.m08c.history.osaka-winter.node.acknowledge",
+          "textId": "option.m08c.history.osaka-winter.node.acknowledge",
+          "requirements": [ { "type": "Always" } ],
+          "effects": []
+        }
+      ],
+      "cooldownMonths": 0,
+      "onceScope": "PerGame",
+      "priority": 2000
+    },
+    {
+      "eventId": "event.m08c.history.osaka-summer.rumor",
+      "scenario": "sc010",
+      "trigger": "Monthly",
+      "conditions": [
+        { "type": "CampaignDateIs", "year": 1614, "month": 2 }
+      ],
+      "weight": 1,
+      "textId": "event.m08c.history.osaka-summer.rumor",
+      "options": [
+        {
+          "optionId": "option.m08c.history.osaka-summer.rumor.acknowledge",
+          "textId": "option.m08c.history.osaka-summer.rumor.acknowledge",
+          "requirements": [ { "type": "Always" } ],
+          "effects": []
+        }
+      ],
+      "cooldownMonths": 0,
+      "onceScope": "PerGame",
+      "priority": 2000
+    },
+    {
+      "eventId": "event.m08c.history.osaka-summer.node",
+      "scenario": "sc010",
+      "trigger": "Monthly",
+      "conditions": [
+        { "type": "CampaignDateIs", "year": 1615, "month": 1 }
+      ],
+      "weight": 1,
+      "textId": "event.m08c.history.osaka-summer.node",
+      "options": [
+        {
+          "optionId": "option.m08c.history.osaka-summer.node.acknowledge",
+          "textId": "option.m08c.history.osaka-summer.node.acknowledge",
+          "requirements": [ { "type": "Always" } ],
+          "effects": []
+        }
+      ],
+      "cooldownMonths": 0,
+      "onceScope": "PerGame",
+      "priority": 2000
     }
   ]
 }

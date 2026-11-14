@@ -1,5 +1,6 @@
 using System.IO;
 using NUnit.Framework;
+using SengokuChronicle.Domain;
 using SengokuChronicle.Events;
 using UnityEngine;
 
@@ -317,6 +318,137 @@ namespace SengokuChronicle.Tests.EditMode
             };
             Assert.That(EventCatalogValidator.Validate(catalog, CrossGenerationText(catalog)).Message,
                 Does.Contain("more than one EventOptionChosen"));
+        }
+
+        [Test]
+        public void RejectsSc010AsASharedScenarioGate()
+        {
+            // SC-010 rows are gated by the dedicated scenario field. Sharing stays a
+            // SC-013/SC-024 mechanism, so `sc010` in sharedScenarios is rejected even
+            // though the primary scenario gate itself accepts it.
+            EventCatalogData catalog = ValidCatalog();
+            Assert.That(EventCatalogValidator.Validate(catalog, ValidText()).Succeeded, Is.True);
+
+            catalog = ValidCatalog();
+            catalog.events[0].sharedScenarios = new[] { EventScenarioIds.Sc010 };
+            Assert.That(EventCatalogValidator.Validate(catalog, ValidText()).Message,
+                Does.Contain("unsupported shared scenario gate"));
+
+            catalog = ValidCatalog();
+            catalog.events[0].scenario = EventScenarioIds.Sc013;
+            catalog.events[0].sharedScenarios = new[] { EventScenarioIds.Sc024 };
+            Assert.That(EventCatalogValidator.Validate(catalog, ValidText()).Succeeded, Is.True,
+                "the existing SC-013/SC-024 sharing path must keep working");
+        }
+
+        [Test]
+        public void CampaignDateIs_RequiresValidDateAndSc010PerGameMonthlyEvent()
+        {
+            Assert.That(EventCatalogValidator.Validate(
+                CampaignDateCatalog(1579, 1), CampaignDateText()).Succeeded, Is.True,
+                EventCatalogValidator.Validate(CampaignDateCatalog(1579, 1), CampaignDateText()).Message);
+
+            Assert.That(EventCatalogValidator.Validate(
+                CampaignDateCatalog(1579, 0), CampaignDateText()).Message,
+                Does.Contain("month outside 1-12"));
+            Assert.That(EventCatalogValidator.Validate(
+                CampaignDateCatalog(1579, 13), CampaignDateText()).Message,
+                Does.Contain("month outside 1-12"));
+            Assert.That(EventCatalogValidator.Validate(
+                CampaignDateCatalog(GameDate.MinYear - 1, 1), CampaignDateText()).Message,
+                Does.Contain("year outside the supported game date range"));
+            Assert.That(EventCatalogValidator.Validate(
+                CampaignDateCatalog(GameDate.MaxYear + 1, 1), CampaignDateText()).Message,
+                Does.Contain("year outside the supported game date range"));
+
+            EventCatalogData catalog = CampaignDateCatalog(1579, 1);
+            catalog.events[0].scenario = EventScenarioIds.Sc013;
+            Assert.That(EventCatalogValidator.Validate(catalog, CampaignDateText()).Message,
+                Does.Contain("only allowed in the SC-010 scenario"));
+
+            catalog = CampaignDateCatalog(1579, 1);
+            catalog.events[0].scenario = null;
+            Assert.That(EventCatalogValidator.Validate(catalog, CampaignDateText()).Message,
+                Does.Contain("only allowed in the SC-010 scenario"));
+
+            catalog = CampaignDateCatalog(1579, 1);
+            catalog.events[0].trigger = "Daily";
+            Assert.That(EventCatalogValidator.Validate(catalog, CampaignDateText()).Message,
+                Does.Contain("only allowed on Monthly events"));
+
+            catalog = CampaignDateCatalog(1579, 1);
+            catalog.events[0].onceScope = "Never";
+            Assert.That(EventCatalogValidator.Validate(catalog, CampaignDateText()).Message,
+                Does.Contain("requires onceScope PerGame"));
+
+            catalog = CampaignDateCatalog(1579, 1);
+            catalog.events[0].scenario = "sc999";
+            Assert.That(EventCatalogValidator.Validate(catalog, CampaignDateText()).Message,
+                Does.Contain("unsupported scenario gate"));
+        }
+
+        private static EventCatalogData CampaignDateCatalog(int year, int month)
+        {
+            return new EventCatalogData
+            {
+                contentVersion = 1,
+                events = new[]
+                {
+                    new EventDefinitionData
+                    {
+                        eventId = "event.dated.history",
+                        scenario = EventScenarioIds.Sc010,
+                        trigger = "Monthly",
+                        conditions = new[]
+                        {
+                            new EventConditionData
+                            {
+                                type = nameof(EventConditionKind.CampaignDateIs),
+                                year = year,
+                                month = month
+                            }
+                        },
+                        weight = 1,
+                        textId = "text.dated.history",
+                        options = new[]
+                        {
+                            new EventOptionData
+                            {
+                                optionId = "option.dated.history.acknowledge",
+                                textId = "text.dated.history.acknowledge",
+                                requirements = new[] { new EventRequirementData { type = "Always" } },
+                                effects = new EventEffectData[0]
+                            }
+                        },
+                        cooldownMonths = 0,
+                        onceScope = "PerGame",
+                        priority = 2000
+                    }
+                }
+            };
+        }
+
+        private static EventTextCatalog CampaignDateText()
+        {
+            return new EventTextCatalog
+            {
+                contentVersion = 1,
+                entries = new[]
+                {
+                    new EventTextEntry
+                    {
+                        textId = "text.dated.history",
+                        title = "史实节点",
+                        body = "这一年的节点记录。"
+                    },
+                    new EventTextEntry
+                    {
+                        textId = "text.dated.history.acknowledge",
+                        title = "记入家史",
+                        body = "家主将此事写入家史。"
+                    }
+                }
+            };
         }
 
         [Test]

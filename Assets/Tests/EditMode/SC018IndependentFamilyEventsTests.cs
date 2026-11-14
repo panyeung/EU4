@@ -223,20 +223,20 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
-        public void CatalogLoadsAndValidatesWithThirtyThreeEventsAndFiveChains()
+        public void CatalogLoadsAndValidatesWithFortyThreeEventsAndFiveChains()
         {
             EventCatalogData catalog = LoadCatalog();
             EventTextCatalog text = LoadText();
 
-            Assert.That(catalog.contentVersion, Is.EqualTo(3));
-            Assert.That(text.contentVersion, Is.EqualTo(3));
+            Assert.That(catalog.contentVersion, Is.EqualTo(4));
+            Assert.That(text.contentVersion, Is.EqualTo(4));
             EventCatalogValidationResult result = EventCatalogValidator.Validate(catalog, text);
             Assert.That(result.Succeeded, Is.True, result.Message);
 
-            Assert.That(catalog.events, Has.Length.EqualTo(33));
+            Assert.That(catalog.events, Has.Length.EqualTo(43));
             Assert.That(catalog.chains, Has.Length.EqualTo(5));
             Assert.That(catalog.events.Select(definition => definition.eventId).Distinct().Count(),
-                Is.EqualTo(33));
+                Is.EqualTo(43));
             Assert.That(catalog.events.Count(
                     definition => definition.eventId.StartsWith("event.sc018.", StringComparison.Ordinal)),
                 Is.EqualTo(7));
@@ -293,8 +293,10 @@ namespace SengokuChronicle.Tests.EditMode
                 FindChain(catalog, "chain.sc013.commission-legacy").linkedEventIds);
 
             Assert.That(catalog.events.Count(definition =>
-                    !definition.eventId.StartsWith("event.sc018.", StringComparison.Ordinal)),
-                Is.EqualTo(26));
+                    !definition.eventId.StartsWith("event.sc018.", StringComparison.Ordinal) &&
+                    !definition.eventId.StartsWith("event.m08c.", StringComparison.Ordinal)),
+                Is.EqualTo(26),
+                "the prior accepted event baseline must stay unchanged");
 
             foreach (string row in BaselineEvents)
             {

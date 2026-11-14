@@ -179,6 +179,53 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
+        public void TryApplySave_AcceptsEventContentVersionThreeWithoutSchemaMigration()
+        {
+            _session.InitStandardDemo(2027UL);
+            Assert.That(_session.TryAdvanceToNextMonth(), Is.True, _session.LastEventMessage);
+            string pendingId = _session.PendingEventId;
+            Assert.That(_session.TryChooseEventOption(pendingId, SampleEventIds.OfferRestOptionId,
+                _session.CreateEventResultId(pendingId, SampleEventIds.OfferRestOptionId)).Succeeded,
+                Is.True);
+            SaveData legacyContent = _session.CaptureSave();
+            Assert.That(legacyContent.eventContentVersion, Is.EqualTo(4));
+
+            // A save written under event content v3 carries no new field: the catalog
+            // version is the only difference, so it must load in place.
+            legacyContent.eventContentVersion = 3;
+            Assert.That(SaveDataValidator.Validate(legacyContent).Succeeded, Is.True,
+                SaveDataValidator.Validate(legacyContent).Message);
+
+            GameSession reloaded = GameSession.NewGame();
+            try
+            {
+                reloaded.InitStandardDemo(5UL);
+                SaveOperationResult applied = reloaded.TryApplySave(legacyContent);
+
+                Assert.That(applied.Succeeded, Is.True, applied.Message);
+                Assert.That(reloaded.WorldClock.CurrentDate,
+                    Is.EqualTo(_session.WorldClock.CurrentDate));
+                SaveData reloadedSave = reloaded.CaptureSave();
+                Assert.That(reloadedSave.eventContentVersion, Is.EqualTo(4),
+                    "the next capture records the current catalog version");
+                Assert.That(reloadedSave.saveFormatVersion,
+                    Is.EqualTo(SaveDataValidator.CurrentVersion),
+                    "no schema migration may run for a content-version change");
+                Assert.That(reloadedSave.eventRuntime.history, Has.Length.EqualTo(1));
+                CollectionAssert.AreEqual(legacyContent.eventRuntime.onceEventIds,
+                    reloadedSave.eventRuntime.onceEventIds);
+                CollectionAssert.AreEqual(legacyContent.eventRuntime.committedResultIds,
+                    reloadedSave.eventRuntime.committedResultIds);
+                AssertRandomStateEqual(legacyContent.randomState, reloadedSave.randomState,
+                    "content-version compatibility");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(reloaded.gameObject);
+            }
+        }
+
+        [Test]
         public void TryApplySave_RejectsEventContentVersionMismatch()
         {
             SaveData data = _session.CaptureSave();

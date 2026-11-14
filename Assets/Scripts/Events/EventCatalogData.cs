@@ -42,6 +42,10 @@ namespace SengokuChronicle.Events
         public string sourceOptionId;
         /// <summary>Stable family-creed ID used by <see cref="EventConditionKind.FamilyCreedIs"/>.</summary>
         public string familyCreedId;
+        /// <summary>Gregorian year used by <see cref="EventConditionKind.CampaignDateIs"/>.</summary>
+        public int year;
+        /// <summary>Gregorian month used by <see cref="EventConditionKind.CampaignDateIs"/>.</summary>
+        public int month;
     }
 
     [Serializable]
@@ -114,7 +118,12 @@ namespace SengokuChronicle.Events
         /// <summary>The settled succession count is at least <c>threshold</c>; offer-time only.</summary>
         SettledSuccessionCountAtLeast = 5,
         /// <summary>The active family creed equals <c>familyCreedId</c>; SC-024 only.</summary>
-        FamilyCreedIs = 6
+        FamilyCreedIs = 6,
+        /// <summary>
+        /// The campaign date equals <c>year</c> and <c>month</c>; SC-010 only. This is a
+        /// scheduling date, not a claim about when the historical event happened.
+        /// </summary>
+        CampaignDateIs = 7
     }
 
     public enum EventRequirementKind
@@ -154,8 +163,41 @@ namespace SengokuChronicle.Events
     /// <summary>Known scenario identifiers used by the optional event scenario gate.</summary>
     public static class EventScenarioIds
     {
+        /// <summary>The SC-010 standard campaign; resolved from the campaign origin.</summary>
+        public const string Sc010 = "sc010";
         public const string Sc013 = "sc013";
         public const string Sc024 = "sc024";
+    }
+
+    /// <summary>
+    /// Stable IDs for the SC-010 historical timeline rows. Each of the five year-level
+    /// nodes has a prior-year rumor and a milestone entry, both acknowledgement-only.
+    /// </summary>
+    public static class SC010EventIds
+    {
+        public const string ScenarioId = EventScenarioIds.Sc010;
+
+        public const string FirstIgaRumorEventId = "event.m08c.history.iga-first.rumor";
+        public const string FirstIgaNodeEventId = "event.m08c.history.iga-first.node";
+        public const string SecondIgaRumorEventId = "event.m08c.history.iga-second.rumor";
+        public const string SecondIgaNodeEventId = "event.m08c.history.iga-second.node";
+        public const string SekigaharaRumorEventId = "event.m08c.history.sekigahara.rumor";
+        public const string SekigaharaNodeEventId = "event.m08c.history.sekigahara.node";
+        public const string OsakaWinterRumorEventId = "event.m08c.history.osaka-winter.rumor";
+        public const string OsakaWinterNodeEventId = "event.m08c.history.osaka-winter.node";
+        public const string OsakaSummerRumorEventId = "event.m08c.history.osaka-summer.rumor";
+        public const string OsakaSummerNodeEventId = "event.m08c.history.osaka-summer.node";
+
+        public const string FirstIgaRumorOptionId = "option.m08c.history.iga-first.rumor.acknowledge";
+        public const string FirstIgaNodeOptionId = "option.m08c.history.iga-first.node.acknowledge";
+        public const string SecondIgaRumorOptionId = "option.m08c.history.iga-second.rumor.acknowledge";
+        public const string SecondIgaNodeOptionId = "option.m08c.history.iga-second.node.acknowledge";
+        public const string SekigaharaRumorOptionId = "option.m08c.history.sekigahara.rumor.acknowledge";
+        public const string SekigaharaNodeOptionId = "option.m08c.history.sekigahara.node.acknowledge";
+        public const string OsakaWinterRumorOptionId = "option.m08c.history.osaka-winter.rumor.acknowledge";
+        public const string OsakaWinterNodeOptionId = "option.m08c.history.osaka-winter.node.acknowledge";
+        public const string OsakaSummerRumorOptionId = "option.m08c.history.osaka-summer.rumor.acknowledge";
+        public const string OsakaSummerNodeOptionId = "option.m08c.history.osaka-summer.node.acknowledge";
     }
 
     /// <summary>Stable IDs for the SC-024 family-creed council event set.</summary>

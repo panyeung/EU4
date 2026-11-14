@@ -1,5 +1,5 @@
 {
-  "contentVersion": 3,
+  "contentVersion": 4,
   "entries": [
     {
       "textId": "event.rainy-arrival",
@@ -800,6 +800,106 @@
       "textId": "summary.sc024.creed-council.merit.reform-righteousness",
       "title": "家训改革",
       "body": "正綱与信正对家主的信任各下降五点，家训改为义理至上。"
+    },
+    {
+      "textId": "event.m08c.history.iga-first.rumor",
+      "title": "伊贺风闻",
+      "body": "1578 年，往来商旅在清洲留下口信：伊贺山地局势日紧，来年恐有兵事。消息未经证实，本家只当作传闻记下。"
+    },
+    {
+      "textId": "option.m08c.history.iga-first.rumor.acknowledge",
+      "title": "记下传闻",
+      "body": "家主命人留意伊贺方向的动静，并叮嘱家人不可仅凭传闻行事。"
+    },
+    {
+      "textId": "event.m08c.history.iga-first.node",
+      "title": "第一次天正伊贺之乱",
+      "body": "1579 年，织田势与伊贺众在伊贺山地交战。本家远在尾张，只能从往来书信中拼出战事的大略。"
+    },
+    {
+      "textId": "option.m08c.history.iga-first.node.acknowledge",
+      "title": "记入家史",
+      "body": "家主将此事写入家史。本家并未参战，家族资源、人物关系与领地皆无变化。"
+    },
+    {
+      "textId": "event.m08c.history.iga-second.rumor",
+      "title": "伊贺再乱之风闻",
+      "body": "1580 年，又有书信提到伊贺余众正在重整。是否会有第二场战事，此刻无人能断言。"
+    },
+    {
+      "textId": "option.m08c.history.iga-second.rumor.acknowledge",
+      "title": "记下传闻",
+      "body": "家主让留守的家人继续收集伊贺消息，不因旧事已过而松懈。"
+    },
+    {
+      "textId": "event.m08c.history.iga-second.node",
+      "title": "第二次天正伊贺之乱",
+      "body": "1581 年，伊贺山地再次传出战报。本家照旧只从书信与商旅口中得知结果。"
+    },
+    {
+      "textId": "option.m08c.history.iga-second.node.acknowledge",
+      "title": "记入家史",
+      "body": "家主把这一年的战事与第一次并列写入家史，仍不改动家中任何资源与人物关系。"
+    },
+    {
+      "textId": "event.m08c.history.sekigahara.rumor",
+      "title": "天下将分之传闻",
+      "body": "1599 年，各路大名调动频繁，清洲城里流言四起：来年恐有一场决定天下归属的大战。"
+    },
+    {
+      "textId": "option.m08c.history.sekigahara.rumor.acknowledge",
+      "title": "记下传闻",
+      "body": "家主吩咐家人谨守本分，不在此刻轻易表态，只把风向记在心里。"
+    },
+    {
+      "textId": "event.m08c.history.sekigahara.node",
+      "title": "关原之战",
+      "body": "1600 年，东西两军在关原一带决战。胜负的消息传回尾张时，天下大势已定。"
+    },
+    {
+      "textId": "option.m08c.history.sekigahara.node.acknowledge",
+      "title": "记入家史",
+      "body": "家主将关原之战写入家史。本家未出兵，此战不改变家族资源、人物关系或领地。"
+    },
+    {
+      "textId": "event.m08c.history.osaka-winter.rumor",
+      "title": "大阪风声",
+      "body": "1613 年，大阪方面的动向引人注目，有消息说丰臣家正在召集浪人。来年是否会起兵，尚不可知。"
+    },
+    {
+      "textId": "option.m08c.history.osaka-winter.rumor.acknowledge",
+      "title": "记下传闻",
+      "body": "家主命人留意大阪方向的使者往来，并把这份忧虑转告家中长辈。"
+    },
+    {
+      "textId": "event.m08c.history.osaka-winter.node",
+      "title": "大阪冬之阵",
+      "body": "1614 年，大阪城外围爆发战事。书信传来时，只说明城池与壕沟的攻防，并未写尽细节。"
+    },
+    {
+      "textId": "option.m08c.history.osaka-winter.node.acknowledge",
+      "title": "记入家史",
+      "body": "家主将冬之阵写入家史，本家仍置身事外，家族资源与人物关系不变。"
+    },
+    {
+      "textId": "event.m08c.history.osaka-summer.rumor",
+      "title": "战事未了之风闻",
+      "body": "1614 年，冬日的战事并未真正结束。商旅说丰臣家仍在修缮城防，来年恐再起兵锋。"
+    },
+    {
+      "textId": "option.m08c.history.osaka-summer.rumor.acknowledge",
+      "title": "记下传闻",
+      "body": "家主把这份风声记下，提醒家人：战事未了，行事务必谨慎。"
+    },
+    {
+      "textId": "event.m08c.history.osaka-summer.node",
+      "title": "大阪夏之阵",
+      "body": "1615 年，大阪再次成为战场，这一次战事终结了丰臣家的势力。"
+    },
+    {
+      "textId": "option.m08c.history.osaka-summer.node.acknowledge",
+      "title": "记入家史",
+      "body": "家主将夏之阵写入家史。本家始终未曾参战，此节点不改变家族资源、人物关系或领地。"
     }
   ]
 }

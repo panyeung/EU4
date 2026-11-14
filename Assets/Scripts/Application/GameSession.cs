@@ -2752,7 +2752,7 @@ namespace SengokuChronicle.Application
                 return InvalidSave("存档活动事件路线与当前家族不符。");
 
             if (!_eventEngine.TryRestoreState(data.eventRuntime, date,
-                    BuildEventRuleContext(succession, eventScenarioId),
+                    BuildEventRuleContext(succession, eventScenarioId, campaign.OriginId),
                     out EventRuntimeState eventRuntime, out string eventError))
                 return InvalidSave(string.IsNullOrEmpty(eventError) ? "存档事件状态无效。" : eventError);
             if (!ChronicleSaveCodec.TryRestore(data.chronicle,
@@ -4115,30 +4115,43 @@ namespace SengokuChronicle.Application
         /// the raw count only while no succession decision, regency, or extinction owns play.
         /// </summary>
         private EventRuleContext BuildEventRuleContext() =>
-            BuildEventRuleContext(Succession, _eventScenarioId);
-
-        /// <summary>
-        /// Builds the same scenario/succession snapshot for live play and for an
-        /// already-validated load candidate.
-        /// </summary>
-        private static EventRuleContext BuildEventRuleContext(SuccessionState succession) =>
-            BuildEventRuleContext(succession, string.Empty);
+            BuildEventRuleContext(Succession, _eventScenarioId, _campaignProgress?.OriginId);
 
         private static EventRuleContext BuildEventRuleContext(SuccessionState succession,
-            string eventScenarioId)
+            string eventScenarioId, string campaignOriginId)
         {
             if (succession == null || succession.World == null)
                 return EventRuleContext.Default;
             int settled = succession.Phase == SuccessionPhase.None ? succession.SuccessionCount : 0;
-            string scenario = !string.IsNullOrWhiteSpace(eventScenarioId)
-                ? eventScenarioId
-                : M2FixedScenario.IsActive(succession) ? EventScenarioIds.Sc013 : string.Empty;
+            string scenario = ResolveEventScenarioId(succession, eventScenarioId, campaignOriginId);
             IReadOnlyList<FamilyMembership> memberships = succession.World.Family.Members;
             var members = new PersonId[memberships.Count];
             for (int i = 0; i < memberships.Count; i++)
                 members[i] = memberships[i].PersonId;
             return new EventRuleContext(succession.SuccessionCount, settled, scenario,
                 succession.HeadPersonId, members);
+        }
+
+        /// <summary>
+        /// Resolves the event route for one succession snapshot. An explicit route wins so
+        /// SC-024 keeps its own rows; the SC-013 fixed roster stays the existing fallback;
+        /// the SC-010 standard campaign is identified by its campaign origin because it
+        /// carries no explicit route. Every other demo origin stays route-less, so a
+        /// scenario-tagged row never leaks between campaigns. Live scheduling and the
+        /// save-load event-runtime check both call this one resolver, and nothing here is
+        /// persisted.
+        /// </summary>
+        private static string ResolveEventScenarioId(SuccessionState succession,
+            string eventScenarioId, string campaignOriginId)
+        {
+            if (!string.IsNullOrWhiteSpace(eventScenarioId))
+                return eventScenarioId;
+            if (M2FixedScenario.IsActive(succession))
+                return EventScenarioIds.Sc013;
+            return string.Equals(campaignOriginId, CampaignOriginCatalog.Sc010OriginId,
+                StringComparison.Ordinal)
+                ? EventScenarioIds.Sc010
+                : string.Empty;
         }
 
         /// <summary>Creates an idempotent event-result ID from stable content and current game date.</summary>

@@ -241,7 +241,7 @@ namespace SengokuChronicle.Events
                 return ChoiceFailure(eventId, optionId, committedResultId, "事件结果 ID 为空或已经提交。");
             if (!TryFindOption(eventId, optionId, out EventDefinitionData definition, out EventOptionData option))
                 return ChoiceFailure(eventId, optionId, committedResultId, "事件或选项 ID 无效。");
-            if (!AreConditionsMet(definition, relationships, state, context, false, currentCreed))
+            if (!AreConditionsMet(definition, currentDate, relationships, state, context, false, currentCreed))
                 return ChoiceFailure(eventId, optionId, committedResultId, "事件条件已经失效，状态保持不变。");
             if (!AreRequirementsMet(option, relationships, out string requirementReason))
                 return ChoiceFailure(eventId, optionId, committedResultId,
@@ -406,7 +406,7 @@ namespace SengokuChronicle.Events
                 if (!string.Equals(definition.trigger, nameof(EventTriggerKind.Monthly), StringComparison.Ordinal) ||
                     state.IsOnCooldown(definition.eventId, monthIndex) ||
                     (ParseOnceScope(definition.onceScope) == EventOnceScope.PerGame && state.HasOccurredOnce(definition.eventId)) ||
-                    !AreConditionsMet(definition, relationships, state, context, true, currentCreed))
+                    !AreConditionsMet(definition, date, relationships, state, context, true, currentCreed))
                     continue;
                 // Offer-time pass. Succession-count conditions are commit-stable: they are
                 // checked here and not re-checked at commit, so a queued scene stays
@@ -427,14 +427,17 @@ namespace SengokuChronicle.Events
         }
 
         /// <summary>
-        /// Evaluates allowlisted event conditions. History conditions are re-checked at
-        /// commit because committed history never changes. Succession-count conditions are
-        /// offer-time gates only (<paramref name="evaluateSuccessionGates"/> false at
-        /// commit), so a stable pending event stays resolvable after a later head change.
+        /// Evaluates allowlisted event conditions against the tested month. History
+        /// conditions are re-checked at commit because committed history never changes.
+        /// Succession-count conditions are offer-time gates only
+        /// (<paramref name="evaluateSuccessionGates"/> false at commit), so a stable pending
+        /// event stays resolvable after a later head change. <see cref="EventConditionKind.CampaignDateIs"/>
+        /// reads the same <paramref name="date"/> at scheduling and commit, so one monthly
+        /// row can never be offered and then rejected by a different date rule.
         /// </summary>
-        private bool AreConditionsMet(EventDefinitionData definition, CharacterRelationships relationships,
-            EventRuntimeState state, EventRuleContext context, bool evaluateSuccessionGates,
-            FamilyCreedKind? currentCreed)
+        private bool AreConditionsMet(EventDefinitionData definition, GameDate date,
+            CharacterRelationships relationships, EventRuntimeState state, EventRuleContext context,
+            bool evaluateSuccessionGates, FamilyCreedKind? currentCreed)
         {
             if (!ScenarioMatches(definition, context)) return false;
             if (definition.conditions == null) return true;
@@ -442,7 +445,12 @@ namespace SengokuChronicle.Events
             {
                 if (string.Equals(condition.type, nameof(EventConditionKind.Always), StringComparison.Ordinal))
                     continue;
-                if (string.Equals(condition.type, nameof(EventConditionKind.RelationshipAtLeast), StringComparison.Ordinal))
+                if (string.Equals(condition.type, nameof(EventConditionKind.CampaignDateIs), StringComparison.Ordinal))
+                {
+                    if (!date.IsValid || date.Year != condition.year || date.Month != condition.month)
+                        return false;
+                }
+                else if (string.Equals(condition.type, nameof(EventConditionKind.RelationshipAtLeast), StringComparison.Ordinal))
                 {
                     if (!TryNpc(condition.targetCharacterId, out CharacterId id)) return false;
                     RelationshipResult relationship = relationships.TryGet(id);

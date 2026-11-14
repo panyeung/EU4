@@ -2,6 +2,14 @@
 
 Current design authority: [GDD_v4.0.md](GDD_v4.0.md), 《影之一族》. Older Sengoku Chronicle / Phase 1 / Phase 2 decisions below are historical and apply only when compatible with the current GDD. Current implementation status is in [PROJECT_STATE.md](PROJECT_STATE.md).
 
+## 2026-11-14 - M08C historical timeline dates and scope
+
+- Scope: add historical warning and milestone events to the SC-010 standard campaign, using the existing event panel, one-time event state and event/chronicle history. The five year-level nodes are 1579, 1581, 1600, 1614 and 1615.
+- Calendar rule: use the game's Gregorian year. Milestones appear on January 1; warnings appear in the preceding Gregorian year. A warning moves to the next free month if its default January date collides with another historical entry. The 1615 warning therefore appears on 1614-02-01, eleven months before its January 1615 milestone. These are scheduling dates, not claims about historical occurrence dates.
+- Player impact: each entry has one acknowledgement option and records its choice. It does not change resources, relationships, territorial control, forced battle outcomes or mortality. Existing family decisions and rules continue to determine the family's own actions and outcomes.
+- Compatibility: use `EventRuntimeState` for pending and once-per-game persistence. No save schema migration is needed. Existing SC-010 saves receive only milestones whose scheduled dates are still ahead; the game does not invent retrospective records. SC-013 and the other demo origins receive no M08C entries.
+- Alternatives reviewed: a new world-politics model, custom rumor UI and third-party narrative package would add state, UI and save rules beyond the five-node slice. The project has an event scheduler, modal and chronicle already, so those additions are deferred.
+
 ## 2026-11-14 - M08B default artifact path: no-policy runs write to the unmanaged policy directory
 
 - Bug: the no-policy entries - `RunShortBatch`, `RunFullBatch`, `RunStagedBatches()` and the null/blank-root fallback of `RunBatch` - still wrote schema-v6 artifacts straight into `Logs/verify/m08b/`. That directory holds the accepted historical v5 baseline, so any default re-run would have overwritten accepted evidence.

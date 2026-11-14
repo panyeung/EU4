@@ -73,6 +73,7 @@ namespace SengokuChronicle.Events
                 if (!TryEnum(definition.onceScope, out EventOnceScope _))
                     errors.Add($"Event {definition.eventId} has an unsupported onceScope.");
                 if (!string.IsNullOrWhiteSpace(definition.scenario) &&
+                    !string.Equals(definition.scenario, EventScenarioIds.Sc010, StringComparison.Ordinal) &&
                     !string.Equals(definition.scenario, EventScenarioIds.Sc013, StringComparison.Ordinal) &&
                     !string.Equals(definition.scenario, EventScenarioIds.Sc024, StringComparison.Ordinal))
                     errors.Add($"Event {definition.eventId} has an unsupported scenario gate.");
@@ -81,6 +82,8 @@ namespace SengokuChronicle.Events
                     var sharedScenarios = new HashSet<string>(StringComparer.Ordinal);
                     foreach (string sharedScenario in definition.sharedScenarios)
                     {
+                        // SC-010 rows use the dedicated scenario field only; sharing is a
+                        // SC-013/SC-024 multi-route mechanism and stays closed to `sc010`.
                         if (string.IsNullOrWhiteSpace(sharedScenario) ||
                             (!string.Equals(sharedScenario, EventScenarioIds.Sc013, StringComparison.Ordinal) &&
                              !string.Equals(sharedScenario, EventScenarioIds.Sc024, StringComparison.Ordinal)))
@@ -285,6 +288,20 @@ namespace SengokuChronicle.Events
                     errors.Add($"Event {eventId} condition {index} has an invalid family creed ID.");
                 if (!string.Equals(definition.scenario, EventScenarioIds.Sc024, StringComparison.Ordinal))
                     errors.Add($"Event {eventId} condition {index} is only allowed in the SC-024 scenario.");
+                return;
+            }
+            if (kind == EventConditionKind.CampaignDateIs)
+            {
+                if (condition.year < GameDate.MinYear || condition.year > GameDate.MaxYear)
+                    errors.Add($"Event {eventId} condition {index} has a year outside the supported game date range.");
+                if (condition.month < 1 || condition.month > 12)
+                    errors.Add($"Event {eventId} condition {index} has a month outside 1-12.");
+                if (!string.Equals(definition.trigger, nameof(EventTriggerKind.Monthly), StringComparison.Ordinal))
+                    errors.Add($"Event {eventId} condition {index} is only allowed on Monthly events.");
+                if (!string.Equals(definition.scenario, EventScenarioIds.Sc010, StringComparison.Ordinal))
+                    errors.Add($"Event {eventId} condition {index} is only allowed in the SC-010 scenario.");
+                if (!string.Equals(definition.onceScope, nameof(EventOnceScope.PerGame), StringComparison.Ordinal))
+                    errors.Add($"Event {eventId} condition {index} requires onceScope PerGame.");
             }
         }
 

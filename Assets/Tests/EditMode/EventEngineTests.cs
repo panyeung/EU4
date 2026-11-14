@@ -616,6 +616,56 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(scheduled.SelectedEventId, Is.EqualTo("event.honored"));
         }
 
+        [Test]
+        public void CampaignDateIs_EligibleOnlyForItsYearAndMonth()
+        {
+            EventDefinitionData dated = CreateEvent("event.dated", 2000);
+            dated.scenario = EventScenarioIds.Sc010;
+            dated.onceScope = "PerGame";
+            dated.conditions = new[]
+            {
+                new EventConditionData
+                {
+                    type = nameof(EventConditionKind.CampaignDateIs),
+                    year = 1579,
+                    month = 1
+                }
+            };
+            EventEngine engine = CreateEngine(dated);
+            Assert.That(engine.IsReady, Is.True, engine.ValidationMessage);
+            var context = new EventRuleContext(0, 0, EventScenarioIds.Sc010);
+            var relationships = new CharacterRelationships();
+
+            CollectionAssert.Contains(engine.GetEligibleEventIds(new GameDate(1579, 1, 15),
+                relationships, new EventRuntimeState(), context), "event.dated");
+            Assert.That(engine.GetEligibleEventIds(new GameDate(1578, 12, 1), relationships,
+                new EventRuntimeState(), context), Is.Empty,
+                "the preceding December must not offer the authored month");
+            Assert.That(engine.GetEligibleEventIds(new GameDate(1579, 2, 1), relationships,
+                new EventRuntimeState(), context), Is.Empty,
+                "the following month must not offer the authored month");
+
+            // Commit uses the same evaluator, so a pending row resolved under a different
+            // date is rejected instead of committing a stale scheduling fact.
+            var state = new EventRuntimeState();
+            EventScheduleResult scheduled = engine.ScheduleMonthly(new GameDate(1579, 1, 15),
+                relationships, RandomStateManager.Create(17UL).GetStream(RandomStreamKind.Events),
+                state, context);
+            Assert.That(scheduled.SelectedEventId, Is.EqualTo("event.dated"));
+
+            EventChoiceResult wrongDate = engine.TryChooseEventOption("event.dated",
+                "option.event.dated", "result.dated.wrong-date", new GameDate(1579, 2, 1),
+                relationships, state, context);
+            Assert.That(wrongDate.Succeeded, Is.False);
+            Assert.That(state.PendingEventIds, Has.Count.EqualTo(1));
+
+            EventChoiceResult committed = engine.TryChooseEventOption("event.dated",
+                "option.event.dated", "result.dated.authored-date", new GameDate(1579, 1, 15),
+                relationships, state, context);
+            Assert.That(committed.Succeeded, Is.True, committed.Message);
+            Assert.That(state.PendingEventIds, Is.Empty);
+        }
+
         private static void AssertRandomStreamsEqual(RandomStateSaveData expected, RandomStateSaveData actual)        {
             Assert.That(actual.streams, Has.Length.EqualTo(expected.streams.Length));
             for (int i = 0; i < expected.streams.Length; i++)

@@ -447,7 +447,7 @@ namespace SengokuChronicle.Application
                         "家族财富变化：尚无已结算的产业或任务资产记录；本评价不推算开局资产。");
                 if (!HasCategory(CampaignHistoryCategory.HistoricalEvents))
                     _view._missingNotes.Add(
-                        "重大历史事件：尚无已提交事件记录；世界历史事件流尚未实现，本评价不补写史实节点。");
+                        "重大历史事件：尚无已提交事件记录；本评价不回填已经过去的史实节点。");
                 if (!HasCategory(CampaignHistoryCategory.People))
                     _view._missingNotes.Add(
                         "人物死亡与重要经历：尚无任务、培养或家族关系记录；本评价不虚构人物经历。");

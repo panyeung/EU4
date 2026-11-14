@@ -369,7 +369,7 @@ namespace SengokuChronicle.Tests.EditMode
 
             Assert.That(loaded.Succeeded, Is.True, loaded.Message);
             Assert.That(_session.PendingEventId, Is.EqualTo(SC011EventIds.LegacyHonoredEventId));
-            Assert.That(_session.CaptureSave().eventContentVersion, Is.EqualTo(3));
+            Assert.That(_session.CaptureSave().eventContentVersion, Is.EqualTo(4));
         }
 
         [Test]

@@ -4,6 +4,7 @@ using System.IO;
 using NUnit.Framework;
 using SengokuChronicle.Application;
 using SengokuChronicle.Domain;
+using SengokuChronicle.Events;
 using SengokuChronicle.Persistence;
 using SengokuChronicle.Presentation;
 using UnityEngine;
@@ -654,6 +655,43 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(notes, Does.Contain("忍术成就"));
             Assert.That(notes, Does.Contain("重大历史事件"));
             Assert.That(notes, Does.Contain("家族盟友和仇敌"));
+            Assert.That(notes, Does.Contain("不回填"),
+                "the history note must say past historical nodes are not backfilled");
+            Assert.That(notes, Does.Not.Contain("世界历史事件流尚未实现"),
+                "the stale unimplemented-stream claim must be gone");
+        }
+
+        /// <summary>
+        /// M08C: once a historical timeline row is committed it is one dated event fact in
+        /// the review, and the empty-source note stops claiming the stream is missing.
+        /// </summary>
+        [Test]
+        public void ReviewView_ListsCommittedHistoricalNodeAndNeverBackfillsPastOnes()
+        {
+            var ledger = HistoryLedger.CreateEmpty();
+            Assert.That(ledger.TryAppendEvent(1579, 1, SC010EventIds.FirstIgaNodeEventId,
+                    SC010EventIds.FirstIgaNodeOptionId, "第一次天正伊贺之乱",
+                    "家主将此事写入家史。", out _, out string appendError),
+                Is.True, appendError);
+            CampaignProgress progress = CampaignProgress.CreateNew(StartDate,
+                CampaignOriginCatalog.Sc010OriginId);
+
+            CampaignReviewView view = CampaignReviewView.Build(
+                CampaignReviewMilestone.StageReview, progress, StageReviewDate,
+                SuccessionSample.CreateStandard(), ledger.Entries,
+                new MissionRecord[0], FamilyStandingState.CreateInitial(), default,
+                new string[0], 0, string.Empty);
+
+            List<CampaignHistoryRow> rows = RowsOf(view, CampaignHistoryCategory.HistoricalEvents);
+            Assert.That(rows, Has.Count.EqualTo(1));
+            Assert.That(rows[0].Date, Is.EqualTo(GameDate.Parse(1579, 1, 1)));
+            Assert.That(rows[0].Text, Does.Contain("第一次天正伊贺之乱"));
+            Assert.That(rows[0].Text, Does.Not.Contain("月"),
+                "the row carries the year-level fact, not a claimed historical month");
+            string notes = string.Join("\n", view.MissingSourceNotes);
+            Assert.That(notes, Does.Not.Contain("重大历史事件"),
+                "a committed node is a recorded fact, not a missing source");
+            Assert.That(notes, Does.Not.Contain("不回填"));
         }
 
         [Test]
