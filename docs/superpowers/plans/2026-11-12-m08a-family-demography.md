@@ -142,15 +142,20 @@
   `unity command run_script --file .opencode/skills/succession-invariants/scripts/SuccessionSweep.cs --entry SuccessionSweep.Run`
   需要 `violations=0` 且 `self-test=PASS`。
 - [x] 停止 Play Mode 时运行 `Tools/Sengoku Chronicle/Validate Foundation Scene`；要求 `Loaded: True; Dirty: False`、清单全 PASS、0 errors。若未改场景，仍验证现有家谱/编年史面板绑定。
-- [ ] Play Mode 先检查 Pipeline health 并经真实标题页开始 SC-013 新局；记录随机 seed，通过实际日历月推进到首个年界。观察自动婚姻、新配偶家谱/编年史、自然死亡/继承提示与暂停状态。游戏只有一个存档槽；测试前备份 `save-slot-1.json` 和 `.bak` 并记录 SHA-256，执行 UI Save/Load 后检查人物 ID、性别、生年、婚姻、生命状态、未完成怀孕、随机流与日期，再还原原文件并验证哈希。不要删除唯一存档槽。
-- [ ] Play Mode 记录准确 seed、命令、界面 text/state readback、Console since-cursor 和 teardown 状态。停止 Play Mode；不保存场景。若截图则检查后立即删除；禁止以日期注入或私有字段状态代替真实月结路径。
+- [x] 在既有 Editor 中经标题 UI 新开 SC-013，以真实月结推进到 1561、1562、1563 和 1564 年界。观察自主婚姻、自然死亡、家谱已故标记及两次家主死亡继承。第二次继承由明智 信正（26）接任；详见 `Logs/verify/20261114-m08a-natural-death-playtest.md`。
+- [x] 经 SC-022 标题入口执行生育观察路线。1560-10 至 1561-12 的名册采样无可见怀孕状态；1562-01 家主与配偶均已故，路线未观察到出生。该结果记录观察边界，不证明生育规则成功。
+- [ ] 在有效配偶存活时，通过真实月结观察一次怀孕与出生，并确认新生儿进入家谱、人口和编年史。当前两条固定路线均未观察到出生。
+- [ ] 记录真实标题页路线的随机 seed。不要向运行中的会话注入 seed、日期或私有字段状态。
+- [ ] 检查自动配偶 ID、性别、生年、婚姻、生命状态、未完成怀孕及 RNG 流的序列化和读档恢复。现有 UI 往返只验证了日期、人口、已故名册标记、继承人和编年史行。
+- [x] 记录 Play Mode 的标题页入口、月结与继承 UI 读数、最终 Console 状态和 teardown。`editor_status` 为 `ready/stopped`，FoundationScene `dirty=false`，Console 0 errors / 0 warnings；最新 ground-truth 样本有 1 条 log。随机 seed 未记录。无截图、未保存场景。
 - [x] Through the real map UI, save a fresh SC-013 route at 1562-01-01, advance one month, load, and confirm date, population, deceased roster markers, heir and lifecycle Chronicle rows. Restore both original slot files and verify exact SHA-256 matches; see `Logs/verify/20261114-m08a-natural-death-playtest.md`.
-- [ ] Inspect serialized generated-spouse ID/gender/birth year, unfinished pregnancy and RNG stream after load; these were not asserted by the visible UI round-trip.
 - [ ] 完成只读 OpenCode reviewer，修正可修复发现并同任务复审；编译、EditMode、Validator、Console、Play Mode 和用户最终验收分别报告。
 
-> **Task 6 状态：**2026-11-14 的后续 Play Mode 新证实死亡名册标记与自然死亡/婚姻编年史，但没有触发家主死亡继承，也未观察到出生；没有执行存档往返或本轮场景 Validator；succession sweep 已通过。之前的全量 EditMode `1947/1947`、Validator PASS 仍是 2026-11-13 证据，不能代替本轮检查。随机 seed 记录、完整存档契约、Task 5 QA request 记录和用户最终验收仍未完成；Task 6 复选框保持未勾选。详见 `Logs/verify/20261114-m08a-natural-death-playtest.md`。
+> **Task 6 状态：**SC-013 的重复继承路线已通过真实 UI 验证两次家主死亡继承。SC-022 路线观察到家主与配偶在同一年度年界已故，并通过 UI 完成成年旁系继承选择；两条路线都未观察到出生。此前 SC-013 UI Save/Load 已验证日期、人口、已故标记、继承人和编年史投影，且恢复了原存档。随机 seed、出生运行时、完整配偶与怀孕/RNG 存档契约、Task 5 QA request 和用户最终验收仍未完成。本次没有重跑 EditMode 或 FoundationScene Validator。详见 `Logs/verify/20261114-m08a-natural-death-playtest.md`。
 
 > **2026-11-14 后续更正：**同日另执行 UI Save/Load 往返并恢复原存档，证实日期、人口、死亡名册标记、指定继承人和相关编年史行可往返；不再将 Save/Load 整体标为未执行。自动配偶序列化字段、未完成怀孕、RNG 恢复仍未验证。无截图；Play Mode 后 Editor `ready/stopped`、`compilationFailed=false`、Console 0 errors/0 warnings，FoundationScene `dirty=false`。完整 Task 6 与用户最终验收仍未完成。
+
+> **2026-11-14 后续补测：**单独一条 SC-013 重复继承路线通过真实 UI 连续完成两次家主交接，并显示继承编年史；本次在 `1564-01-01` 由明智 信正继任，未观察到出生。另启动 SC-022 生育观察路线，名册在 `1561-12-01` 前的采样没有怀孕状态；`1562-01-01` 家主与配偶均标为已故，继承 UI 暂停月结，选择成年旁系后 HUD 更新。该路线未观察到出生，也未检查死因编年史类别。两次测试均无截图、无场景保存、未访问存档；存档与备份哈希仍与测试前一致。Editor 停止后 `ready/stopped`、FoundationScene `dirty=false`、Console 0 errors/0 warnings（最新 ground-truth 有 1 条 log）。详见 `Logs/verify/20261114-m08a-natural-death-playtest.md`。家主死亡继承现已在 SC-013 Play Mode 验证；出生、随机 seed、自动配偶序列化字段及未完成怀孕/RNG 读档恢复、Task 5 QA request、用户最终验收仍待完成。M08A 不能创建最终 checkpoint、合并 `main` 或打 tag。
 
 ## 提交与验收门
 

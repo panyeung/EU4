@@ -390,6 +390,12 @@ M01 已于 2026-11-07 由用户明确验收通过。当前 `main` 的 `Assets/Sc
 - 2026-11-14 M08A UI Save/Load 追补：在同一既有 Editor 的新 SC-013 路线中保存于 `1562-01-01`，推进至 `1562-02-01` 后从地图 UI 读档；日期回到 `1562-01-01`，人口 6、内記与明智 千恵的“已故”标记、明智 正綱的指定继承人状态，以及两条自然死亡和佐近/志乃自主婚姻编年史行均保留。测试前/后恢复的 `save-slot-1.json` 与 `.bak` SHA-256 分别为 `1E61ED9C…BCB92C` / `F1C0630E…DA4CBE`，逐字节匹配。Play Mode 后 Editor `ready/stopped`、`compilationFailed=false`、Console 0 errors/0 warnings（15 条缓冲日志，最新 ground-truth 样本 1 条 log）、FoundationScene `dirty=false`。未验证自动配偶序列化 ID/性别/生年、未完成怀孕或 RNG 流读档恢复；未观察到出生或家主死亡继承；无截图。本机忽略证据已补充到 `Logs/verify/20261114-m08a-natural-death-playtest.md`。完整 M08A 验收与用户最终里程碑接受仍待办。
 - 详见 [M08 验证报告](docs/reports/m08-campaign-review.md#m08a-家族人口动态切片2026-11-12)。
 
+## M08A Play Mode 后续补测（2026-11-14）
+
+- 单独一条 SC-013 重复继承路线经标题页新局并真实月结至 `1563-01-01`，人口 4；明智 晴信（73）与明智 時姫（47）已故。玩家选择明智 正綱（49）并确认后，HUD 显示正綱为家主、明智 信正（25）为继承人。至 `1564-01-01`，正綱（50）身故；再次选择信正（26）后，HUD 显示无固定继承人和第三代终局提示，编年史记录信正继承。
+- SC-022 生育观察路线于 `1560-05-01` 开局，名册有政宗（36）、千代（32）、小夜（10）、弦次郎（24）。截至 `1561-12-01` 的名册采样没有可见怀孕状态。至 `1562-01-01`，人口从 4 降至 2，政宗与千代均标为已故，继承 UI 暂停时间；玩家选成年旁系弦次郎并确认。此路线没有观察到出生，也没有读取死亡编年史类别。
+- 两轮都没有保存场景、截图或写入唯一存档。存档与备份的 SHA-256 仍为 `1E61ED9CAB4A5F3E5FBCCE5EDA4BD24586BE5A072EA5B749CCB3C1E280BCB92C` 和 `F1C0630E5DD91BAA0B18607CA4367956DB637A8BB4DD6DA21D1E79212BDA4CBE`。Editor 停止后为 `ready/stopped`，FoundationScene `dirty=false`，Console 为 0 errors / 0 warnings，最新 ground-truth 样本有 1 条 log。随机 seed、出生 Play Mode、自动配偶字段及未完成怀孕/RNG 的存档恢复仍未验证。详情见本机忽略记录 `Logs/verify/20261114-m08a-natural-death-playtest.md`。
+
 ## M08B 经济模拟状态（2026-11-12）
 
 - 多商品真实经济设计已获用户批准：粮食与生产物资交易、人口月度消费、价格指数/通胀、短缺死亡修正及 100 年/1000 种子真实 `GameSession` 模拟。
