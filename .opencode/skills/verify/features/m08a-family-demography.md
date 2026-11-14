@@ -32,7 +32,9 @@ review without a new panel.
 
 Lead Play Mode on 2026-11-13 used real month-end controls to reach 1561-01-01 and 1562-01-01; the family chronicle showed two natural deaths and two autonomous marriages. In-game Save/Load retained the 1562-01-01 date and lifecycle chronicle rows. This run did not check the generated spouse's serialized ID, gender or birth year, an unfinished pregnancy, or the RNG stream after loading. A hash comparison was reported after restoring the original save and backup, but the digest values were not retained. Full EditMode passed 1947/1947 and FoundationScene Validator passed with 0 errors. The Editor was recorded as ready/stopped with a clean scene; raw status output was not retained. The local evidence is `Logs/verify/20261113-m08a-family-demography.md`.
 
-The post-death tree's `已故` marker was not independently checked. The roster was viewed, but its names, ages and generation labels were not transcribed into the evidence. Head-death succession and birth linkage also remain unverified in Play Mode.
+2026-11-14 follow-up used the existing Editor and a fresh SC-013 campaign, with real month-end UI and no save-slot access or injected state. By `1562-01-01`, the HUD population fell from 7 to 6. The family roster marked 内記 (49) and 明智 千恵 (68) `已故`; the Chronicle recorded both natural deaths and the autonomous marriage of 佐近 and 志乃. The head 明智 晴信 (72) remained in office and 明智 正綱 (48) remained designated heir, so head-death succession was not exercised. No birth was observed. The Editor was stopped with a clean `FoundationScene` and Console 0 errors / 0 warnings. No screenshot or save was made. Local evidence: `Logs/verify/20261114-m08a-natural-death-playtest.md`.
+
+This verifies visible death markers and Chronicle projection. Head-death succession, birth linkage, the full save/load contract and user milestone acceptance remain unverified in Play Mode.
 
 - Doctor: `unity pipeline list`, `unity command editor_status`, `unity command console_status`,
   `unity command list_open_scenes`. Require the single Editor for this project,

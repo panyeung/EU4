@@ -10,7 +10,7 @@
 
 **Spec:** [M08A 家族人口动态设计](../specs/2026-11-12-m08-demography-design.md)
 
-> **状态（2026-11-12 复审补充，2026-11-13 追补）：**设计稿已获用户批准；M08A 代码实现与聚焦 EditMode 回归已完成（含年界委托死亡的三种情形：执行人离世中止、12 月 31 日已终态不变、非执行人离世后照常结算）。Task 1–4 的复选框按已落地产物与已记录证据勾选。2026-11-13 lead Play Mode 验证了两次年界及婚姻/死亡编年史，并只验证了 Save/Load 后日期和编年史行保留；完整存档契约尚未验证。死后家谱标签、家主死亡继承、出生衔接、配偶字段/未完成怀孕/RNG 的读档恢复、随机 seed 记录、Task 5 的 QA request 记录和 M08A 文件提交推送仍未完成。此次运行的原存档和备份据记录已恢复，但 SHA-256 值未保留，不能独立复核。Task 6 仍未完成；用户最终验收仍待办。本次追补只新增一条非执行人离世的确定性回归，并修正代码注释、计划措辞与证据说明；不改变 GDD 的基础死亡率，也不新增机制。在用户明确接受前不创建最终 checkpoint、不合并 `main`、不打 tag。
+> **状态（2026-11-14 lead 追补）：**设计稿已获用户批准，M08A 实现与既有 EditMode 回归证据不变。2026-11-14 的真实 SC-013 Play Mode 补充验证了自然死亡、HUD 人口下降、两条死亡编年史及名册“已故”标记，并观察到第二次自主婚姻；记录在 `Logs/verify/20261114-m08a-natural-death-playtest.md`。本轮没有使用存档槽、注入状态或保存场景；Editor 停止后 FoundationScene clean；succession sweep 返回 scenarios=2、sequences=680、steps=2504、violations=0、self-test=PASS (4/4 broken traces caught)。最后一次 Console ground-truth 样本为 0 errors/0 warnings/0 new logs，缓冲区保留 14 条此前日志。家主仍存活，故家主死亡继承未验证；也未观察到出生。配偶字段/未完成怀孕/RNG 的存档恢复、随机 seed 记录、Task 5 QA request、精确隔离文件的提交推送及用户最终验收仍未完成。此前 2026-11-13 路线报告中的存档哈希缺失问题保持不变。M08A 仍未完成，不能创建最终 checkpoint、合并 `main` 或打 tag。
 
 ## 全局约束
 
@@ -138,7 +138,7 @@
 - [x] 按项目已有命令运行聚焦 EditMode：
   `unity command run_tests --mode editor --filter FamilyLifeCycleRulesTests --filter_type testName --timeout 900`
   对 `FamilyMarriageSettlementTests`、`GameSessionFamilyLifeCycleTests`、相关存档/回顾测试逐条运行；最终运行 `unity command run_tests --mode editor --timeout 900`，读取本轮新 XML 的 passed/failed/skipped/inconclusive。超时不算通过。
-- [ ] 运行 succession sweep：
+- [x] 运行 succession sweep：
   `unity command run_script --file .opencode/skills/succession-invariants/scripts/SuccessionSweep.cs --entry SuccessionSweep.Run`
   需要 `violations=0` 且 `self-test=PASS`。
 - [x] 停止 Play Mode 时运行 `Tools/Sengoku Chronicle/Validate Foundation Scene`；要求 `Loaded: True; Dirty: False`、清单全 PASS、0 errors。若未改场景，仍验证现有家谱/编年史面板绑定。
@@ -146,7 +146,7 @@
 - [ ] Play Mode 记录准确 seed、命令、界面 text/state readback、Console since-cursor 和 teardown 状态。停止 Play Mode；不保存场景。若截图则检查后立即删除；禁止以日期注入或私有字段状态代替真实月结路径。
 - [ ] 完成只读 OpenCode reviewer，修正可修复发现并同任务复审；编译、EditMode、Validator、Console、Play Mode 和用户最终验收分别报告。
 
-> **Task 6 状态：**2026-11-13 在既有 Editor 中完成重编译状态检查、1947/1947 全量 EditMode、FoundationScene Validator 和部分 lead Play Mode。运行时记录了两次年界中的婚姻与死亡；Save/Load 只确认日期和编年史行保留，未核对生成配偶字段、未完成怀孕或 RNG。原存档/备份恢复的哈希值未保留。死后家谱标签、家主死亡继承、出生衔接、随机 seed、存档完整往返、Task 5 QA request 记录与用户最终验收仍未完成；Task 6 的对应复选框保持未勾选。本次报告见 `Logs/verify/20261113-m08a-family-demography.md`。
+> **Task 6 状态：**2026-11-14 的后续 Play Mode 新证实死亡名册标记与自然死亡/婚姻编年史，但没有触发家主死亡继承，也未观察到出生；没有执行存档往返或本轮场景 Validator；succession sweep 已通过。之前的全量 EditMode `1947/1947`、Validator PASS 仍是 2026-11-13 证据，不能代替本轮检查。随机 seed 记录、完整存档契约、Task 5 QA request 记录和用户最终验收仍未完成；Task 6 复选框保持未勾选。详见 `Logs/verify/20261114-m08a-natural-death-playtest.md`。
 
 ## 提交与验收门
 
