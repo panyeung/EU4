@@ -198,3 +198,16 @@ M06 手动（无警戒带密报撤离 → 完全成功；2026-11-12，文本记�
 - 退出后 Editor 为 ready/stopped/not compiling，`FoundationScene` active、loaded、`dirty=false`，Console ground truth 为 0 errors / 0 warnings / 0 logs。
 
 完整操作和边界记录：`Logs/verify/20261114-m06-head-death-followup.md`（本机 Git 忽略）。
+
+## M06/M07 家主阵亡与继承 Play Mode 补充（2026-11-14）
+
+**范围：** 通过 M06 严重失败的死亡检定观察家主阵亡与继承 UI；不代表 M06/M07 整体验收，也不覆盖摄政或危机。
+
+- 使用已打开的 Unity `6000.6.6f1` Editor PID `77116`，项目路径 `C:\Users\panye\My project`，从现有 `FoundationScene` 进入 Play Mode。通过 Unity Pipeline 和 `VerifyUi` 调用运行时按钮事件。未运行 batchmode、未启动第二个 Editor、未保存场景或生成截图。
+- 新开内存 SC-013 固定三代剧本，日期 `1560-04-01`，地点清洲。为触发稀有死亡分支，临时验证脚本只在内存中替换 `Missions` 随机流，首两次 d100 结果为 8 和 66，并通过现有 `GameSession.TryApplySave` 应用捕获数据；没有写入磁盘存档。队员依次为明智 晴信（当代家主）和佐近，选择亲自执行、不准备、晴信任队长。简报逐名披露二人的严重失败死亡风险。
+- 按北 4 格、东 6 格将晴信移动到 `(6,4)` 的驻守守卫。第 10 回合守卫捕获晴信，任务结算为严重失败。结果 UI 与编年史显示物资 `12→10`、资金与情报无变化、名望 `0→0`、隐蔽度 `50→45`、晴信阵亡、佐近负伤；顶部人口从 6 变为 5。
+- 打开“家族与继承”，界面显示继承待定；唯一合法候选为在世成年直系亲族明智 正綱（46岁）。选择并确认后，反馈为“家督已交接给 明智 正綱”，当代家主显示正綱（46岁）。日期仍为 `1560-04-01`，之后显示固定继承人为明智 信正（22岁）。本路线没有触发摄政或危机。
+- 这次实机流程验证了严重失败、被披露队员的死亡检定结果、家主人物死亡以及经 UI 完成继承交接。稀有分支由内存随机流注入触发，不是玩家正常游戏中可选的操作。
+- `editor_stop` 后 Pipeline 报告 ready/stopped、`compiling=false`、`compilationFailed=false`，路径仍指向当前项目。`VerifyUi.State` 显示 `FoundationScene` loaded、dirty=false、playing=false。Console ground truth 为 0 errors / 0 warnings / 0 logs。
+- 本次没有运行 EditMode、全量测试、FoundationScene Validator、存档/读档或像素命中区检查。方向按钮只设置方向；在确认回合仍为 0 后，实际移动使用方向按钮再点“移动”，并以回合数增加确认执行成功。
+- 此前遗留截图 `Assets/Logs/verify/_scratch/20261114-1206-m08c-initial.png` 尚未清理，删除操作曾被自动审核拦截。本次没有打开该图、操作该图或创建新图。
