@@ -15,7 +15,7 @@
 
 | 节点 | 方向 | 当前状态 |
 |---|---|---|
-| M00 | 现有工程基线与验收收敛 | 当前核对见下方「M00 当前核验快照」：本地 `main`、`origin/main` 与 GitHub `main` 同处 `369422d`；完整工程基线与用户最终验收仍待办。 |
+| M00 | 现有工程基线与验收收敛 | 当前核对见下方「M00 Git 核验快照」：本地 `main`、`origin/main` 与 GitHub `main` 同处 `6c282ab`；完整工程基线与用户最终验收仍待办。 |
 | M01 | 固定三代家族可玩原型 | **已验收（2026-11-07，用户明确确认）**；当前 `main` 含 SC-024 场景接入。技术验证细节见下方历史报告，不从用户验收推断额外测试结果 |
 | M02 | 每日行动与旅行基础 | 行动输入、日推进、旅行与 GUI 存读档技术路线已验证；日期刷新、人物名册遮挡、窄屏地图/家谱布局已修复。M02 专项记录的全量 EditMode 1386/1386、编译无 C# 错误、FoundationScene Validator PASS、独立只读复审 ACCEPT 与 960×720 / 1280×720 Play Mode 均为 2026-11-09 证据；2026-11-10 的全量 EditMode 历史结果为 1454/1454（见 M00/M03 当日记录；M05 worker 后续结果见 M05 行）。2026-11-11 OpenCode2 InputField 生命周期修复已提交并推送至 chore/pstack-verification（bc17491）；现有 Editor 全量 EditMode 为 1645/1645 passed、0 failed、0 skipped（该运行早于后续纯注释修正）。Play Mode 验证字段已启用且标签绑定、UGUI 输入后关闭/重开保留值，并确认训练已安排（训练进度未推进）；物理键盘输入未验证。详细记录见 [M02 InputField 修复](docs/archive/verification-and-research-history.md#m02-inputfield-lifecycle-2026-11-11)。用户存档哈希未变；M02 最终用户里程碑验收仍待办。见 [地图验证](docs/archive/verification-and-research-history.md#world-map-immersive-ui-2026-11-09)、[名册修复](docs/archive/verification-and-research-history.md#m02-roster-rail-visibility-2026-11-09)、[M02 记录](docs/archive/verification-and-research-history.md#m02-daily-action-foundation)及 [M04A 记录](docs/archive/verification-and-research-history.md#m04a-personal-memories) |
 | M03 | 高自主 NPC 与只读 Inspector | 双 NPC 原型与 2026-11-12 用户批准的规则已完成技术验证。2026-11-13 在既有 Unity Editor 中，SC-013 首局显示正綱训练、信正工作，Inspector 明确 2 名试点人物；任命信正负责农庄并打断其工作后，自治重规划选择休息，Inspector 将工作候选标为产业职责冲突、诊断分数 138。零库存与伤病限制也在 Play Mode 通过临时内存存档夹具注入后由实际 UI 验证：库存 0 时工作被拒绝、训练可选且库存仍为 0；伤员只能休息，训练和工作均被拒绝。两项均不是普通玩家流程生成，且未写入磁盘存档。M03 的 2026-11-13 定向 EditMode `NpcAutonomy` 86/86 与当时全量 EditMode 1947/1947 均通过；该轮包含 2 条预期编年史故障注入错误日志和 45 条测试警告，清理后 Console 为 0/0/0。最新全量 EditMode 为 2026-11-14T07:54Z 的 1958/1958（早于 M08B 输出目录修复，见 M08 验证报告）；修复后仅运行定向 51/51，未重跑全量套件。代码复审通过（`task_51001e836828`）；M03 最终用户里程碑验收待办。此前待清理的 M03 验证截图已于 2026-11-14 处理；Computer Use 临时缓存当前无截图文件，Unity `.meta` 目录标记保留。详见 [M03 本轮验证记录（本机 Git 忽略）](Logs/verify/20261113-m03-npc-autonomy.md)、[2026-11-12 验证记录](Logs/verify/20261112-0745-m03-npc-autonomy.md) 与 [验证配方](.opencode/skills/verify/features/m03-npc-autonomy.md)。 |
@@ -30,11 +30,13 @@
 - 使用既有 Unity Editor（PID `77116`）在三个新建的内存 SC-013 局中验证 M06 严重失败死亡风险：两次手动任务达到严重失败，家主晴信与队员千恵均负伤但无人死亡；第三次委派任务安全撤离，不触发死亡检定。三局简报均逐名披露死亡风险。未读写存档、未保存场景、未截图；退出后 Editor ready/stopped、FoundationScene clean、Console 0/0/0。
 - 三次均未出现死亡或继承 UI，因此死亡随机分支、家主死亡后的继承选择、摄政和危机仍未通过 Play Mode 验证。详见 [M06 后续试验记录](Logs/verify/20261114-m06-head-death-followup.md)（本机 Git 忽略）与 [M07 运行验证报告](docs/reports/m07-runtime-verification.md)。
 
-## M00 当前核验快照（2026-11-14 09:26 UTC）
+## M00 Git 核验快照（2026-11-14 10:18 UTC）
 
-- Git：本地 `main`、本地跟踪引用 `origin/main` 与 GitHub `main` 均指向 `369422d6c2e78d98d82512e0e4a8acfc22631bab`。本地与远端 `chore/pstack-verification` 均为 `7649945740f7bc0e14571df4584c7f0a4f0a6ff6`。截至该核对时间，主工作树跟踪文件干净；该状态早于本次文档编辑。保留的未跟踪内容为 `Assets/Logs.meta`、`Assets/Logs/`、`Assets/Scenes/TestResults_20261108_072929.xml` 及其 `.meta`、`graphify-out/` 与 `nul`。
+- Git：本地 `main`、本地跟踪引用 `origin/main` 与 GitHub `main` 均指向 `6c282ab24e79e99f2403b73c341bafa12adfaba0`。本地 `chore/pstack-verification` 指向 `7649945740f7bc0e14571df4584c7f0a4f0a6ff6`；GitHub 当前未公布该分支。主工作树跟踪文件干净；未跟踪内容为 `Assets/Logs.meta`、`Assets/Logs/`、`Assets/Scenes/TestResults_20261108_072929.xml` 及其 `.meta`、`graphify-out/` 与 `nul`，均保留。
 
-- 其他工作树：`sc021-scene-integration` 仍在 detached HEAD `66373ee9630b53a9c00a804576e5298bc7b52b0e`；`.vscode/settings.json` 和 `ProjectSettings/Packages/com.unity.learn.iet-framework/Settings.json` 的未提交改动保留。
+- 其他项目工作树：`sc021-scene-integration` 仍在 detached HEAD `66373ee9630b53a9c00a804576e5298bc7b52b0e`；`.vscode/settings.json` 和 `ProjectSettings/Packages/com.unity.learn.iet-framework/Settings.json` 的未提交改动保留。未清理该工作树或改动。
+
+## M00 Unity 与测试检查点（2026-11-14 09:26 UTC）
 
 - Unity：既有 Editor PID `77116` 的 `-projectPath` 指向本项目，版本 `6000.6.6f1`；`editor_status` 为 `ready`、未编译、Play Mode `stopped`。2026-11-14T09:26:03Z 的 Console ground truth 为 0 errors、0 warnings、17 logs。
 
