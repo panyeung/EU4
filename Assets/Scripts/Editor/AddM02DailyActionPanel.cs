@@ -118,6 +118,8 @@ namespace SengokuChronicle.Editor
         private const string EducationRootName = "SC020EducationRoot";
         private const string ResearchRootName = "SC021ResearchRoot";
         private const string FormationRootName = "SC022FamilyFormationRoot";
+        private const string DoctrineRootName = "FamilyDoctrineRoot";
+        private const string DoctrineOpenButtonName = "FamilyDoctrineOpenButton";
         private const string TitleRootName = "M6TitleRoot";
         private const string EventRootName = "EventChoiceRoot";
         private const string TacticalOverlayName = AddM6TitleScreen.TacticalOverlayName;
@@ -370,6 +372,13 @@ namespace SengokuChronicle.Editor
                 relationRoots.Any(item => item == null))
                 return Invalid(out error,
                     "M02 character/daily-action hierarchy is incomplete or ambiguous.");
+
+            if (!PageRootsMatchCanvas(canvas, root, navigator))
+                return Invalid(out error,
+                    "The gallery page-root registration is stale; re-run the M02 updater.");
+            if (!FeatureLaunchersMatchCanvas(canvas, navigator))
+                return Invalid(out error,
+                    "The feature launcher registration is stale; re-run the M02 updater.");
 
             if (panelRoot.parent != root || panelRoot.gameObject.activeSelf)
                 return Invalid(out error,
@@ -1029,7 +1038,7 @@ namespace SengokuChronicle.Editor
                     Undo.AddComponent<ReferenceGalleryNavigator>(rootObject);
                 var pageRoots = new List<ReferenceGalleryPageRoot>();
                 foreach (Transform pageRoot in canvas)
-                    if (pageRoot != rootObject.transform)
+                    if (pageRoot != rootObject.transform && !IsExcludedFromPageRoots(pageRoot))
                         pageRoots.Add(new ReferenceGalleryPageRoot(pageRoot.gameObject,
                             PageMaskForRoot(pageRoot.name)));
                 navigator.BindReferences(pageRoots.ToArray(), new[]
@@ -1044,6 +1053,7 @@ namespace SengokuChronicle.Editor
                     FindGameObject(scene, MapRootName), open,
                     navRail.gameObject, topBar.gameObject);
                 navigator.BindGameSession(session);
+                navigator.BindFeatureLaunchers(FeatureLaunchers(canvas));
                 EditorUtility.SetDirty(panel);
                 EditorUtility.SetDirty(view);
                 EditorUtility.SetDirty(navigator);
@@ -1776,7 +1786,7 @@ namespace SengokuChronicle.Editor
                 MapRootName, IndustryRootName, EducationRootName, ResearchRootName,
                 FormationRootName
             };
-            string[] below = { TitleRootName, EventRootName };
+            string[] below = { TitleRootName, EventRootName, TacticalOverlayName };
             foreach (string name in above)
             {
                 Transform other = canvas.Find(name);
@@ -2095,7 +2105,12 @@ namespace SengokuChronicle.Editor
                 case "FamilyRosterRoot":
                 case "SuccessionRoot":
                 case "FamilyChronicleRoot":
+                case "SC022FamilyFormationRoot":
+                case "SC021ResearchRoot":
+                case "FamilyDoctrineOpenButton":
                     return ReferenceGalleryPageMask.Family;
+                case "SC020EducationRoot":
+                    return ReferenceGalleryPageMask.Character;
                 case "IndustryRoot":
                     return ReferenceGalleryPageMask.Household;
                 case "EventChoiceRoot":
@@ -2113,6 +2128,134 @@ namespace SengokuChronicle.Editor
                 default:
                     return ReferenceGalleryPageMask.None;
             }
+        }
+
+        /// <summary>
+        /// Canvas roots the gallery must never own. The campaign review, the title screen and
+        /// the tactical sheet are full-screen overlays driven by their own controllers, so
+        /// deactivating them on a page switch would drop the review's live subscriptions or
+        /// fight the title lifecycle. The family-doctrine body is a panel its launcher opens,
+        /// so navigation must not force it visible either. Excluded roots are neither
+        /// registered nor counted as expected, which keeps them untouched on every page.
+        /// </summary>
+        private static bool IsExcludedFromPageRoots(Transform candidate) =>
+            candidate != null &&
+            (candidate.name == CampaignReviewPanel.RootObjectName ||
+             candidate.name == TacticalMissionPanel.OverlayObjectName ||
+             candidate.name == TitleRootName ||
+             candidate.name == DoctrineRootName);
+
+        /// <summary>
+        /// True when the navigator's serialized page-root registration still matches what
+        /// the current mapping would produce for this canvas. A stale registration keeps a
+        /// generated root hidden on every page, so validation must reject it instead of
+        /// letting <see cref="Update(Scene)"/> report success without repairing the scene.
+        /// Every registered entry must be a distinct Canvas child that is not an overlay and
+        /// carries its mapped mask; together with the count that covers omissions too.
+        /// </summary>
+        private static bool PageRootsMatchCanvas(Transform canvas, Transform pageRoot,
+            ReferenceGalleryNavigator navigator)
+        {
+            int expected = 0;
+            for (int i = 0; i < canvas.childCount; i++)
+                if (canvas.GetChild(i) != pageRoot && !IsExcludedFromPageRoots(canvas.GetChild(i)))
+                    expected++;
+
+            SerializedProperty roots = new SerializedObject(navigator).FindProperty("pageRoots");
+            if (roots == null || !roots.isArray || roots.arraySize != expected)
+                return false;
+            var seen = new HashSet<GameObject>();
+            for (int i = 0; i < roots.arraySize; i++)
+            {
+                SerializedProperty entry = roots.GetArrayElementAtIndex(i);
+                SerializedProperty root = entry.FindPropertyRelative("root");
+                SerializedProperty visibleOn = entry.FindPropertyRelative("visibleOn");
+                var registered = root != null
+                    ? root.objectReferenceValue as GameObject
+                    : null;
+                if (registered == null || visibleOn == null ||
+                    registered == pageRoot.gameObject ||
+                    IsExcludedFromPageRoots(registered.transform) ||
+                    registered.transform.parent != canvas ||
+                    !seen.Add(registered) ||
+                    (ReferenceGalleryPageMask)visibleOn.intValue !=
+                    PageMaskForRoot(registered.name))
+                    return false;
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// The feature entries whose roots open an SC-020/021/022/024 panel from a page tab.
+        /// Their launcher control is the root itself (doctrine) or its first direct button
+        /// child (education, research, formation).
+        /// </summary>
+        private static readonly string[] FeatureLauncherRootNames =
+        {
+            EducationRootName, ResearchRootName, FormationRootName, DoctrineOpenButtonName
+        };
+
+        private static bool IsFeatureLauncherRoot(Transform candidate) =>
+            candidate != null && FeatureLauncherRootNames.Contains(candidate.name);
+
+        private static ReferenceGalleryPageRoot[] FeatureLaunchers(Transform canvas)
+        {
+            var launchers = new List<ReferenceGalleryPageRoot>();
+            foreach (string name in FeatureLauncherRootNames)
+            {
+                Transform launcher = canvas.Find(name);
+                if (launcher != null)
+                    launchers.Add(new ReferenceGalleryPageRoot(launcher.gameObject,
+                        PageMaskForRoot(name)));
+            }
+            return launchers.ToArray();
+        }
+
+        /// <summary>
+        /// True when the navigator's launcher list names exactly the feature roots present on
+        /// this Canvas, each as its own direct child with the mapped page mask and a working
+        /// launcher button. The shelf placement is runtime presentation, but a launcher that
+        /// is not registered here would stay beneath the opaque page and be unclickable.
+        /// </summary>
+        private static bool FeatureLaunchersMatchCanvas(Transform canvas,
+            ReferenceGalleryNavigator navigator)
+        {
+            int expected = 0;
+            for (int i = 0; i < canvas.childCount; i++)
+                if (IsFeatureLauncherRoot(canvas.GetChild(i)))
+                    expected++;
+
+            SerializedProperty launchers =
+                new SerializedObject(navigator).FindProperty("featureLaunchers");
+            if (launchers == null || !launchers.isArray || launchers.arraySize != expected)
+                return false;
+            var seen = new HashSet<GameObject>();
+            for (int i = 0; i < launchers.arraySize; i++)
+            {
+                SerializedProperty entry = launchers.GetArrayElementAtIndex(i);
+                SerializedProperty root = entry.FindPropertyRelative("root");
+                SerializedProperty visibleOn = entry.FindPropertyRelative("visibleOn");
+                var registered = root != null
+                    ? root.objectReferenceValue as GameObject
+                    : null;
+                if (registered == null || visibleOn == null ||
+                    registered.transform.parent != canvas ||
+                    !IsFeatureLauncherRoot(registered.transform) ||
+                    !seen.Add(registered) ||
+                    (ReferenceGalleryPageMask)visibleOn.intValue !=
+                    PageMaskForRoot(registered.name) ||
+                    !HasLauncherButton(registered.transform))
+                    return false;
+            }
+            return true;
+        }
+
+        private static bool HasLauncherButton(Transform root)
+        {
+            Button button = root != null ? root.GetComponent<Button>() : null;
+            for (int i = 0; root != null && button == null && i < root.childCount; i++)
+                button = root.GetChild(i).GetComponent<Button>();
+            return button != null && HasButtonVisual(button) && HasRaycastTarget(button);
         }
 
         private static bool HasRaycastTarget(InputField input) =>

@@ -59,6 +59,7 @@ namespace SengokuChronicle.Presentation
 
         [SerializeField] private int configurationVersion;
         [SerializeField] private ReferenceGalleryPageRoot[] pageRoots;
+        [SerializeField] private ReferenceGalleryPageRoot[] featureLaunchers;
         [SerializeField] private Button[] navigationButtons;
         [SerializeField] private Button launcherButton;
         [SerializeField] private GameObject navigationRoot;
@@ -103,6 +104,33 @@ namespace SengokuChronicle.Presentation
         }
 
         public ReferenceGalleryPage CurrentPage => _currentPage;
+
+        /// <summary>
+        /// Number of feature-entry launchers bound to page tabs. Each bound root owns a
+        /// launcher control (the root itself or its first direct button child) that is
+        /// placed on the shared right-hand shelf and rendered above the page it belongs to.
+        /// </summary>
+        public int FeatureLauncherCount => featureLaunchers != null ? featureLaunchers.Length : 0;
+
+        // The launcher shelf lives in the page's free right column: below the M02 inspector
+        // copy on the Character page and below the succession HUD on the Family page. The
+        // rects are anchored to the canvas top-right so they track the live page size; the
+        // depth pass keeps the band above the page root and below the page's own content.
+        public static readonly Vector2 FeatureLauncherSize = new Vector2(200f, 44f);
+        public const float FeatureLauncherRightInset = 56f;
+        public const float FeatureLauncherCharacterTop = 460f;
+        public const float FeatureLauncherFamilyTop = 380f;
+        public const float FeatureLauncherSpacing = 52f;
+
+        /// <summary>
+        /// Binds the feature-entry launcher roots (education, research, formation, doctrine).
+        /// They stay registered page roots; this list adds the shared shelf placement and
+        /// keeps their roots in the render band between the page root and page content.
+        /// </summary>
+        public void BindFeatureLaunchers(ReferenceGalleryPageRoot[] launchers)
+        {
+            featureLaunchers = launchers;
+        }
 
         /// <summary>Diagnostics proving a same-page click does not replay page side effects.</summary>
         public int MapReturnCount => _mapReturnCount;
@@ -188,7 +216,12 @@ namespace SengokuChronicle.Presentation
 
         private void LateUpdate()
         {
-            if (!_hasShownPage || PageSize() == _lastPageSize)
+            if (!_hasShownPage)
+                return;
+            // A modal opened by a page root (succession, chronicle) must stay above the
+            // shelf; the pass is idempotent and lifts it on the first frame it paints.
+            EnforceShelfDepth();
+            if (PageSize() == _lastPageSize)
                 return;
             StyleSharedFrame();
             if (_currentPage == ReferenceGalleryPage.Map)
@@ -228,6 +261,7 @@ namespace SengokuChronicle.Presentation
         {
             if (!_hasShownPage)
                 return;
+            EnforceShelfDepth();
             if (_currentPage == ReferenceGalleryPage.Household)
             {
                 BuildHouseholdComposition();
@@ -253,6 +287,9 @@ namespace SengokuChronicle.Presentation
             {
                 ConfigureRosterRail();
                 RestoreCurrentPageVisibility();
+                // Re-presenting the page repairs the shelf after a same-tab click and
+                // picks up any modal opened from a page root since the last pass.
+                PresentFeatureLaunchers(page);
                 StyleNavigationSelection(page);
                 return;
             }
@@ -271,6 +308,11 @@ namespace SengokuChronicle.Presentation
                 : null;
             if (page != ReferenceGalleryPage.Family && familyRoster != null)
                 familyRoster.Close();
+            // The doctrine body root is excluded from page-root toggling (it is owned by
+            // its launcher), so leaving the Family page must close it explicitly instead
+            // of leaving an orphaned panel over the next page.
+            if (page != ReferenceGalleryPage.Family)
+                CloseFamilyDoctrinePanels();
             if (pageRoots != null)
                 for (int i = 0; i < pageRoots.Length; i++)
                 {
@@ -356,6 +398,7 @@ namespace SengokuChronicle.Presentation
                 UpdatePendingRail();
             }
 
+            PresentFeatureLaunchers(page);
             StyleNavigationSelection(page);
         }
 
@@ -502,6 +545,256 @@ namespace SengokuChronicle.Presentation
         {
             if (panel != null)
                 panel.SetActive(visible);
+        }
+
+        /// <summary>A same-page root whose opaque content can cover the launcher shelf.</summary>
+        private sealed class ShelfContent
+        {
+            public Transform Root;
+            public Graphic[] Graphics;
+        }
+
+        private const float ShelfOpacityThreshold = 0.35f;
+
+        private readonly List<Transform> _shelf = new List<Transform>();
+        private readonly List<Button> _shelfButtons = new List<Button>();
+        private readonly List<ShelfContent> _shelfContent = new List<ShelfContent>();
+
+        /// <summary>
+        /// Places the bound feature launchers of the current page on the shared right-hand
+        /// shelf. Page roots and panels are opaque surfaces, so a launcher registered below
+        /// one is active but invisible and unclickable; <see cref="EnforceShelfDepth"/> owns
+        /// the render order.
+        /// </summary>
+        private void PresentFeatureLaunchers(ReferenceGalleryPage page)
+        {
+            _shelf.Clear();
+            _shelfButtons.Clear();
+            _shelfContent.Clear();
+
+            float top = page == ReferenceGalleryPage.Character
+                ? FeatureLauncherCharacterTop
+                : page == ReferenceGalleryPage.Family ? FeatureLauncherFamilyTop : -1f;
+            Transform host = transform.parent;
+            if (top < 0f || host == null || featureLaunchers == null ||
+                featureLaunchers.Length == 0)
+                return;
+
+            ReferenceGalleryPageMask mask = (ReferenceGalleryPageMask)(1 << (int)page);
+            for (int i = 0; i < featureLaunchers.Length; i++)
+            {
+                GameObject root = featureLaunchers[i].Root;
+                if (root == null || (featureLaunchers[i].VisibleOn & mask) == 0 ||
+                    root.transform.parent != host)
+                    continue;
+                Button button = LauncherButton(root.transform);
+                if (button == null)
+                    continue;
+                PlaceFeatureLauncher((RectTransform)button.transform, top, _shelf.Count);
+                _shelf.Add(root.transform);
+                _shelfButtons.Add(button);
+            }
+            if (_shelf.Count == 0)
+                return;
+
+            CacheShelfContent(host, mask);
+            EnforceShelfDepth();
+        }
+
+        /// <summary>
+        /// Remembers the same-page surfaces whose content must never be covered by the
+        /// shelf: the roots this page shows plus the lifecycle overlays. The graphics are
+        /// captured once per page presentation so the per-frame depth pass only measures
+        /// rects instead of walking every panel hierarchy again.
+        /// </summary>
+        private void CacheShelfContent(Transform host, ReferenceGalleryPageMask mask)
+        {
+            for (int i = 0; i < host.childCount; i++)
+            {
+                Transform child = host.GetChild(i);
+                if (child == transform || _shelf.Contains(child) ||
+                    !child.gameObject.activeInHierarchy)
+                    continue;
+                if (!IsShelfCeiling(child.name) && !SharesPage(child, mask))
+                    continue;
+                _shelfContent.Add(new ShelfContent
+                {
+                    Root = child,
+                    Graphics = child.GetComponentsInChildren<Graphic>(true)
+                });
+            }
+        }
+
+        private const string InspectorRootName = "M03NpcAiInspectorRoot";
+        private const string TitleOverlayRootName = "M6TitleRoot";
+        private const string EventOverlayRootName = "EventChoiceRoot";
+        private const string DoctrineRootName = "FamilyDoctrineRoot";
+
+        /// <summary>Roots that own their lifecycle and always render above page content.</summary>
+        private static bool IsShelfCeiling(string name) =>
+            name == InspectorRootName || name == TitleOverlayRootName ||
+            name == EventOverlayRootName || name == DoctrineRootName ||
+            name == TacticalMissionPanel.OverlayObjectName ||
+            name == CampaignReviewPanel.RootObjectName;
+
+        private bool SharesPage(Transform root, ReferenceGalleryPageMask mask)
+        {
+            if (pageRoots == null)
+                return false;
+            for (int i = 0; i < pageRoots.Length; i++)
+                if (pageRoots[i].Root != null && pageRoots[i].Root.transform == root)
+                    return (pageRoots[i].VisibleOn & mask) != 0;
+            return false;
+        }
+
+        /// <summary>
+        /// Keeps the shelf directly above the page root and below every same-page surface
+        /// that paints over it. The insertion point is read from the live hierarchy for
+        /// each root: moving a root that starts below the page root shifts every later
+        /// index, so a single anchor computed before the first move would place the shelf
+        /// above the title, event, tactical and inspector overlays.
+        ///
+        /// A page root created before the M02 root (the succession HUD and its modal, the
+        /// family roster, the chronicle) sits below the page root as well. Roots whose
+        /// content does not reach the shelf stay where they are, while an open modal that
+        /// does reach it is lifted above the shelf so its own controls keep the pointer.
+        /// The pass is idempotent and is repeated once per frame, so a modal opened after
+        /// the page was shown is raised on the next frame instead of swallowing a click.
+        /// </summary>
+        private void EnforceShelfDepth()
+        {
+            if (_shelf.Count == 0 || transform.parent == null)
+                return;
+
+            for (int i = _shelf.Count - 1; i >= 0; i--)
+                if (_shelf[i] != null)
+                    MoveDirectlyAbovePage(_shelf[i]);
+
+            Rect bounds = ShelfBounds(transform.parent);
+            for (int i = _shelfContent.Count - 1; i >= 0; i--)
+            {
+                ShelfContent content = _shelfContent[i];
+                if (content.Root == null || !content.Root.gameObject.activeInHierarchy)
+                    continue;
+                if (!PaintsOver(content.Graphics, transform.parent, bounds))
+                    continue;
+                RaiseAboveShelf(content.Root);
+            }
+        }
+
+        private void MoveDirectlyAbovePage(Transform element)
+        {
+            int pageIndex = transform.GetSiblingIndex();
+            int current = element.GetSiblingIndex();
+            int insertAt = current <= pageIndex ? pageIndex : pageIndex + 1;
+            if (current != insertAt)
+                element.SetSiblingIndex(insertAt);
+        }
+
+        private void RaiseAboveShelf(Transform element)
+        {
+            int shelfTop = transform.GetSiblingIndex() + 1 + _shelf.Count;
+            if (element.GetSiblingIndex() >= shelfTop)
+                return;
+            element.SetSiblingIndex(shelfTop - 1);
+        }
+
+        private Rect ShelfBounds(Transform space)
+        {
+            bool any = false;
+            Rect bounds = new Rect();
+            for (int i = 0; i < _shelfButtons.Count; i++)
+            {
+                Button button = _shelfButtons[i];
+                if (button == null)
+                    continue;
+                Rect rect = RectIn((RectTransform)button.transform, space);
+                bounds = any
+                    ? Rect.MinMaxRect(Mathf.Min(bounds.xMin, rect.xMin),
+                        Mathf.Min(bounds.yMin, rect.yMin), Mathf.Max(bounds.xMax, rect.xMax),
+                        Mathf.Max(bounds.yMax, rect.yMax))
+                    : rect;
+                any = true;
+            }
+            return bounds;
+        }
+
+        private static bool PaintsOver(Graphic[] graphics, Transform space, Rect bounds)
+        {
+            if (graphics == null)
+                return false;
+            for (int i = 0; i < graphics.Length; i++)
+            {
+                Graphic graphic = graphics[i];
+                if (graphic == null || !graphic.enabled ||
+                    !graphic.gameObject.activeInHierarchy ||
+                    graphic.color.a <= ShelfOpacityThreshold)
+                    continue;
+                if (RectIn(graphic.rectTransform, space).Overlaps(bounds, true))
+                    return true;
+            }
+            return false;
+        }
+
+        /// <summary>The rect in the plane of a common ancestor, used for overlap tests.</summary>
+        private static Rect RectIn(RectTransform rect, Transform space)
+        {
+            var corners = new Vector3[4];
+            rect.GetWorldCorners(corners);
+            Vector3 min = space.InverseTransformPoint(corners[0]);
+            Vector3 max = space.InverseTransformPoint(corners[2]);
+            return Rect.MinMaxRect(min.x, min.y, max.x, max.y);
+        }
+
+        private static void PlaceFeatureLauncher(RectTransform rect, float top, int slot)
+        {
+            rect.anchorMin = rect.anchorMax = rect.pivot = new Vector2(1f, 1f);
+            rect.sizeDelta = FeatureLauncherSize;
+            rect.anchoredPosition = new Vector2(-FeatureLauncherRightInset,
+                -(top + slot * FeatureLauncherSpacing));
+            rect.localScale = Vector3.one;
+        }
+
+        /// <summary>
+        /// The launcher control of a feature root: a doctrine-style root is itself the
+        /// button, while the other feature roots keep their entry as the first direct
+        /// button child. Nested panel buttons are never mistaken for the entry.
+        /// </summary>
+        private static Button LauncherButton(Transform root)
+        {
+            if (root == null)
+                return null;
+            Button button = root.GetComponent<Button>();
+            if (button != null)
+                return button;
+            for (int i = 0; i < root.childCount; i++)
+            {
+                button = root.GetChild(i).GetComponent<Button>();
+                if (button != null)
+                    return button;
+            }
+            return null;
+        }
+
+        private void CloseFamilyDoctrinePanels()
+        {
+            CloseFamilyDoctrineIn(pageRoots);
+            CloseFamilyDoctrineIn(featureLaunchers);
+        }
+
+        private static void CloseFamilyDoctrineIn(ReferenceGalleryPageRoot[] roots)
+        {
+            if (roots == null)
+                return;
+            for (int i = 0; i < roots.Length; i++)
+            {
+                GameObject root = roots[i].Root;
+                if (root == null)
+                    continue;
+                FamilyDoctrinePanel panel = root.GetComponent<FamilyDoctrinePanel>();
+                if (panel != null)
+                    panel.Close();
+            }
         }
 
         private void StyleSharedFrame()

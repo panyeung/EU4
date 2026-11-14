@@ -182,6 +182,390 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
+        public void ShowPage_RendersBoundFeatureLaunchersAboveThePageRoot()
+        {
+            GameObject host = Create("CanvasHost", typeof(RectTransform));
+            var hostRect = (RectTransform)host.transform;
+            hostRect.sizeDelta = new Vector2(1280f, 720f);
+
+            GameObject pagePanel = Create("PagePanel", typeof(RectTransform),
+                typeof(CanvasRenderer), typeof(Image));
+            pagePanel.transform.SetParent(host.transform, false);
+            var pageRect = (RectTransform)pagePanel.transform;
+            pageRect.anchorMin = Vector2.zero;
+            pageRect.anchorMax = Vector2.one;
+            pageRect.offsetMin = pageRect.offsetMax = Vector2.zero;
+
+            GameObject featureRoot = Create("SC020EducationRoot", typeof(RectTransform));
+            featureRoot.transform.SetParent(host.transform, false);
+            var featureRect = (RectTransform)featureRoot.transform;
+            featureRect.anchorMin = Vector2.zero;
+            featureRect.anchorMax = Vector2.one;
+            featureRect.offsetMin = featureRect.offsetMax = Vector2.zero;
+            Button launcher = CreateButton("SC020EducationOpenButton");
+            launcher.transform.SetParent(featureRoot.transform, false);
+
+            Button[] buttons = new Button[ReferenceGalleryNavigator.PageCount];
+            for (int i = 0; i < buttons.Length; i++)
+                buttons[i] = CreateButton("LauncherTab" + i);
+            ReferenceGalleryNavigator navigator = Create("Navigator", typeof(RectTransform))
+                .AddComponent<ReferenceGalleryNavigator>();
+            navigator.transform.SetParent(host.transform, false);
+            navigator.BindReferences(new[]
+            {
+                new ReferenceGalleryPageRoot(featureRoot, ReferenceGalleryPageMask.Character)
+            }, buttons, pagePanel, pagePanel, pagePanel, pagePanel, buttons[0],
+                Create("Navigation", typeof(RectTransform), typeof(Image)), Create("Header"));
+            navigator.BindFeatureLaunchers(new[]
+            {
+                new ReferenceGalleryPageRoot(featureRoot, ReferenceGalleryPageMask.Character)
+            });
+
+            navigator.ShowPage(ReferenceGalleryPage.Character);
+            Canvas.ForceUpdateCanvases();
+
+            Assert.That(navigator.FeatureLauncherCount, Is.EqualTo(1));
+            Assert.That(featureRoot.activeSelf, Is.True);
+            Assert.That(featureRoot.transform.GetSiblingIndex(),
+                Is.GreaterThan(pagePanel.transform.GetSiblingIndex()),
+                "a launcher registered beneath its opaque page is invisible and unclickable");
+            var launcherRect = (RectTransform)launcher.transform;
+            Assert.That(launcherRect.anchorMin, Is.EqualTo(Vector2.one));
+            Assert.That(launcherRect.anchoredPosition,
+                Is.EqualTo(new Vector2(-ReferenceGalleryNavigator.FeatureLauncherRightInset,
+                    -ReferenceGalleryNavigator.FeatureLauncherCharacterTop)));
+            Assert.That(launcherRect.rect.size,
+                Is.EqualTo(ReferenceGalleryNavigator.FeatureLauncherSize));
+
+            navigator.ShowPage(ReferenceGalleryPage.Household);
+            Assert.That(featureRoot.activeSelf, Is.False,
+                "the launcher leaves with its page tab");
+        }
+
+        [Test]
+        public void ShowPage_FirstCharacterAndFamilyVisitsOrderTheShelfBelowTheOverlays()
+        {
+            GalleryFixture fixture = CreateGalleryFixture();
+            fixture.Navigator.ShowPage(ReferenceGalleryPage.Character);
+            Canvas.ForceUpdateCanvases();
+
+            AssertShelfBand(fixture, new[] { LauncherControl(fixture.EducationRoot) });
+
+            fixture.Navigator.ShowPage(ReferenceGalleryPage.Family);
+            Canvas.ForceUpdateCanvases();
+
+            AssertShelfBand(fixture, new[]
+            {
+                LauncherControl(fixture.ResearchRoot),
+                LauncherControl(fixture.FormationRoot),
+                LauncherControl(fixture.DoctrineRoot)
+            });
+        }
+
+        [Test]
+        public void ShowPage_Family_KeepsAnOpenSuccessionModalAboveTheShelf()
+        {
+            GalleryFixture fixture = CreateGalleryFixture();
+
+            fixture.Navigator.ShowPage(ReferenceGalleryPage.Family);
+            Canvas.ForceUpdateCanvases();
+
+            Button doctrine = LauncherControl(fixture.DoctrineRoot);
+            var confirmRect = (RectTransform)fixture.Confirm.transform;
+            MoveOver(confirmRect, (RectTransform)doctrine.transform);
+            Vector2 point = CanvasPoint(fixture.HostRect, confirmRect);
+            point += new Vector2(-confirmRect.rect.width * 0.45f, 0f);
+            Assert.That(TopmostRaycast(fixture.HostRect, point),
+                Is.SameAs(fixture.DoctrineRoot.GetComponent<Image>()),
+                "with the modal closed the launcher owns its own shelf point");
+
+            // The succession HUD opens the modal after the page was already shown, so the
+            // depth pass has to react to the modal becoming visible, not only to navigation.
+            fixture.SuccessionModal.SetActive(true);
+            InvokeLateUpdate(fixture.Navigator);
+
+            Assert.That(fixture.SuccessionRoot.transform.GetSiblingIndex(),
+                Is.GreaterThan(fixture.DoctrineRoot.transform.GetSiblingIndex()),
+                "an open modal must render above the Family shelf");
+            Assert.That(fixture.SuccessionRoot.transform.GetSiblingIndex(),
+                Is.LessThan(fixture.InspectorRoot.transform.GetSiblingIndex()),
+                "lifting the modal must not put it above the lifecycle overlays");
+            Assert.That(TopmostRaycast(fixture.HostRect, point),
+                Is.SameAs(fixture.Confirm.GetComponent<Image>()),
+                "the modal control, not the shelf launcher, receives the pointer");
+        }
+
+        /// <summary>Places one rect exactly over another in the shared canvas plane.</summary>
+        private static void MoveOver(RectTransform moving, RectTransform over)
+        {
+            Vector3 world = over.TransformPoint(over.rect.center);
+            moving.anchoredPosition = moving.parent.InverseTransformPoint(world);
+        }
+
+        /// <summary>The launcher control of a feature root: the root itself or its first child.</summary>
+        private static Button LauncherControl(GameObject root)
+        {
+            Button button = root.GetComponent<Button>();
+            if (button != null)
+                return button;
+            for (int i = 0; i < root.transform.childCount; i++)
+                if ((button = root.transform.GetChild(i).GetComponent<Button>()) != null)
+                    return button;
+            return null;
+        }
+
+        private void AssertShelfBand(GalleryFixture fixture, Button[] shelf)
+        {
+            int pageIndex = fixture.PageRoot.transform.GetSiblingIndex();
+            int ceiling = fixture.Host.transform.childCount;
+            GameObject[] overlays =
+            {
+                fixture.InspectorRoot, fixture.TitleRoot, fixture.EventRoot, fixture.TacticalRoot
+            };
+            foreach (GameObject overlay in overlays)
+            {
+                Assert.That(overlay.transform.GetSiblingIndex(), Is.GreaterThan(pageIndex),
+                    overlay.name + " must stay above the page root");
+                ceiling = Mathf.Min(ceiling, overlay.transform.GetSiblingIndex());
+            }
+
+            int previous = pageIndex;
+            foreach (Button button in shelf)
+            {
+                Transform root = button.transform == fixture.DoctrineRoot.transform
+                    ? button.transform
+                    : button.transform.parent;
+                int index = root.GetSiblingIndex();
+                Assert.That(index, Is.GreaterThan(previous),
+                    root.name + " must render above the page root and the previous launcher");
+                Assert.That(index, Is.LessThan(ceiling),
+                    root.name + " must render below every lifecycle overlay");
+                Assert.That(index, Is.EqualTo(previous + 1),
+                    root.name + " belongs in the contiguous shelf band");
+                Assert.That(button.gameObject.activeInHierarchy, Is.True);
+                Assert.That(button.targetGraphic.raycastTarget, Is.True);
+                Assert.That(TopmostRaycast(fixture.HostRect,
+                        CanvasPoint(fixture.HostRect, (RectTransform)button.transform)),
+                    Is.SameAs(button.targetGraphic),
+                    root.name + " must be the topmost raycast target at its own centre");
+                previous = index;
+            }
+        }
+
+        private sealed class GalleryFixture
+        {
+            public GameObject Host;
+            public RectTransform HostRect;
+            public GameObject PageRoot;
+            public ReferenceGalleryNavigator Navigator;
+            public GameObject EducationRoot;
+            public GameObject ResearchRoot;
+            public GameObject FormationRoot;
+            public GameObject DoctrineRoot;
+            public GameObject ContentRoot;
+            public GameObject SuccessionRoot;
+            public GameObject SuccessionModal;
+            public GameObject Confirm;
+            public GameObject InspectorRoot;
+            public GameObject TitleRoot;
+            public GameObject EventRoot;
+            public GameObject TacticalRoot;
+        }
+
+        /// <summary>
+        /// A Canvas ordered the way the scene updaters produce it: the page content and the
+        /// launcher roots exist before M02DailyActionRoot, and the lifecycle overlays are
+        /// generated after it. The shelf must land between the page root and the overlays
+        /// on the very first visit, without replaying a navigation.
+        /// </summary>
+        private GalleryFixture CreateGalleryFixture()
+        {
+            var fixture = new GalleryFixture();
+            GameObject host = Create("CanvasHost", typeof(RectTransform));
+            var hostRect = (RectTransform)host.transform;
+            hostRect.sizeDelta = new Vector2(1280f, 720f);
+            fixture.Host = host;
+            fixture.HostRect = hostRect;
+
+            fixture.ContentRoot = CreateStretched("FamilyRosterRoot", host.transform);
+
+            fixture.SuccessionRoot = CreateStretched("SuccessionRoot", host.transform);
+            GameObject hud = Create("SuccessionHud", typeof(RectTransform),
+                typeof(CanvasRenderer), typeof(Image));
+            hud.transform.SetParent(fixture.SuccessionRoot.transform, false);
+            ((RectTransform)hud.transform).sizeDelta = new Vector2(340f, 260f);
+            fixture.SuccessionModal = Create("SuccessionModal", typeof(RectTransform),
+                typeof(CanvasRenderer), typeof(Image));
+            fixture.SuccessionModal.transform.SetParent(fixture.SuccessionRoot.transform, false);
+            var modalRect = (RectTransform)fixture.SuccessionModal.transform;
+            modalRect.anchorMin = modalRect.anchorMax = modalRect.pivot = new Vector2(0.5f, 0.5f);
+            modalRect.anchoredPosition = Vector2.zero;
+            modalRect.sizeDelta = new Vector2(860f, 600f);
+            fixture.Confirm = Create("SuccessionConfirmButton", typeof(RectTransform),
+                typeof(CanvasRenderer), typeof(Image), typeof(Button));
+            fixture.Confirm.transform.SetParent(fixture.SuccessionModal.transform, false);
+            fixture.Confirm.GetComponent<Button>().targetGraphic =
+                fixture.Confirm.GetComponent<Image>();
+            var confirmRect = (RectTransform)fixture.Confirm.transform;
+            confirmRect.anchorMin = confirmRect.anchorMax = confirmRect.pivot =
+                new Vector2(0.5f, 0.5f);
+            confirmRect.sizeDelta = ReferenceGalleryNavigator.FeatureLauncherSize;
+            confirmRect.anchoredPosition = Vector2.zero;
+
+            fixture.EducationRoot = CreateLauncherRoot("SC020EducationRoot", host.transform,
+                "SC020EducationOpenButton", "子女培养");
+            fixture.ResearchRoot = CreateLauncherRoot("SC021ResearchRoot", host.transform,
+                "SC021ResearchOpenButton", "家族研究");
+            fixture.FormationRoot = CreateLauncherRoot("SC022FamilyFormationRoot",
+                host.transform, "SC022FamilyFormationOpenButton", "婚姻与收养");
+            fixture.DoctrineRoot = CreateLauncherRoot("FamilyDoctrineOpenButton",
+                host.transform, null, "家训与抱负");
+
+            fixture.PageRoot = Create("M02DailyActionRoot", typeof(RectTransform),
+                typeof(CanvasRenderer), typeof(Image));
+            fixture.PageRoot.transform.SetParent(host.transform, false);
+            CreateFullScreen((RectTransform)fixture.PageRoot.transform);
+            fixture.Navigator = fixture.PageRoot.AddComponent<ReferenceGalleryNavigator>();
+            fixture.InspectorRoot = CreateStretched("M03NpcAiInspectorRoot", host.transform);
+            fixture.TitleRoot = CreateStretched("M6TitleRoot", host.transform);
+            fixture.EventRoot = CreateStretched("EventChoiceRoot", host.transform);
+            fixture.TacticalRoot = CreateStretched("M6TacticalMissionOverlay", host.transform);
+
+            Button[] tabs = new Button[ReferenceGalleryNavigator.PageCount];
+            for (int i = 0; i < tabs.Length; i++)
+                tabs[i] = CreateButton("GalleryTab" + i);
+            GameObject householdPanel = CreateStretched("IndustryRoot", host.transform);
+            GameObject mapPanel = CreateStretched("M2WorldMapRoot", host.transform);
+            fixture.Navigator.BindReferences(new[]
+            {
+                new ReferenceGalleryPageRoot(fixture.ContentRoot, ReferenceGalleryPageMask.Family),
+                new ReferenceGalleryPageRoot(fixture.SuccessionRoot,
+                    ReferenceGalleryPageMask.Family),
+                new ReferenceGalleryPageRoot(fixture.EducationRoot,
+                    ReferenceGalleryPageMask.Character),
+                new ReferenceGalleryPageRoot(fixture.ResearchRoot, ReferenceGalleryPageMask.Family),
+                new ReferenceGalleryPageRoot(fixture.FormationRoot,
+                    ReferenceGalleryPageMask.Family),
+                new ReferenceGalleryPageRoot(fixture.DoctrineRoot,
+                    ReferenceGalleryPageMask.Family),
+                new ReferenceGalleryPageRoot(fixture.InspectorRoot,
+                    ReferenceGalleryPageMask.Character)
+            }, tabs, fixture.PageRoot, fixture.ContentRoot, householdPanel, mapPanel, tabs[0],
+                Create("Navigation", typeof(RectTransform), typeof(Image)), Create("Header"));
+            fixture.Navigator.BindFeatureLaunchers(new[]
+            {
+                new ReferenceGalleryPageRoot(fixture.EducationRoot,
+                    ReferenceGalleryPageMask.Character),
+                new ReferenceGalleryPageRoot(fixture.ResearchRoot, ReferenceGalleryPageMask.Family),
+                new ReferenceGalleryPageRoot(fixture.FormationRoot,
+                    ReferenceGalleryPageMask.Family),
+                new ReferenceGalleryPageRoot(fixture.DoctrineRoot,
+                    ReferenceGalleryPageMask.Family)
+            });
+            fixture.SuccessionModal.SetActive(false);
+            return fixture;
+        }
+
+        private GameObject CreateLauncherRoot(string rootName, Transform parent,
+            string buttonName, string label)
+        {
+            GameObject root = Create(rootName, typeof(RectTransform));
+            root.transform.SetParent(parent, false);
+            CreateFullScreen((RectTransform)root.transform);
+            GameObject target = buttonName == null
+                ? root
+                : Create(buttonName, typeof(RectTransform), typeof(CanvasRenderer),
+                    typeof(Image), typeof(Button));
+            if (target != root)
+            {
+                target.transform.SetParent(root.transform, false);
+                ((RectTransform)target.transform).sizeDelta =
+                    ReferenceGalleryNavigator.FeatureLauncherSize;
+            }
+            else
+            {
+                target.AddComponent<CanvasRenderer>();
+                target.AddComponent<Image>();
+                target.AddComponent<Button>();
+            }
+            var rect = (RectTransform)target.transform;
+            rect.anchorMin = rect.anchorMax = rect.pivot = Vector2.one;
+            rect.sizeDelta = ReferenceGalleryNavigator.FeatureLauncherSize;
+            rect.anchoredPosition = Vector2.zero;
+            Image image = target.GetComponent<Image>();
+            image.raycastTarget = true;
+            Button button = target.GetComponent<Button>();
+            button.targetGraphic = image;
+            GameObject labelObject = Create("LauncherLabel", typeof(RectTransform), typeof(Text));
+            labelObject.transform.SetParent(target.transform, false);
+            Text text = labelObject.GetComponent<Text>();
+            text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            text.text = label;
+            text.raycastTarget = false;
+            return root;
+        }
+
+        private GameObject CreateStretched(string name, Transform parent)
+        {
+            GameObject go = Create(name, typeof(RectTransform));
+            go.transform.SetParent(parent, false);
+            CreateFullScreen((RectTransform)go.transform);
+            return go;
+        }
+
+        private static void CreateFullScreen(RectTransform rect)
+        {
+            rect.anchorMin = Vector2.zero;
+            rect.anchorMax = Vector2.one;
+            rect.offsetMin = rect.offsetMax = Vector2.zero;
+        }
+
+        private static void InvokeLateUpdate(ReferenceGalleryNavigator navigator) =>
+            typeof(ReferenceGalleryNavigator).GetMethod("LateUpdate",
+                System.Reflection.BindingFlags.Instance |
+                System.Reflection.BindingFlags.NonPublic).Invoke(navigator, null);
+
+        private static Vector2 CanvasPoint(RectTransform canvas, RectTransform rect) =>
+            canvas.InverseTransformPoint(rect.TransformPoint(rect.rect.center));
+
+        /// <summary>The topmost raycast target at a point in uGUI draw order.</summary>
+        private static Graphic TopmostRaycast(Transform canvas, Vector2 canvasPoint)
+        {
+            Vector3 world = canvas.TransformPoint(canvasPoint);
+            Graphic found = null;
+            for (int i = 0; i < canvas.childCount; i++)
+            {
+                Graphic child = TopmostRaycastIn(canvas.GetChild(i), world);
+                if (child != null)
+                    found = child;
+            }
+            return found;
+        }
+
+        private static Graphic TopmostRaycastIn(Transform node, Vector3 world)
+        {
+            Graphic found = null;
+            foreach (Graphic graphic in node.GetComponents<Graphic>())
+            {
+                if (!graphic.enabled || !graphic.gameObject.activeInHierarchy ||
+                    !graphic.raycastTarget || graphic.color.a <= 0.01f)
+                    continue;
+                if (graphic is Text text && string.IsNullOrEmpty(text.text))
+                    continue;
+                RectTransform rect = graphic.rectTransform;
+                if (rect.rect.Contains(rect.InverseTransformPoint(world)))
+                    found = graphic;
+            }
+            for (int i = 0; i < node.childCount; i++)
+            {
+                Graphic child = TopmostRaycastIn(node.GetChild(i), world);
+                if (child != null)
+                    found = child;
+            }
+            return found;
+        }
+
+        [Test]
         public void ShowPage_Household_PresentsRosterIndustryMonthEventAndPendingDecisions()
         {
             GameSession session = GameSession.NewGame();

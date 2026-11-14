@@ -47,7 +47,9 @@ namespace SengokuChronicle.Tests.EditMode
             Create("SuccessionRoot", null);
             Create("FamilyChronicleRoot", null);
             Create("FamilyDoctrineRoot", null);
-            Create("SC022FamilyFormationRoot", null);
+            GameObject formationRoot = Create("SC022FamilyFormationRoot", null);
+            CreateLauncherButton(AddSC022FamilyFormation.OpenButtonName,
+                formationRoot.transform, "婚姻与收养");
             GameObject industryRoot = Create("IndustryRoot", null);
             Create("IndustryPanel", industryRoot.transform);
             Create("M2WorldMapRoot", null);
@@ -197,6 +199,600 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(Panel().SelectedPersonId, Is.EqualTo(M2FixedScenario.MasatsunaId));
             Assert.That(View().ProfileNameLine, Is.EqualTo(_session.FamilyRoster.Single(
                 person => person.PersonId == M2FixedScenario.MasatsunaId).DisplayName));
+        }
+
+        [Test]
+        public void Navigator_RepairsTheFamilyFormationRegistrationAndOpensItsPanel()
+        {
+            // Replace the bare fixture root with the real SC-022 hierarchy so the test
+            // exercises the launcher's actual panel-open binding, not a stand-in button.
+            UnityEngine.Object.DestroyImmediate(Find("SC022FamilyFormationRoot").gameObject);
+            Assert.That(AddSC022FamilyFormation.Update(_scene),
+                Is.EqualTo(AddSC022FamilyFormation.UpdateResult.Success));
+
+            Assert.That(AddM02DailyActionPanel.Validate(_scene, out string stale), Is.False,
+                "a root added after the page was generated must invalidate the registration");
+            Assert.That(stale, Does.Contain("stale"));
+            Assert.That(AddM02DailyActionPanel.Update(_scene),
+                Is.EqualTo(AddM02DailyActionPanel.UpdateResult.Success),
+                "the stale page-root registration must be repaired, not reported as valid");
+            Assert.That(AddM02DailyActionPanel.Validate(_scene, out string repaired), Is.True, repaired);
+
+            ReferenceGalleryNavigator navigator = Find(AddM02DailyActionPanel.RootName)
+                .GetComponent<ReferenceGalleryNavigator>();
+            Transform formation = Find("SC022FamilyFormationRoot");
+            Button launcher = Find(AddSC022FamilyFormation.OpenButtonName).GetComponent<Button>();
+            FamilyFormationPanel panel = formation.GetComponent<FamilyFormationPanel>();
+            Assert.That(panel.IsOpen, Is.False);
+
+            navigator.ShowPage(ReferenceGalleryPage.Family);
+            Assert.That(formation.gameObject.activeSelf, Is.True,
+                "SC022FamilyFormationRoot must map to ReferenceGalleryPageMask.Family, not None");
+            Assert.That(launcher.gameObject.activeInHierarchy, Is.True,
+                "the SC-022 launcher must stay clickable on the Family page");
+            Assert.That(launcher.targetGraphic, Is.Not.Null);
+
+            launcher.onClick.Invoke();
+            Assert.That(panel.IsOpen, Is.True,
+                "the Family-page launcher must open the SC-022 panel through its bound listener");
+
+            navigator.ShowPage(ReferenceGalleryPage.Household);
+            Assert.That(formation.gameObject.activeSelf, Is.False,
+                "the SC-022 entry belongs to the Family page only");
+            Assert.That(launcher.gameObject.activeInHierarchy, Is.False,
+                "the SC-022 launcher must be unreachable once the Family page is left");
+            Assert.That(panel.gameObject.activeInHierarchy, Is.False,
+                "the SC-022 panel must not stay on screen after the Family page closes it");
+        }
+
+        [Test]
+        public void Navigator_LeavesTheFullScreenOverlaysUnregistered()
+        {
+            Transform canvas = Find("Canvas");
+            GameObject review = Create(CampaignReviewPanel.RootObjectName, canvas);
+            GameObject tactical = Create(TacticalMissionPanel.OverlayObjectName, canvas);
+            GameObject title = Create("M6TitleRoot", canvas);
+            GameObject doctrine = Create(AddSC024FamilyDoctrine.RootName, canvas);
+            doctrine.SetActive(false);
+
+            Assert.That(AddM02DailyActionPanel.Update(_scene),
+                Is.EqualTo(AddM02DailyActionPanel.UpdateResult.Success));
+            Assert.That(AddM02DailyActionPanel.Validate(_scene, out string error), Is.True, error);
+
+            ReferenceGalleryNavigator navigator = Find(AddM02DailyActionPanel.RootName)
+                .GetComponent<ReferenceGalleryNavigator>();
+            string[] registered = RegisteredPageRootNames(navigator);
+            Assert.That(registered, Does.Not.Contain(CampaignReviewPanel.RootObjectName));
+            Assert.That(registered, Does.Not.Contain(TacticalMissionPanel.OverlayObjectName));
+            Assert.That(registered, Does.Not.Contain("M6TitleRoot"));
+            Assert.That(registered, Does.Not.Contain(AddSC024FamilyDoctrine.RootName));
+
+            foreach (ReferenceGalleryPage page in Enum.GetValues(typeof(ReferenceGalleryPage)))
+            {
+                navigator.ShowPage(page);
+                Assert.That(review.activeSelf, Is.True,
+                    CampaignReviewPanel.RootObjectName + " must stay active on " + page);
+                Assert.That(tactical.activeSelf, Is.True,
+                    TacticalMissionPanel.OverlayObjectName + " must stay active on " + page);
+                Assert.That(title.activeSelf, Is.True,
+                    "M6TitleRoot is a lifecycle overlay the navigator must not deactivate on " + page);
+                Assert.That(doctrine.activeSelf, Is.False,
+                    "the launcher-owned doctrine body must stay closed on " + page);
+            }
+        }
+
+        [Test]
+        public void Navigator_ShowsTheFeatureEntriesOnTheirTabsOnly()
+        {
+            Transform canvas = Find("Canvas");
+            Button educationOpen = CreateFeatureLauncher(AddSC020CharacterEducation.RootName,
+                AddSC020CharacterEducation.OpenButtonName, canvas, "子女培养");
+            Button researchOpen = CreateFeatureLauncher(AddSC021FamilyResearch.RootName,
+                AddSC021FamilyResearch.OpenButtonName, canvas, "家族研究");
+            Button doctrineOpen = CreateLauncherButton(AddSC024FamilyDoctrine.OpenButtonName,
+                canvas, "家训与抱负");
+
+            Assert.That(AddM02DailyActionPanel.Update(_scene),
+                Is.EqualTo(AddM02DailyActionPanel.UpdateResult.Success));
+            Assert.That(AddM02DailyActionPanel.Validate(_scene, out string error), Is.True, error);
+
+            ReferenceGalleryNavigator navigator = Find(AddM02DailyActionPanel.RootName)
+                .GetComponent<ReferenceGalleryNavigator>();
+
+            navigator.ShowPage(ReferenceGalleryPage.Character);
+            Assert.That(educationOpen.gameObject.activeInHierarchy, Is.True,
+                "the SC-020 education entry belongs on the Character page");
+            Assert.That(researchOpen.gameObject.activeInHierarchy, Is.False);
+            Assert.That(doctrineOpen.gameObject.activeInHierarchy, Is.False);
+
+            navigator.ShowPage(ReferenceGalleryPage.Family);
+            Assert.That(educationOpen.gameObject.activeInHierarchy, Is.False,
+                "the education entry must leave with the Character page");
+            Assert.That(researchOpen.gameObject.activeInHierarchy, Is.True,
+                "the SC-021 research entry belongs on the Family page");
+            Assert.That(doctrineOpen.gameObject.activeInHierarchy, Is.True,
+                "the SC-024 doctrine launcher belongs on the Family page");
+
+            navigator.ShowPage(ReferenceGalleryPage.Household);
+            Assert.That(educationOpen.gameObject.activeInHierarchy, Is.False);
+            Assert.That(researchOpen.gameObject.activeInHierarchy, Is.False);
+            Assert.That(doctrineOpen.gameObject.activeInHierarchy, Is.False);
+        }
+
+        [Test]
+        public void Validator_RejectsAndRepairsStaleMasksAndDuplicateRegistrations()
+        {
+            Transform canvas = Find("Canvas");
+            Find("SC022FamilyFormationRoot").SetParent(canvas, false);
+            Find("FamilyRosterRoot").SetParent(canvas, false);
+            Assert.That(AddM02DailyActionPanel.Update(_scene),
+                Is.EqualTo(AddM02DailyActionPanel.UpdateResult.Success));
+
+            ReferenceGalleryNavigator navigator = Find(AddM02DailyActionPanel.RootName)
+                .GetComponent<ReferenceGalleryNavigator>();
+            SerializedProperty roots = new SerializedObject(navigator).FindProperty("pageRoots");
+            Assert.That(roots.arraySize, Is.EqualTo(2),
+                "the fixture registers exactly the SC-022 and family-roster page roots");
+
+            // A serialized mask that no longer matches the mapping is rejected, then repaired
+            // so the SC-022 entry returns to the Family page.
+            int formationIndex = RegisteredRootIndex(roots, "SC022FamilyFormationRoot");
+            Assert.That(formationIndex, Is.GreaterThanOrEqualTo(0));
+            SetRegisteredMask(roots, formationIndex, ReferenceGalleryPageMask.None);
+            Assert.That(AddM02DailyActionPanel.Validate(_scene, out string masked), Is.False,
+                "a root registered as None is never shown on any page");
+            Assert.That(masked, Does.Contain("stale"));
+            Assert.That(AddM02DailyActionPanel.Update(_scene),
+                Is.EqualTo(AddM02DailyActionPanel.UpdateResult.Success));
+            Assert.That(AddM02DailyActionPanel.Validate(_scene, out string repaired), Is.True, repaired);
+
+            // Two entries for one root keep the count right while hiding another page root.
+            navigator = Find(AddM02DailyActionPanel.RootName)
+                .GetComponent<ReferenceGalleryNavigator>();
+            roots = new SerializedObject(navigator).FindProperty("pageRoots");
+            int rosterIndex = RegisteredRootIndex(roots, "FamilyRosterRoot");
+            formationIndex = RegisteredRootIndex(roots, "SC022FamilyFormationRoot");
+            Assert.That(rosterIndex, Is.GreaterThanOrEqualTo(0));
+            Assert.That(formationIndex, Is.GreaterThanOrEqualTo(0));
+            roots.GetArrayElementAtIndex(rosterIndex).FindPropertyRelative("root")
+                .objectReferenceValue = Find("SC022FamilyFormationRoot").gameObject;
+            roots.serializedObject.ApplyModifiedPropertiesWithoutUndo();
+            Assert.That(AddM02DailyActionPanel.Validate(_scene, out string duplicated), Is.False,
+                "a duplicated registration drops the family-roster root from every page");
+            Assert.That(duplicated, Does.Contain("stale"));
+            Assert.That(AddM02DailyActionPanel.Update(_scene),
+                Is.EqualTo(AddM02DailyActionPanel.UpdateResult.Success));
+            Assert.That(AddM02DailyActionPanel.Validate(_scene, out string final), Is.True, final);
+
+            navigator = Find(AddM02DailyActionPanel.RootName)
+                .GetComponent<ReferenceGalleryNavigator>();
+            navigator.ShowPage(ReferenceGalleryPage.Family);
+            Assert.That(Find("SC022FamilyFormationRoot").gameObject.activeSelf, Is.True,
+                "the repaired mask must put the SC-022 entry back on the Family page");
+        }
+
+        [Test]
+        public void Navigator_PlacesTheFeatureLaunchersAboveTheOpaquePageChrome()
+        {
+            Transform canvas = Find("Canvas");
+            Button education = CreateFeatureLauncher(AddSC020CharacterEducation.RootName,
+                AddSC020CharacterEducation.OpenButtonName, canvas, "子女培养");
+            Button research = CreateFeatureLauncher(AddSC021FamilyResearch.RootName,
+                AddSC021FamilyResearch.OpenButtonName, canvas, "家族研究");
+            Transform formationRoot = Find(AddSC022FamilyFormation.RootName);
+            formationRoot.SetParent(canvas, false);
+            StretchToCanvas((RectTransform)formationRoot);
+            Button formation = Find(AddSC022FamilyFormation.OpenButtonName)
+                .GetComponent<Button>();
+            Button doctrine = CreateLauncherButton(AddSC024FamilyDoctrine.OpenButtonName,
+                canvas, "家训与抱负");
+
+            Assert.That(AddM02DailyActionPanel.Update(_scene),
+                Is.EqualTo(AddM02DailyActionPanel.UpdateResult.Success));
+            Assert.That(AddM02DailyActionPanel.Validate(_scene, out string error), Is.True, error);
+
+            ReferenceGalleryNavigator navigator = Find(AddM02DailyActionPanel.RootName)
+                .GetComponent<ReferenceGalleryNavigator>();
+            Assert.That(navigator.FeatureLauncherCount, Is.EqualTo(4),
+                "every feature entry present on the Canvas must be bound as a launcher");
+
+            navigator.ShowPage(ReferenceGalleryPage.Character);
+            Canvas.ForceUpdateCanvases();
+            Assert.That(education.gameObject.activeInHierarchy, Is.True);
+            AssertLauncherReachable(canvas, education);
+            Assert.That(research.gameObject.activeInHierarchy, Is.False);
+            Assert.That(formation.gameObject.activeInHierarchy, Is.False);
+            Assert.That(doctrine.gameObject.activeInHierarchy, Is.False);
+
+            navigator.ShowPage(ReferenceGalleryPage.Family);
+            Canvas.ForceUpdateCanvases();
+            Assert.That(education.gameObject.activeInHierarchy, Is.False);
+            AssertLauncherReachable(canvas, research);
+            AssertLauncherReachable(canvas, formation);
+            AssertLauncherReachable(canvas, doctrine);
+
+            // The three Family entries form one non-overlapping shelf; each keeps its
+            // own click target while the whole shelf clears the page's primary columns.
+            Rect researchRect = RectIn((RectTransform)research.transform, canvas);
+            Rect formationRect = RectIn((RectTransform)formation.transform, canvas);
+            Rect doctrineRect = RectIn((RectTransform)doctrine.transform, canvas);
+            Assert.That(researchRect.Overlaps(formationRect, true), Is.False);
+            Assert.That(formationRect.Overlaps(doctrineRect, true), Is.False);
+        }
+
+        [Test]
+        public void Navigator_FirstPageVisitsKeepTheShelfBetweenThePageAndTheOverlays()
+        {
+            Transform canvas = Find("Canvas");
+            // The scene updaters create these roots before M02DailyActionRoot. The first
+            // Character and Family visits must still end with the shelf between the page
+            // root and the title/event/tactical/inspector overlays.
+            Button education = CreateFeatureLauncher(AddSC020CharacterEducation.RootName,
+                AddSC020CharacterEducation.OpenButtonName, canvas, "子女培养");
+            Button research = CreateFeatureLauncher(AddSC021FamilyResearch.RootName,
+                AddSC021FamilyResearch.OpenButtonName, canvas, "家族研究");
+            Transform formationRoot = Find(AddSC022FamilyFormation.RootName);
+            formationRoot.SetParent(canvas, false);
+            StretchToCanvas((RectTransform)formationRoot);
+            Button formation = Find(AddSC022FamilyFormation.OpenButtonName)
+                .GetComponent<Button>();
+            Button doctrine = CreateLauncherButton(AddSC024FamilyDoctrine.OpenButtonName,
+                canvas, "家训与抱负");
+            Find("M03NpcAiInspectorRoot").SetParent(canvas, false);
+            Find("EventChoiceRoot").SetParent(canvas, false);
+            Create("M6TitleRoot", canvas);
+            Create("M6TacticalMissionOverlay", canvas);
+
+            Assert.That(AddM02DailyActionPanel.Update(_scene),
+                Is.EqualTo(AddM02DailyActionPanel.UpdateResult.Success));
+            Assert.That(AddM02DailyActionPanel.Validate(_scene, out string error), Is.True, error);
+
+            ReferenceGalleryNavigator navigator = Find(AddM02DailyActionPanel.RootName)
+                .GetComponent<ReferenceGalleryNavigator>();
+            Assert.That(navigator.FeatureLauncherCount, Is.EqualTo(4));
+
+            navigator.ShowPage(ReferenceGalleryPage.Character);
+            Canvas.ForceUpdateCanvases();
+            AssertShelfBand(canvas, education);
+            AssertLauncherReachable(canvas, education);
+
+            navigator.ShowPage(ReferenceGalleryPage.Family);
+            Canvas.ForceUpdateCanvases();
+            AssertShelfBand(canvas, research, formation, doctrine);
+            AssertLauncherReachable(canvas, research);
+            AssertLauncherReachable(canvas, formation);
+            AssertLauncherReachable(canvas, doctrine);
+        }
+
+        [Test]
+        public void Navigator_KeepsAnOpenSuccessionModalAboveTheFamilyShelf()
+        {
+            Transform canvas = Find("Canvas");
+            CreateFeatureLauncher(AddSC021FamilyResearch.RootName,
+                AddSC021FamilyResearch.OpenButtonName, canvas, "家族研究");
+            Find(AddSC022FamilyFormation.RootName).SetParent(canvas, false);
+            StretchToCanvas((RectTransform)Find(AddSC022FamilyFormation.RootName));
+            Button doctrine = CreateLauncherButton(AddSC024FamilyDoctrine.OpenButtonName,
+                canvas, "家训与抱负");
+            Transform successionRoot = Find("SuccessionRoot");
+            successionRoot.SetParent(canvas, false);
+            StretchToCanvas((RectTransform)successionRoot);
+            Create("SuccessionHud", successionRoot, typeof(Image));
+            GameObject modal = Create("SuccessionModal", successionRoot, typeof(Image));
+            var modalRect = (RectTransform)modal.transform;
+            modalRect.anchorMin = modalRect.anchorMax = modalRect.pivot = new Vector2(0.5f, 0.5f);
+            modalRect.anchoredPosition = Vector2.zero;
+            modalRect.sizeDelta = new Vector2(860f, 600f);
+            GameObject confirm = Create("SuccessionConfirmButton", modal.transform,
+                typeof(Image), typeof(Button));
+            var confirmRect = (RectTransform)confirm.transform;
+            confirmRect.anchorMin = confirmRect.anchorMax = confirmRect.pivot =
+                new Vector2(0.5f, 0.5f);
+            confirmRect.sizeDelta = ReferenceGalleryNavigator.FeatureLauncherSize;
+            Image confirmImage = confirm.GetComponent<Image>();
+            confirmImage.raycastTarget = true;
+            confirm.GetComponent<Button>().targetGraphic = confirmImage;
+            modal.SetActive(false);
+            Find("M03NpcAiInspectorRoot").SetParent(canvas, false);
+            Find("EventChoiceRoot").SetParent(canvas, false);
+            Create("M6TitleRoot", canvas);
+            Create("M6TacticalMissionOverlay", canvas);
+
+            Assert.That(AddM02DailyActionPanel.Update(_scene),
+                Is.EqualTo(AddM02DailyActionPanel.UpdateResult.Success));
+            Assert.That(AddM02DailyActionPanel.Validate(_scene, out string error), Is.True, error);
+
+            ReferenceGalleryNavigator navigator = Find(AddM02DailyActionPanel.RootName)
+                .GetComponent<ReferenceGalleryNavigator>();
+            navigator.ShowPage(ReferenceGalleryPage.Family);
+            Canvas.ForceUpdateCanvases();
+
+            // A modal control sits exactly under the doctrine shelf slot.
+            MoveOver(confirmRect, (RectTransform)doctrine.transform);
+            Vector2 point = SharedShelfPoint(canvas, confirmRect);
+            Assert.That(TopmostGraphic(canvas, point, true), Is.SameAs(doctrine.targetGraphic),
+                "with the modal closed the shelf owns its own slot");
+
+            // The succession HUD opens the modal while the page is already displayed.
+            modal.SetActive(true);
+            typeof(ReferenceGalleryNavigator).GetMethod("LateUpdate",
+                    System.Reflection.BindingFlags.Instance |
+                    System.Reflection.BindingFlags.NonPublic).Invoke(navigator, null);
+
+            // Read the live indices: lifting the modal shifts the shelf band by one slot.
+            Assert.That(successionRoot.GetSiblingIndex(),
+                Is.GreaterThan(doctrine.transform.GetSiblingIndex()),
+                "an open modal must render above the Family shelf");
+            Assert.That(successionRoot.GetSiblingIndex(),
+                Is.LessThan(canvas.Find("M03NpcAiInspectorRoot").GetSiblingIndex()),
+                "lifting the modal must keep it below the lifecycle overlays");
+            Assert.That(TopmostGraphic(canvas, point, true), Is.SameAs(confirmImage),
+                "the modal control, not the shelf launcher, receives the pointer");
+        }
+
+        [Test]
+        public void Validator_RejectsMissingDuplicateAndForeignLauncherRegistrations()
+        {
+            Transform canvas = Find("Canvas");
+            CreateFeatureLauncher(AddSC020CharacterEducation.RootName,
+                AddSC020CharacterEducation.OpenButtonName, canvas, "子女培养");
+            CreateFeatureLauncher(AddSC021FamilyResearch.RootName,
+                AddSC021FamilyResearch.OpenButtonName, canvas, "家族研究");
+            Find(AddSC022FamilyFormation.RootName).SetParent(canvas, false);
+            StretchToCanvas((RectTransform)Find(AddSC022FamilyFormation.RootName));
+            CreateLauncherButton(AddSC024FamilyDoctrine.OpenButtonName, canvas, "家训与抱负");
+
+            Assert.That(AddM02DailyActionPanel.Update(_scene),
+                Is.EqualTo(AddM02DailyActionPanel.UpdateResult.Success));
+            Assert.That(AddM02DailyActionPanel.Validate(_scene, out string error), Is.True, error);
+            Assert.That(RegisteredLauncherNames(), Is.EqualTo(new[]
+            {
+                AddSC020CharacterEducation.RootName, AddSC021FamilyResearch.RootName,
+                AddSC022FamilyFormation.RootName, AddSC024FamilyDoctrine.OpenButtonName
+            }), "the generator must bind all four feature entries");
+
+            // A registration that lost its root makes that entry unreachable on its page.
+            SerializedProperty launchers = LauncherEntries();
+            launchers.GetArrayElementAtIndex(0).FindPropertyRelative("root")
+                .objectReferenceValue = null;
+            launchers.serializedObject.ApplyModifiedPropertiesWithoutUndo();
+            Assert.That(AddM02DailyActionPanel.Validate(_scene, out string missing), Is.False,
+                "a launcher entry without a root must invalidate the registration");
+            Assert.That(missing, Does.Contain("launcher"));
+            Assert.That(AddM02DailyActionPanel.Update(_scene),
+                Is.EqualTo(AddM02DailyActionPanel.UpdateResult.Success));
+            Assert.That(AddM02DailyActionPanel.Validate(_scene, out string repaired), Is.True, repaired);
+
+            // Two entries for one launcher leave another entry unreachable.
+            launchers = LauncherEntries();
+            launchers.GetArrayElementAtIndex(0).FindPropertyRelative("root")
+                .objectReferenceValue = Find(AddSC021FamilyResearch.RootName).gameObject;
+            launchers.serializedObject.ApplyModifiedPropertiesWithoutUndo();
+            Assert.That(AddM02DailyActionPanel.Validate(_scene, out string duplicated), Is.False,
+                "a duplicated launcher registration drops another entry");
+            Assert.That(duplicated, Does.Contain("launcher"));
+            Assert.That(AddM02DailyActionPanel.Update(_scene),
+                Is.EqualTo(AddM02DailyActionPanel.UpdateResult.Success));
+
+            // A launcher-shaped root nested inside another page root cannot be shelved on
+            // the Canvas, so it must be rejected instead of silently left below the page.
+            GameObject foreign = Create(AddSC021FamilyResearch.RootName,
+                Find("M2WorldMapRoot"));
+            launchers = LauncherEntries();
+            launchers.GetArrayElementAtIndex(1).FindPropertyRelative("root")
+                .objectReferenceValue = foreign;
+            launchers.serializedObject.ApplyModifiedPropertiesWithoutUndo();
+            Assert.That(AddM02DailyActionPanel.Validate(_scene, out string foreignParent),
+                Is.False, "a launcher root nested under another root is not a Canvas child");
+            Assert.That(foreignParent, Does.Contain("launcher"));
+            Assert.That(AddM02DailyActionPanel.Update(_scene),
+                Is.EqualTo(AddM02DailyActionPanel.UpdateResult.Success));
+            Assert.That(AddM02DailyActionPanel.Validate(_scene, out string final), Is.True, final);
+            Assert.That(RegisteredLauncherNames(), Does.Contain(AddSC021FamilyResearch.RootName));
+
+            ReferenceGalleryNavigator navigator = Find(AddM02DailyActionPanel.RootName)
+                .GetComponent<ReferenceGalleryNavigator>();
+            navigator.ShowPage(ReferenceGalleryPage.Family);
+            Canvas.ForceUpdateCanvases();
+            AssertLauncherReachable(canvas, Find(AddSC021FamilyResearch.OpenButtonName)
+                .GetComponent<Button>());
+        }
+
+        private SerializedProperty LauncherEntries()
+        {
+            ReferenceGalleryNavigator navigator = Find(AddM02DailyActionPanel.RootName)
+                .GetComponent<ReferenceGalleryNavigator>();
+            return new SerializedObject(navigator).FindProperty("featureLaunchers");
+        }
+
+        private string[] RegisteredLauncherNames()
+        {
+            SerializedProperty launchers = LauncherEntries();
+            var names = new string[launchers != null && launchers.isArray ? launchers.arraySize : 0];
+            for (int i = 0; i < names.Length; i++)
+            {
+                var registered = launchers.GetArrayElementAtIndex(i)
+                    .FindPropertyRelative("root").objectReferenceValue as GameObject;
+                names[i] = registered != null ? registered.name : string.Empty;
+            }
+            return names;
+        }
+
+        private static void AssertShelfBand(Transform canvas, params Button[] shelf)
+        {
+            Transform page = canvas.Find(AddM02DailyActionPanel.RootName);
+            int pageIndex = page.GetSiblingIndex();
+            string[] overlayNames =
+            {
+                "M03NpcAiInspectorRoot", "M6TitleRoot", "EventChoiceRoot",
+                "M6TacticalMissionOverlay"
+            };
+            int ceiling = canvas.childCount;
+            foreach (string overlayName in overlayNames)
+            {
+                Transform overlay = canvas.Find(overlayName);
+                Assert.That(overlay, Is.Not.Null, overlayName + " must be a Canvas child");
+                Assert.That(overlay.GetSiblingIndex(), Is.GreaterThan(pageIndex),
+                    overlayName + " must render above the page root");
+                ceiling = Mathf.Min(ceiling, overlay.GetSiblingIndex());
+            }
+            int previous = pageIndex;
+            foreach (Button button in shelf)
+            {
+                Transform root = button.name == AddSC024FamilyDoctrine.OpenButtonName
+                    ? button.transform
+                    : button.transform.parent;
+                int index = root.GetSiblingIndex();
+                Assert.That(index, Is.EqualTo(previous + 1),
+                    root.name + " belongs in the shelf band directly above the page root");
+                Assert.That(index, Is.LessThan(ceiling),
+                    root.name + " must render below every lifecycle overlay");
+                previous = index;
+            }
+        }
+
+        /// <summary>Places one rect exactly over another in the shared canvas plane.</summary>
+        private static void MoveOver(RectTransform moving, RectTransform over)
+        {
+            Vector3 world = over.TransformPoint(over.rect.center);
+            moving.anchoredPosition = moving.parent.InverseTransformPoint(world);
+        }
+
+        /// <summary>
+        /// A point inside both the overlay control and the shelf: the shelf column's centre
+        /// is right of the 860x600 succession sheet, so the shared strip is its left edge.
+        /// </summary>
+        private static Vector2 SharedShelfPoint(Transform canvas, RectTransform control)
+        {
+            Vector2 centre = CanvasPoint(canvas, control);
+            return centre + new Vector2(-control.rect.width * 0.45f, 0f);
+        }
+
+        [Test]
+        public void Navigator_ClosesTheLauncherOwnedDoctrinePanelWhenTheFamilyPageIsLeft()
+        {
+            // Replace the bare fixture body with the real SC-024 launcher, whose panel
+            // component lives on the active HUD button while the body root stays excluded
+            // from page-root toggling.
+            UnityEngine.Object.DestroyImmediate(
+                Find(AddSC024FamilyDoctrine.RootName).gameObject);
+            _session.gameObject.AddComponent<TitleScreenController>();
+            Assert.That(AddSC024FamilyDoctrine.Update(_scene),
+                Is.EqualTo(AddSC024FamilyDoctrine.UpdateResult.Success));
+
+            Assert.That(AddM02DailyActionPanel.Validate(_scene, out string stale), Is.False,
+                "a launcher added after generation must invalidate the registration");
+            Assert.That(stale, Does.Contain("stale"));
+            Assert.That(AddM02DailyActionPanel.Update(_scene),
+                Is.EqualTo(AddM02DailyActionPanel.UpdateResult.Success));
+            Assert.That(AddM02DailyActionPanel.Validate(_scene, out string repaired), Is.True,
+                repaired);
+
+            ReferenceGalleryNavigator navigator = Find(AddM02DailyActionPanel.RootName)
+                .GetComponent<ReferenceGalleryNavigator>();
+            Button launcher = Find(AddSC024FamilyDoctrine.OpenButtonName)
+                .GetComponent<Button>();
+            FamilyDoctrinePanel panel = launcher.GetComponent<FamilyDoctrinePanel>();
+            Transform doctrineRoot = Find(AddSC024FamilyDoctrine.RootName);
+            Assert.That(panel, Is.Not.Null);
+            Assert.That(panel.IsOpen, Is.False);
+            Assert.That(doctrineRoot.gameObject.activeSelf, Is.False);
+
+            navigator.ShowPage(ReferenceGalleryPage.Family);
+            Canvas.ForceUpdateCanvases();
+            AssertLauncherReachable(Find("Canvas"), launcher);
+
+            launcher.onClick.Invoke();
+            Assert.That(panel.IsOpen, Is.True,
+                "the Family-page launcher opens the launcher-owned doctrine panel");
+            Assert.That(doctrineRoot.gameObject.activeSelf, Is.True);
+
+            navigator.ShowPage(ReferenceGalleryPage.Household);
+            Assert.That(panel.IsOpen, Is.False,
+                "the excluded doctrine body must be closed explicitly when Family is left");
+            Assert.That(doctrineRoot.gameObject.activeSelf, Is.False);
+            Assert.That(launcher.gameObject.activeInHierarchy, Is.False);
+        }
+
+        [Test]
+        public void Validator_RejectsAForeignParentPageRootRegistration()
+        {
+            Transform canvas = Find("Canvas");
+            Find(AddSC022FamilyFormation.RootName).SetParent(canvas, false);
+            Assert.That(AddM02DailyActionPanel.Update(_scene),
+                Is.EqualTo(AddM02DailyActionPanel.UpdateResult.Success));
+
+            ReferenceGalleryNavigator navigator = Find(AddM02DailyActionPanel.RootName)
+                .GetComponent<ReferenceGalleryNavigator>();
+            SerializedProperty roots = new SerializedObject(navigator).FindProperty("pageRoots");
+            int formationIndex = RegisteredRootIndex(roots,
+                AddSC022FamilyFormation.RootName);
+            Assert.That(formationIndex, Is.GreaterThanOrEqualTo(0));
+
+            // A registered page root must be a direct Canvas child. Re-point the entry at
+            // a root nested under another page root: toggling it would leave the page area
+            // dark and its geometry would be laid out against the wrong parent.
+            GameObject foreign = Create("ForeignPageRoot", Find("M2WorldMapRoot"));
+            roots.GetArrayElementAtIndex(formationIndex).FindPropertyRelative("root")
+                .objectReferenceValue = foreign;
+            roots.serializedObject.ApplyModifiedPropertiesWithoutUndo();
+
+            Assert.That(AddM02DailyActionPanel.Validate(_scene, out string foreignParent),
+                Is.False);
+            Assert.That(foreignParent, Does.Contain("stale"));
+            Assert.That(AddM02DailyActionPanel.Update(_scene),
+                Is.EqualTo(AddM02DailyActionPanel.UpdateResult.Success));
+            Assert.That(AddM02DailyActionPanel.Validate(_scene, out string repaired), Is.True,
+                repaired);
+
+            navigator = Find(AddM02DailyActionPanel.RootName)
+                .GetComponent<ReferenceGalleryNavigator>();
+            Assert.That(RegisteredPageRootNames(navigator), Does.Not.Contain("ForeignPageRoot"));
+            Assert.That(RegisteredPageRootNames(navigator),
+                Does.Contain(AddSC022FamilyFormation.RootName),
+                "the repair must restore the real Canvas child");
+        }
+
+        private static int RegisteredRootIndex(SerializedProperty roots, string name)
+        {
+            for (int i = 0; i < roots.arraySize; i++)
+            {
+                SerializedProperty root = roots.GetArrayElementAtIndex(i)
+                    .FindPropertyRelative("root");
+                var registered = root != null
+                    ? root.objectReferenceValue as GameObject
+                    : null;
+                if (registered != null && registered.name == name)
+                    return i;
+            }
+            return -1;
+        }
+
+        private static void SetRegisteredMask(SerializedProperty roots, int index,
+            ReferenceGalleryPageMask mask)
+        {
+            SerializedProperty visibleOn = roots.GetArrayElementAtIndex(index)
+                .FindPropertyRelative("visibleOn");
+            Assert.That(visibleOn, Is.Not.Null);
+            visibleOn.intValue = (int)mask;
+            roots.serializedObject.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        private static string[] RegisteredPageRootNames(ReferenceGalleryNavigator navigator)
+        {
+            SerializedProperty roots = new SerializedObject(navigator).FindProperty("pageRoots");
+            int count = roots != null && roots.isArray ? roots.arraySize : 0;
+            var names = new string[count];
+            for (int i = 0; i < count; i++)
+            {
+                SerializedProperty root = roots.GetArrayElementAtIndex(i)
+                    .FindPropertyRelative("root");
+                var registered = root != null
+                    ? root.objectReferenceValue as GameObject
+                    : null;
+                names[i] = registered != null ? registered.name : string.Empty;
+            }
+            return names;
         }
 
         [Test]
@@ -1311,6 +1907,178 @@ namespace SengokuChronicle.Tests.EditMode
             scene.GetRootGameObjects()
                 .SelectMany(root => root.GetComponentsInChildren<Transform>(true))
                 .Where(transform => transform.name == name).ToArray();
+
+        private Button CreateFeatureLauncher(string rootName, string buttonName, Transform canvas,
+            string label)
+        {
+            GameObject root = Create(rootName, canvas);
+            StretchToCanvas((RectTransform)root.transform);
+            return CreateLauncherButton(buttonName, root.transform, label);
+        }
+
+        private Button CreateLauncherButton(string name, Transform parent, string label)
+        {
+            GameObject go = Create(name, parent, typeof(Image), typeof(Button));
+            Image image = go.GetComponent<Image>();
+            image.color = new Color(0.14f, 0.18f, 0.24f, 1f);
+            image.raycastTarget = true;
+            Button button = go.GetComponent<Button>();
+            button.targetGraphic = image;
+            GameObject labelObject = Create(name + "Label", go.transform, typeof(Text));
+            Text text = labelObject.GetComponent<Text>();
+            text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            text.text = label;
+            text.alignment = TextAnchor.MiddleCenter;
+            text.raycastTarget = false;
+            var labelRect = (RectTransform)labelObject.transform;
+            labelRect.anchorMin = Vector2.zero;
+            labelRect.anchorMax = Vector2.one;
+            labelRect.offsetMin = labelRect.offsetMax = Vector2.zero;
+            var rect = (RectTransform)go.transform;
+            rect.anchorMin = rect.anchorMax = rect.pivot = new Vector2(0f, 1f);
+            rect.sizeDelta = new Vector2(200f, 44f);
+            rect.anchoredPosition = new Vector2(20f, -300f);
+            return button;
+        }
+
+        private static void StretchToCanvas(RectTransform rect)
+        {
+            rect.anchorMin = Vector2.zero;
+            rect.anchorMax = Vector2.one;
+            rect.offsetMin = rect.offsetMax = Vector2.zero;
+        }
+
+        /// <summary>
+        /// Proves a launcher is not only active but actually visible and hittable: its
+        /// rect is inside the canvas and clear of the opaque chrome, its render order is
+        /// above the opaque page root, the topmost drawn graphic at its centre belongs to
+        /// it, and the topmost raycast target at that point is the launcher itself.
+        /// </summary>
+        private void AssertLauncherReachable(Transform canvas, Button button)
+        {
+            RectTransform rect = (RectTransform)button.transform;
+            Assert.That(button.interactable, Is.True, button.name + " must stay clickable");
+            Assert.That(button.targetGraphic, Is.Not.Null);
+            Assert.That(button.targetGraphic.raycastTarget, Is.True,
+                button.name + " needs a raycast target for pointer hits");
+            Assert.That(rect.rect.size, Is.EqualTo(
+                    ReferenceGalleryNavigator.FeatureLauncherSize),
+                button.name + " uses the shared launcher shelf size");
+            Assert.That(Contained(rect, (RectTransform)canvas), Is.True,
+                button.name + " must stay inside the page canvas");
+
+            Rect launcherRect = RectIn(rect, canvas);
+            Assert.That(launcherRect.Overlaps(RectIn((RectTransform)Find(
+                AddM02DailyActionPanel.NavRailName), canvas), true), Is.False,
+                button.name + " must not sit under the opaque navigation rail");
+            Assert.That(launcherRect.Overlaps(RectIn((RectTransform)Find(
+                AddM02DailyActionPanel.TopBarName), canvas), true), Is.False,
+                button.name + " must not sit under the opaque top bar");
+            Assert.That(launcherRect.Overlaps(RectIn((RectTransform)Find(
+                AddM02DailyActionPanel.ProfilePanelName), canvas), true), Is.False,
+                button.name + " must not cover the character profile column");
+            Assert.That(launcherRect.Overlaps(RectIn((RectTransform)Find(
+                AddM02DailyActionPanel.ActionPanelName), canvas), true), Is.False,
+                button.name + " must not cover the daily-action column");
+
+            Transform page = canvas.Find(AddM02DailyActionPanel.RootName);
+            Transform root = button.transform.parent == canvas
+                ? button.transform
+                : button.transform.parent;
+            Assert.That(root.parent, Is.EqualTo(canvas));
+            Assert.That(root.GetSiblingIndex(), Is.GreaterThan(page.GetSiblingIndex()),
+                button.name + " must render above the opaque page root, not behind it");
+
+            RectTransform backdrop = (RectTransform)Find(AddM02DailyActionPanel.BackdropName);
+            Vector2 point = CanvasPoint(canvas, rect);
+            if (Find(AddM02DailyActionPanel.PanelName).gameObject.activeInHierarchy)
+            {
+                Assert.That(backdrop.gameObject.activeInHierarchy, Is.True,
+                    "the open Character page paints its opaque backdrop under the launcher");
+                Assert.That(RectIn(backdrop, canvas).Contains(point), Is.True,
+                    "the sample point must lie inside the opaque M02 page area");
+            }
+
+            // On every tab the shared gallery background is the opaque surface the launcher
+            // must rise above; the M02 page backdrop only exists while the dossier is open.
+            Transform shared = canvas.Find("ReferenceGalleryBackdrop");
+            Assert.That(shared, Is.Not.Null, "the shared page background must exist");
+            var sharedRect = (RectTransform)shared;
+            Assert.That(sharedRect.gameObject.activeInHierarchy, Is.True);
+            Assert.That(sharedRect.GetComponent<Image>().color.a, Is.GreaterThan(0.5f),
+                "the shared page background is opaque");
+            Assert.That(RectIn(sharedRect, canvas).Contains(point), Is.True,
+                "the launcher must sit over the opaque shared background");
+            Assert.That(shared.GetSiblingIndex(), Is.LessThan(root.GetSiblingIndex()),
+                "the shared background must render behind the launcher shelf");
+
+            Graphic opaque = TopmostGraphic(canvas, point, false);
+            Assert.That(opaque, Is.Not.Null);
+            Assert.That(opaque.transform == button.transform ||
+                        opaque.transform.IsChildOf(button.transform), Is.True,
+                button.name + " is visually covered by " + Describe(opaque));
+            Graphic hit = TopmostGraphic(canvas, point, true);
+            Assert.That(hit, Is.SameAs(button.targetGraphic),
+                button.name + " must be the topmost raycast target, not " + Describe(hit));
+        }
+
+        private static Rect RectIn(RectTransform rect, Transform canvas)
+        {
+            var corners = new Vector3[4];
+            rect.GetWorldCorners(corners);
+            Vector3 min = canvas.InverseTransformPoint(corners[0]);
+            Vector3 max = canvas.InverseTransformPoint(corners[2]);
+            return Rect.MinMaxRect(min.x, min.y, max.x, max.y);
+        }
+
+        private static Vector2 CanvasPoint(Transform canvas, RectTransform rect) =>
+            canvas.InverseTransformPoint(rect.TransformPoint(rect.rect.center));
+
+        /// <summary>
+        /// Topmost graphic at a Canvas-local point in uGUI render order (later siblings and
+        /// children draw over earlier ones). With raycastOnly it returns the graphic the
+        /// EventSystem would hit, which is the clickability ground truth.
+        /// </summary>
+        private static Graphic TopmostGraphic(Transform canvas, Vector2 canvasPoint,
+            bool raycastOnly)
+        {
+            Vector3 world = canvas.TransformPoint(canvasPoint);
+            Graphic found = null;
+            for (int i = 0; i < canvas.childCount; i++)
+            {
+                Graphic child = TopmostGraphicIn(canvas.GetChild(i), world, raycastOnly);
+                if (child != null)
+                    found = child;
+            }
+            return found;
+        }
+
+        private static Graphic TopmostGraphicIn(Transform node, Vector3 world,
+            bool raycastOnly)
+        {
+            Graphic found = null;
+            foreach (Graphic graphic in node.GetComponents<Graphic>())
+            {
+                if (!graphic.enabled || !graphic.gameObject.activeInHierarchy ||
+                    graphic.color.a <= 0.01f || (raycastOnly && !graphic.raycastTarget))
+                    continue;
+                if (graphic is Text text && string.IsNullOrEmpty(text.text))
+                    continue;
+                RectTransform rect = graphic.rectTransform;
+                if (rect.rect.Contains(rect.InverseTransformPoint(world)))
+                    found = graphic;
+            }
+            for (int i = 0; i < node.childCount; i++)
+            {
+                Graphic child = TopmostGraphicIn(node.GetChild(i), world, raycastOnly);
+                if (child != null)
+                    found = child;
+            }
+            return found;
+        }
+
+        private static string Describe(Graphic graphic) =>
+            graphic == null ? "nothing" : graphic.gameObject.name;
 
         private static bool Contained(RectTransform child, RectTransform parent)
         {
