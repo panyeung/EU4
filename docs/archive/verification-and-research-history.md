@@ -6,6 +6,7 @@
 - [docs/reports/m02-roster-rail-visibility-2026-11-09.md](#m02-roster-rail-visibility-2026-11-09)
 - [docs/reports/m03-npc-autonomy-implementation.md](#m03-npc-autonomy-implementation)
 - [docs/reports/m04a-personal-memories.md](#m04a-personal-memories)
+- [M02 travel and month-boundary Play Mode follow-up](#m02-additional-travel-and-month-boundary-playmode-2026-11-14)
 - [docs/reports/sc013-implementation.md](#sc013-implementation)
 - [docs/reports/sc013-review-2.md](#sc013-review-2)
 - [docs/reports/sc013-review-3.md](#sc013-review-3)
@@ -5832,3 +5833,13 @@ Build the tactical rules in the project after the M05 validation gate, reusing i
 - Play Mode: in the existing `FoundationScene` Editor, the M02 duration InputField was enabled with a bound label; a focused UGUI `InputField.ProcessEvent` Ctrl+A plus `2` updated both field and label; closing and reopening the panel preserved `2`. The training action was accepted and its feedback displayed, while progress remained 0/2 because no day was advanced. Physical keyboard entry was not verified. No save was made.
 - Immediately after that Play Mode run, Unity returned to ready/stopped, `FoundationScene` remained active and clean, and the Console was 0 errors / 0 warnings / 0 logs.
 - Status: this is M02 technical verification only. Final M02 user milestone acceptance remains pending.
+
+<a id="m02-additional-travel-and-month-boundary-playmode-2026-11-14"></a>
+## M02 travel and month-boundary Play Mode follow-up (2026-11-14)
+
+- Environment: existing Unity Editor PID `77116`, Unity `6000.6.6f1`, exact project `C:\Users\panye\My project`; Pipeline 7801 reachable. `FoundationScene` was loaded and clean. Editor returned to ready/stopped; compile failure false; final Unity Console ground truth was 0 errors, 0 warnings and 0 logs. The Pipeline history retained 29 expected informational pause entries from the blocked-time probe; no screenshot was captured.
+- In a new SC-013 run, the world map preview from 清洲 to 热田 showed one travel day and arrival `1560-04-02`. Confirming produced the 热田 town view and advanced the HUD to `1560-04-02` at 热田.
+- The character daily-action panel then scheduled 千恵 from 清洲 to 热田. Her row showed `旅途中（清洲→热田）` and `旅行 0/1 天（剩 1）`; the global location line showed `清洲→热田`. After one day, the HUD reached `1560-04-03` and her row showed 热田 / 空闲.
+- SC-013 reached a pending `继承前的家议` on `1560-05-01`. Time-advance attempts were refused with the pending-event explanation and the HUD date stayed `1560-05-01`. The choice was resolved in memory only; no save was written.
+- A fresh SC-010 standard-sample run reached `1560-04-29` using 28 successful one-day UI actions (spot probes at advances 7/14/21/28 showed 04-08/04-15/04-22/04-29). 正綱 was scheduled for one-day training on 04-29; advancing once reached 04-30, where one-day training was scheduled again. One `结束月份` then moved the date to `1560-05-01`, and he returned idle. Visible funds changed `30→28` while supplies stayed `12`, consistent with one month settlement on this route.
+- Scope limit: this verifies only the exercised path. It does not prove every economic subsystem is idempotent under duplicate or faulted calls, and it is not final M02 acceptance. No default user save was read or written. UI actions used `VerifyUi` handlers; no map raycast/pixel check was made. Prior physical-pointer evidence for roster/training/advance is recorded in the local ignored log `Logs/verify/20261114-m02-daily-action-smoke.md`.
