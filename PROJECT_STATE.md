@@ -333,6 +333,7 @@ M01 已于 2026-11-07 由用户明确验收通过。当前 `main` 的 `Assets/Sc
 - 多商品真实经济设计已获用户批准：粮食与生产物资交易、人口月度消费、价格指数/通胀、短缺死亡修正及 100 年/1000 种子真实 `GameSession` 模拟。
 - 实现计划已写入 [M08B 实现计划](docs/superpowers/plans/2026-11-12-m08b-economic-simulation.md)，并按 GDD §14.2 补齐检查点与完整指标；用户已于 2026-11-12 批准计划并授权 OpenCode2 实施。实现按当前 Orca Run `run_125d614abb6b` 派发；代码与验证状态以 worker 结果更新。
 - 用户于 2026-11-12 批准仅供模拟器使用的确定性继承选择。模拟器优先用有效指定继承人，否则选择稳定 ID 最小的合法继承人；摄政按稳定 ID 确定性选择；无合法继承人时保留停机分类。此规则不改变玩家流程。
+- 2026-11-14 更正：无政策默认入口（`RunShortBatch`、`RunFullBatch`、`RunStagedBatches()` 与 `RunBatch` 的空根回退）此前仍会写入历史根目录 `Logs/verify/m08b/`，可能覆盖已接受基线；现已统一运行 `Unmanaged` 政策并写入 `Logs/verify/m08b/unmanaged/`，政策感知 `RunBatch` 的空根解析为 `PolicyOutputRoot(policy)`，显式非历史根保持有效，而归一化后等于历史根的显式路径会在写入前以 `ArgumentException` 拒绝。历史根与两个政策目录的既有产物未被改写；政策标签、schema 与确定性结果不变。
 
 ## 历史工作区保护（SC-012 时点）
 

@@ -128,3 +128,11 @@ The existing 1000-seed result is an unmanaged baseline: `IndustryState.CreateIni
 - Verification: targeted EditMode 50/50 and full EditMode 1958/1958 passed; the `unmanaged` rerun reproduces all 123 historical columns for 20, 200 and 1000 seeds with zero field differences.
 - 1000 seeds × 100 years: `unmanaged` stays at 605 extinction / 395 pending succession / 0 completed; `farm-managed-v1` reports 870 completed / 68 extinction / 62 pending succession, 803/1000 famine and economic collapse, 801/1000 extreme inflation, 0 industry collapse and 0 progression deadlocks. Farm appointments total 5825; all 1000 seeds staffed at least once and 913 ended staffed.
 - Boundaries: the comparison is one deterministic policy, not average player behaviour and not a pass threshold. The SC-013 farm-panel Play Mode acceptance passed on 2026-11-14; final M08 user acceptance, merge and tag remain open.
+
+### Correction: default artifact root routing (2026-11-14)
+
+The implementation outcome above describes the build that shipped the comparison. That build left one path bug, recorded here as a correction rather than by rewriting the outcome: the no-policy entries (`RunShortBatch`, `RunFullBatch`, `RunStagedBatches()` and the blank-root fallback of `RunBatch`) still resolved to the historical root `Logs/verify/m08b/`, so a default re-run could overwrite the accepted v5 baseline.
+
+- Every no-policy entry point now runs the `Unmanaged` policy through `RunPolicyBatch`, and the policy-aware `RunBatch` core resolves a null or blank root to `PolicyOutputRoot(policy)` through `ResolveArtifactRoot`.
+- An explicit output root is used exactly as given unless its normalized full path (trailing separators trimmed, ordinal case-insensitive) equals `DefaultOutputRoot`; that exact legacy root is rejected with `ArgumentException` before any write, while arbitrary roots and directories below the legacy root stay usable.
+- No run target is the historical root: the default path resolves to a policy directory, and an explicit call that normalizes to the legacy root is rejected, so no run can rewrite the accepted baseline. `DefaultOutputRoot` remains the historical root and the parent of the policy directories. Policy labels, schema, deterministic rows and economy rules are unchanged.

@@ -235,16 +235,52 @@ namespace SengokuChronicle.Editor
 
         private static readonly int[] DefaultCheckpointYears = { 10, 25, 50, 100 };
 
-        /// <summary>Default artifact directory: Logs/verify/m08b under the project root.</summary>
+        /// <summary>
+        /// Legacy artifact root: Logs/verify/m08b under the project root. It holds the accepted
+        /// schema-v5 artifacts, so it is only the parent of <see cref="PolicyOutputRoot"/> and
+        /// never a destination for a new run.
+        /// </summary>
         public static string DefaultOutputRoot =>
             Path.GetFullPath(Path.Combine(UnityEngine.Application.dataPath, "..", OutputRootRelativePath));
 
         /// <summary>
-        /// Policy-specific artifact directory below <see cref="DefaultOutputRoot"/>. Comparison
-        /// runs write here so the accepted historical artifacts at the root are never rewritten.
+        /// Policy-specific artifact directory below <see cref="DefaultOutputRoot"/>: the destination
+        /// of every new run, including the no-policy defaults. Each policy owns its own files, so no
+        /// run can rewrite the accepted historical artifacts at the legacy root.
         /// </summary>
         public static string PolicyOutputRoot(M08BIndustryPolicy policy) =>
             Path.Combine(DefaultOutputRoot, PolicyIdOf(policy));
+
+        /// <summary>
+        /// Artifact root a run writes to: a blank root resolves to the policy directory, so no
+        /// default run can target the historical root. An explicit root is kept as given unless its
+        /// normalized full path is <see cref="DefaultOutputRoot"/> itself, which is rejected so no
+        /// caller can rewrite the accepted historical artifacts. Directories below the historical
+        /// root stay usable.
+        /// </summary>
+        public static string ResolveArtifactRoot(string outputRoot, M08BIndustryPolicy policy)
+        {
+            if (string.IsNullOrWhiteSpace(outputRoot))
+                return PolicyOutputRoot(policy);
+            if (IsLegacyOutputRoot(outputRoot))
+                throw new ArgumentException(
+                    "Refusing to write simulation artifacts to the historical root " +
+                    DefaultOutputRoot + "; pass a policy directory or another explicit root.",
+                    nameof(outputRoot));
+            return outputRoot;
+        }
+
+        /// <summary>
+        /// True when <paramref name="outputRoot"/> is the historical artifact root itself. The
+        /// comparison uses normalized full paths with trailing separators trimmed and ordinal
+        /// case-insensitive matching, so alternate spellings of the legacy root are rejected too.
+        /// </summary>
+        private static bool IsLegacyOutputRoot(string outputRoot) =>
+            string.Equals(NormalizeRootPath(outputRoot), NormalizeRootPath(DefaultOutputRoot),
+                StringComparison.OrdinalIgnoreCase);
+
+        private static string NormalizeRootPath(string root) =>
+            Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 
         /// <summary>Stable artifact and provenance label for one policy.</summary>
         public static string PolicyIdOf(M08BIndustryPolicy policy) =>
@@ -1139,11 +1175,19 @@ namespace SengokuChronicle.Editor
             throw new ArgumentException("No terminal condition matches the supplied state.");
         }
 
+        /// <summary>
+        /// Runs a short seed range under the unmanaged policy in that policy's own artifact
+        /// directory, so the accepted historical root artifacts are never rewritten.
+        /// </summary>
         public static IReadOnlyList<M08BSeedResult> RunShortBatch(int firstSeed, int count, int years) =>
-            RunBatch(firstSeed, count, years, DefaultOutputRoot, DefaultCheckpointYears);
+            RunPolicyBatch(M08BIndustryPolicy.Unmanaged, firstSeed, count, years);
 
+        /// <summary>
+        /// Runs a full-length seed range under the unmanaged policy in that policy's own artifact
+        /// directory, so the accepted historical root artifacts are never rewritten.
+        /// </summary>
         public static IReadOnlyList<M08BSeedResult> RunFullBatch(int firstSeed, int count) =>
-            RunBatch(firstSeed, count, FullBatchYears, DefaultOutputRoot, DefaultCheckpointYears);
+            RunPolicyBatch(M08BIndustryPolicy.Unmanaged, firstSeed, count, FullBatchYears);
 
         /// <summary>
         /// Runs a resumable seed range for one policy into its own artifact directory, so two
@@ -1154,9 +1198,13 @@ namespace SengokuChronicle.Editor
             RunBatch(firstSeed, count, years, PolicyOutputRoot(policy), DefaultCheckpointYears, policy);
 
         /// <summary>
-        /// Runs a resumable seed range. Completed rows from this exact range are kept, and
-        /// deterministic rows from other completed ranges with the same year count may be
-        /// reused; no other range file is ever written or deleted.
+        /// Runs a resumable seed range under the unmanaged policy. A blank
+        /// <paramref name="outputRoot"/> resolves to that policy's own directory, so the accepted
+        /// historical root artifacts are never rewritten, and an explicit
+        /// <paramref name="outputRoot"/> that normalizes to the historical root is rejected.
+        /// Completed rows from this exact range are kept, and deterministic rows from other
+        /// completed ranges with the same year count may be reused; no other range file is ever
+        /// written or deleted.
         /// </summary>
         public static IReadOnlyList<M08BSeedResult> RunBatch(int firstSeed, int count, int years,
             string outputRoot, IReadOnlyList<int> checkpointYears) =>
@@ -1180,7 +1228,7 @@ namespace SengokuChronicle.Editor
                 throw new ArgumentOutOfRangeException(nameof(count), "seed range exceeds uint range.");
 
             List<int> checkpoints = NormalizeCheckpointYears(checkpointYears);
-            string root = string.IsNullOrWhiteSpace(outputRoot) ? DefaultOutputRoot : outputRoot;
+            string root = ResolveArtifactRoot(outputRoot, policy);
             Directory.CreateDirectory(root);
 
             string seedsPath = Path.Combine(root, SeedsFileName(firstSeed, count, years));
@@ -1246,8 +1294,13 @@ namespace SengokuChronicle.Editor
             return ordered.AsReadOnly();
         }
 
-        /// <summary>Pipeline entry: 20 short runs, one 100-year seed, 200, then 1000.</summary>
-        public static string RunStagedBatches()        {
+        /// <summary>
+        /// Pipeline entry: 20 short runs, one 100-year seed, 200, then 1000, all under the unmanaged
+        /// policy, so every artifact lands in <see cref="PolicyOutputRoot"/> and the accepted
+        /// historical root artifacts are never rewritten.
+        /// </summary>
+        public static string RunStagedBatches()
+        {
             var report = new StringBuilder();
             report.AppendLine(RunStageShort());
             report.AppendLine(RunStageSingleFull());

@@ -321,6 +321,7 @@
 - `Assets/Scripts/Editor/M08BLongTermSimulationRunner.cs`：新增 `M08BIndustryPolicy`（`Unmanaged` / `FarmManagedV1`）、`TryApplyFarmManagement`、按政策区分的输出根目录与阶段入口。默认重载（`RunSeed`、`RunShortBatch`、`RunFullBatch`、`RunBatch(expected)`、`RunStagedBatches()`）行为与路径不变。
 - 归一化 schema 升至 `m08b.long-term-simulation/v6`：种子 CSV 与检查点 CSV 新增 `policy` 列，种子行新增 `farmAppointments`、`farmVacancies`、`finalFarmAssignee`；汇总 JSON 新增顶层 `policy`、`industryPolicy` 定义与 `overall.industryPolicy` 计数；批次日志新增 `policy=`。复用校验要求同伴汇总的 `policy` 与当前政策一致，因此两种政策的行永远不会互相复用。
 - 产物：`Logs/verify/m08b/unmanaged/` 与 `Logs/verify/m08b/farm-managed-v1/` 均已包含经本次命令重跑并核对的 20、200、1000 种子阶段产物；每个汇总的 `policy`、`range`、`schema` 与 runner/规则输入摘要已逐项核对（同 runner `1113a912…`、同规则输入 `b8094557…`、schema v6），种子 CSV 的 `policy` 值与目录一致。历史基线文件（根目录）未被覆盖。各阶段状态以本文件末尾的对照表与 `Logs/verify/m08b/evidence-20261114/batch-progress.log` 为准。
+- 2026-11-14 更正：上一条「默认重载路径不变」描述的是当时的构建。后续发现 `RunShortBatch`、`RunFullBatch`、`RunStagedBatches()` 与 `RunBatch` 的空根回退仍会写入历史根目录 `Logs/verify/m08b/`，会覆盖已接受基线。现在这些无政策入口统一运行 `Unmanaged` 政策并写入 `Logs/verify/m08b/unmanaged/`；政策感知的 `RunBatch` 通过 `ResolveArtifactRoot` 把空根解析为 `PolicyOutputRoot(policy)`，显式传入的非历史根保持有效，而归一化后等于历史根的显式路径（含尾部分隔符、`.` 归一化与大小写变体）会在任何写入前以 `ArgumentException` 拒绝，因此旧工具 `Logs/verify/m08b/tools/M08BRunBatches.cs` 显式传入 `DefaultOutputRoot` 的路径已被阻断。政策标签、schema、确定性行与经济规则未变，历史段落保留为当时记录。
 
 ### 验证
 

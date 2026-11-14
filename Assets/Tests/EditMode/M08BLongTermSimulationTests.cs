@@ -1927,6 +1927,70 @@ namespace SengokuChronicle.Tests.EditMode
                 Does.EndWith("farm-managed-v1"));
         }
 
+        [Test]
+        public void DefaultRunRootsTargetPolicyDirectoriesAndNeverTheHistoricalRoot()
+        {
+            string historicalRoot = Path.GetFullPath(
+                M08BLongTermSimulationRunner.DefaultOutputRoot);
+
+            foreach (M08BIndustryPolicy policy in Enum.GetValues(typeof(M08BIndustryPolicy)))
+            {
+                string expected = Path.GetFullPath(
+                    M08BLongTermSimulationRunner.PolicyOutputRoot(policy));
+                Assert.That(
+                    Path.GetFullPath(M08BLongTermSimulationRunner.ResolveArtifactRoot(null, policy)),
+                    Is.EqualTo(expected),
+                    "a null root must resolve to the policy directory for " + policy);
+                Assert.That(
+                    Path.GetFullPath(M08BLongTermSimulationRunner.ResolveArtifactRoot("   ", policy)),
+                    Is.EqualTo(expected),
+                    "a blank root must resolve to the policy directory for " + policy);
+                Assert.That(expected, Is.Not.EqualTo(historicalRoot),
+                    "a default run must never target the historical artifact root");
+                Assert.That(Path.GetDirectoryName(expected), Is.EqualTo(historicalRoot),
+                    "policy directories stay directly below the historical root");
+            }
+
+            Assert.That(
+                Path.GetFullPath(M08BLongTermSimulationRunner.ResolveArtifactRoot(
+                    null, M08BIndustryPolicy.Unmanaged)),
+                Is.EqualTo(Path.Combine(historicalRoot,
+                    M08BLongTermSimulationRunner.UnmanagedPolicyId)),
+                "the no-policy default is the unmanaged directory");
+
+            // The ignored Logs tool passed DefaultOutputRoot explicitly, so an explicit legacy
+            // root must be rejected in every spelling before any write happens.
+            string[] legacyRootSpellings =
+            {
+                historicalRoot,
+                M08BLongTermSimulationRunner.DefaultOutputRoot,
+                historicalRoot + Path.DirectorySeparatorChar,
+                historicalRoot + Path.AltDirectorySeparatorChar,
+                Path.Combine(historicalRoot, "."),
+                historicalRoot.ToUpperInvariant()
+            };
+            List<string> entriesBefore = Directory.EnumerateFileSystemEntries(historicalRoot)
+                .OrderBy(path => path, StringComparer.Ordinal)
+                .ToList();
+            foreach (string spelling in legacyRootSpellings)
+            {
+                Assert.Throws<ArgumentException>(() =>
+                        M08BLongTermSimulationRunner.ResolveArtifactRoot(spelling,
+                            M08BIndustryPolicy.FarmManagedV1),
+                    "an explicit legacy root must be rejected: " + spelling);
+            }
+            Assert.That(Directory.EnumerateFileSystemEntries(historicalRoot)
+                    .OrderBy(path => path, StringComparer.Ordinal),
+                Is.EqualTo(entriesBefore),
+                "rejecting the legacy root must not write or create anything there");
+
+            Assert.That(
+                M08BLongTermSimulationRunner.ResolveArtifactRoot(_root,
+                    M08BIndustryPolicy.FarmManagedV1),
+                Is.EqualTo(_root),
+                "an explicitly supplied output root stays functional");
+        }
+
         private static PersonId FarmAssigneeOf(GameSession session) =>
             session.Industry.Slot(IndustryCatalog.FarmId).AssigneeId;
 
