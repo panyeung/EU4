@@ -164,3 +164,23 @@
 - [ ] **步骤 4：逐验证门只提交刚通过门且由该任务拥有的文件，并立即推送当前分支；若无法精确 stage，保留所有 WIP、不做混合提交并报告。**
 - [ ] **步骤 5：不合并、不打 milestone tag，等待用户对 M08B demo 的显式最终验收。**
 
+
+### Follow-up task: deterministic farm-managed comparison
+
+**Scope:** Preserve the completed unmanaged baseline and add `farm-managed-v1`. This policy is for simulation only; it does not change player rules or create a survival pass threshold.
+
+**Files:**
+- Modify: `Assets/Scripts/Editor/M08BLongTermSimulationRunner.cs`
+- Modify: `Assets/Tests/EditMode/M08BLongTermSimulationTests.cs`
+- Update: this plan, the M08B design, `GDD_v4.0.md` §14.2 simulation-method note, `PROJECT_STATE.md`, `docs/reports/m08-campaign-review.md`
+- Output: policy-specific CSV, JSON and logs under `Logs/verify/m08b/`; preserve existing unmanaged artifacts
+
+**Policy:** At each management-stable point after pending events and succession are resolved, if Farm is vacant, enumerate living family members by ordinal `PersonId.Value` and try `GameSession.TryAssignIndustry` until one succeeds. Leave Farm vacant when no candidate qualifies. Keep Trading House vacant. Do not replace a valid Farm appointment. If the real session rules vacate it, refill at the next stable point. The policy consumes no RNG.
+
+- [x] **Step 1: Pin the existing default.** `DefaultRunStaysUnmanaged` proves a default run leaves Farm and Trading House vacant with zero policy counters. The unmanaged rerun under the new schema matches the accepted historical artifact on all 123 existing columns for 20, 200 and 1000 seeds (zero field differences); historical files were not overwritten.
+- [x] **Step 2: Test farm assignment.** `FarmManagedV1PicksTheLowestOrdinalLegalCandidate`, `FarmManagedV1NeverReplacesAValidAssignment`, `FarmManagedV1RefillsOnlyAfterRealSessionRulesVacateThePost` and `FarmManagedV1LeavesThePostVacantWhenNobodyIsEligible` cover the four required outcomes through the public session API.
+- [x] **Step 3: Test determinism and artifact separation.** `FarmManagedPolicyIsDeterministicForTheSameSeed` and `PolicyRunsWriteDistinctPolicyLabeledArtifactsAndNeverShareRows` cover byte-identical repeats, distinct policy IDs/paths and cross-policy reuse rejection.
+- [x] **Step 4: Implement and verify in the current Unity Editor.** Compilation clean; targeted EditMode 50/50 and full EditMode 1958/1958 passed. EditMode aftermath had 2 intentional injected negative-path errors and 45 known warnings; the later Play Mode check cleared prior entries and ended at 0 errors / 0 warnings / 0 logs. `Logs/Editor.log` contains 52 Pipeline 30-second transport timeout lines from long batches; these are not simulation faults. No scene, prefab or `ProjectSettings` change.
+- [x] **Step 5: Run both policies through 20/200/1000 seed stages.** Both policy directories hold complete, provenance-checked stages; `unmanaged` reproduces the accepted baseline and `farm-managed-v1` reports 870 completed / 68 extinct / 62 pending succession at 1000 seeds. Reported as one deterministic policy, not average player behaviour and not a pass threshold.
+- [x] **Step 6: Lead Play Mode check.** In the existing Unity 6000.6.6f1 Editor (PID 77116, project `C:\Users\panye\My project`), started a fresh SC-013 game through the title UI, appointed the ordinal-lowest candidate `person.sc013.chie` (明智 千惠) to Farm through the actual Industry panel, and settled one month through the map UI. On 1560-05-01 the live report showed Farm output +4 food, household demand 2 for six people, grain 2→4, materials 12→15, both price indexes 1000→900‰, and food shortage 0 months. No explicit save was performed. After clearing prior test/cleanup entries, Play Mode Console was 0 errors / 0 warnings / 0 logs; Editor returned to ready/stopped and FoundationScene stayed clean.
+- [ ] **Step 7: Independent read-only documentation recheck, then commit/push verified task files.** The implementation review passed; a separate read-only review of the final Play Mode documentation delta is pending. Commit only verified task files to the current branch and push it. Do not merge or tag before explicit final M08 acceptance.

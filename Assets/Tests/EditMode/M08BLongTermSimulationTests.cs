@@ -908,7 +908,7 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(log, Does.Not.Contain("ran=2"),
                 "counters from an earlier run must not survive into this run's log");
             StringAssert.Contains("utcEnd:", log);
-            StringAssert.Contains("schema=m08b.long-term-simulation/v5", log);
+            StringAssert.Contains("schema=m08b.long-term-simulation/v6", log);
             StringAssert.Contains("ruleInputFileCount=", log);
         }
 
@@ -934,8 +934,8 @@ namespace SengokuChronicle.Tests.EditMode
             StringAssert.Contains("reused=0 ran=2", staleSourceLog);
             StringAssert.Contains("sourceSha256 does not match", staleSourceLog);
 
-            File.WriteAllText(summaryPath, summary.Replace("m08b.long-term-simulation/v5",
-                "m08b.long-term-simulation/v4"));
+            File.WriteAllText(summaryPath, summary.Replace("m08b.long-term-simulation/v6",
+                "m08b.long-term-simulation/v5"));
             M08BLongTermSimulationRunner.RunBatch(1, 2, 1, _root, years);
             StringAssert.Contains("reused=0 ran=2", File.ReadAllText(logPath));
             StringAssert.Contains("schema", File.ReadAllText(logPath));
@@ -1597,6 +1597,345 @@ namespace SengokuChronicle.Tests.EditMode
             {
                 Object.DestroyImmediate(holder);
             }
+        }
+
+        [Test]
+        public void DefaultRunStaysUnmanaged()
+        {
+            var holder = new GameObject("M08BDefaultUnmanagedTest");
+            try
+            {
+                GameSession session = holder.AddComponent<GameSession>();
+                session.InitNewGame(7UL);
+
+                M08BSeedResult run = M08BLongTermSimulationRunner.RunExistingSession(
+                    session, 7UL, 1, new[] { 1 });
+
+                Assert.That(run.PolicyId,
+                    Is.EqualTo(M08BLongTermSimulationRunner.UnmanagedPolicyId));
+                Assert.That(run.FarmAppointments, Is.Zero,
+                    "the default path must never appoint an industry");
+                Assert.That(run.FarmVacancies, Is.Zero,
+                    "the default path must not even inspect the industry posts");
+                Assert.That(run.FinalFarmAssignee, Is.Empty);
+                Assert.That(run.IndustryDecisions, Is.Empty);
+                Assert.That(FarmAssigneeOf(session).IsEmpty, Is.True,
+                    "the real session must end with Farm vacant");
+                Assert.That(session.Industry.Slot(IndustryCatalog.TradingHouseId).AssigneeId.IsEmpty,
+                    Is.True, "Trading House must stay vacant");
+                Assert.That(run.Termination, Is.Not.EqualTo(M08BTerminationReason.SimulatorFault));
+                Assert.That(run.ProgressionDeadlocks, Is.Zero);
+            }
+            finally
+            {
+                Object.DestroyImmediate(holder);
+            }
+        }
+
+        [Test]
+        public void FarmManagedV1PicksTheLowestOrdinalLegalCandidate()
+        {
+            var primaryHolder = new GameObject("M08BFarmPolicyPrimary");
+            var probeHolder = new GameObject("M08BFarmPolicyProbe");
+            try
+            {
+                GameSession session = primaryHolder.AddComponent<GameSession>();
+                session.InitNewGame(7UL);
+                GameSession probe = probeHolder.AddComponent<GameSession>();
+                probe.InitNewGame(7UL);
+
+                // Oracle: the same real command, enumerated literally in ordinal ID order on an
+                // identical session. Every rejected candidate before the success is recorded.
+                var refusedBeforeSuccess = new List<PersonId>();
+                PersonId expected = default;
+                foreach (PersonId candidate in LivingMembersByOrdinalId(session))
+                {
+                    IndustryAssignmentResult attempt =
+                        probe.TryAssignIndustry(IndustryCatalog.FarmId, candidate);
+                    if (attempt.Succeeded)
+                    {
+                        expected = candidate;
+                        break;
+                    }
+                    refusedBeforeSuccess.Add(candidate);
+                }
+                Assert.That(expected.IsEmpty, Is.False,
+                    "the standard SC-013 roster must offer at least one legal Farm candidate");
+
+                var appointments = new List<string>();
+                bool appointed = M08BLongTermSimulationRunner.TryApplyFarmManagement(session,
+                    appointments, out bool farmWasVacant, out string detail);
+
+                Assert.That(appointed, Is.True, detail);
+                Assert.That(farmWasVacant, Is.True);
+                Assert.That(FarmAssigneeOf(session), Is.EqualTo(expected),
+                    "the policy must take the first candidate the real rules accept");
+                Assert.That(appointments, Is.EqualTo(new[] { "farm=" + expected.Value }));
+                foreach (PersonId refused in refusedBeforeSuccess)
+                {
+                    Assert.That(session.Succession.World.IsLiving(refused), Is.True);
+                    Assert.That(IndustryService.CanWork(session.Succession, refused,
+                            session.WorldClock.CurrentDate, out _), Is.False,
+                        "a candidate skipped by the ordinal scan must be genuinely ineligible");
+                }
+                Assert.That(session.Industry.Slot(IndustryCatalog.TradingHouseId).AssigneeId.IsEmpty,
+                    Is.True, "the policy must never staff the Trading House");
+            }
+            finally
+            {
+                Object.DestroyImmediate(primaryHolder);
+                Object.DestroyImmediate(probeHolder);
+            }
+        }
+
+        [Test]
+        public void FarmManagedV1NeverReplacesAValidAssignment()
+        {
+            var holder = new GameObject("M08BFarmPolicyNoReplaceTest");
+            try
+            {
+                GameSession session = holder.AddComponent<GameSession>();
+                session.InitNewGame(7UL);
+                PersonId keeper = LivingMembersByOrdinalId(session)
+                    .First(personId => IndustryService.CanWork(session.Succession, personId,
+                        session.WorldClock.CurrentDate, out _));
+                Assert.That(session.TryAssignIndustry(IndustryCatalog.FarmId, keeper).Succeeded,
+                    Is.True);
+
+                var appointments = new List<string>();
+                bool appointed = M08BLongTermSimulationRunner.TryApplyFarmManagement(session,
+                    appointments, out bool farmWasVacant, out string detail);
+
+                Assert.That(appointed, Is.False, detail);
+                Assert.That(farmWasVacant, Is.False,
+                    "an occupied post is not a vacancy the policy may fill");
+                Assert.That(appointments, Is.Empty);
+                Assert.That(FarmAssigneeOf(session), Is.EqualTo(keeper),
+                    "a valid appointment must never be replaced or reassigned");
+            }
+            finally
+            {
+                Object.DestroyImmediate(holder);
+            }
+        }
+
+        [Test]
+        public void FarmManagedV1RefillsOnlyAfterRealSessionRulesVacateThePost()
+        {
+            var holder = new GameObject("M08BFarmPolicyRefillTest");
+            try
+            {
+                GameSession session = holder.AddComponent<GameSession>();
+                session.InitNewGame(7UL);
+                PersonId head = session.Succession.HeadPersonId;
+                Assert.That(session.TryAssignIndustry(IndustryCatalog.FarmId, head).Succeeded, Is.True,
+                    "the head must be a legal Farm candidate for this scenario");
+
+                var beforeVacancy = new List<string>();
+                Assert.That(M08BLongTermSimulationRunner.TryApplyFarmManagement(session,
+                    beforeVacancy, out bool vacantBefore, out _), Is.False);
+                Assert.That(vacantBefore, Is.False);
+                Assert.That(FarmAssigneeOf(session), Is.EqualTo(head));
+
+                Assert.That(session.Succession.World.TryGetLife(head,
+                    out SuccessionPersonLife life), Is.True);
+                Assert.That(session.Succession.World.TrySetLife(head,
+                    new SuccessionPersonLife(life.BirthYear, false, life.Retired),
+                    out string lifeError), Is.True, lifeError);
+                Assert.That(SuccessionService.BeginDeathSuccession(session.Succession,
+                    session.WorldClock.CurrentDate).Succeeded, Is.True);
+                var decisions = new List<string>();
+                Assert.That(M08BLongTermSimulationRunner.TryResolveSuccession(session, decisions,
+                    out string failure), Is.True, failure);
+
+                Assert.That(FarmAssigneeOf(session).IsEmpty, Is.True,
+                    "the real succession rules must vacate the dead head's post first");
+                Assert.That(session.CanEditIndustryAssignments, Is.True,
+                    "the refill needs a management-stable point");
+
+                var appointments = new List<string>();
+                bool refilled = M08BLongTermSimulationRunner.TryApplyFarmManagement(session,
+                    appointments, out bool farmWasVacant, out string detail);
+
+                Assert.That(refilled, Is.True, detail);
+                Assert.That(farmWasVacant, Is.True);
+                Assert.That(appointments.Count, Is.EqualTo(1));
+                Assert.That(FarmAssigneeOf(session), Is.Not.EqualTo(head));
+                Assert.That(FarmAssigneeOf(session).IsEmpty, Is.False);
+                Assert.That(session.Succession.World.IsLiving(FarmAssigneeOf(session)), Is.True);
+            }
+            finally
+            {
+                Object.DestroyImmediate(holder);
+            }
+        }
+
+        [Test]
+        public void FarmManagedV1LeavesThePostVacantWhenNobodyIsEligible()
+        {
+            var holder = new GameObject("M08BFarmPolicyNoCandidateTest");
+            try
+            {
+                GameSession session = holder.AddComponent<GameSession>();
+                session.InitNewGame(7UL);
+                foreach (PersonId member in LivingMembersByOrdinalId(session))
+                {
+                    Assert.That(session.Succession.World.TryGetLife(member,
+                        out SuccessionPersonLife life), Is.True);
+                    Assert.That(session.Succession.World.TrySetLife(member,
+                        new SuccessionPersonLife(life.BirthYear, life.Alive, true),
+                        out string retireError), Is.True, retireError);
+                }
+
+                var appointments = new List<string>();
+                bool appointed = M08BLongTermSimulationRunner.TryApplyFarmManagement(session,
+                    appointments, out bool farmWasVacant, out string detail);
+
+                Assert.That(appointed, Is.False, detail);
+                Assert.That(farmWasVacant, Is.True);
+                Assert.That(appointments, Is.Empty);
+                Assert.That(FarmAssigneeOf(session).IsEmpty, Is.True,
+                    "no accepted candidate must leave the post vacant");
+            }
+            finally
+            {
+                Object.DestroyImmediate(holder);
+            }
+        }
+
+        [Test]
+        public void FarmManagedV1ConsumesNoRandomState()
+        {
+            var holder = new GameObject("M08BFarmPolicyRandomTest");
+            try
+            {
+                GameSession session = holder.AddComponent<GameSession>();
+                session.InitNewGame(7UL);
+                Assert.That(session.CanEditIndustryAssignments, Is.True,
+                    "a fresh new game must be a management-stable point");
+                string before = JsonUtility.ToJson(session.CaptureSave().randomState);
+
+                var appointments = new List<string>();
+                Assert.That(M08BLongTermSimulationRunner.TryApplyFarmManagement(session,
+                    appointments, out _, out string detail), Is.True, detail);
+
+                string after = JsonUtility.ToJson(session.CaptureSave().randomState);
+                Assert.That(after, Is.EqualTo(before),
+                    "the industry policy must not read or advance the random streams");
+            }
+            finally
+            {
+                Object.DestroyImmediate(holder);
+            }
+        }
+
+        [Test]
+        public void FarmManagedRunAppointsTheFarmWhileTheUnmanagedRunStaysVacant()
+        {
+            int[] years = { 1 };
+            M08BSeedResult unmanaged = M08BLongTermSimulationRunner.RunSeed(7UL, 1, years,
+                M08BIndustryPolicy.Unmanaged);
+            M08BSeedResult managed = M08BLongTermSimulationRunner.RunSeed(7UL, 1, years,
+                M08BIndustryPolicy.FarmManagedV1);
+
+            Assert.That(unmanaged.PolicyId,
+                Is.EqualTo(M08BLongTermSimulationRunner.UnmanagedPolicyId));
+            Assert.That(managed.PolicyId,
+                Is.EqualTo(M08BLongTermSimulationRunner.FarmManagedV1PolicyId));
+            Assert.That(unmanaged.FarmAppointments, Is.Zero);
+            Assert.That(unmanaged.FinalFarmAssignee, Is.Empty);
+            Assert.That(managed.FarmAppointments, Is.GreaterThanOrEqualTo(1),
+                "a fresh SC-013 family must staff the Farm at its first stable point");
+            Assert.That(managed.FarmVacancies, Is.GreaterThanOrEqualTo(managed.FarmAppointments),
+                "every appointment needs a vacancy, so vacancies cannot trail appointments");
+            Assert.That(managed.FinalFarmAssignee, Is.Not.Empty);
+            Assert.That(managed.FarmAppointments, Is.EqualTo(managed.IndustryDecisions.Count),
+                "every counted appointment needs exactly one recorded decision");
+            Assert.That(managed.IndustryDecisions.All(decision =>
+                    decision.StartsWith("farm=", StringComparison.Ordinal)), Is.True);
+        }
+
+        [Test]
+        public void FarmManagedPolicyIsDeterministicForTheSameSeed()
+        {
+            int[] years = { 1 };
+            M08BSeedResult first = M08BLongTermSimulationRunner.RunSeed(7UL, 1, years,
+                M08BIndustryPolicy.FarmManagedV1);
+            M08BSeedResult repeat = M08BLongTermSimulationRunner.RunSeed(7UL, 1, years,
+                M08BIndustryPolicy.FarmManagedV1);
+
+            Assert.That(M08BLongTermSimulationRunner.SerializeSeedsCsv(new[] { repeat }, years),
+                Is.EqualTo(M08BLongTermSimulationRunner.SerializeSeedsCsv(new[] { first }, years)),
+                "the same seed and policy must serialize byte-identically");
+            Assert.That(repeat.IndustryDecisions, Is.EqualTo(first.IndustryDecisions),
+                "the same stable points must make the same appointments in the same order");
+            Assert.That(repeat.Termination, Is.EqualTo(first.Termination));
+            Assert.That(repeat.FarmAppointments, Is.EqualTo(first.FarmAppointments));
+        }
+
+        [Test]
+        public void PolicyRunsWriteDistinctPolicyLabeledArtifactsAndNeverShareRows()
+        {
+            int[] years = { 1 };
+            string unmanagedRoot = Path.Combine(_root, "unmanaged");
+            string managedRoot = Path.Combine(_root, "farm-managed-v1");
+            Directory.CreateDirectory(unmanagedRoot);
+            Directory.CreateDirectory(managedRoot);
+
+            M08BLongTermSimulationRunner.RunBatch(1, 1, 1, unmanagedRoot, years,
+                M08BIndustryPolicy.Unmanaged);
+            M08BLongTermSimulationRunner.RunBatch(1, 1, 1, managedRoot, years,
+                M08BIndustryPolicy.FarmManagedV1);
+
+            string unmanagedSeeds = File.ReadAllText(Path.Combine(unmanagedRoot, "seeds-1-1-1y.csv"));
+            string managedSeeds = File.ReadAllText(Path.Combine(managedRoot, "seeds-1-1-1y.csv"));
+            Assert.That(unmanagedSeeds, Is.Not.EqualTo(managedSeeds));
+            Assert.That(CsvField(unmanagedSeeds, "policy"),
+                Is.EqualTo(M08BLongTermSimulationRunner.UnmanagedPolicyId));
+            Assert.That(CsvField(managedSeeds, "policy"),
+                Is.EqualTo(M08BLongTermSimulationRunner.FarmManagedV1PolicyId));
+            StringAssert.Contains("\"policy\":\"farm-managed-v1\"",
+                File.ReadAllText(Path.Combine(managedRoot, "summary-1-1-1y.json")));
+            StringAssert.Contains("\"policy\":\"unmanaged\"",
+                File.ReadAllText(Path.Combine(unmanagedRoot, "summary-1-1-1y.json")));
+            StringAssert.Contains("policy=farm-managed-v1",
+                File.ReadAllText(Path.Combine(managedRoot, "batch-1-1-1y.log")));
+            StringAssert.Contains("policy=unmanaged",
+                File.ReadAllText(Path.Combine(unmanagedRoot, "batch-1-1-1y.log")));
+
+            // Each policy root is independently resumable.
+            M08BLongTermSimulationRunner.RunBatch(1, 1, 1, managedRoot, years,
+                M08BIndustryPolicy.FarmManagedV1);
+            StringAssert.Contains("reused=1 ran=0",
+                File.ReadAllText(Path.Combine(managedRoot, "batch-1-1-1y.log")));
+
+            // A summary written by the other policy can never be reused.
+            string managedSeedsBefore = File.ReadAllText(
+                Path.Combine(managedRoot, "seeds-1-1-1y.csv"));
+            M08BLongTermSimulationRunner.RunBatch(1, 1, 1, unmanagedRoot, years,
+                M08BIndustryPolicy.FarmManagedV1);
+            string rejectionLog = File.ReadAllText(Path.Combine(unmanagedRoot, "batch-1-1-1y.log"));
+            StringAssert.Contains("reused=0 ran=1", rejectionLog);
+            StringAssert.Contains("policy unmanaged does not match farm-managed-v1", rejectionLog);
+            Assert.That(managedSeeds, Is.EqualTo(managedSeedsBefore));
+            Assert.That(M08BLongTermSimulationRunner.PolicyOutputRoot(
+                    M08BIndustryPolicy.Unmanaged),
+                Is.Not.EqualTo(M08BLongTermSimulationRunner.PolicyOutputRoot(
+                    M08BIndustryPolicy.FarmManagedV1)));
+            Assert.That(M08BLongTermSimulationRunner.PolicyOutputRoot(
+                    M08BIndustryPolicy.FarmManagedV1),
+                Does.EndWith("farm-managed-v1"));
+        }
+
+        private static PersonId FarmAssigneeOf(GameSession session) =>
+            session.Industry.Slot(IndustryCatalog.FarmId).AssigneeId;
+
+        private static IEnumerable<PersonId> LivingMembersByOrdinalId(GameSession session)
+        {
+            return session.Succession.World.Family.Members
+                .Select(member => member.PersonId)
+                .Where(personId => session.Succession.World.IsLiving(personId))
+                .OrderBy(personId => personId.Value ?? string.Empty, StringComparer.Ordinal);
         }
 
         private static EventCatalogData LoadCatalog()

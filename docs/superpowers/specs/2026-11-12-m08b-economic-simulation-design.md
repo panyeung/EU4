@@ -110,3 +110,21 @@
 - 首版商品为粮食与生产物资；资金为货币，情报不交易：用户已批准。
 - 本文列出的数量、价格、通胀、饥荒、迁移、产业和统计规则：用户已批准进入实现计划。
 - 实现计划已获用户批准（2026-11-12）；代码实施已获授权，按 OpenCode2 项目流程执行。
+
+## Follow-up: managed-policy comparison (lead-selected 2026-11-14)
+
+The existing 1000-seed result is an unmanaged baseline: `IndustryState.CreateInitial` leaves both posts vacant, and the runner applies no industry appointments. Preserve that baseline and add a separately identified `farm-managed-v1` comparison. This is a simulation policy only; it does not change player rules or assert a survival pass.
+
+- At each management-stable point after pending events and succession are resolved, if Farm is vacant, enumerate living family members by ordinal stable `PersonId` and call `GameSession.TryAssignIndustry` until one appointment succeeds. Leave Farm vacant if no candidate is accepted.
+- Keep Trading House vacant. Do not unassign or replace a valid Farm appointment. When the existing session rules vacate a post, the policy may refill it at the next stable point.
+- The policy consumes no random state and uses the real industry API, eligibility rules, market settlement and `GameSession` month transaction.
+- Preserve unmanaged outputs and label every new CSV/summary with the policy ID. Compare survival and economic metrics without inventing pass thresholds or presenting the single policy as average player behavior.
+- Recompute both unmanaged and managed output under the new runner hash, writing into separate policy-specific artifact directories so the accepted historical baseline remains intact.
+### Implementation outcome (2026-11-14)
+
+- `M08BIndustryPolicy` now carries the policy through `RunSeed`, `RunExistingSession`, `RunBatch`, the policy-aware stage entries and the artifact writers. Default overloads stay on `Unmanaged` and keep the historical output root; policy runs write to `Logs/verify/m08b/unmanaged/` and `Logs/verify/m08b/farm-managed-v1/`.
+- `TryApplyFarmManagement` runs only at the post-event, post-succession management-stable point, reads the Farm slot from the public industry view, keeps an occupied post untouched, and tries living members in ordinal `PersonId.Value` order through `GameSession.TryAssignIndustry`. It never reads or advances random state.
+- Normalized schema is `m08b.long-term-simulation/v6`: both CSVs carry a `policy` column, seed rows add `farmAppointments`, `farmVacancies` and `finalFarmAssignee`, and the summary adds the top-level `policy`, an `industryPolicy` definition and `overall.industryPolicy` counts. Reuse requires the companion summary to prove the same policy, so the two policies can never consume each other's rows.
+- Verification: targeted EditMode 50/50 and full EditMode 1958/1958 passed; the `unmanaged` rerun reproduces all 123 historical columns for 20, 200 and 1000 seeds with zero field differences.
+- 1000 seeds × 100 years: `unmanaged` stays at 605 extinction / 395 pending succession / 0 completed; `farm-managed-v1` reports 870 completed / 68 extinction / 62 pending succession, 803/1000 famine and economic collapse, 801/1000 extreme inflation, 0 industry collapse and 0 progression deadlocks. Farm appointments total 5825; all 1000 seeds staffed at least once and 913 ended staffed.
+- Boundaries: the comparison is one deterministic policy, not average player behaviour and not a pass threshold. The SC-013 farm-panel Play Mode acceptance passed on 2026-11-14; final M08 user acceptance, merge and tag remain open.

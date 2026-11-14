@@ -300,3 +300,115 @@
 - 本轮未观察到自然死亡或继承，故不构成死亡路径验证。没有验证存档往返或怀孕衔接。
 - 退出 Play Mode 后新鲜 Pipeline 检查显示 Editor `ready/stopped`，FoundationScene `dirty=false`，Console `0` errors / `0` warnings，8 条缓冲日志（ground-truth 日志数 1），`compilationFailed=false`。`Logs/Editor.log` 显示这些信息日志来自月结阻断事件时的“尚有事件等待选择”提示。随后在停止态运行 FoundationScene Validator，报告 `RESULT: PASS; Errors: 0`；最新检查点仍为 0 errors / 0 warnings，缓冲日志 9 条、ground-truth 日志数 2，没有清空日志。
 - 结论：本轮支持“年度 NPC 自主婚姻、配偶入册、人口 HUD 更新”这条 SC-013 路径；不支持死亡、继承或 M08 最终验收结论。
+
+## 2026-11-14 M08B 后续：farm-managed-v1 确定性政策对照
+
+**范围：** 仅为 M08B 长周期模拟增加一个模拟专用产业政策，并重跑两种政策做对照。不改变玩家规则、场景、预制体或 `ProjectSettings`；不把结果当作生存通过标准或平均玩家行为。
+
+**背景发现：** 已接受的 1000-seed 结果是「无人管理」基线，不是遗漏的固定设置：`GameSession.InitNewGame` 通过 `IndustryState.CreateInitial` 建立两个空缺职位，而 M08B 运行器只处理事件与继承，从未调用 `TryAssignIndustry`。因此该基线的产业线始终空缺，产业产出为零。该基线继续保留并单独标注。
+
+### 政策
+
+| 政策 ID | 行为 | 产物目录 |
+|---|---|---|
+| `unmanaged`（默认） | 不任命任何产业，两个职位保持空缺，除非真实会话规则自己改变它 | `Logs/verify/m08b/`（历史基线）与新重跑 `Logs/verify/m08b/unmanaged/` |
+| `farm-managed-v1` | 在管理稳定点补任空缺的农庄，商馆始终空缺 | `Logs/verify/m08b/farm-managed-v1/` |
+
+`farm-managed-v1` 的稳定点定义与玩家可操作时点一致：待处理事件已解决、继承决策已解决、下一次月结尚未开始。此时若农庄空缺，按稳定 `PersonId` 的序数值升序列举在世家族成员，逐个调用公开的 `GameSession.TryAssignIndustry`，直到真实规则接受；无人被接受则保持空缺。已有有效任命不会被替换或解除；只有当真实会话规则（负责人死亡或退休时的岗位清理）使岗位空缺后，才会在下一个稳定点补任。政策不读取也不推进随机状态。
+
+### 实现与产物
+
+- `Assets/Scripts/Editor/M08BLongTermSimulationRunner.cs`：新增 `M08BIndustryPolicy`（`Unmanaged` / `FarmManagedV1`）、`TryApplyFarmManagement`、按政策区分的输出根目录与阶段入口。默认重载（`RunSeed`、`RunShortBatch`、`RunFullBatch`、`RunBatch(expected)`、`RunStagedBatches()`）行为与路径不变。
+- 归一化 schema 升至 `m08b.long-term-simulation/v6`：种子 CSV 与检查点 CSV 新增 `policy` 列，种子行新增 `farmAppointments`、`farmVacancies`、`finalFarmAssignee`；汇总 JSON 新增顶层 `policy`、`industryPolicy` 定义与 `overall.industryPolicy` 计数；批次日志新增 `policy=`。复用校验要求同伴汇总的 `policy` 与当前政策一致，因此两种政策的行永远不会互相复用。
+- 产物：`Logs/verify/m08b/unmanaged/` 与 `Logs/verify/m08b/farm-managed-v1/` 均已包含经本次命令重跑并核对的 20、200、1000 种子阶段产物；每个汇总的 `policy`、`range`、`schema` 与 runner/规则输入摘要已逐项核对（同 runner `1113a912…`、同规则输入 `b8094557…`、schema v6），种子 CSV 的 `policy` 值与目录一致。历史基线文件（根目录）未被覆盖。各阶段状态以本文件末尾的对照表与 `Logs/verify/m08b/evidence-20261114/batch-progress.log` 为准。
+
+### 验证
+
+| 检查 | 结果 | 证据 |
+|---|---|---|
+| 编译（既有 Editor PID 77116，项目路径已核对） | `compilationFailed=false`，0 error | `console_status` ground truth |
+| 定向 EditMode（`M08BLongTermSimulationTests`） | 50/50 passed，0 failed/skipped/inconclusive | `Logs/verify/m08b/evidence-20261114/editmode-m08b-targeted-final.xml` |
+| 全量 EditMode | 1958/1958 passed，0 failed/skipped/inconclusive | `Logs/verify/m08b/evidence-20261114/editmode-full-final-1958.xml`（SHA-256 `475dbde40a740a39fb4169bf5d1a39718abac7e25ba102c488bb3019a483c5cb`） |
+| 默认行为不变（仅 `unmanaged`） | 新 `unmanaged` 重跑与已接受历史产物在全部 123 个原有列上逐字段相同：20 种子 0 处、200 种子 0 处、1000 种子 0 处差异 | `Logs/verify/m08b/evidence-20261114/policy-comparison-partial.txt`（SHA-256 `54adf459de7daf94d27c5d4978651cf12c0951f002ff24d42b363bcfcf51a760`） |
+| 场景/预制体/ProjectSettings | 未修改；`git status` 中无场景、预制体或 `ProjectSettings` 变更 | `git status --short` |
+
+新增测试覆盖：默认运行保持无人管理；农庄按最低序数合法成员任命；不替换有效任命；仅真实规则腾空后补任；无合法候选人时保持空缺；政策不改变随机状态；同种子同政策逐字节可重复；两种政策产物路径、标签与复用隔离。测试文件：`Assets/Tests/EditMode/M08BLongTermSimulationTests.cs`。
+
+### 100 年结果对照
+
+两种政策都用当前 runner 源码摘要 `1113a912…` 与规则输入摘要 `b8094557…`、schema `m08b.long-term-simulation/v6`、`ruleVersion M08B-long-term-v4` 重跑；每行种子 CSV 的 `policy` 值与所在目录一致。以下数字直接取自各自的 `summary-1-*.json`，可用 `Logs/verify/m08b/tools/compare_policies.py` 复现，完整输出见 `Logs/verify/m08b/evidence-20261114/policy-comparison.txt`。
+
+**20 种子 × 5 年（短期冒烟，不是长期结果）**
+
+| 指标 | `unmanaged` | `farm-managed-v1` |
+|---|---|---|
+| 终止 | 完成 16、灭族 2、待处理继承 2 | 完成 20、灭族 0、待处理继承 0 |
+| 粮荒 / 经济崩溃 / 极端通胀 | 20/20、20/20、20/20 | 0/20、0/20、0/20 |
+| 产业停摆 | 0/20 | 0/20 |
+| 停止时继承人断档 | 11/18 | 0/20 |
+| 事件频率（每 1000 月） | 261 | 220 |
+| 农庄任命 / 空缺稳定点 | 0 / 0 | 25 / 25 |
+
+**200 种子 × 100 年**
+
+| 指标 | `unmanaged` | `farm-managed-v1` |
+|---|---|---|
+| 终止 | 完成 0、灭族 121、待处理继承 79 | 完成 182、灭族 7、待处理继承 11 |
+| 粮荒 / 经济崩溃 / 极端通胀 | 200/200、200/200、200/200 | 171/200、171/200、169/200 |
+| 产业停摆 / 世界推进死锁 | 0/200、0/200 | 0/200、0/200 |
+| 停止时继承人断档 | 79/79 | 11/193 |
+| 事件频率（每 1000 月） | 163 | 16 |
+| 检查点存活：10 / 25 / 50 / 100 年 | 46 / 0 / 0 / 0 | 200 / 200 / 188 / 182 |
+| 财富中位数（10 / 25 / 50 / 100 年） | 29 / — / — / — | 194 / 459 / 796 / 423 |
+| 在世人数中位数（10 / 25 / 50 / 100 年） | 1 / — / — / — | 9 / 10 / 22 / 20 |
+| 农庄任命 | 0 | 1191（200 个种子全部至少一次） |
+
+**1000 种子 × 100 年（GDD §14.2 主结果）**
+
+| 指标 | `unmanaged`（已接受基线） | `farm-managed-v1`（比较政策） |
+|---|---|---|
+| 终止分类 | 完成 0、灭族 605、待处理继承 395 | 完成 870、灭族 68、待处理继承 62 |
+| 未解决阻断事件 / 超时 / 日期溢出 / 模拟器故障 | 0 / 0 / 0 / 0 | 0 / 0 / 0 / 0 |
+| 粮荒 / 经济崩溃 | 999/1000、999/1000 | 803/1000、803/1000 |
+| 极端通胀 / 产业停摆 | 999/1000、0/1000 | 801/1000、0/1000 |
+| 停止时继承人断档 | 395/395（100%） | 66/932（7.1%） |
+| 世界推进死锁 | 0/1000 | 0/1000 |
+| 家族关系异常种子 | 0/48 | 0/328 |
+| 事件频率（每 1000 月） | 168 | 16 |
+| 检查点存活：10 / 25 / 50 / 100 年 | 194 / 2 / 0 / 0 | 1000 / 998 / 921 / 870 |
+| 检查点财富中位数（10 / 25 / 50 / 100 年） | 29 / 29 / — / — | 194 / 462 / 814 / 448 |
+| 检查点在世人数中位数（10 / 25 / 50 / 100 年） | 1 / 1 / — / — | 9 / 10 / 22 / 20 |
+| 检查点平均年龄中位数（10 / 25 / 50 / 100 年，十分之一年） | 520 / 470 / — / — | 433 / 379 / 221 / 273 |
+| 农庄任命 / 空缺稳定点 | 0 / 0 | 5825 / 5825 |
+| 至少任命一次的种子 / 结束时仍在任 | 0 / 0 | 1000 / 913 |
+
+对照解读的限制：
+
+- `farm-managed-v1` 是唯一一个确定性模拟政策，不是“普通玩家”的行为，也不是生存通过标准。GDD 未定义经济平衡阈值，因此 870/1000 完成 100 年不构成通过，`unmanaged` 的 0/1000 也不构成失败判定，只说明在没有农庄管理时该规则组合下的长期结果。
+- 两种政策仍都报告 80% 以上的粮荒与经济崩溃种子（`farm-managed-v1` 为 803/1000），说明仅补任农庄并不能消除长期粮食压力。
+- 50 年和 100 年在 `unmanaged` 下没有存活样本，其人口、年龄与财富分母为 0，不得读作零值或通过。
+- 商馆在两种政策下都保持空缺；产业停摆 0/1000 是“没有已任命产业则不计入停摆”的规则结果，不是产业健康证据。
+
+### 复现路径与运行限制
+
+- 重跑命令：`unity command run_script --file Logs/verify/m08b/tools/M08BPolicyBatchRun.cs --entry M08BPolicyBatchRun.Chunk --args '["<policy>","<first>","<count>","100"]'`，随后用同文件的 `Assemble` 入口生成 1–200 与 1–1000 规范区间；驱动脚本 `Logs/verify/m08b/tools/run_policy_batches.py`。日志：`Logs/verify/m08b/evidence-20261114/batch-progress.log`。
+- Unity Pipeline 客户端在约 30 秒后中止调用，但 Editor 仍会把请求跑完；因此驱动脚本改为每发一个分块就等待该分块的 `batch-*.log` 落盘，而不是相信调用返回值。Console 中因此积累了多条 `Failed to handle /api/exec request: Main thread operation timed out after 30000ms`，它们属于传输层超时，不是模拟或游戏规则错误。
+- 驱动脚本第一次运行时在种子 820 之后因 Windows 控制台编码（`UnicodeEncodeError`，cp1252 无法编码 CLI 回复中的中文）退出；随后以 UTF-8 重配置标准输出并从种子 821 继续，使用同一 Editor、同一 runner 与同一产物目录，未改动代码。`farm-managed-v1` 的 1000 种子分块与 1–200 / 1–1000 汇总均由这次续跑完成，分块日志与汇总的终止计数一致。
+- 100 年分块为每块 20 个种子（`farm-managed-v1` 每块约 2 分钟，总计约 90 分钟；`unmanaged` 每块 50 个种子）。这是本机的实际运行上限，不是规则限制。
+
+### 编译 / EditMode / Console / Play Mode 证据分层
+
+- 编译：既有 Editor（PID 77116，项目路径 `C:\Users\panye\My project`）`compilationFailed=false`、`compiling=false`；0 个 C# 错误。
+- EditMode：定向 `M08BLongTermSimulationTests` 50/50 通过（`Logs/verify/m08b/evidence-20261114/editmode-m08b-targeted-final.xml`，SHA-256 `474617a79a12a964c3b500c1db1f2088f77b7bc2dd17e78a4427a337bde34994`）；全量 1958/1958 通过、0 failed / 0 skipped / 0 inconclusive（`Logs/verify/m08b/evidence-20261114/editmode-full-final-1958.xml`，SHA-256 `475dbde40a740a39fb4169bf5d1a39718abac7e25ba102c488bb3019a483c5cb`，套件耗时 80.98 s）。
+- Console：最新全量测试后未读 Console 为 2 errors / 45 warnings。两条 error 是既有负向测试故意注入的“家族编年史记录写入失败（家族收养 / 家族婚姻）”日志（`LogAssert.Expect`，seq 997/998）；warning 来自既有生成器回滚测试与一条 `Object.FindFirstObjectByType` 过时 API 警告。批处理期间另有 52 条 `Failed to handle /api/exec request: Main thread operation timed out after 30000ms`，属于 Unity Pipeline 客户端 30 秒上限的传输层错误，不是游戏规则或模拟错误。`compilationFailed=false`、`compiling=false`，Editor `ready/stopped`。
+- 场景：本次未修改任何场景、预制体或 `ProjectSettings`（`git status --short` 无此类路径），因此不存在场景内新增根节点、绑定或视觉变化。SC-013 农庄面板的真实任命与一个月结 Play Mode 验收已由下方 2026-11-14 补充记录；未验证存档往返，也未处理次月事件。
+- 本结论不合并、不打 tag；M08 最终用户验收仍是独立门。
+
+## 2026-11-14 M08B farm-managed-v1 Play Mode 验收与独立复审
+
+- 使用已打开的 Unity Editor（PID `77116`，Unity `6000.6.6f1`，项目 `C:\Users\panye\My project`），经标题页“开始新游戏”→“固定三代剧本（SC-013）”启动真实新局。日期为 `1560-04-01`，家族 6 人；未写入存档。
+- 在“家族内务”产业面板通过候选按钮将序数最低合法候选 `person.sc013.chie`（明智千惠）任命到空缺农庄；月结后实际界面显示该任命仍在岗，农庄产粮 `+4`。人口需求为 2 单位，库存粮食 `2→4`，生产物资 `12→15`，粮价与物资价指数分别 `1000→900‰`，连续粮食短缺为 0 个月；这与已批准的 farm-managed-v1 稳定 ID 选择规则一致。
+- 点击世界地图界面的“结束月份”后日期从 `1560-04-01` 到 `1560-05-01`。当月还显示 `+2` 资金农庄收入、`-1` 资金维护、`+2` 资金家庭粮食购买及月结净 `+1` 资金。次月出现待处理的“继承前的家议”事件；本次测试在一个月结后停止，没有选择该事件或再推进月份。
+- 清空先前 EditMode 与临时截图清理日志后，Play Mode 结束时 Console ground truth 为 `0 errors / 0 warnings / 0 logs`、`compilationFailed=false`；Editor 回到 `ready/stopped`，`FoundationScene` `dirty=false`。本轮所有检查截图均已即时删除，未保留图片证据。
+- 独立只读 OpenCode 复审结论 **PASS**，无阻断或主要缺陷。低优先级备注：历史默认阶段入口仍向旧基线目录写 v6；非管理稳定点拒绝分支无直接测试；GDD“有效任命”用语可进一步对齐代码的“已占用岗位保持不变”。审查者在 `Logs/Editor.log` 中数到 52 条 30 秒 Pipeline 超时；协调方已独立全文重数确认 52 条。它们是批处理调用的传输超时，非模拟器 fault。
+- 范围：此项只关闭农庄面板的实际任命与一个月结 Play Mode 验收；未在此轮复验存档/读档，也没有处理次月事件。M08B 的用户风险结果已接受；M08 整体最终验收仍待用户确认。

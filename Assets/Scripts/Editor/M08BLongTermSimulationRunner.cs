@@ -28,6 +28,27 @@ namespace SengokuChronicle.Editor
         SimulatorFault = 6
     }
 
+    /// <summary>
+    /// Simulation-only industry policy. These policies never change player rules; they decide
+    /// what the harness does at a management-stable point so two runs can be compared.
+    /// </summary>
+    public enum M08BIndustryPolicy
+    {
+        /// <summary>
+        /// Accepted baseline: the harness never appoints an industry, so both posts stay vacant
+        /// unless a real session rule fills them. <see cref="IndustryState.CreateInitial"/> leaves
+        /// both posts vacant, so a fresh new game stays unmanaged for its whole run.
+        /// </summary>
+        Unmanaged = 0,
+
+        /// <summary>
+        /// Deterministic simulation-only comparison: keep Trading House vacant and fill a vacant
+        /// Farm through the public session command, choosing the living family member with the
+        /// lowest ordinal <see cref="PersonId.Value"/> that the real rules accept.
+        /// </summary>
+        FarmManagedV1 = 1
+    }
+
     /// <summary>One GDD 14.2 checkpoint. Unreached checkpoints keep <see cref="Reached"/> false.</summary>
     public sealed class M08BCheckpointResult
     {
@@ -78,6 +99,11 @@ namespace SengokuChronicle.Editor
         public M08BTerminationReason Termination;
         /// <summary>Rule-level stop detail; never a replacement for the termination category.</summary>
         public string TerminationDetail;
+        /// <summary>
+        /// Simulation policy that produced this row. Rows from different policies are never
+        /// comparable and never reusable for each other.
+        /// </summary>
+        public string PolicyId = M08BLongTermSimulationRunner.UnmanagedPolicyId;
         public int StartYear;
         public int StartMonth;
         public int EndYear;
@@ -120,6 +146,15 @@ namespace SengokuChronicle.Editor
         public int FinalFoodInventory;
         public int FinalSupplies;
         public int FinalLivingMembers;
+        /// <summary>Successful Farm appointments the active policy made during the run.</summary>
+        public int FarmAppointments;
+        /// <summary>
+        /// Management-stable points where the policy found the Farm post vacant, whether or not
+        /// a candidate was accepted. It is the opportunity count behind <see cref="FarmAppointments"/>.
+        /// </summary>
+        public int FarmVacancies;
+        /// <summary>Farm assignee at the final state, or empty when the post ended vacant.</summary>
+        public string FinalFarmAssignee = string.Empty;
         /// <summary>
         /// True when the real succession phase ended the family, including an extinction reached
         /// while a succession decision was resolving. Extinct families keep their roster rows, so
@@ -132,6 +167,8 @@ namespace SengokuChronicle.Editor
         public List<string> EventChoices = new List<string>();
         /// <summary>Stable succession decisions in resolution order; diagnostics and tests only.</summary>
         public List<string> SuccessionDecisions = new List<string>();
+        /// <summary>Stable industry decisions in resolution order; diagnostics and tests only.</summary>
+        public List<string> IndustryDecisions = new List<string>();
         /// <summary>Wall-clock cost for the batch log; never part of normalized artifacts.</summary>
         public long DurationMilliseconds;
     }
@@ -140,10 +177,11 @@ namespace SengokuChronicle.Editor
     /// Real-rule long-term simulation for GDD 14.2. Every seed starts a fresh SC-013
     /// <see cref="GameSession"/> through the public new-game entry and advances the same
     /// month transaction a player uses. The only automated policies are the approved stable
-    /// option-ID event resolver and the approved simulation-only succession policy (designated
-    /// heir, else lowest stable PersonId, with a stable-ID regent); extinction, a crisis
-    /// adoption the player alone may accept, and every other pause keep their own explicit stop
-    /// category and are never discarded.
+    /// option-ID event resolver, the approved simulation-only succession policy (designated
+    /// heir, else lowest stable PersonId, with a stable-ID regent), and the optional
+    /// simulation-only <see cref="M08BIndustryPolicy.FarmManagedV1"/> comparison policy;
+    /// extinction, a crisis adoption the player alone may accept, and every other pause keep
+    /// their own explicit stop category and are never discarded.
     /// </summary>
     public static class M08BLongTermSimulationRunner
     {
@@ -158,10 +196,15 @@ namespace SengokuChronicle.Editor
 
         private const string OutputRootRelativePath = "Logs/verify/m08b";
         private const string SourceRelativePath = "Assets/Scripts/Editor/M08BLongTermSimulationRunner.cs";
-        private const string NormalizedSchema = "m08b.long-term-simulation/v5";
+        private const string NormalizedSchema = "m08b.long-term-simulation/v6";
         private const string RuleVersion = "M08B-long-term-v4";
         private const string NoSeedRowsError = "CSV has no seed rows.";
         private const string RuleInputManifestHeader = "m08b-rule-inputs/v1";
+
+        /// <summary>Policy ID of the accepted unmanaged baseline.</summary>
+        public const string UnmanagedPolicyId = "unmanaged";
+        /// <summary>Policy ID of the simulation-only vacant-Farm comparison.</summary>
+        public const string FarmManagedV1PolicyId = "farm-managed-v1";
 
         /// <summary>
         /// Directories swept into the rule-input manifest, in dependency order. They hold the
@@ -195,6 +238,34 @@ namespace SengokuChronicle.Editor
         /// <summary>Default artifact directory: Logs/verify/m08b under the project root.</summary>
         public static string DefaultOutputRoot =>
             Path.GetFullPath(Path.Combine(UnityEngine.Application.dataPath, "..", OutputRootRelativePath));
+
+        /// <summary>
+        /// Policy-specific artifact directory below <see cref="DefaultOutputRoot"/>. Comparison
+        /// runs write here so the accepted historical artifacts at the root are never rewritten.
+        /// </summary>
+        public static string PolicyOutputRoot(M08BIndustryPolicy policy) =>
+            Path.Combine(DefaultOutputRoot, PolicyIdOf(policy));
+
+        /// <summary>Stable artifact and provenance label for one policy.</summary>
+        public static string PolicyIdOf(M08BIndustryPolicy policy) =>
+            policy == M08BIndustryPolicy.FarmManagedV1 ? FarmManagedV1PolicyId : UnmanagedPolicyId;
+
+        /// <summary>True only for a documented policy ID.</summary>
+        public static bool TryParsePolicyId(string policyId, out M08BIndustryPolicy policy)
+        {
+            if (string.Equals(policyId, FarmManagedV1PolicyId, StringComparison.Ordinal))
+            {
+                policy = M08BIndustryPolicy.FarmManagedV1;
+                return true;
+            }
+            if (string.Equals(policyId, UnmanagedPolicyId, StringComparison.Ordinal))
+            {
+                policy = M08BIndustryPolicy.Unmanaged;
+                return true;
+            }
+            policy = M08BIndustryPolicy.Unmanaged;
+            return false;
+        }
 
         public static IReadOnlyList<int> ApprovedCheckpointYears =>
             Array.AsReadOnly(DefaultCheckpointYears);
@@ -428,15 +499,20 @@ namespace SengokuChronicle.Editor
 
         /// <summary>Runs one seed for up to <paramref name="years"/> simulated years.</summary>
         public static M08BSeedResult RunSeed(ulong seed, int years) =>
-            RunSeed(seed, years, DefaultCheckpointYears);
+            RunSeed(seed, years, DefaultCheckpointYears, M08BIndustryPolicy.Unmanaged);
+
+        /// <summary>Runs one unmanaged seed with an explicit checkpoint list.</summary>
+        public static M08BSeedResult RunSeed(ulong seed, int years, IReadOnlyList<int> checkpointYears) =>
+            RunSeed(seed, years, checkpointYears, M08BIndustryPolicy.Unmanaged);
 
         /// <summary>
-        /// Runs one seed with an explicit checkpoint list in a throwaway preview scene, so the
+        /// Runs one seed with the requested simulation policy in a throwaway preview scene, so the
         /// user's active scene and its dirty flag stay untouched. The scene is closed in
         /// <c>finally</c>, which destroys the holder. Tests pass a one-year checkpoint so small
         /// real runs still exercise the checkpoint path.
         /// </summary>
-        public static M08BSeedResult RunSeed(ulong seed, int years, IReadOnlyList<int> checkpointYears)
+        public static M08BSeedResult RunSeed(ulong seed, int years, IReadOnlyList<int> checkpointYears,
+            M08BIndustryPolicy policy)
         {
             Scene scene = EditorSceneManager.NewPreviewScene();
             try
@@ -445,7 +521,7 @@ namespace SengokuChronicle.Editor
                 SceneManager.MoveGameObjectToScene(holder, scene);
                 GameSession session = holder.AddComponent<GameSession>();
                 session.InitNewGame(seed);
-                return RunExistingSession(session, seed, years, checkpointYears);
+                return RunExistingSession(session, seed, years, checkpointYears, policy);
             }
             finally
             {
@@ -459,10 +535,14 @@ namespace SengokuChronicle.Editor
         /// state before invocation.
         /// </summary>
         public static M08BSeedResult RunExistingSession(GameSession session, ulong seed, int years) =>
-            RunExistingSession(session, seed, years, DefaultCheckpointYears);
+            RunExistingSession(session, seed, years, DefaultCheckpointYears, M08BIndustryPolicy.Unmanaged);
 
         public static M08BSeedResult RunExistingSession(GameSession session, ulong seed, int years,
-            IReadOnlyList<int> checkpointYears)
+            IReadOnlyList<int> checkpointYears) =>
+            RunExistingSession(session, seed, years, checkpointYears, M08BIndustryPolicy.Unmanaged);
+
+        public static M08BSeedResult RunExistingSession(GameSession session, ulong seed, int years,
+            IReadOnlyList<int> checkpointYears, M08BIndustryPolicy policy)
         {
             if (session == null)
                 throw new ArgumentNullException(nameof(session));
@@ -482,6 +562,7 @@ namespace SengokuChronicle.Editor
             {
                 Seed = seed,
                 SeedHex = FormatSeedHex(seed),
+                PolicyId = PolicyIdOf(policy),
                 StartYear = start.Year,
                 StartMonth = start.Month,
                 EndYear = start.Year,
@@ -562,6 +643,13 @@ namespace SengokuChronicle.Editor
                         break;
                     }
                 }
+
+                // Management-stable point: pending events and any succession decision are resolved
+                // and the next month has not started, which is exactly when a player may change
+                // industry appointments. The unmanaged policy does nothing here, so the accepted
+                // baseline stays byte-identical.
+                if (policy == M08BIndustryPolicy.FarmManagedV1)
+                    ApplyFarmManagement(session, result);
 
                 if (!session.TryAdvanceToNextMonth())
                 {
@@ -875,6 +963,125 @@ namespace SengokuChronicle.Editor
         }
 
         /// <summary>
+        /// farm-managed-v1, the simulation-only comparison policy. At a management-stable point
+        /// it inspects the Farm post: an occupied post is never replaced or unassigned, and a
+        /// vacant one is filled through <see cref="GameSession.TryAssignIndustry"/> by trying the
+        /// living family members in ordinal <see cref="PersonId.Value"/> order until one
+        /// appointment succeeds. When no member is accepted the post stays vacant. Trading House
+        /// is never touched, and no random state is read or advanced.
+        /// </summary>
+        /// <param name="appointments">
+        /// Receives one <c>farm=&lt;personId&gt;</c> entry per accepted appointment, in order.
+        /// </param>
+        /// <param name="farmWasVacant">
+        /// True only when the policy inspected the Farm post and found it vacant, so a caller can
+        /// report the opportunity count behind the accepted appointments.
+        /// </param>
+        /// <returns>True only when this call itself appointed someone to the Farm.</returns>
+        public static bool TryApplyFarmManagement(GameSession session, IList<string> appointments,
+            out bool farmWasVacant, out string detail)
+        {
+            farmWasVacant = false;
+            detail = string.Empty;
+            if (session == null)
+            {
+                detail = "session is null";
+                return false;
+            }
+            if (!session.CanEditIndustryAssignments)
+            {
+                detail = "not a management-stable point: " + session.IndustryBlockReason;
+                return false;
+            }
+            if (!TryGetIndustryAssignee(session, IndustryCatalog.FarmId, out PersonId current))
+            {
+                detail = "the industry view has no " + IndustryCatalog.FarmId + " slot";
+                return false;
+            }
+            if (!current.IsEmpty)
+            {
+                detail = "Farm keeps its valid assignee " + (current.Value ?? string.Empty);
+                return false;
+            }
+
+            farmWasVacant = true;
+            List<PersonId> candidates = LivingFamilyMembersByOrdinalId(session.Succession);
+            string lastRefusal = string.Empty;
+            foreach (PersonId candidate in candidates)
+            {
+                IndustryAssignmentResult assignment =
+                    session.TryAssignIndustry(IndustryCatalog.FarmId, candidate);
+                if (!assignment.Succeeded)
+                {
+                    lastRefusal = assignment.Outcome + ": " + assignment.Message;
+                    continue;
+                }
+
+                appointments?.Add("farm=" + (candidate.Value ?? string.Empty));
+                detail = "Farm assigned to " + (candidate.Value ?? string.Empty);
+                return true;
+            }
+
+            detail = "Farm left vacant: no living family member was accepted" +
+                (string.IsNullOrEmpty(lastRefusal) ? string.Empty : " (" + lastRefusal + ")");
+            return false;
+        }
+
+        /// <summary>
+        /// Adapter that applies farm-managed-v1 to one seed row and records its own counts. The
+        /// unmanaged policy never calls it, so the accepted baseline is unaffected.
+        /// </summary>
+        private static void ApplyFarmManagement(GameSession session, M08BSeedResult result)
+        {
+            bool appointed = TryApplyFarmManagement(session, result.IndustryDecisions,
+                out bool farmWasVacant, out _);
+            if (appointed)
+                result.FarmAppointments++;
+            if (farmWasVacant)
+                result.FarmVacancies++;
+        }
+
+        /// <summary>
+        /// Living current-family members in ordinal stable-ID order, the documented order of the
+        /// farm-managed-v1 candidate scan. Ordinal, not culture-aware: the order must not depend
+        /// on the host locale.
+        /// </summary>
+        private static List<PersonId> LivingFamilyMembersByOrdinalId(SuccessionState succession)
+        {
+            var candidates = new List<PersonId>();
+            if (succession == null || succession.World == null)
+                return candidates;
+            IReadOnlyList<FamilyMembership> members = succession.World.Family.Members;
+            for (int i = 0; i < members.Count; i++)
+            {
+                PersonId personId = members[i].PersonId;
+                if (succession.World.IsLiving(personId))
+                    candidates.Add(personId);
+            }
+            candidates.Sort((left, right) => string.CompareOrdinal(
+                left.Value ?? string.Empty, right.Value ?? string.Empty));
+            return candidates;
+        }
+
+        /// <summary>Reads one slot assignee from the public industry view.</summary>
+        private static bool TryGetIndustryAssignee(GameSession session, string industryId,
+            out PersonId assignee)
+        {
+            assignee = default;
+            IReadOnlyList<IndustrySlotView> slots = session.Industry.Slots;
+            if (slots == null)
+                return false;
+            for (int i = 0; i < slots.Count; i++)
+            {
+                if (!string.Equals(slots[i].IndustryId, industryId, StringComparison.Ordinal))
+                    continue;
+                assignee = slots[i].AssigneeId;
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>
         /// Nearest-rank percentile over ascending values: rank = ceil(n * p / 100), clamped to
         /// [1, n]. p0 returns the minimum, p100 the maximum, and ties return the lower rank.
         /// </summary>
@@ -939,12 +1146,29 @@ namespace SengokuChronicle.Editor
             RunBatch(firstSeed, count, FullBatchYears, DefaultOutputRoot, DefaultCheckpointYears);
 
         /// <summary>
+        /// Runs a resumable seed range for one policy into its own artifact directory, so two
+        /// policies never share rows, summaries or logs.
+        /// </summary>
+        public static IReadOnlyList<M08BSeedResult> RunPolicyBatch(M08BIndustryPolicy policy,
+            int firstSeed, int count, int years) =>
+            RunBatch(firstSeed, count, years, PolicyOutputRoot(policy), DefaultCheckpointYears, policy);
+
+        /// <summary>
         /// Runs a resumable seed range. Completed rows from this exact range are kept, and
         /// deterministic rows from other completed ranges with the same year count may be
         /// reused; no other range file is ever written or deleted.
         /// </summary>
         public static IReadOnlyList<M08BSeedResult> RunBatch(int firstSeed, int count, int years,
-            string outputRoot, IReadOnlyList<int> checkpointYears)
+            string outputRoot, IReadOnlyList<int> checkpointYears) =>
+            RunBatch(firstSeed, count, years, outputRoot, checkpointYears,
+                M08BIndustryPolicy.Unmanaged);
+
+        /// <summary>
+        /// Runs a resumable seed range for one policy. Rows may only be reused from artifacts
+        /// whose companion summary proves the same policy, so the two policies stay separate.
+        /// </summary>
+        public static IReadOnlyList<M08BSeedResult> RunBatch(int firstSeed, int count, int years,
+            string outputRoot, IReadOnlyList<int> checkpointYears, M08BIndustryPolicy policy)
         {
             if (firstSeed < 0)
                 throw new ArgumentOutOfRangeException(nameof(firstSeed));
@@ -966,7 +1190,8 @@ namespace SengokuChronicle.Editor
 
             var bySeed = new Dictionary<ulong, M08BSeedResult>();
             string loadWarning = string.Empty;
-            TryLoadRange(root, seedsPath, firstSeed, count, years, checkpoints, bySeed, out loadWarning);
+            TryLoadRange(root, seedsPath, firstSeed, count, years, checkpoints, policy, bySeed,
+                out loadWarning);
 
             int reused = bySeed.Count;
             int ran = 0;
@@ -989,13 +1214,14 @@ namespace SengokuChronicle.Editor
                 M08BSeedResult seedResult;
                 try
                 {
-                    seedResult = RunSeed(seed, years, checkpoints);
+                    seedResult = RunSeed(seed, years, checkpoints, policy);
                 }
                 catch (Exception exception)
                 {
                     // Preserve the seed as an explicit stopped sample instead of
                     // aborting the whole range; the category stays in the closed set.
                     seedResult = CreateAbortedSeedResult(seed, years, checkpoints, exception);
+                    seedResult.PolicyId = PolicyIdOf(policy);
                 }
                 seedWatch.Stop();
                 seedResult.DurationMilliseconds = seedWatch.ElapsedMilliseconds;
@@ -1005,17 +1231,17 @@ namespace SengokuChronicle.Editor
 
                 if (ran % 10 == 0)
                     WriteArtifacts(seedsPath, checkpointsPath, summaryPath, bySeed.Values,
-                        firstSeed, count, years, checkpoints);
+                        firstSeed, count, years, checkpoints, policy);
             }
 
             List<M08BSeedResult> ordered = bySeed.Values.OrderBy(item => item.Seed).ToList();
             WriteArtifacts(seedsPath, checkpointsPath, summaryPath, ordered,
-                firstSeed, count, years, checkpoints);
+                firstSeed, count, years, checkpoints, policy);
 
             stopwatch.Stop();
             WriteBatchLog(logPath, firstSeed, count, years, reused, ran, startedTicks,
                 stopwatch.ElapsedMilliseconds, ordered, runDetails.ToString(), loadWarning,
-                seedsPath, checkpointsPath, summaryPath);
+                seedsPath, checkpointsPath, summaryPath, policy);
 
             return ordered.AsReadOnly();
         }
@@ -1041,6 +1267,36 @@ namespace SengokuChronicle.Editor
 
         public static string RunStageOneThousand() => DescribeStage(
             RunFullBatch(1, 1000), "full-1000", 1, 1000, FullBatchYears);
+
+        /// <summary>
+        /// Re-runs every stage for one policy. Files go to that policy's own directory, so the
+        /// accepted historical artifacts at <see cref="DefaultOutputRoot"/> are never rewritten.
+        /// </summary>
+        public static string RunStagedBatches(M08BIndustryPolicy policy)
+        {
+            var report = new StringBuilder();
+            report.AppendLine(RunStageShort(policy));
+            report.AppendLine(RunStageSingleFull(policy));
+            report.AppendLine(RunStageTwoHundred(policy));
+            report.AppendLine(RunStageOneThousand(policy));
+            return report.ToString();
+        }
+
+        public static string RunStageShort(M08BIndustryPolicy policy) => DescribeStage(
+            RunPolicyBatch(policy, 1, 20, ShortBatchYears),
+            PolicyIdOf(policy) + "-short", 1, 20, ShortBatchYears);
+
+        public static string RunStageSingleFull(M08BIndustryPolicy policy) => DescribeStage(
+            RunPolicyBatch(policy, 1, 1, FullBatchYears),
+            PolicyIdOf(policy) + "-full-single", 1, 1, FullBatchYears);
+
+        public static string RunStageTwoHundred(M08BIndustryPolicy policy) => DescribeStage(
+            RunPolicyBatch(policy, 1, 200, FullBatchYears),
+            PolicyIdOf(policy) + "-full-200", 1, 200, FullBatchYears);
+
+        public static string RunStageOneThousand(M08BIndustryPolicy policy) => DescribeStage(
+            RunPolicyBatch(policy, 1, 1000, FullBatchYears),
+            PolicyIdOf(policy) + "-full-1000", 1, 1000, FullBatchYears);
 
         /// <summary>
         /// Keeps an escaped simulator exception as an explicit stopped sample. The category is
@@ -1252,6 +1508,10 @@ namespace SengokuChronicle.Editor
             result.FinalFoodInventory = ResolveFoodInventory(save, session);
             result.FinalSupplies = save.industry != null ? save.industry.supplies : 0;
             result.FinalLivingMembers = living;
+            result.FinalFarmAssignee = TryGetIndustryAssignee(session, IndustryCatalog.FarmId,
+                    out PersonId farmAssignee) && !farmAssignee.IsEmpty
+                ? farmAssignee.Value ?? string.Empty
+                : string.Empty;
             result.FinalFamilyExtinct = session.IsFamilyExtinct;
             result.FinalHeirGap = !result.FinalFamilyExtinct && living > 0 &&
                 SuccessionService.GetCandidates(session.Succession, date).Count == 0;
@@ -1471,14 +1731,14 @@ namespace SengokuChronicle.Editor
 
         private static void WriteArtifacts(string seedsPath, string checkpointsPath, string summaryPath,
             IEnumerable<M08BSeedResult> seeds, int firstSeed, int count, int years,
-            IReadOnlyList<int> checkpointYears)
+            IReadOnlyList<int> checkpointYears, M08BIndustryPolicy policy)
         {
             List<M08BSeedResult> ordered = seeds.OrderBy(item => item.Seed).ToList();
             File.WriteAllText(seedsPath, SerializeSeedsCsv(ordered, checkpointYears), Utf8NoBom);
             File.WriteAllText(checkpointsPath,
                 SerializeCheckpointsCsv(ordered, checkpointYears), Utf8NoBom);
             File.WriteAllText(summaryPath,
-                BuildSummaryJson(ordered, firstSeed, count, years, checkpointYears), Utf8NoBom);
+                BuildSummaryJson(ordered, firstSeed, count, years, checkpointYears, policy), Utf8NoBom);
         }
 
         private static readonly UTF8Encoding Utf8NoBom = new UTF8Encoding(false);
@@ -1489,24 +1749,25 @@ namespace SengokuChronicle.Editor
         /// checkpoint set. Any doubt rejects the file instead of trusting a stale artifact.
         /// </summary>
         private static void TryLoadRange(string root, string seedsPath, int firstSeed, int count,
-            int years, IReadOnlyList<int> checkpointYears, Dictionary<ulong, M08BSeedResult> bySeed,
-            out string warning)
+            int years, IReadOnlyList<int> checkpointYears, M08BIndustryPolicy policy,
+            Dictionary<ulong, M08BSeedResult> bySeed, out string warning)
         {
             var warnings = new List<string>();
             List<int> checkpoints = NormalizeCheckpointYears(checkpointYears);
             string sourceSha = ComputeSourceSha256();
             string ruleInputSha = ComputeRuleInputSha256();
+            string policyId = PolicyIdOf(policy);
             if (File.Exists(seedsPath))
             {
                 if (!TryValidateReuseProvenance(seedsPath, years, checkpoints, sourceSha, ruleInputSha,
-                        out string ownRejection))
+                        policyId, out string ownRejection))
                 {
                     warnings.Add("own range not reused: " + ownRejection);
                 }
                 else if (TryParseSeedsCsv(File.ReadAllText(seedsPath), firstSeed, count, years,
                         checkpointYears, out List<M08BSeedResult> own, out string ownError))
                 {
-                    AcceptReusableRows(own, bySeed, warnings, "own range");
+                    AcceptReusableRows(own, bySeed, warnings, "own range", policyId);
                 }
                 else if (!string.IsNullOrEmpty(ownError))
                 {
@@ -1521,7 +1782,7 @@ namespace SengokuChronicle.Editor
                         StringComparison.OrdinalIgnoreCase))
                     continue;
                 if (!TryValidateReuseProvenance(candidate, years, checkpoints, sourceSha, ruleInputSha,
-                        out string rejection))
+                        policyId, out string rejection))
                 {
                     warnings.Add(Path.GetFileName(candidate) + " not reused: " + rejection);
                     continue;
@@ -1534,7 +1795,7 @@ namespace SengokuChronicle.Editor
                         warnings.Add(Path.GetFileName(candidate) + " not reusable: " + candidateError);
                     continue;
                 }
-                AcceptReusableRows(imported, bySeed, warnings, Path.GetFileName(candidate));
+                AcceptReusableRows(imported, bySeed, warnings, Path.GetFileName(candidate), policyId);
             }
 
             warning = string.Join(" | ", warnings);
@@ -1545,14 +1806,21 @@ namespace SengokuChronicle.Editor
         /// row is never reused: the harness fault must be re-observed, not frozen into the range.
         /// </summary>
         private static void AcceptReusableRows(IReadOnlyList<M08BSeedResult> rows,
-            Dictionary<ulong, M08BSeedResult> bySeed, List<string> warnings, string sourceLabel)
+            Dictionary<ulong, M08BSeedResult> bySeed, List<string> warnings, string sourceLabel,
+            string policyId)
         {
             var faulted = new List<ulong>();
+            var wrongPolicy = new List<ulong>();
             foreach (M08BSeedResult item in rows)
             {
                 if (item.Termination == M08BTerminationReason.SimulatorFault)
                 {
                     faulted.Add(item.Seed);
+                    continue;
+                }
+                if (!string.Equals(item.PolicyId, policyId, StringComparison.Ordinal))
+                {
+                    wrongPolicy.Add(item.Seed);
                     continue;
                 }
                 if (!bySeed.ContainsKey(item.Seed))
@@ -1561,6 +1829,10 @@ namespace SengokuChronicle.Editor
             if (faulted.Count > 0)
                 warnings.Add(sourceLabel + " faulted rows re-run: " +
                     string.Join(",", faulted.Select(seed => seed.ToString(CultureInfo.InvariantCulture))));
+            if (wrongPolicy.Count > 0)
+                warnings.Add(sourceLabel + " rows from another policy re-run: " +
+                    string.Join(",", wrongPolicy.Select(seed =>
+                        seed.ToString(CultureInfo.InvariantCulture))));
         }
 
         /// <summary>
@@ -1571,7 +1843,7 @@ namespace SengokuChronicle.Editor
         /// </summary>
         private static bool TryValidateReuseProvenance(string seedsPath, int years,
             IReadOnlyList<int> checkpointYears, string currentSourceSha, string currentRuleInputSha,
-            out string rejection)
+            string currentPolicyId, out string rejection)
         {
             rejection = string.Empty;
             string summaryPath = SummaryPathForSeedsPath(seedsPath);
@@ -1595,6 +1867,12 @@ namespace SengokuChronicle.Editor
             {
                 rejection = "summary ruleVersion " + provenance.RuleVersion + " does not match " +
                     RuleVersion;
+                return false;
+            }
+            if (!string.Equals(provenance.Policy, currentPolicyId, StringComparison.Ordinal))
+            {
+                rejection = "summary policy " + provenance.Policy + " does not match " +
+                    currentPolicyId;
                 return false;
             }
             if (string.IsNullOrEmpty(currentSourceSha) ||
@@ -1692,6 +1970,7 @@ namespace SengokuChronicle.Editor
         {
             public string Schema;
             public string RuleVersion;
+            public string Policy;
             public string SourceSha256;
             public string RuleInputSha256;
             public int FirstSeed;
@@ -1724,6 +2003,7 @@ namespace SengokuChronicle.Editor
 
             if (!TryReadJsonString(json, "schema", out string schema) ||
                 !TryReadJsonString(json, "ruleVersion", out string ruleVersion) ||
+                !TryReadJsonString(json, "policy", out string policy) ||
                 !TryReadJsonString(json, "sourceSha256", out string sourceSha256) ||
                 !TryReadJsonString(json, "ruleInputSha256", out string ruleInputSha256) ||
                 !TryReadJsonInt(json, "firstSeed", out int firstSeed) ||
@@ -1739,6 +2019,7 @@ namespace SengokuChronicle.Editor
             {
                 Schema = schema,
                 RuleVersion = ruleVersion,
+                Policy = policy,
                 SourceSha256 = sourceSha256,
                 RuleInputSha256 = ruleInputSha256,
                 FirstSeed = firstSeed,
@@ -1829,7 +2110,7 @@ namespace SengokuChronicle.Editor
         private static void WriteBatchLog(string path, int firstSeed, int count, int years,
             int reused, int ran, long startedTicks, long totalMilliseconds,
             IReadOnlyList<M08BSeedResult> seeds, string runDetails, string warning,
-            string seedsPath, string checkpointsPath, string summaryPath)
+            string seedsPath, string checkpointsPath, string summaryPath, M08BIndustryPolicy policy)
         {
             var log = new StringBuilder(8192);
             log.AppendLine("M08B LONG-TERM SIMULATION BATCH LOG");
@@ -1845,6 +2126,7 @@ namespace SengokuChronicle.Editor
             log.AppendLine("ruleInputFileCount=" +
                 ruleInputFileCount.ToString(CultureInfo.InvariantCulture));
             log.AppendLine("schema=" + NormalizedSchema + " ruleVersion=" + RuleVersion);
+            log.AppendLine("policy=" + PolicyIdOf(policy));
             log.AppendLine("reused=" + reused.ToString(CultureInfo.InvariantCulture) +
                 " ran=" + ran.ToString(CultureInfo.InvariantCulture) +
                 " totalSeeds=" + seeds.Count.ToString(CultureInfo.InvariantCulture));
@@ -1886,7 +2168,7 @@ namespace SengokuChronicle.Editor
 
         private static readonly string[] SeedColumns =
         {
-            "seed", "seedHex", "termination", "terminationDetail", "startYear", "startMonth",
+            "seed", "seedHex", "policy", "termination", "terminationDetail", "startYear", "startMonth",
             "endYear", "endMonth", "monthsSimulated", "initialRandomStateHex", "eventsTriggered",
             "eventDeadlocks", "famineCollapse", "longestFamineMonths", "industryCollapse",
             "longestIndustryStallMonths", "economicCollapse", "extremeInflation",
@@ -1896,7 +2178,8 @@ namespace SengokuChronicle.Editor
             "maxFoodPriceIndex", "minFoodPriceIndex", "maxMaterialsPriceIndex",
             "minMaterialsPriceIndex", "maxCompositePriceIndex", "finalFunds",
             "finalFoodInventory", "finalSupplies", "finalLivingMembers",
-            "finalFamilyExtinct", "finalHeirGap"
+            "finalFamilyExtinct", "finalHeirGap", "farmAppointments", "farmVacancies",
+            "finalFarmAssignee"
         };
 
         private static readonly string[] CheckpointColumns =
@@ -1929,6 +2212,7 @@ namespace SengokuChronicle.Editor
                 {
                     seed.Seed.ToString(CultureInfo.InvariantCulture),
                     seed.SeedHex ?? FormatSeedHex(seed.Seed),
+                    seed.PolicyId ?? UnmanagedPolicyId,
                     seed.Termination.ToString(),
                     seed.TerminationDetail ?? string.Empty,
                     seed.StartYear.ToString(CultureInfo.InvariantCulture),
@@ -1961,7 +2245,10 @@ namespace SengokuChronicle.Editor
                     seed.FinalSupplies.ToString(CultureInfo.InvariantCulture),
                     seed.FinalLivingMembers.ToString(CultureInfo.InvariantCulture),
                     Bool(seed.FinalFamilyExtinct),
-                    Bool(seed.FinalHeirGap)
+                    Bool(seed.FinalHeirGap),
+                    seed.FarmAppointments.ToString(CultureInfo.InvariantCulture),
+                    seed.FarmVacancies.ToString(CultureInfo.InvariantCulture),
+                    seed.FinalFarmAssignee ?? string.Empty
                 };
                 foreach (int year in years)
                 {
@@ -2007,7 +2294,7 @@ namespace SengokuChronicle.Editor
         {
             List<int> years = NormalizeCheckpointYears(checkpointYears);
             var csv = new StringBuilder(8192);
-            csv.Append("seed,seedHex,termination,checkpointYear,monthsRequired,reached,alive," +
+            csv.Append("seed,seedHex,policy,termination,checkpointYear,monthsRequired,reached,alive," +
                        "livingMembers,meanAgeTenths,funds,foodInventory,supplies,foodPriceIndex," +
                        "materialsPriceIndex,compositePriceIndex,wealth,heirGap,eventCount," +
                        "eventsPer1000Months,famineCollapse,industryCollapse,economicCollapse," +
@@ -2027,6 +2314,7 @@ namespace SengokuChronicle.Editor
                     {
                         seed.Seed.ToString(CultureInfo.InvariantCulture),
                         seed.SeedHex ?? FormatSeedHex(seed.Seed),
+                        seed.PolicyId ?? UnmanagedPolicyId,
                         seed.Termination.ToString(),
                         year.ToString(CultureInfo.InvariantCulture),
                         (year * 12).ToString(CultureInfo.InvariantCulture),
@@ -2167,6 +2455,7 @@ namespace SengokuChronicle.Editor
                 {
                     Seed = seedValue,
                     SeedHex = Field(fields, index, "seedHex"),
+                    PolicyId = Field(fields, index, "policy"),
                     Termination = termination,
                     TerminationDetail = Field(fields, index, "terminationDetail"),
                     StartYear = ParseInt(fields, index, "startYear"),
@@ -2203,7 +2492,10 @@ namespace SengokuChronicle.Editor
                     FinalSupplies = ParseInt(fields, index, "finalSupplies"),
                     FinalLivingMembers = ParseInt(fields, index, "finalLivingMembers"),
                     FinalFamilyExtinct = ParseBool(fields, index, "finalFamilyExtinct"),
-                    FinalHeirGap = ParseBool(fields, index, "finalHeirGap")
+                    FinalHeirGap = ParseBool(fields, index, "finalHeirGap"),
+                    FarmAppointments = ParseInt(fields, index, "farmAppointments"),
+                    FarmVacancies = ParseInt(fields, index, "farmVacancies"),
+                    FinalFarmAssignee = Field(fields, index, "finalFarmAssignee")
                 };
 
                 foreach (int year in expectedYears)
@@ -2344,7 +2636,17 @@ namespace SengokuChronicle.Editor
         /// range always produces the same bytes.
         /// </summary>
         public static string BuildSummaryJson(IReadOnlyList<M08BSeedResult> seeds, int firstSeed,
-            int count, int years, IReadOnlyList<int> checkpointYears)
+            int count, int years, IReadOnlyList<int> checkpointYears) =>
+            BuildSummaryJson(seeds, firstSeed, count, years, checkpointYears,
+                M08BIndustryPolicy.Unmanaged);
+
+        /// <summary>
+        /// Deterministic summary over the completed seed rows for one policy. Every ratio prints
+        /// its numerator and denominator; wall-clock timing stays in the batch log so the same
+        /// range always produces the same bytes.
+        /// </summary>
+        public static string BuildSummaryJson(IReadOnlyList<M08BSeedResult> seeds, int firstSeed,
+            int count, int years, IReadOnlyList<int> checkpointYears, M08BIndustryPolicy policy)
         {
             List<int> yearsList = NormalizeCheckpointYears(checkpointYears);
             List<M08BSeedResult> ordered = seeds == null
@@ -2355,6 +2657,7 @@ namespace SengokuChronicle.Editor
             json.Append("{\n");
             JsonProperty(json, 2, "schema", NormalizedSchema, true);
             JsonProperty(json, 2, "ruleVersion", RuleVersion, true);
+            JsonProperty(json, 2, "policy", PolicyIdOf(policy), true);
             JsonProperty(json, 2, "sourceSha256", ComputeSourceSha256(), true);
             TryComputeRuleInputProvenance(out string ruleInputSha256, out int ruleInputFileCount);
             JsonProperty(json, 2, "ruleInputSha256", ruleInputSha256, true);
@@ -2403,6 +2706,9 @@ namespace SengokuChronicle.Editor
                 true);
             JsonProperty(json, 4, "successionPolicy",
                 "approved simulation-only policy: prefer the valid designated heir, otherwise the eligible candidate with the lowest stable PersonId; pick the regent by the same stable-ID rule and complete a due regency through the public session command. A crisis adoption is never accepted, so a family with no lawful candidate keeps the PendingSuccession stop",
+                true);
+            JsonProperty(json, 4, "industryPolicy",
+                "farm-managed-v1 is a simulation-only comparison policy, not player behaviour and not a survival threshold. At each management-stable point after pending events and succession are resolved, a vacant Farm post is filled through GameSession.TryAssignIndustry by trying living family members in ordinal PersonId order until one real-rule appointment succeeds; the post stays vacant when nobody qualifies. Trading House stays vacant, an occupied post is never replaced or unassigned, and the policy consumes no random state. farmVacancyStablePoints is the opportunity count and farmAppointments the accepted appointments behind it",
                 true);
             JsonProperty(json, 4, "progressionDeadlock",
                 "world progression stopped by an unresolved blocking event that still prevents the calendar advancing. A rule-required pending succession keeps its own stop category and is not a deadlock. A three-refusal advance stall is reported separately as Timeout, and an escaped harness exception as SimulatorFault",
@@ -2469,7 +2775,14 @@ namespace SengokuChronicle.Editor
             json.Append("    \"peakFamilyRelationshipAnomalies\":")
                 .Append(ordered.Sum(item => item.PeakFamilyRelationshipAnomalies)).Append(",\n");
             json.Append("    \"persistedRelationshipViolations\":")
-                .Append(ordered.Sum(item => item.PersistedRelationshipViolations)).Append('\n');
+                .Append(ordered.Sum(item => item.PersistedRelationshipViolations)).Append(",\n");
+            json.Append("    \"industryPolicy\": {\"farmAppointments\":")
+                .Append(ordered.Sum(item => item.FarmAppointments))
+                .Append(",\"farmVacancyStablePoints\":")
+                .Append(ordered.Sum(item => item.FarmVacancies))
+                .Append(",\"seedsWithFarmAppointment\":")
+                .Append(ordered.Count(item => item.FarmAppointments > 0))
+                .Append(",\"denominator\":").Append(ordered.Count).Append("}\n");
             json.Append("  },\n");
 
             json.Append("  \"checkpoints\": [");
