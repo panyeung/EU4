@@ -36,6 +36,8 @@ Lead Play Mode on 2026-11-13 used real month-end controls to reach 1561-01-01 an
 
 This verifies visible death markers and Chronicle projection. Head-death succession, birth linkage, the full save/load contract and user milestone acceptance remain unverified in Play Mode.
 
+2026-11-14 UI Save/Load follow-up: saved a fresh SC-013 session at `1562-01-01`, advanced to `1562-02-01`, then loaded through the map UI. The visible date returned to `1562-01-01`; population 6, deceased markers for 内記 (49) and 明智 千恵 (68), designated heir 明智 正綱 (48), and Chronicle rows for both deaths and the 佐近/志乃 autonomous marriage persisted. The UI showed `已保存当前进度。` and `已载入存档。` Both original save files were restored and their SHA-256 values matched the pre-test values exactly. This verifies those visible fields only; serialized spouse ID/gender/birth year, unfinished pregnancy, and RNG restoration remain unverified. No screenshot was captured. Evidence: `Logs/verify/20261114-m08a-natural-death-playtest.md`.
+
 - Doctor: `unity pipeline list`, `unity command editor_status`, `unity command console_status`,
   `unity command list_open_scenes`. Require the single Editor for this project,
   `compilationFailed=false`, and `FoundationScene` active and clean.
