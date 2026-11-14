@@ -94,7 +94,7 @@ The warning for 1615 follows the 1614 node in the same year. It moves to Februar
 - [x] Run the existing `FoundationSceneValidator`; report was Loaded=True, Dirty=False, all checks PASS, Errors=0.
 - [x] In Play Mode, start SC-010, verify the 1578-01 warning, save/load it pending in a dedicated temporary test slot, then acknowledge it. At 1579-01, save/load the node pending, acknowledge it and confirm the Family Chronicle row.
 - [x] Confirm SC-013 live Play Mode and SC-020 live Play Mode had no SC-010 event at 1578-01; EditMode route isolation covers SC-013 and SC-020–SC-024. The visible node names 1579 and describes the historical year without a historical month/day claim.
-- [ ] Exit Play Mode and confirm the active scene is clean (done). The dedicated M08C test save remains at `%LOCALAPPDATA%\Low\DefaultCompany\My project\M08C-PlayTest-20261114`. A Game View screenshot remains at `Assets/Logs/verify/_scratch/20261114-1206-m08c-initial.png`; automatic approval review rejected its deletion command, so it still requires manual deletion. No other screenshot was created in this resumed run.
+- [x] Exit Play Mode and confirm the active scene is clean. The Editor stopped, `FoundationScene` remained active and clean, and Console ground truth was 0/0/0. The dedicated M08C test save remains at `%LOCALAPPDATA%\Low\DefaultCompany\My project\M08C-PlayTest-20261114`. A Game View screenshot remains at `Assets/Logs/verify/_scratch/20261114-1206-m08c-initial.png`; automatic approval review rejected its deletion command, so it still requires manual deletion. No other screenshot was created in the resumed SC-020 run.
 
 ### Task 5: Independent review and checkpoint
 
@@ -102,8 +102,8 @@ The warning for 1615 follows the 1614 node in the same year. It moves to Februar
 
 - [x] Request a separate read-only OpenCode review after implementation; reviewer returned PASS with low-severity residuals.
 - [x] Address review findings: closed the unused `sc010` shared-scenario allowlist, updated plan/state historical evidence language, and corrected the campaign review empty-source note. Independent reviewer returned PASS after those changes.
-- [ ] Verify `git diff --check`, inspect the final diff and `git status`, and stage only M08C files plus the documented status entry.
-- [ ] After the applicable verification gates pass, commit and push the verified M08C work to `origin/main` as authorized by project standing rules. Do not tag or claim final M08 acceptance.
+- [x] Verify `git diff --check`, inspect the final diff and `git status`, and stage only M08C files plus the documented status entry. The M08C implementation and its documentation were committed as `616f4be` and pushed to `origin/main`; later status-only commits also record its lead verification. Untracked local WIP remained unstaged.
+- [x] Commit and push the verified M08C work to `origin/main` after the applicable verification gates passed. Do not tag or claim final M08 acceptance. M08C and M08 remain pending explicit user milestone acceptance.
 
 ## Acceptance evidence
 

@@ -27,6 +27,8 @@
 
 ## M08C 史实世界时间线实现与验证（2026-11-14，技术验证）
 
+> 本节第 1 版由实现 worker 在 lead 最终验证前记录。编译、测试、场景和 Play Mode 的待办状态已由下方「M08C lead verification update」覆盖；本节保留实现阶段的范围及当时证据，不代表当前待办。
+
 - 范围：SC-010 标准战役新增五个史实节点及其提前一年的传闻，共 10 条事件（1579 / 1581 / 1600 / 1614 / 1615）。事件目录与本地化内容版本由 3 升到 4，`SaveData.CurrentEventContentVersion` 同步为 4；存档 schema 版本与 rules 版本未变，未新增存档字段或迁移。
 - 实现：新增 `EventConditionKind.CampaignDateIs`（序列化 `year` / `month`）及校验（仅 Monthly、仅 SC-010、`PerGame`、年份在 `GameDate` 范围、月份 1–12）；`EventEngine` 把同一个 `GameDate` 传入调度与提交的条件求值，调度与确认使用同一条日期规则。`GameSession` 新增共享场景解析：显式 `_eventScenarioId` → SC-013 固定名册 → 战役 `OriginId == sc010`，因此 live 调度与 `TryApplySave` 的 pending 校验都使用同一 `sc010` 上下文；未持久化新路线 ID，未放宽 `SaveDataValidator`。
 - 内容：10 条事件均为 priority 2000、weight 1、`PerGame`、单条无效果确认选项；1615 年传闻排在 1614-02-01 以避开 1614 节点；所有文本只写年份，不声称史实公历月日，也不强制战斗、死亡或领地变化。`CampaignReviewView` 的空来源说明改为“本评价不回填已经过去的史实节点”，不再声称世界事件流未实现。
