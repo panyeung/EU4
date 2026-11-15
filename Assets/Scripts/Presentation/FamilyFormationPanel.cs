@@ -17,10 +17,10 @@ namespace SengokuChronicle.Presentation
     [DisallowMultipleComponent]
     public sealed class FamilyFormationPanel : MonoBehaviour
     {
-        private const string MarriageMemberPrefix = "SC022MarriageMember_";
-        private const string MarriageCandidatePrefix = "SC022MarriageCandidate_";
-        private const string AdoptionMemberPrefix = "SC022AdoptionMember_";
-        private const string AdoptionCandidatePrefix = "SC022AdoptionCandidate_";
+        public const string MarriageMemberPrefix = "SC022MarriageMember_";
+        public const string MarriageCandidatePrefix = "SC022MarriageCandidate_";
+        public const string AdoptionMemberPrefix = "SC022AdoptionMember_";
+        public const string AdoptionCandidatePrefix = "SC022AdoptionCandidate_";
 
         [SerializeField] private GameSession gameSession;
         [SerializeField] private GameObject panelRoot;
@@ -56,6 +56,8 @@ namespace SengokuChronicle.Presentation
         private bool _subscribed;
         private UnityAction _openListener;
         private UnityAction _closeListener;
+        private UnityAction _marriageConfirmListener;
+        private UnityAction _adoptionConfirmListener;
         private PersonId _selectedMarriageMember;
         private PersonId _selectedMarriageCandidate;
         private PersonId _selectedAdoptionMember;
@@ -492,6 +494,18 @@ namespace SengokuChronicle.Presentation
                 _closeListener = Close;
                 closeButton.onClick.AddListener(_closeListener);
             }
+            // The generator only serializes the confirmation buttons; their runtime click
+            // handlers must be bound here, otherwise the visible submit buttons do nothing.
+            if (marriageConfirmButton != null && _marriageConfirmListener == null)
+            {
+                _marriageConfirmListener = ConfirmMarriage;
+                marriageConfirmButton.onClick.AddListener(_marriageConfirmListener);
+            }
+            if (adoptionConfirmButton != null && _adoptionConfirmListener == null)
+            {
+                _adoptionConfirmListener = ConfirmAdoption;
+                adoptionConfirmButton.onClick.AddListener(_adoptionConfirmListener);
+            }
         }
 
         private void Unsubscribe()
@@ -505,6 +519,12 @@ namespace SengokuChronicle.Presentation
             if (closeButton != null && _closeListener != null)
                 closeButton.onClick.RemoveListener(_closeListener);
             _closeListener = null;
+            if (marriageConfirmButton != null && _marriageConfirmListener != null)
+                marriageConfirmButton.onClick.RemoveListener(_marriageConfirmListener);
+            _marriageConfirmListener = null;
+            if (adoptionConfirmButton != null && _adoptionConfirmListener != null)
+                adoptionConfirmButton.onClick.RemoveListener(_adoptionConfirmListener);
+            _adoptionConfirmListener = null;
         }
 
         private void OnSessionStateChanged()

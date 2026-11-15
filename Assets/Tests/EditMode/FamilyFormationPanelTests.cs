@@ -179,6 +179,151 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
+        public void Panel_MarriageSceneButtonSubmitsExactlyOneCommandPerClick()
+        {
+            FamilyFormationPanel panel = Panel();
+            SceneButton(AddSC022FamilyFormation.OpenButtonName).onClick.Invoke();
+            Assert.That(panel.IsOpen, Is.True);
+
+            SceneButton(FamilyFormationPanel.MarriageMemberPrefix +
+                        SC022FamilyFormationScenario.HeadIdValue).onClick.Invoke();
+            Assert.That(panel.SelectedMarriageMember,
+                Is.EqualTo(SC022FamilyFormationScenario.HeadId));
+            SceneButton(FamilyFormationPanel.MarriageCandidatePrefix +
+                        SC022FamilyFormationScenario.MarriageCandidateOneIdValue)
+                .onClick.Invoke();
+            Assert.That(panel.SelectedMarriageCandidate,
+                Is.EqualTo(SC022FamilyFormationScenario.MarriageCandidateOneId));
+
+            Button confirm = SceneButton(AddSC022FamilyFormation.MarriageConfirmButtonName);
+            Assert.That(confirm.interactable, Is.True);
+            confirm.onClick.Invoke();
+
+            Assert.That(panel.MarriageCommitCount, Is.EqualTo(1));
+            Assert.That(_session.Succession.World.Family.TryGetRole(
+                SC022FamilyFormationScenario.MarriageCandidateOneId, out FamilyMemberRole role),
+                Is.True);
+            Assert.That(role, Is.EqualTo(FamilyMemberRole.Spouse));
+            Assert.That(_session.ChronicleEntries.Count, Is.EqualTo(1));
+            Assert.That(panel.MarriageMessageVisible, Is.True);
+            Assert.That(panel.MarriageMessageLine, Does.Contain("已登记婚姻"));
+
+            confirm.onClick.Invoke();
+            Assert.That(panel.MarriageCommitCount, Is.EqualTo(1),
+                "the scene button must not replay a confirmed selection");
+            Assert.That(_session.ChronicleEntries.Count, Is.EqualTo(1));
+
+            // A disable/enable cycle must release the click handler, then bind it exactly once.
+            SceneButton(FamilyFormationPanel.MarriageCandidatePrefix +
+                        SC022FamilyFormationScenario.MarriageCandidateTwoIdValue)
+                .onClick.Invoke();
+            Assert.That(panel.SelectedMarriageCandidate,
+                Is.EqualTo(SC022FamilyFormationScenario.MarriageCandidateTwoId));
+            panel.enabled = false;
+            InvokeLifecycle(panel, "OnDisable");
+            confirm.onClick.Invoke();
+            Assert.That(panel.MarriageCommitCount, Is.EqualTo(1),
+                "a disabled panel must not submit through a stale scene-button listener");
+
+            panel.enabled = true;
+            InvokeLifecycle(panel, "OnEnable");
+            panel.Open();
+            Assert.That(panel.SelectedMarriageCandidate,
+                Is.EqualTo(SC022FamilyFormationScenario.MarriageCandidateTwoId));
+            Assert.That(confirm.interactable, Is.True);
+            confirm.onClick.Invoke();
+
+            Assert.That(panel.MarriageCommitCount, Is.EqualTo(2));
+            Assert.That(_session.Succession.World.Family.TryGetRole(
+                SC022FamilyFormationScenario.MarriageCandidateTwoId, out role), Is.True);
+            Assert.That(role, Is.EqualTo(FamilyMemberRole.Spouse));
+            Assert.That(_session.ChronicleEntries.Count, Is.EqualTo(2));
+        }
+
+        [Test]
+        public void Panel_AdoptionSceneButtonSubmitsExactlyOneCommandAndKeepsSuccession()
+        {
+            SuccessionPhase phase = _session.Succession.Phase;
+            PersonId head = _session.Succession.HeadPersonId;
+            FamilyFormationPanel panel = Panel();
+            SceneButton(AddSC022FamilyFormation.OpenButtonName).onClick.Invoke();
+            Assert.That(panel.IsOpen, Is.True);
+
+            SceneButton(FamilyFormationPanel.AdoptionMemberPrefix +
+                        SC022FamilyFormationScenario.HeadIdValue).onClick.Invoke();
+            Assert.That(panel.SelectedAdoptionMember,
+                Is.EqualTo(SC022FamilyFormationScenario.HeadId));
+            SceneButton(FamilyFormationPanel.AdoptionCandidatePrefix +
+                        SC022FamilyFormationScenario.ChildAdoptionCandidateIdValue)
+                .onClick.Invoke();
+            Assert.That(panel.SelectedAdoptionCandidate,
+                Is.EqualTo(SC022FamilyFormationScenario.ChildAdoptionCandidateId));
+
+            Button confirm = SceneButton(AddSC022FamilyFormation.AdoptionConfirmButtonName);
+            Assert.That(confirm.interactable, Is.True);
+            confirm.onClick.Invoke();
+
+            Assert.That(panel.AdoptionCommitCount, Is.EqualTo(1));
+            Assert.That(_session.Succession.World.Family.TryGetRole(
+                SC022FamilyFormationScenario.ChildAdoptionCandidateId,
+                out FamilyMemberRole role), Is.True);
+            Assert.That(role, Is.EqualTo(FamilyMemberRole.AdoptedChild));
+            Assert.That(_session.Succession.Phase, Is.EqualTo(phase));
+            Assert.That(_session.Succession.HeadPersonId, Is.EqualTo(head));
+            Assert.That(_session.ChronicleEntries.Count, Is.EqualTo(1));
+            Assert.That(panel.AdoptionMessageVisible, Is.True);
+            Assert.That(panel.AdoptionMessageLine, Does.Contain("已办理收养"));
+
+            confirm.onClick.Invoke();
+            Assert.That(panel.AdoptionCommitCount, Is.EqualTo(1),
+                "the scene button must not replay a confirmed selection");
+            Assert.That(_session.ChronicleEntries.Count, Is.EqualTo(1));
+
+            // A disable/enable cycle must release the click handler, then bind it exactly once.
+            SceneButton(FamilyFormationPanel.AdoptionCandidatePrefix +
+                        SC022FamilyFormationScenario.AdultAdoptionCandidateIdValue)
+                .onClick.Invoke();
+            Assert.That(panel.SelectedAdoptionCandidate,
+                Is.EqualTo(SC022FamilyFormationScenario.AdultAdoptionCandidateId));
+            panel.enabled = false;
+            InvokeLifecycle(panel, "OnDisable");
+            confirm.onClick.Invoke();
+            Assert.That(panel.AdoptionCommitCount, Is.EqualTo(1),
+                "a disabled panel must not submit through a stale scene-button listener");
+
+            panel.enabled = true;
+            InvokeLifecycle(panel, "OnEnable");
+            panel.Open();
+            Assert.That(panel.SelectedAdoptionCandidate,
+                Is.EqualTo(SC022FamilyFormationScenario.AdultAdoptionCandidateId));
+            Assert.That(confirm.interactable, Is.True);
+            confirm.onClick.Invoke();
+
+            Assert.That(panel.AdoptionCommitCount, Is.EqualTo(2));
+            Assert.That(_session.Succession.World.Family.TryGetRole(
+                SC022FamilyFormationScenario.AdultAdoptionCandidateId, out role), Is.True);
+            Assert.That(role, Is.EqualTo(FamilyMemberRole.AdoptedChild));
+            Assert.That(_session.Succession.Phase, Is.EqualTo(phase));
+            Assert.That(_session.Succession.HeadPersonId, Is.EqualTo(head));
+            Assert.That(_session.ChronicleEntries.Count, Is.EqualTo(2));
+        }
+
+        [Test]
+        public void Panel_ConfirmSceneButtonsWithoutASelectionDoNotSubmit()
+        {
+            FamilyFormationPanel panel = Panel();
+            SceneButton(AddSC022FamilyFormation.OpenButtonName).onClick.Invoke();
+
+            // Both buttons are non-interactable here; a programmatic click must still no-op.
+            SceneButton(AddSC022FamilyFormation.MarriageConfirmButtonName).onClick.Invoke();
+            SceneButton(AddSC022FamilyFormation.AdoptionConfirmButtonName).onClick.Invoke();
+
+            Assert.That(panel.MarriageCommitCount, Is.Zero);
+            Assert.That(panel.AdoptionCommitCount, Is.Zero);
+            Assert.That(_session.ChronicleEntries, Is.Empty);
+        }
+
+        [Test]
         public void Panel_ClosingWithoutConfirmationDoesNotSubmit()
         {
             FamilyFormationPanel panel = Panel();
@@ -278,5 +423,23 @@ namespace SengokuChronicle.Tests.EditMode
             _scene.GetRootGameObjects()
                 .SelectMany(root => root.GetComponentsInChildren<Transform>(true))
                 .SingleOrDefault(transform => transform.name == name);
+
+        private Button SceneButton(string name)
+        {
+            Transform transform = Find(name);
+            Assert.That(transform, Is.Not.Null, name + " must exist in the scene");
+            Button button = transform.GetComponent<Button>();
+            Assert.That(button, Is.Not.Null, name + " must expose a Button");
+            return button;
+        }
+
+        private static void InvokeLifecycle(FamilyFormationPanel panel, string methodName)
+        {
+            System.Reflection.MethodInfo method = typeof(FamilyFormationPanel).GetMethod(
+                methodName, System.Reflection.BindingFlags.Instance |
+                            System.Reflection.BindingFlags.NonPublic);
+            Assert.That(method, Is.Not.Null, "Missing lifecycle method: " + methodName);
+            method.Invoke(panel, null);
+        }
     }
 }
