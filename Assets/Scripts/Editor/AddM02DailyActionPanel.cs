@@ -153,6 +153,7 @@ namespace SengokuChronicle.Editor
         private static readonly Vector2 PanelSize = new Vector2(1280f, 720f);
 
         private const float ContainmentTolerance = 0.5f;
+        private const float UnitScaleTolerance = 0.001f;
 
         // Column geometry at the 1280x720 reference canvas.
         private const float NavWidth = 150f;
@@ -401,6 +402,12 @@ namespace SengokuChronicle.Editor
                 historyBody.parent != profilePanel)
                 return Invalid(out error,
                     "M02 profile tab bodies must nest beneath the profile panel.");
+            if (!UnitScale(profileBody.localScale) || !UnitScale(relationsBody.localScale) ||
+                !UnitScale(historyBody.localScale))
+                return Invalid(out error,
+                    "The M02 profile tab bodies (M02ProfileBody, M02RelationsBody, " +
+                    "M02HistoryBody) must keep localScale 1 so their content renders at " +
+                    "full size.");
 
             if (content.parent != scroll || template.parent != content ||
                 template.gameObject.activeSelf)
@@ -1170,11 +1177,8 @@ namespace SengokuChronicle.Editor
         private static void CreateProfile(Scene scene, RectTransform parent, Font font,
             Sprite portraitSprite, Sprite sealSprite)
         {
-            GameObject profileBody = new GameObject(ProfileBodyName, typeof(RectTransform));
-            SceneManager.MoveGameObjectToScene(profileBody, parent.gameObject.scene);
-            Undo.RegisterCreatedObjectUndo(profileBody, UndoName);
-            Undo.SetTransformParent(profileBody.transform, parent, UndoName);
-            RectTransform bodyRect = profileBody.GetComponent<RectTransform>();
+            RectTransform bodyRect = Create(scene, parent, ProfileBodyName)
+                .GetComponent<RectTransform>();
             Stretch(bodyRect, 0f, 0f, 0f, 0f);
 
             CreateTab(scene, parent, font, ProfileTabButtonName, ProfileTabUnderlineName,
@@ -1593,10 +1597,7 @@ namespace SengokuChronicle.Editor
         private static GameObject WrapBody(Scene scene, Transform parent, string bodyName,
             Text content, bool active)
         {
-            GameObject body = new GameObject(bodyName, typeof(RectTransform));
-            SceneManager.MoveGameObjectToScene(body, parent.gameObject.scene);
-            Undo.RegisterCreatedObjectUndo(body, UndoName);
-            Undo.SetTransformParent(body.transform, parent, UndoName);
+            GameObject body = Create(scene, parent, bodyName);
             RectTransform rect = body.GetComponent<RectTransform>();
             PlaceTopLeft(rect, new Vector2(14f, 40f), new Vector2(412f, 560f));
             Undo.SetTransformParent(content.transform, rect, UndoName);
@@ -2270,6 +2271,11 @@ namespace SengokuChronicle.Editor
 
         private static bool HasRaycastTarget(Image image) =>
             image != null && image.raycastTarget;
+
+        private static bool UnitScale(Vector3 scale) =>
+            Mathf.Abs(scale.x - 1f) <= UnitScaleTolerance &&
+            Mathf.Abs(scale.y - 1f) <= UnitScaleTolerance &&
+            Mathf.Abs(scale.z - 1f) <= UnitScaleTolerance;
 
         private static bool Contained(RectTransform child, RectTransform parent)
         {

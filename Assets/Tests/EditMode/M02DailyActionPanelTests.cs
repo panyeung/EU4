@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Linq;
+using System.Reflection;
 using NUnit.Framework;
 using SengokuChronicle.Application;
 using SengokuChronicle.Domain;
@@ -1579,6 +1580,139 @@ namespace SengokuChronicle.Tests.EditMode
             }
             Assert.That(AddM02DailyActionPanel.Validate(_scene, out string restored),
                 Is.True, restored);
+        }
+
+        [Test]
+        public void Validate_RejectsOneThirdScaleProfileTabBodiesAndRegeneratesAtUnitScale()
+        {
+            // The three tab bodies share the 412x560 profile block, so a stale one-third
+            // local scale (as serialized in FoundationScene) shrinks the portrait and
+            // every profile detail. Validation must reject it and the updater must repair it.
+            string[] bodies =
+            {
+                AddM02DailyActionPanel.ProfileBodyName,
+                AddM02DailyActionPanel.RelationsBodyName,
+                AddM02DailyActionPanel.HistoryBodyName
+            };
+            var oneThird = new Vector3(1f / 3f, 1f / 3f, 1f / 3f);
+
+            foreach (string bodyName in bodies)
+            {
+                Transform body = Find(bodyName);
+                Assert.That(body.localScale, Is.EqualTo(Vector3.one),
+                    bodyName + " must be generated at unit scale");
+
+                body.localScale = oneThird;
+                try
+                {
+                    Assert.That(AddM02DailyActionPanel.Validate(_scene, out string error), Is.False,
+                        bodyName + " at one third scale would render its content too small");
+                    // Validate reports one shared message naming all three bodies, so
+                    // Does.Contain(bodyName) would hold whichever body was scaled. Only this
+                    // body is scaled here, so the shared unit-scale reason identifies the
+                    // failure instead of the body name inside the message.
+                    Assert.That(error, Does.Contain("must keep localScale 1"),
+                        bodyName + " must be rejected by the unit-scale rule");
+                }
+                finally
+                {
+                    body.localScale = Vector3.one;
+                }
+                Assert.That(AddM02DailyActionPanel.Validate(_scene, out string restored),
+                    Is.True, restored);
+            }
+
+            Find(AddM02DailyActionPanel.ProfileBodyName).localScale = oneThird;
+            Assert.That(AddM02DailyActionPanel.Update(_scene),
+                Is.EqualTo(AddM02DailyActionPanel.UpdateResult.Success));
+            foreach (string bodyName in bodies)
+                Assert.That(Find(bodyName).localScale, Is.EqualTo(Vector3.one),
+                    bodyName + " must be regenerated at unit scale");
+            Assert.That(AddM02DailyActionPanel.Validate(_scene, out string repaired),
+                Is.True, repaired);
+        }
+
+        [Test]
+        public void Create_NormalizesGeneratedScaleUnderANonUnitParent()
+        {
+            // Outer parenting keeps world scale, so a raw new GameObject + Undo
+            // .SetTransformParent copies the inverse parent scale into localScale. The
+            // existing rebuild coverage runs under a unit-scale parent, where that bug is
+            // invisible, so this parent is deliberately one third scale. Bodies at local
+            // scale 1/3 or 3 are what Validate rejects; only normalization after parenting
+            // passes.
+            Scene scene = EditorSceneManager.NewPreviewScene();
+            try
+            {
+                var parent = (RectTransform)CreateIn(scene, "M02ScaledParent", null).transform;
+                parent.sizeDelta = new Vector2(412f, 560f);
+                parent.localScale = new Vector3(1f / 3f, 1f / 3f, 1f / 3f);
+
+                // Premise: this parent is hostile, so the assertions below are not vacuous.
+                var probe = new GameObject("M02ScaleProbe", typeof(RectTransform));
+                SceneManager.MoveGameObjectToScene(probe, scene);
+                try
+                {
+                    Undo.SetTransformParent(probe.transform, parent, string.Empty);
+                    Assert.That(probe.transform.localScale, Is.Not.EqualTo(Vector3.one),
+                        "unnormalized parenting must inherit the parent's inverse scale");
+                }
+                finally
+                {
+                    UnityEngine.Object.DestroyImmediate(probe);
+                }
+
+                Transform child = (GeneratorMethod("Create").Invoke(null,
+                    new object[] { scene, parent, "M02ScaledChild", new Type[0] })
+                    as GameObject).transform;
+                Assert.That(child.localScale, Is.EqualTo(Vector3.one),
+                    "a created child must normalize its scale after parenting");
+                Assert.That(child.lossyScale, Is.EqualTo(parent.lossyScale),
+                    "the child keeps the parent's world scale instead of shrinking");
+
+                GeneratorMethod("CreateProfile").Invoke(null,
+                    new object[] { scene, parent, null, null, null });
+                Transform profileBody = FindAllIn(scene, AddM02DailyActionPanel.ProfileBodyName)
+                    .Single();
+                foreach (Transform part in profileBody
+                             .GetComponentsInChildren<Transform>(true))
+                {
+                    Assert.That(part.localScale, Is.EqualTo(Vector3.one),
+                        part.name + " must be created at unit scale under a scaled parent");
+                    Assert.That(part.lossyScale, Is.EqualTo(parent.lossyScale),
+                        part.name + " must render at the page's scale");
+                }
+
+                Text content = (GeneratorMethod("Create").Invoke(null,
+                    new object[] { scene, parent, "M02ScaledContent", new[] { typeof(Text) } })
+                    as GameObject).GetComponent<Text>();
+                GeneratorMethod("WrapBody").Invoke(null,
+                    new object[] { scene, parent, "M02ScaledWrappedBody", content, false });
+                Transform wrappedBody = FindAllIn(scene, "M02ScaledWrappedBody").Single();
+                Assert.That(wrappedBody.localScale, Is.EqualTo(Vector3.one),
+                    "a wrapped tab body must be created at unit scale");
+                Assert.That(content.transform.localScale, Is.EqualTo(Vector3.one),
+                    "wrapping content into a body must keep it at unit scale");
+                Assert.That(content.transform.lossyScale, Is.EqualTo(parent.lossyScale),
+                    "wrapped content keeps the page's world scale");
+            }
+            finally
+            {
+                if (scene.IsValid())
+                    EditorSceneManager.ClosePreviewScene(scene);
+            }
+        }
+
+        /// <summary>
+        /// Reaches the private generator helpers so generated bodies can be exercised
+        /// against a deliberately scaled parent without a production seam used only here.
+        /// </summary>
+        private static MethodInfo GeneratorMethod(string name)
+        {
+            MethodInfo method = typeof(AddM02DailyActionPanel)
+                .GetMethod(name, BindingFlags.Static | BindingFlags.NonPublic);
+            Assert.That(method, Is.Not.Null, name + " must exist in AddM02DailyActionPanel");
+            return method;
         }
 
         private static M2RosterRow RelationRow(string id, string name, bool isHead = false) =>
