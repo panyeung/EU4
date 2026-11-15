@@ -317,6 +317,7 @@
 - 再执行一次正常月结至 `1561-02-01` 后，名册人数从 9 增至 10。家谱节点显示新生儿“阿绫”为 0 岁、第二代；母亲节点的怀孕状态已清除。家族编年史最新一行显示“1561年2月・家族关系 家族新生”，正文为“PlaytestMother与PlaytestFather的女阿绫出生。”另一条孕期仍在进行。
 - 本轮证明一条受孕记录经九个月结完成出生，并写入可见家谱和家族编年史；年界死亡、继承暂停与恢复月结也在同一调试局中经过真实界面。它没有验证 Debug Mode 中的孕期存档往返、普通玩家 SC-013 路线的受孕出生、第二条孕期的分娩，或 M08 最终验收。
 - 退出 Play Mode 后 Editor 为 `ready/stopped`，`FoundationScene` `dirty=false`，`compilationFailed=false`，Console ground truth 为 0 errors / 0 warnings / 0 logs。测试没有保存场景。
+- 随后在同一 Editor 聚焦运行现有 EditMode 覆盖：`FamilyPregnancy` 30/30、两个在途孕期 Save 往返用例 2/2、性别与孕期当前版本迁移用例 1/1。没有重跑全量套件。最终 Editor 为 `ready/stopped`，场景 `dirty=false`、`compilationFailed=false`；Console ground truth 为 0 errors、1 warning、8 logs。唯一 warning 是故障注入回滚测试预期的 `SC-021 month settlement rolled back: injected birth rollback`。
 
 ## 2026-11-14 M08B 后续：farm-managed-v1 确定性政策对照
 
