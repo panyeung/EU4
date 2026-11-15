@@ -157,6 +157,16 @@
 
 > **2026-11-14 后续补测：**单独一条 SC-013 重复继承路线通过真实 UI 连续完成两次家主交接，并显示继承编年史；本次在 `1564-01-01` 由明智 信正继任，未观察到出生。另启动 SC-022 生育观察路线，名册在 `1561-12-01` 前的采样没有怀孕状态；`1562-01-01` 家主与配偶均标为已故，继承 UI 暂停月结，选择成年旁系后 HUD 更新。该路线未观察到出生，也未检查死因编年史类别。两次测试均无截图、无场景保存、未访问存档；存档与备份哈希仍与测试前一致。Editor 停止后 `ready/stopped`、FoundationScene `dirty=false`、Console 0 errors/0 warnings（最新 ground-truth 有 1 条 log）。详见 `Logs/verify/20261114-m08a-natural-death-playtest.md`。家主死亡继承现已在 SC-013 Play Mode 验证；出生、随机 seed、自动配偶序列化字段及未完成怀孕/RNG 读档恢复、Task 5 QA request、用户最终验收仍待完成。M08A 不能创建最终 checkpoint、合并 `main` 或打 tag。
 
+## 2026-11-15 补充：自然受孕与孕期恢复回归测试
+
+用户最新分工为 Mochi 规划并编写 Unit Test，OpenCode2 执行测试与 Play Mode，Mochi 审查证据。以下为待实施测试，不表示已经通过。测试仅扩展 `Assets/Tests/EditMode/FamilyPregnancySessionTests.cs`，复用其月结和事件选择 helper，不改变游戏规则或默认 seed。
+
+- 使用 `InitFamilyFormationDemoScenario(46UL)` 创建 SC-022 测试局，从 `1560-05-01` 正常月结。断言初始无怀孕，`1560-06-01` 自然产生一条怀孕，双亲为剧本家主与配偶，预产期为 `1561-03-01`；不调用 `SetPregnancy` 注入记录。
+- 在孕期捕获 v17 `SaveData` 并经 JSON 序列化/反序列化。原会话继续正常月结跨过年界并到达预产月，记录读档前的日期与随机流；必须断言日期不同且至少一条随机流与快照不同，再应用保存快照。断言日期、双亲、受孕日、预产期及全部五条随机流恢复到快照；若未构造出随机流差异，测试失败，不能把未变化状态的往返记为恢复验证。
+- 同一快照载入第二个会话，两会话以相同事件选择正常结算至预产月。断言只新增一个出生人物，双亲关系、家族成员身份、每日行动行、成长记录和一条出生编年史存在；两会话的新生儿稳定 ID、性别及随机流相同。再推进一个月，确认原怀孕没有重复结算。
+- 测试源码只在 OpenCode2 当前 Unity 测试任务结束后修改。OpenCode2 执行新用例与整个 `FamilyPregnancySessionTests`，返回匹配数非零的 NUnit XML、通过/失败/跳过数和 Console 分类；未执行、编译失败或断言失败均不能记为通过。若 fixture 事件选择与已观察的 seed 46 路线不同，先查明差异，不修改规则或放宽出生断言来追求通过。
+- 这项自动测试不替代默认 seed 的自然生育试玩，也不授予 M08 最终用户验收。现有 seed 46 Play Mode 与 v17 怀孕 fixture 往返证据见 [M08 报告](../../reports/m08-campaign-review.md) 的 2026-11-15 补测章节。
+
 ## 提交与验收门
 
 - 每个可独立隔离的验证门只提交其已验证文件，立即推送 `origin/chore/pstack-verification`；不要把 M02–M08 混合 WIP 一起 stage。

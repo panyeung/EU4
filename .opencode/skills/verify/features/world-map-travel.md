@@ -4,19 +4,22 @@ Travel is how the player moves between towns. The map page shows the current loc
 destination list, and a trip preview; committing a trip moves the location and advances the
 date by the travel time.
 
-Status: `MAP-1` and `MAP-2` are **unproven and currently failing**. A 2026-11-10 run could not
-produce a travel preview: selecting `热田` while standing in `清洲` reported
-`无直达路线（热田 ↔ 那古野 不可直达）`, `TravelTimeText` stayed `—`, and the console carried 766
-`IndexOutOfRangeException` entries from `UnityEngine.UI.Selectable.OnEnable`. Clicking `清洲`
-(the current town) opens the town menu instead of previewing a trip. Evidence:
-`Logs/verify/20261110-2341-month-turn-travel-succession.md`.
+Status: the 2026-11-14 SC-013 Play Mode follow-up verified `MAP-1` and `MAP-2`:
+清洲 to 热田 previewed one day and arrival `1560-04-02`; confirming opened the 热田 town
+view and advanced the HUD to that date. The run used Pipeline UI handlers and did not
+check pointer hit-testing or map pixels. See the
+[travel and month-boundary record](../../../../docs/archive/verification-and-research-history.md#m02-travel-and-month-boundary-play-mode-follow-up-2026-11-14).
+The 2026-11-10 failure is historical. `MAP-3` still needs a recorded Play Mode check.
+`MAP-4` describes the current-town control's behavior; its current source is
+`WorldMapController.OnLocationClicked`, and it has not been independently replayed here.
 
 ## Sub-features
 
 - `MAP-1` — selecting a destination shows its name, travel days, and arrival date.
 - `MAP-2` — `确认出发` moves the location marker to the destination and advances the date.
 - `MAP-3` — `取消` clears the preview and leaves location and date unchanged.
-- `MAP-4` — the town you are already standing in is not offered as a destination.
+- `MAP-4` — clicking the town you are standing in opens its town view and clears the travel
+  preview instead of starting a trip.
 
 ## How to get to it (user POV)
 

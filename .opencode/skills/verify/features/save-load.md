@@ -4,8 +4,13 @@ Saving writes the campaign and loading restores it. The user-visible promise is 
 after a load, the campaign looks and behaves like it did at save time, including a pending
 decision.
 
-Status: mapped from the scene and older playtest guides. Not yet driven end to end in this
-skill's Play Mode run — treat the expected values below as claims to check, not results.
+Status: a 2026-11-14 SC-013 Play Mode run exercised `SAVE-1` and the date/action-state
+portion of `SAVE-2` through the map UI using an isolated test store. It saved at
+`1560-05-02`, advanced to `1560-05-03`, then loaded back to `1560-05-02`; the head's
+completed training remained idle and the panel reported `已载入存档`.
+See [the M02 record](../../../../PROJECT_STATE.md#m02-每日行动与旅行基础2026-11-06).
+That route did not establish every head/location/HUD field, pending succession (`SAVE-3`),
+or the empty-store refusal (`SAVE-4`). Those checks remain open for this recipe.
 
 ## Sub-features
 
@@ -44,7 +49,8 @@ Preconditions: a fresh campaign; `M5SaveStatusText` reads `未存档`.
 ## Gotchas
 
 - Save state is real user data. Start from a new game; never point a verification run at a
-  campaign the user cares about.
+  campaign the user cares about. Bind the panel to an isolated test store before pressing
+  Save or Load; a new campaign alone does not protect the default player slot.
 - `未存档` is the only trustworthy empty-state signal. A save that leaves that text did not
   save.
 - Compare against values recorded earlier in the same run, never against a campaign the run did

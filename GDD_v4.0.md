@@ -1232,10 +1232,12 @@ Play Mode 测试负责操作和场景表现。
 |---|---|
 | 项目所有者／用户 | 确认设计规则和优先级；执行 Play Test 并决定是否验收 |
 | Mochi／Orca 主协调 | 维护路线、分派 OpenCode2、Scout 与 QATester、保全工作区、核实证据并做最终技术签核 |
-| OpenCode2 | 负责本项目全部代码实现、Unity 接入和对应测试 |
+| OpenCode2 | 负责玩法代码实现、Unity 接入，并执行 Unit Test、EditMode、Play Mode 与适用回归，返回实际结果和证据 |
 | Scout | 调查官方 Unity 资料和必要的 GitHub 复用方案；不做无关代码改动 |
-| QATester | 对实现任务做同任务只读审查、验证并报告缺陷；修正后复审同一任务 |
-| Codex | 协调方的独立分析与证据复核；不替代 OpenCode2 实现职责或用户 Play Test 验收 |
+| QATester | 对实现任务及测试证据做同任务只读审查并报告缺陷；修正后复审同一任务；测试执行交由 OpenCode2 |
+| Codex／Mochi | 负责规划、验收标准、编写和维护 Unit Test，以及独立分析、证据复核和技术签核；用户保留最终里程碑验收权 |
+
+2026-11-15 用户更新分工：测试由 OpenCode2 执行，协调方负责规划和创建 Unit Test。此条覆盖此前由协调方或 QATester 执行测试的流程描述；玩法规则不变。
 
 开发始终留在现有 Unity 项目；不得因路线调整创建第二个 Unity 项目。用户明确委托时可由协调方代跑 Play Mode，但需将执行者和路径写清楚，且不混同为用户亲自验收。
 
