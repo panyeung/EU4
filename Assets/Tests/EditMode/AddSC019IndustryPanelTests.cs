@@ -76,6 +76,11 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(Find(AddSC019IndustryPanel.PanelName).gameObject.activeSelf, Is.False);
             Assert.That(Find(AddSC019IndustryPanel.CandidateTemplateName).gameObject.activeSelf, Is.False);
             Assert.That(Find(AddSC019IndustryPanel.OpenButtonName).gameObject.activeSelf, Is.True);
+            Assert.That(Find(AddSC019IndustryPanel.FarmDetailTextName).GetComponent<Text>(), Is.Not.Null);
+            Assert.That(Find(AddSC019IndustryPanel.TradingDetailTextName).GetComponent<Text>(), Is.Not.Null);
+            Assert.That(Find(AddSC019IndustryPanel.PreviewTextName).GetComponent<Text>(), Is.Not.Null);
+            Assert.That(Find(AddSC019IndustryPanel.ConfirmButtonName).GetComponent<Button>(), Is.Not.Null);
+            Assert.That(Find(AddSC019IndustryPanel.CancelButtonName).GetComponent<Button>(), Is.Not.Null);
             Assert.That(ObjectCount(), Is.GreaterThan(before));
             Assert.That(AddSC019IndustryPanel.Validate(_scene, out string error), Is.True, error);
             Assert.That(_scene.path, Is.Empty, "the test seam must not save or reload a scene");
@@ -125,6 +130,56 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(container.GetComponent<GridLayoutGroup>(), Is.Not.Null,
                 "repair must restore the candidate grid layout");
             Assert.That(AddSC019IndustryPanel.Validate(_scene, out string error), Is.True, error);
+        }
+
+        [Test]
+        public void AddSC019IndustryPanel_RepairsMissingPreviewControlsTransactionally()
+        {
+            Assert.That(AddSC019IndustryPanel.Update(_scene),
+                Is.EqualTo(AddSC019IndustryPanel.UpdateResult.Success));
+            Object.DestroyImmediate(Find(AddSC019IndustryPanel.ConfirmButtonName).gameObject);
+            Assert.That(AddSC019IndustryPanel.Validate(_scene, out string missing), Is.False);
+
+            Assert.That(AddSC019IndustryPanel.Update(_scene),
+                Is.EqualTo(AddSC019IndustryPanel.UpdateResult.Success));
+
+            Assert.That(Find(AddSC019IndustryPanel.ConfirmButtonName).GetComponent<Button>(), Is.Not.Null);
+            Assert.That(AddSC019IndustryPanel.Validate(_scene, out string restored), Is.True, restored);
+            Assert.That(_scene.path, Is.Empty, "repair must not save or reload the test scene");
+        }
+
+        [Test]
+        public void AddSC019IndustryPanel_RepairsStatusBandThatCannotHoldMonthEndText()
+        {
+            Assert.That(AddSC019IndustryPanel.Update(_scene),
+                Is.EqualTo(AddSC019IndustryPanel.UpdateResult.Success));
+            var band = (RectTransform)Find(AddSC019IndustryPanel.MessageName);
+            string authored = "农庄（明智 晴信）：收成 +2资金/+4物资，保留 1物资维护（材料成本 1资金），" +
+                              "产粮 +4，净 +1资金/+3物资；商馆（明智 千恵）：维护 6资金/2物资（材料成本 2资金），" +
+                              "产出 +9资金/+1情报。月末 资金 30→32，物资 12→13，情报 0→1。";
+            float authoredHeight = band.rect.height;
+            var label = band.GetComponent<Text>();
+            label.text = authored;
+            Assert.That(label.preferredHeight, Is.LessThanOrEqualTo(authoredHeight),
+                "the authored band must hold the month-end settlement summary");
+
+            label.verticalOverflow = VerticalWrapMode.Overflow;
+            Assert.That(AddSC019IndustryPanel.Validate(_scene, out _), Is.False,
+                "the bounded status band must not allow text to paint outside its rectangle");
+            Assert.That(AddSC019IndustryPanel.Update(_scene),
+                Is.EqualTo(AddSC019IndustryPanel.UpdateResult.Success));
+            Assert.That(label.verticalOverflow, Is.EqualTo(VerticalWrapMode.Truncate));
+
+            band.sizeDelta = new Vector2(band.sizeDelta.x, 24f);
+            band.GetComponent<Text>().text = string.Empty;
+            Assert.That(AddSC019IndustryPanel.Validate(_scene, out string tooShort), Is.False,
+                "a one-line band must be rejected before it can paint over the farm row");
+            Assert.That(tooShort, Does.Contain("multi-line status text"));
+
+            Assert.That(AddSC019IndustryPanel.Update(_scene),
+                Is.EqualTo(AddSC019IndustryPanel.UpdateResult.Success));
+            Assert.That(band.rect.height, Is.EqualTo(authoredHeight).Within(0.5f));
+            Assert.That(AddSC019IndustryPanel.Validate(_scene, out string restored), Is.True, restored);
         }
 
         [Test]

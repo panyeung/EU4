@@ -1,5 +1,6 @@
 using System.Linq;
 using NUnit.Framework;
+using UnityEditor;
 using SengokuChronicle.Application;
 using SengokuChronicle.Domain;
 using SengokuChronicle.Editor;
@@ -95,6 +96,7 @@ namespace SengokuChronicle.Tests.EditMode
             AssertDistinctInside(panel, false);
 
             panel.ClickTradingCandidate(2);
+            panel.ClickConfirm();
             panel.Refresh();
             Assert.That(panel.TradingCandidateCount, Is.EqualTo(5),
                 "the assigned trading candidate must leave the selectable list");
@@ -176,20 +178,120 @@ namespace SengokuChronicle.Tests.EditMode
         {
             IndustryPanel panel = Panel();
             panel.Open();
+            Assert.That(panel.CanConfirmSelection, Is.True);
+            Assert.That(panel.ConfirmInteractable, Is.False,
+                "confirmation is unavailable until a candidate is selected");
             Assert.That(panel.FarmCandidateLabel(0), Does.Contain("剩余 4/4"));
 
             panel.ClickFarmCandidate(0);
+            panel.Refresh();
+            Assert.That(panel.HasPendingAssignment, Is.True);
+            Assert.That(panel.PreviewVisible, Is.True);
+            Assert.That(panel.ConfirmVisible, Is.True);
+            Assert.That(panel.ConfirmInteractable, Is.True);
+            string pendingLabel = panel.FarmCandidateLabel(0);
+            Assert.That(pendingLabel, Does.StartWith("▶ "),
+                "the candidate list marks the pending choice");
+            string pendingName = pendingLabel.Substring(2, pendingLabel.IndexOf("（") - 2);
+            Assert.That(panel.PreviewLine, Does.Contain("已选择：" + pendingName + " → "));
+            Assert.That(panel.PreviewLine, Does.Contain("待确认"));
+            Assert.That(panel.PreviewLine, Does.Contain("每月规则："),
+                "the preview exposes the selected post's consequence");
+            Assert.That(_session.Industry.Slot(IndustryCatalog.FarmId).AssigneeId.IsEmpty, Is.True,
+                "candidate selection is only a preview until confirmed");
+            string firstAssignee = panel.PendingPersonId.Value;
+
+            panel.ClickConfirm();
             panel.Refresh();
             Assert.That(panel.FarmAssignee, Does.Contain("3/4 已用"));
             Assert.That(panel.FarmAssignee, Does.Contain("1 可用"));
             Assert.That(panel.FarmCandidateCount, Is.EqualTo(5),
                 "the assigned person is no longer a candidate for that post");
+            Assert.That(_session.Industry.Slot(IndustryCatalog.FarmId).AssigneeId.Value,
+                Is.EqualTo(firstAssignee));
+            Assert.That(panel.ConfirmVisible, Is.False);
+            Assert.That(panel.ConfirmInteractable, Is.False);
+
+            string committedState = JsonUtility.ToJson(_session.CaptureSave());
+            panel.ClickConfirm();
+            Assert.That(JsonUtility.ToJson(_session.CaptureSave()), Is.EqualTo(committedState),
+                "a repeated confirmation with no pending selection is a no-op");
 
             panel.ClickFarmCandidate(0);
             panel.Refresh();
-            Assert.That(_session.Industry.Slot(IndustryCatalog.FarmId).AssigneeName, Is.Not.Empty);
+            string replacementLabel = panel.FarmCandidateLabel(0);
+            Assert.That(replacementLabel, Does.StartWith("▶ "));
+            string replacementName = replacementLabel.Substring(2, replacementLabel.IndexOf("（") - 2);
+            Assert.That(panel.PreviewLine, Does.Contain("已选择：" + replacementName + " → "));
+            Assert.That(panel.PreviewLine, Does.Contain("替换现任"),
+                "replacement preview identifies the current holder");
+            Assert.That(panel.ConfirmInteractable, Is.True);
+            Assert.That(_session.Industry.Slot(IndustryCatalog.FarmId).AssigneeId.Value,
+                Is.EqualTo(firstAssignee), "replacement selection must not commit early");
+            panel.ClickConfirm();
+            panel.Refresh();
+            Assert.That(_session.Industry.Slot(IndustryCatalog.FarmId).AssigneeId.Value,
+                Is.Not.EqualTo(firstAssignee));
             Assert.That(panel.TradingCandidateCount, Is.EqualTo(5),
                 "the replaced person's reservation is released");
+        }
+
+        [Test]
+        public void IndustryPanel_LegacySceneExplainsThatAssignmentControlsAreMissing()
+        {
+            IndustryPanel panel = Panel();
+            var serialized = new SerializedObject(panel);
+            serialized.FindProperty("previewText").objectReferenceValue = null;
+            serialized.FindProperty("confirmButton").objectReferenceValue = null;
+            serialized.FindProperty("cancelButton").objectReferenceValue = null;
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+
+            panel.Open();
+
+            Assert.That(panel.IsBound, Is.True,
+                "legacy optional controls must not prevent the rest of the panel from binding");
+            Assert.That(panel.CanConfirmSelection, Is.False);
+            Assert.That(panel.FarmCandidateCount, Is.GreaterThan(0));
+            Button candidate = _scene.GetRootGameObjects()
+                .SelectMany(root => root.GetComponentsInChildren<Button>(true))
+                .First(button => button.name.StartsWith(
+                    "IndustryCandidate_" + IndustryCatalog.FarmId + "_"));
+            Assert.That(candidate.interactable, Is.False,
+                "legacy candidate buttons must not imply a working one-click assignment");
+            candidate.onClick.Invoke();
+            Assert.That(panel.HasPendingAssignment, Is.False);
+            Assert.That(panel.MessageVisible, Is.True);
+            Assert.That(panel.MessageLine, Does.Contain(IndustryPanel.ConfirmUnboundNotice));
+        }
+
+        [Test]
+        public void IndustryPanel_CancelCandidatePreviewLeavesAssignmentUnchanged()
+        {
+            IndustryPanel panel = Panel();
+            panel.Open();
+            IndustrySlotView before = _session.Industry.Slot(IndustryCatalog.FarmId);
+            IndustryResources resourcesBefore = _session.Industry.Resources;
+
+            panel.ClickFarmCandidate(0);
+            panel.Refresh();
+            Assert.That(panel.HasPendingAssignment, Is.True);
+            Assert.That(panel.ConfirmVisible, Is.True);
+            Assert.That(panel.CancelVisible, Is.True);
+            Assert.That(_session.Industry.Slot(IndustryCatalog.FarmId).AssigneeId,
+                Is.EqualTo(before.AssigneeId));
+
+            panel.ClickCancel();
+            panel.Refresh();
+
+            Assert.That(panel.HasPendingAssignment, Is.False);
+            Assert.That(panel.PreviewVisible, Is.True,
+                "the idle preview hint remains available after cancelling a selection");
+            Assert.That(panel.PreviewLine, Does.Contain("选择一名家人后确认任命"));
+            Assert.That(panel.ConfirmVisible, Is.False);
+            Assert.That(panel.CancelVisible, Is.False);
+            Assert.That(_session.Industry.Slot(IndustryCatalog.FarmId).AssigneeId,
+                Is.EqualTo(before.AssigneeId));
+            Assert.That(_session.Industry.Resources, Is.EqualTo(resourcesBefore));
         }
 
         [Test]
@@ -198,6 +300,10 @@ namespace SengokuChronicle.Tests.EditMode
             IndustryPanel panel = Panel();
             panel.Open();
             panel.ClickTradingCandidate(0);
+            panel.Refresh();
+            Assert.That(_session.Industry.Slot(IndustryCatalog.TradingHouseId).AssigneeId.IsEmpty,
+                Is.True, "candidate selection does not mutate the assignment");
+            panel.ClickConfirm();
             panel.Refresh();
             Assert.That(_session.Industry.Slot(IndustryCatalog.TradingHouseId).AssigneeId.IsEmpty, Is.False);
 
@@ -323,6 +429,65 @@ namespace SengokuChronicle.Tests.EditMode
                 "a persisted zero count must not disappear from the panel");
             Assert.That(panel.ReportLine, Does.Not.Contain("缺粮"),
                 "the current-month unmet quantity is a separate value from the shortage duration");
+        }
+
+        [Test]
+        public void IndustryPanel_SettlementMessageStaysAboveTheFarmRow()
+        {
+            IndustryPanel panel = Panel();
+            panel.Open();
+            panel.ClickFarmCandidate(0);
+            panel.ClickConfirm();
+            panel.ClickTradingCandidate(0);
+            panel.ClickConfirm();
+            Assert.That(_session.TryAdvanceToNextMonth(), Is.True, _session.LastEventMessage);
+            panel.Refresh();
+
+            var band = (RectTransform)Find(AddSC019IndustryPanel.MessageName);
+            var label = band.GetComponent<Text>();
+            var farm = (RectTransform)Find(AddSC019IndustryPanel.FarmRowName);
+
+            Assert.That(panel.MessageVisible, Is.True,
+                "the settled month publishes a status message");
+            Assert.That(panel.MessageLine, Does.StartWith("农庄"),
+                "the message is the month settlement summary");
+            Assert.That(label.preferredHeight, Is.LessThanOrEqualTo(band.rect.height),
+                "the settlement summary must wrap inside the authored status band");
+
+            float textBottom = band.anchoredPosition.y - label.preferredHeight * 0.5f;
+            float farmTop = farm.anchoredPosition.y + farm.rect.height * 0.5f;
+            Assert.That(textBottom, Is.GreaterThan(farmTop),
+                "the rendered settlement text must stay above the farm row");
+        }
+
+        [Test]
+        public void IndustryPanel_UsesMonthlyReportPointerWhenSettlementSummaryExceedsBandCapacity()
+        {
+            IndustryPanel panel = Panel();
+            panel.Open();
+            panel.ClickFarmCandidate(0);
+            panel.ClickConfirm();
+            panel.ClickTradingCandidate(0);
+            panel.ClickConfirm();
+            Assert.That(_session.TryAdvanceToNextMonth(), Is.True, _session.LastEventMessage);
+            panel.Refresh();
+
+            string fullSummary = panel.MessageLine;
+            var band = (RectTransform)Find(AddSC019IndustryPanel.MessageName);
+            Assert.That(panel.StatusBandLineBudget, Is.EqualTo(3));
+            Assert.That(panel.StatusLineCount, Is.EqualTo(3));
+            Assert.That(panel.StatusPointerActive, Is.False);
+            Assert.That(panel.ReportLine, Does.Contain(fullSummary));
+
+            band.sizeDelta = new Vector2(band.sizeDelta.x, 24f);
+            panel.Refresh();
+
+            Assert.That(panel.StatusBandLineBudget, Is.EqualTo(1));
+            Assert.That(panel.StatusLineCount, Is.EqualTo(3));
+            Assert.That(panel.StatusPointerActive, Is.True);
+            Assert.That(panel.MessageLine, Is.EqualTo(IndustryPanel.ReportPointerStatus));
+            Assert.That(panel.ReportLine, Does.Contain(fullSummary),
+                "the detailed monthly report retains the complete settlement text");
         }
 
         [Test]

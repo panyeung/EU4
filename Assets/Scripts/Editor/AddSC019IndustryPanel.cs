@@ -30,15 +30,20 @@ namespace SengokuChronicle.Editor
         public const string FarmRowName = "IndustryRowFarm";
         public const string FarmNameTextName = "FarmRowNameText";
         public const string FarmStatusTextName = "FarmRowStatusText";
+        public const string FarmDetailTextName = "FarmRowDetailText";
         public const string FarmAssigneeTextName = "FarmRowAssigneeText";
         public const string FarmUnassignButtonName = "FarmUnassignButton";
         public const string FarmCandidateContainerName = "FarmCandidateContainer";
         public const string TradingRowName = "IndustryRowTradingHouse";
         public const string TradingNameTextName = "TradingRowNameText";
         public const string TradingStatusTextName = "TradingRowStatusText";
+        public const string TradingDetailTextName = "TradingRowDetailText";
         public const string TradingAssigneeTextName = "TradingRowAssigneeText";
         public const string TradingUnassignButtonName = "TradingUnassignButton";
         public const string TradingCandidateContainerName = "TradingCandidateContainer";
+        public const string PreviewTextName = "IndustryPreviewText";
+        public const string ConfirmButtonName = "IndustryConfirmButton";
+        public const string CancelButtonName = "IndustryCancelButton";
         public const string CandidateTemplateName = "IndustryCandidateButtonTemplate";
         public const string ClockFeedbackName = "MonthTurnFeedbackText";
         public const string MenuPath = "Tools/Sengoku Chronicle/Add SC-019 Industry Panel";
@@ -64,9 +69,66 @@ namespace SengokuChronicle.Editor
         private const float CandidateAreaWidth = 620f;
         private const float CandidateAreaHeight = 64f;
         private const float RowWidth = 700f;
-        private const float RowHeight = 140f;
-        private const float FarmRowY = 60f;
-        private const float TradingRowY = -82f;
+        private const float RowHeight = 160f;
+        private const float FarmRowY = 104f;
+        private const float TradingRowY = -58f;
+        private const float PanelWidth = 760f;
+        private const float PanelHeight = 700f;
+
+        // One authored geometry shared by creation and repair: a control whose repair
+        // position or size drifts from its creation position fails Validate on the same
+        // scene, so both paths read every value from here.
+        private const float ContentWidth = 700f;
+        private const float TitleY = 325f;
+        private const float TitleHeight = 38f;
+        private const float ResourcesY = 287f;
+        private const float ResourcesHeight = 30f;
+        private const float BlockReasonY = 256f;
+        private const float LineHeight = 24f;
+        // The status line carries month-end text, so it authors three lines of headroom
+        // instead of a single clipped line; a one-line band is what let the settlement
+        // summary paint over the farm row.
+        private const float MessageY = 214f;
+        private const float MessageHeight = 56f;
+        private const int MessageFontSize = 14;
+        private const TextAnchor MessageAlignment = TextAnchor.MiddleLeft;
+        private const HorizontalWrapMode MessageWrap = HorizontalWrapMode.Wrap;
+        private const VerticalWrapMode MessageOverflow = VerticalWrapMode.Truncate;
+        private const float MessageLineHeightFactor = 1.16f;
+        // Create, repair and Validate share this capacity: the band must hold the panel's
+        // safe line budget before it is allowed to show a full status line.
+        private const float MessageCapacityHeight =
+            IndustryPanel.StatusBandSafeLines * MessageFontSize * MessageLineHeightFactor;
+        private const float PreviewY = -168f;
+        private const float PreviewHeight = 40f;
+        private const float ActionY = -211f;
+        private const float ActionHeight = 34f;
+        private const float CancelX = -30f;
+        private const float CancelWidth = 140f;
+        private const float ConfirmX = 130f;
+        private const float ConfirmWidth = 150f;
+        private const int ActionFontSize = 15;
+        private const float ReportY = -266f;
+        private const float ReportHeight = 68f;
+        private const int ReportFontSize = 14;
+        private const int PreviewFontSize = 13;
+        private const float CloseY = -327f;
+        private const float CloseWidth = 170f;
+        private const float CloseHeight = 38f;
+        private const float OpenWidth = 200f;
+        private const float OpenHeight = 44f;
+
+        private static readonly Vector2 RowNamePosition = new Vector2(-180f, 64f);
+        private static readonly Vector2 RowNameSize = new Vector2(320f, 22f);
+        private static readonly Vector2 RowStatusPosition = new Vector2(-170f, 42f);
+        private static readonly Vector2 RowStatusSize = new Vector2(340f, 22f);
+        private static readonly Vector2 RowDetailPosition = new Vector2(-100f, 20f);
+        private static readonly Vector2 RowDetailSize = new Vector2(470f, 22f);
+        private static readonly Vector2 RowAssigneePosition = new Vector2(-170f, -2f);
+        private static readonly Vector2 RowAssigneeSize = new Vector2(320f, 22f);
+        private static readonly Vector2 RowUnassignPosition = new Vector2(270f, 62f);
+        private static readonly Vector2 RowUnassignSize = new Vector2(120f, 32f);
+        private static readonly Vector2 RowCandidateAreaPosition = new Vector2(0f, -46f);
 
         public enum UpdateResult
         {
@@ -133,9 +195,13 @@ namespace SengokuChronicle.Editor
             Transform close = Require(scene, CloseButtonName);
             Transform farm = Require(scene, FarmRowName);
             Transform trading = Require(scene, TradingRowName);
+            Transform preview = Require(scene, PreviewTextName);
+            Transform confirm = Require(scene, ConfirmButtonName);
+            Transform cancel = Require(scene, CancelButtonName);
             if (open == null || panel == null || title == null || resources == null ||
                 blockReason == null || message == null || report == null || close == null ||
-                farm == null || trading == null)
+                farm == null || trading == null || preview == null || confirm == null ||
+                cancel == null)
                 return Invalid(out error, "Industry hierarchy is incomplete or ambiguous.");
 
             if (root.parent != canvases[0] || panels[0].transform != root || !root.gameObject.activeSelf)
@@ -160,16 +226,19 @@ namespace SengokuChronicle.Editor
                 return Invalid(out error, "IndustryPanel must be a hidden direct child of the root.");
             if (title.parent != panel || resources.parent != panel || blockReason.parent != panel ||
                 message.parent != panel || report.parent != panel || close.parent != panel ||
-                farm.parent != panel || trading.parent != panel)
+                farm.parent != panel || trading.parent != panel || preview.parent != panel ||
+                confirm.parent != panel || cancel.parent != panel)
                 return Invalid(out error,
-                    "Industry title, resources, block reason, message, rows, report and close button must be panel children.");
+                    "Industry title, resources, block reason, message, rows, preview, actions, " +
+                    "report and close button must be panel children.");
 
-            if (!ValidateRow(scene, farm, FarmNameTextName, FarmStatusTextName, FarmAssigneeTextName,
-                    FarmUnassignButtonName, FarmCandidateContainerName, out error))
+            if (!ValidateRow(scene, farm, FarmNameTextName, FarmStatusTextName, FarmDetailTextName,
+                    FarmAssigneeTextName, FarmUnassignButtonName, FarmCandidateContainerName,
+                    out error))
                 return false;
             if (!ValidateRow(scene, trading, TradingNameTextName, TradingStatusTextName,
-                    TradingAssigneeTextName, TradingUnassignButtonName, TradingCandidateContainerName,
-                    out error))
+                    TradingDetailTextName, TradingAssigneeTextName, TradingUnassignButtonName,
+                    TradingCandidateContainerName, out error))
                 return false;
 
             Transform template = Require(scene, CandidateTemplateName);
@@ -201,19 +270,41 @@ namespace SengokuChronicle.Editor
             Text blockText = blockReason.GetComponent<Text>();
             Text messageText = message.GetComponent<Text>();
             Text reportText = report.GetComponent<Text>();
+            Text previewLabel = preview.GetComponent<Text>();
             Button openButton = open.GetComponent<Button>();
             Button closeButton = close.GetComponent<Button>();
+            Button confirmButton = confirm.GetComponent<Button>();
+            Button cancelButton = cancel.GetComponent<Button>();
             if (titleText == null || resourceText == null || blockText == null ||
-                messageText == null || reportText == null ||
+                messageText == null || reportText == null || previewLabel == null ||
                 titleText.font == null || resourceText.font == null || blockText.font == null ||
-                messageText.font == null || reportText.font == null || openButton == null ||
-                closeButton == null ||
+                messageText.font == null || reportText.font == null || previewLabel.font == null ||
+                openButton == null || closeButton == null || confirmButton == null ||
+                cancelButton == null ||
                 !HasButtonVisual(openButton) || !HasButtonVisual(closeButton) ||
+                !HasButtonVisual(confirmButton) || !HasButtonVisual(cancelButton) ||
                 !HasRaycastTarget(openButton) || !HasRaycastTarget(closeButton) ||
+                !HasRaycastTarget(confirmButton) || !HasRaycastTarget(cancelButton) ||
                 panel.GetComponent<Image>() == null || !panel.GetComponent<Image>().raycastTarget)
                 return Invalid(out error, "Industry text, buttons, background or raycast components are invalid.");
             if (message.gameObject.activeSelf)
                 return Invalid(out error, "The industry message line must start hidden.");
+            if (messageText.fontSize != MessageFontSize)
+                return Invalid(out error,
+                    "The industry message line must use the authored font size; re-run the generator.");
+            if (messageText.alignment != MessageAlignment)
+                return Invalid(out error,
+                    "The industry message line must use the authored alignment; re-run the generator.");
+            if (messageText.horizontalOverflow != MessageWrap ||
+                messageText.verticalOverflow != MessageOverflow)
+                return Invalid(out error,
+                    "The industry message line must wrap and clip inside its band; re-run the generator.");
+            float messageBandHeight = ((RectTransform)message).rect.height;
+            if (Mathf.Abs(messageBandHeight - MessageHeight) > 0.5f ||
+                messageBandHeight + 0.5f < MessageCapacityHeight)
+                return Invalid(out error,
+                    "The industry message line must use the authored height and hold its " +
+                    "multi-line status text; re-run the generator.");
             if (!titleText.text.Contains("产业"))
                 return Invalid(out error, "The industry panel title must contain 产业.");
 
@@ -230,14 +321,19 @@ namespace SengokuChronicle.Editor
                 !Bound(industryPanel, "rowFarm", farm.gameObject) ||
                 !Bound(industryPanel, "rowTradingHouse", trading.gameObject) ||
                 !Bound(industryPanel, "farmStatusText", Require(scene, FarmStatusTextName).GetComponent<Text>()) ||
+                !Bound(industryPanel, "farmDetailText", Require(scene, FarmDetailTextName).GetComponent<Text>()) ||
                 !Bound(industryPanel, "farmAssigneeText", Require(scene, FarmAssigneeTextName).GetComponent<Text>()) ||
                 !Bound(industryPanel, "farmUnassignButton", Require(scene, FarmUnassignButtonName).GetComponent<Button>()) ||
                 !Bound(industryPanel, "farmCandidateContainer", farmContainer) ||
                 !Bound(industryPanel, "tradingStatusText", Require(scene, TradingStatusTextName).GetComponent<Text>()) ||
+                !Bound(industryPanel, "tradingDetailText", Require(scene, TradingDetailTextName).GetComponent<Text>()) ||
                 !Bound(industryPanel, "tradingAssigneeText", Require(scene, TradingAssigneeTextName).GetComponent<Text>()) ||
                 !Bound(industryPanel, "tradingUnassignButton", Require(scene, TradingUnassignButtonName).GetComponent<Button>()) ||
                 !Bound(industryPanel, "tradingCandidateContainer", tradingContainer) ||
-                !Bound(industryPanel, "candidateTemplate", template.gameObject))
+                !Bound(industryPanel, "candidateTemplate", template.gameObject) ||
+                !Bound(industryPanel, "previewText", preview.GetComponent<Text>()) ||
+                !Bound(industryPanel, "confirmButton", confirm.GetComponent<Button>()) ||
+                !Bound(industryPanel, "cancelButton", cancel.GetComponent<Button>()))
                 return Invalid(out error, "IndustryPanel serialized references are not bound.");
 
             RectTransform rootRect = root as RectTransform;
@@ -253,13 +349,21 @@ namespace SengokuChronicle.Editor
                 !Contained((RectTransform)blockReason, panelRect) ||
                 !Contained((RectTransform)message, panelRect) ||
                 !Contained((RectTransform)report, panelRect) ||
+                !Contained((RectTransform)preview, panelRect) ||
+                !Contained((RectTransform)confirm, panelRect) ||
+                !Contained((RectTransform)cancel, panelRect) ||
                 Overlaps((RectTransform)title, (RectTransform)resources, panelRect) ||
                 Overlaps((RectTransform)resources, (RectTransform)blockReason, panelRect) ||
                 Overlaps((RectTransform)blockReason, (RectTransform)message, panelRect) ||
                 Overlaps((RectTransform)message, (RectTransform)farm, panelRect) ||
                 Overlaps((RectTransform)blockReason, (RectTransform)farm, panelRect) ||
                 Overlaps((RectTransform)farm, (RectTransform)trading, panelRect) ||
-                Overlaps((RectTransform)trading, (RectTransform)report, panelRect) ||
+                Overlaps((RectTransform)trading, (RectTransform)preview, panelRect) ||
+                Overlaps((RectTransform)preview, (RectTransform)confirm, panelRect) ||
+                Overlaps((RectTransform)preview, (RectTransform)cancel, panelRect) ||
+                Overlaps((RectTransform)confirm, (RectTransform)cancel, panelRect) ||
+                Overlaps((RectTransform)confirm, (RectTransform)report, panelRect) ||
+                Overlaps((RectTransform)cancel, (RectTransform)report, panelRect) ||
                 Overlaps((RectTransform)report, closeRect, panelRect))
                 return Invalid(out error, "Industry controls overlap or lie outside their bounds.");
 
@@ -366,26 +470,30 @@ namespace SengokuChronicle.Editor
         }
 
         private static bool ValidateRow(Scene scene, Transform row, string nameText, string statusText,
-            string assigneeText, string unassignButton, string candidateContainer, out string error)
+            string detailText, string assigneeText, string unassignButton, string candidateContainer,
+            out string error)
         {
             Transform name = Require(scene, nameText);
             Transform status = Require(scene, statusText);
+            Transform detail = Require(scene, detailText);
             Transform assignee = Require(scene, assigneeText);
             Transform unassign = Require(scene, unassignButton);
             Transform container = Require(scene, candidateContainer);
-            if (name == null || status == null || assignee == null || unassign == null || container == null)
+            if (name == null || status == null || detail == null || assignee == null ||
+                unassign == null || container == null)
             {
                 error = "Industry row " + row.name + " is missing one of its controls.";
                 return false;
             }
-            if (name.parent != row || status.parent != row || assignee.parent != row ||
-                unassign.parent != row || container.parent != row)
+            if (name.parent != row || status.parent != row || detail.parent != row ||
+                assignee.parent != row || unassign.parent != row || container.parent != row)
             {
                 error = "Industry row " + row.name + " controls must be direct children.";
                 return false;
             }
             if (name.GetComponent<Text>() == null || status.GetComponent<Text>() == null ||
-                assignee.GetComponent<Text>() == null || unassign.GetComponent<Button>() == null ||
+                detail.GetComponent<Text>() == null || assignee.GetComponent<Text>() == null ||
+                unassign.GetComponent<Button>() == null ||
                 !HasButtonVisual(unassign.GetComponent<Button>()) ||
                 !HasRaycastTarget(unassign.GetComponent<Button>()))
             {
@@ -421,6 +529,9 @@ namespace SengokuChronicle.Editor
                 Named(scene, MessageName).Any() ||
                 Named(scene, ReportName).Any() || Named(scene, CloseButtonName).Any() ||
                 Named(scene, FarmRowName).Any() || Named(scene, TradingRowName).Any() ||
+                Named(scene, FarmDetailTextName).Any() || Named(scene, TradingDetailTextName).Any() ||
+                Named(scene, PreviewTextName).Any() || Named(scene, ConfirmButtonName).Any() ||
+                Named(scene, CancelButtonName).Any() ||
                 Named(scene, CandidateTemplateName).Any() ||
                 Components<IndustryPanel>(scene).Length != 0)
                 return UpdateResult.ExistingPartialControl;
@@ -443,48 +554,61 @@ namespace SengokuChronicle.Editor
                 rootRect.offsetMax = Vector2.zero;
 
                 Button open = CreateButton(scene, rootRect, OpenButtonName, font, "产业",
-                    200f, 44f, 16);
-                SetTopLeftRect(open.transform, OpenButtonPosition, new Vector2(200f, 44f));
+                    OpenWidth, OpenHeight, 16);
+                SetTopLeftRect(open.transform, OpenButtonPosition, new Vector2(OpenWidth, OpenHeight));
 
                 GameObject panelObject = Create(scene, rootRect, PanelName, typeof(Image));
                 RectTransform panelRect = panelObject.GetComponent<RectTransform>();
                 panelRect.anchorMin = panelRect.anchorMax = panelRect.pivot = new Vector2(0.5f, 0.5f);
                 panelRect.anchoredPosition = Vector2.zero;
-                panelRect.sizeDelta = new Vector2(760f, 560f);
+                panelRect.sizeDelta = new Vector2(PanelWidth, PanelHeight);
                 panelObject.GetComponent<Image>().color = new Color(0.08f, 0.1f, 0.13f, 0.98f);
                 panelObject.SetActive(false);
 
                 Text title = CreateText(scene, panelRect, TitleName, font, "产业与人事",
-                    0f, 245f, 700f, 38f, 22, TextAnchor.MiddleLeft);
+                    0f, TitleY, ContentWidth, TitleHeight, 22, TextAnchor.MiddleLeft);
                 Text resources = CreateText(scene, panelRect, ResourceName, font, "资金 30　物资 12　情报 0",
-                    0f, 205f, 700f, 30f, 17, TextAnchor.MiddleLeft);
+                    0f, ResourcesY, ContentWidth, ResourcesHeight, 17, TextAnchor.MiddleLeft);
                 Text block = CreateText(scene, panelRect, BlockReasonName, font, string.Empty,
-                    0f, 172f, 700f, 24f, 15, TextAnchor.MiddleLeft);
+                    0f, BlockReasonY, ContentWidth, LineHeight, 15, TextAnchor.MiddleLeft);
                 block.color = new Color(1f, 0.82f, 0.4f, 1f);
                 block.gameObject.SetActive(false);
                 Text message = CreateText(scene, panelRect, MessageName, font, string.Empty,
-                    0f, 146f, 700f, 24f, 14, TextAnchor.MiddleLeft);
+                    0f, MessageY, ContentWidth, MessageHeight, MessageFontSize, MessageAlignment);
+                ApplyStatusBandSettings(message);
                 message.color = new Color(0.65f, 0.86f, 1f, 1f);
                 message.gameObject.SetActive(false);
 
                 GameObject farmRow = CreateRow(scene, panelRect, FarmRowName, FarmRowY);
                 CreateRowControls(scene, farmRow.transform, font, FarmNameTextName, FarmStatusTextName,
-                    FarmAssigneeTextName, FarmUnassignButtonName, FarmCandidateContainerName,
-                    "农庄（等级 1・1 个职位・3/4 工时）");
+                    FarmDetailTextName, FarmAssigneeTextName, FarmUnassignButtonName,
+                    FarmCandidateContainerName, "农庄（等级 1・1 个职位・3/4 工时）");
 
                 GameObject tradingRow = CreateRow(scene, panelRect, TradingRowName, TradingRowY);
                 CreateRowControls(scene, tradingRow.transform, font, TradingNameTextName,
-                    TradingStatusTextName, TradingAssigneeTextName, TradingUnassignButtonName,
-                    TradingCandidateContainerName, "商馆（等级 1・1 个职位・3/4 工时）");
+                    TradingStatusTextName, TradingDetailTextName, TradingAssigneeTextName,
+                    TradingUnassignButtonName, TradingCandidateContainerName,
+                    "商馆（等级 1・1 个职位・3/4 工时）");
+
+                CreateText(scene, panelRect, PreviewTextName, font, string.Empty,
+                    0f, PreviewY, ContentWidth, PreviewHeight, PreviewFontSize, TextAnchor.UpperLeft);
+                Button cancel = CreateButton(scene, panelRect, CancelButtonName, font, "取消",
+                    CancelWidth, ActionHeight, ActionFontSize);
+                cancel.GetComponent<RectTransform>().anchoredPosition = new Vector2(CancelX, ActionY);
+                cancel.gameObject.SetActive(false);
+                Button confirm = CreateButton(scene, panelRect, ConfirmButtonName, font, "确认任命",
+                    ConfirmWidth, ActionHeight, ActionFontSize);
+                confirm.GetComponent<RectTransform>().anchoredPosition = new Vector2(ConfirmX, ActionY);
+                confirm.gameObject.SetActive(false);
 
                 Text report = CreateText(scene, panelRect, ReportName, font, "本月尚未结算。",
-                    0f, -190f, 700f, 32f, 15, TextAnchor.UpperLeft);
+                    0f, ReportY, ContentWidth, ReportHeight, ReportFontSize, TextAnchor.UpperLeft);
 
                 Button close = CreateButton(scene, panelRect, CloseButtonName, font, "关闭",
-                    170f, 38f, 16);
+                    CloseWidth, CloseHeight, 16);
                 RectTransform closeRect = close.GetComponent<RectTransform>();
                 closeRect.anchorMin = closeRect.anchorMax = closeRect.pivot = new Vector2(0.5f, 0.5f);
-                closeRect.anchoredPosition = new Vector2(0f, -245f);
+                closeRect.anchoredPosition = new Vector2(0f, CloseY);
 
                 Transform farmContainer = Require(scene, FarmCandidateContainerName);
                 Transform tradingContainer = Require(scene, TradingCandidateContainerName);
@@ -510,22 +634,11 @@ namespace SengokuChronicle.Editor
 
                 IndustryPanel panel = Undo.AddComponent<IndustryPanel>(rootObject);
                 Undo.RecordObject(panel, UndoName);
-                Transform farmStatus = Require(scene, FarmStatusTextName);
-                Transform farmAssignee = Require(scene, FarmAssigneeTextName);
-                Transform farmUnassign = Require(scene, FarmUnassignButtonName);
-                Transform tradingStatus = Require(scene, TradingStatusTextName);
-                Transform tradingAssignee = Require(scene, TradingAssigneeTextName);
-                Transform tradingUnassign = Require(scene, TradingUnassignButtonName);
-                panel.BindReferences(session, panelObject, open, close, title, resources, block, message,
-                    report, farmRow, farmStatus.GetComponent<Text>(), farmAssignee.GetComponent<Text>(),
-                    farmUnassign.GetComponent<Button>(), farmContainer,
-                    tradingRow, tradingStatus.GetComponent<Text>(), tradingAssignee.GetComponent<Text>(),
-                    tradingUnassign.GetComponent<Button>(), tradingContainer, template, false);
-                SetSerializedReferences(panel, session, panelObject, open, close, title, resources, block,
-                    message, report, farmRow, farmStatus.GetComponent<Text>(),
-                    farmAssignee.GetComponent<Text>(), farmUnassign.GetComponent<Button>(), farmContainer,
-                    tradingRow, tradingStatus.GetComponent<Text>(), tradingAssignee.GetComponent<Text>(),
-                    tradingUnassign.GetComponent<Button>(), tradingContainer, template);
+                BindIndustryPanel(scene, panel, session, panelObject, open, close, title, resources,
+                    block, message, report, farmRow, tradingRow, farmContainer, tradingContainer,
+                    template, out string bindError);
+                if (bindError != null)
+                    throw new InvalidOperationException(bindError);
                 EditorUtility.SetDirty(panel);
 
                 beforeValidation?.Invoke(rootObject);
@@ -607,19 +720,22 @@ namespace SengokuChronicle.Editor
                     template == null)
                     throw new InvalidOperationException("Complete SC-019 hierarchy could not be resolved.");
 
-                SetTopLeftRect(open, OpenButtonPosition, new Vector2(200f, 44f));
-                SetRect(panel, Vector2.zero, new Vector2(760f, 560f));
-                SetRect(title, new Vector2(0f, 245f), new Vector2(700f, 38f));
-                SetRect(resources, new Vector2(0f, 205f), new Vector2(700f, 30f));
-                SetRect(block, new Vector2(0f, 172f), new Vector2(700f, 24f));
-                SetRect(report, new Vector2(0f, -190f), new Vector2(700f, 32f));
-                SetRect(close, new Vector2(0f, -245f), new Vector2(170f, 38f));
+                SetTopLeftRect(open, OpenButtonPosition, new Vector2(OpenWidth, OpenHeight));
+                SetRect(panel, Vector2.zero, new Vector2(PanelWidth, PanelHeight));
+                SetRect(title, new Vector2(0f, TitleY), new Vector2(ContentWidth, TitleHeight));
+                SetRect(resources, new Vector2(0f, ResourcesY), new Vector2(ContentWidth, ResourcesHeight));
+                SetRect(block, new Vector2(0f, BlockReasonY), new Vector2(ContentWidth, LineHeight));
+                SetRect(report, new Vector2(0f, ReportY), new Vector2(ContentWidth, ReportHeight));
+                SetRect(close, new Vector2(0f, CloseY), new Vector2(CloseWidth, CloseHeight));
                 SetRect(farm, new Vector2(0f, FarmRowY), new Vector2(RowWidth, RowHeight));
                 SetRect(trading, new Vector2(0f, TradingRowY), new Vector2(RowWidth, RowHeight));
-                RepairRowControls(scene, FarmNameTextName, FarmStatusTextName, FarmAssigneeTextName,
-                    FarmUnassignButtonName, FarmCandidateContainerName);
-                RepairRowControls(scene, TradingNameTextName, TradingStatusTextName,
-                    TradingAssigneeTextName, TradingUnassignButtonName, TradingCandidateContainerName);
+                RepairRowControls(scene, font, FarmNameTextName, FarmStatusTextName,
+                    FarmDetailTextName, FarmAssigneeTextName, FarmUnassignButtonName,
+                    FarmCandidateContainerName);
+                RepairRowControls(scene, font, TradingNameTextName, TradingStatusTextName,
+                    TradingDetailTextName, TradingAssigneeTextName, TradingUnassignButtonName,
+                    TradingCandidateContainerName);
+                EnsurePreviewControls(scene, panel, font);
 
                 SetRect(template, Vector2.zero,
                     new Vector2(CandidateCellWidth, CandidateCellHeight));
@@ -635,19 +751,23 @@ namespace SengokuChronicle.Editor
                 if (message == null)
                 {
                     message = CreateText(scene, panel, MessageName, font, string.Empty,
-                        0f, 146f, 700f, 24f, 14, TextAnchor.MiddleLeft).transform;
+                        0f, MessageY, ContentWidth, MessageHeight, MessageFontSize, TextAnchor.MiddleLeft).transform;
                 }
                 else
                 {
-                    SetRect(message, new Vector2(0f, 146f), new Vector2(700f, 24f));
+                    SetRect(message, new Vector2(0f, MessageY), new Vector2(ContentWidth, MessageHeight));
                 }
                 Text messageText = message.GetComponent<Text>();
                 if (messageText != null)
                 {
+                    Undo.RecordObject(messageText, UndoName);
+                    ApplyStatusBandSettings(messageText);
                     messageText.color = new Color(0.65f, 0.86f, 1f, 1f);
                     messageText.raycastTarget = false;
+                    EditorUtility.SetDirty(messageText);
                 }
                 message.gameObject.SetActive(false);
+                NormalizePanelTypography(scene);
 
                 EnsureClockFeedback(scene, font);
 
@@ -655,30 +775,14 @@ namespace SengokuChronicle.Editor
                 if (component == null)
                     throw new InvalidOperationException("IndustryRoot no longer owns IndustryPanel.");
                 Undo.RecordObject(component, UndoName);
-                Transform farmStatus = Require(scene, FarmStatusTextName);
-                Transform farmAssignee = Require(scene, FarmAssigneeTextName);
-                Transform farmUnassign = Require(scene, FarmUnassignButtonName);
-                Transform tradingStatus = Require(scene, TradingStatusTextName);
-                Transform tradingAssignee = Require(scene, TradingAssigneeTextName);
-                Transform tradingUnassign = Require(scene, TradingUnassignButtonName);
                 GameSession session = Components<GameSession>(scene)[0];
-                component.BindReferences(session, panel.gameObject, open.GetComponent<Button>(),
+                BindIndustryPanel(scene, component, session, panel.gameObject, open.GetComponent<Button>(),
                     close.GetComponent<Button>(), title.GetComponent<Text>(),
                     resources.GetComponent<Text>(), block.GetComponent<Text>(), messageText,
-                    report.GetComponent<Text>(), farm.gameObject,
-                    farmStatus.GetComponent<Text>(), farmAssignee.GetComponent<Text>(),
-                    farmUnassign.GetComponent<Button>(), farmContainer,
-                    trading.gameObject, tradingStatus.GetComponent<Text>(),
-                    tradingAssignee.GetComponent<Text>(), tradingUnassign.GetComponent<Button>(),
-                    tradingContainer, template.gameObject, false);
-                SetSerializedReferences(component, session, panel.gameObject,
-                    open.GetComponent<Button>(), close.GetComponent<Button>(),
-                    title.GetComponent<Text>(), resources.GetComponent<Text>(),
-                    block.GetComponent<Text>(), messageText, report.GetComponent<Text>(),
-                    farm.gameObject, farmStatus.GetComponent<Text>(), farmAssignee.GetComponent<Text>(),
-                    farmUnassign.GetComponent<Button>(), farmContainer, trading.gameObject,
-                    tradingStatus.GetComponent<Text>(), tradingAssignee.GetComponent<Text>(),
-                    tradingUnassign.GetComponent<Button>(), tradingContainer, template.gameObject);
+                    report.GetComponent<Text>(), farm.gameObject, trading.gameObject, farmContainer,
+                    tradingContainer, template.gameObject, out string bindError);
+                if (bindError != null)
+                    throw new InvalidOperationException(bindError);
                 EditorUtility.SetDirty(component);
 
                 beforeValidation?.Invoke(root.gameObject);
@@ -705,14 +809,101 @@ namespace SengokuChronicle.Editor
             }
         }
 
-        private static void RepairRowControls(Scene scene, string nameText, string statusText,
-            string assigneeText, string unassignButton, string candidateContainer)
+        /// <summary>
+        /// Applies the current row geometry and adds the detail line an older scene lacks.
+        /// Only the supplied row's own controls are touched.
+        /// </summary>
+        private static void RepairRowControls(Scene scene, Font font,
+            string nameText, string statusText, string detailText, string assigneeText,
+            string unassignButton, string candidateContainer)
         {
-            SetRect(Require(scene, nameText), new Vector2(-180f, 56f), new Vector2(320f, 24f));
-            SetRect(Require(scene, statusText), new Vector2(-170f, 32f), new Vector2(340f, 24f));
-            SetRect(Require(scene, assigneeText), new Vector2(-170f, 8f), new Vector2(320f, 24f));
-            SetRect(Require(scene, unassignButton), new Vector2(270f, 52f), new Vector2(120f, 32f));
+            SetRect(Require(scene, nameText), RowNamePosition, RowNameSize);
+            SetRect(Require(scene, statusText), RowStatusPosition, RowStatusSize);
+            Transform detail = Require(scene, detailText);
+            if (detail == null)
+                detail = CreateText(scene, Require(scene, nameText).parent, detailText, font,
+                    string.Empty, RowDetailPosition.x, RowDetailPosition.y, RowDetailSize.x,
+                    RowDetailSize.y, 13, TextAnchor.MiddleLeft).transform;
+            else
+                SetRect(detail, RowDetailPosition, RowDetailSize);
+            SetRect(Require(scene, assigneeText), RowAssigneePosition, RowAssigneeSize);
+            SetRect(Require(scene, unassignButton), RowUnassignPosition, RowUnassignSize);
             ConfigureCandidateArea(Require(scene, candidateContainer));
+        }
+
+        /// <summary>
+        /// Adds the assignment preview line and its confirm/cancel buttons to a scene that
+        /// predates them. Both actions start hidden and are shown only for a pending choice.
+        /// </summary>
+        private static void EnsurePreviewControls(Scene scene, Transform panel, Font font)
+        {
+            Transform preview = Require(scene, PreviewTextName);
+            if (preview == null)
+                CreateText(scene, panel, PreviewTextName, font, string.Empty,
+                    0f, PreviewY, ContentWidth, PreviewHeight, PreviewFontSize, TextAnchor.UpperLeft);
+            else
+                SetRect(preview, new Vector2(0f, PreviewY), new Vector2(ContentWidth, PreviewHeight));
+
+            EnsureActionButton(scene, panel, font, CancelButtonName, "取消",
+                new Vector2(CancelX, ActionY), new Vector2(CancelWidth, ActionHeight));
+            EnsureActionButton(scene, panel, font, ConfirmButtonName, "确认任命",
+                new Vector2(ConfirmX, ActionY), new Vector2(ConfirmWidth, ActionHeight));
+        }
+
+        /// <summary>
+        /// Re-applies the authored font sizes a repaired scene may still carry from an older
+        /// layout, so the preview and the month report wrap inside their taller boxes.
+        /// </summary>
+        private static void NormalizePanelTypography(Scene scene)
+        {
+            SetFontSize(Require(scene, ReportName), ReportFontSize);
+            SetFontSize(Require(scene, PreviewTextName), PreviewFontSize);
+            SetFontSize(Require(scene, CancelButtonName), ActionFontSize);
+            SetFontSize(Require(scene, ConfirmButtonName), ActionFontSize);
+        }
+
+        /// <summary>
+        /// One authored contract for the status band: font, alignment, wrap and vertical
+        /// clipping. Creation and repair both apply it, and Validate rejects any scene that
+        /// differs, so a longer status can never overrun the band.
+        /// </summary>
+        private static void ApplyStatusBandSettings(Text label)
+        {
+            if (label == null)
+                return;
+            label.fontSize = MessageFontSize;
+            label.alignment = MessageAlignment;
+            label.horizontalOverflow = MessageWrap;
+            label.verticalOverflow = MessageOverflow;
+        }
+
+        private static void SetFontSize(Transform target, int fontSize)
+        {
+            Text text = target != null ? target.GetComponentInChildren<Text>(true) : null;
+            if (text == null || text.fontSize == fontSize)
+                return;
+            Undo.RecordObject(text, UndoName);
+            text.fontSize = fontSize;
+            EditorUtility.SetDirty(text);
+        }
+
+        private static void EnsureActionButton(Scene scene, Transform panel, Font font, string name,
+            string label, Vector2 position, Vector2 size)
+        {
+            Transform existing = Require(scene, name);
+            if (existing == null)
+            {
+                Button created = CreateButton(scene, panel, name, font, label, size.x, size.y, 15);
+                SetRect(created.transform, position, size);
+                created.gameObject.SetActive(false);
+                return;
+            }
+
+            SetRect(existing, position, size);
+            Text existingLabel = existing.GetComponentInChildren<Text>(true);
+            if (existingLabel != null)
+                existingLabel.text = label;
+            existing.gameObject.SetActive(false);
         }
 
         private static void SetRect(Transform target, Vector2 position, Vector2 size)
@@ -783,25 +974,31 @@ namespace SengokuChronicle.Editor
         }
 
         private static void CreateRowControls(Scene scene, Transform row, Font font, string nameTextName,
-            string statusTextName, string assigneeTextName, string unassignButtonName,
-            string candidateContainerName, string nameValue)
+            string statusTextName, string detailTextName, string assigneeTextName,
+            string unassignButtonName, string candidateContainerName, string nameValue)
         {
             CreateText(scene, row, nameTextName, font, nameValue,
-                -180f, 56f, 320f, 24f, 16, TextAnchor.MiddleLeft);
+                RowNamePosition.x, RowNamePosition.y, RowNameSize.x, RowNameSize.y, 16,
+                TextAnchor.MiddleLeft);
             CreateText(scene, row, statusTextName, font, "空缺：无人负责，本月无产出",
-                -170f, 32f, 340f, 24f, 14, TextAnchor.MiddleLeft);
+                RowStatusPosition.x, RowStatusPosition.y, RowStatusSize.x, RowStatusSize.y, 14,
+                TextAnchor.MiddleLeft);
+            CreateText(scene, row, detailTextName, font, string.Empty,
+                RowDetailPosition.x, RowDetailPosition.y, RowDetailSize.x, RowDetailSize.y, 13,
+                TextAnchor.MiddleLeft);
             CreateText(scene, row, assigneeTextName, font, "负责人：空缺",
-                -170f, 8f, 320f, 24f, 14, TextAnchor.MiddleLeft);
+                RowAssigneePosition.x, RowAssigneePosition.y, RowAssigneeSize.x, RowAssigneeSize.y, 14,
+                TextAnchor.MiddleLeft);
             Button unassign = CreateButton(scene, row, unassignButtonName, font, "解除",
-                120f, 32f, 14);
+                RowUnassignSize.x, RowUnassignSize.y, 14);
             RectTransform unassignRect = unassign.GetComponent<RectTransform>();
             unassignRect.anchorMin = unassignRect.anchorMax = unassignRect.pivot = new Vector2(0.5f, 0.5f);
-            unassignRect.anchoredPosition = new Vector2(270f, 52f);
+            unassignRect.anchoredPosition = RowUnassignPosition;
 
             GameObject container = Create(scene, row, candidateContainerName, typeof(GridLayoutGroup));
             RectTransform containerRect = container.GetComponent<RectTransform>();
             containerRect.anchorMin = containerRect.anchorMax = containerRect.pivot = new Vector2(0.5f, 0.5f);
-            containerRect.anchoredPosition = new Vector2(0f, -36f);
+            containerRect.anchoredPosition = RowCandidateAreaPosition;
             containerRect.sizeDelta = new Vector2(CandidateAreaWidth, CandidateAreaHeight);
             ConfigureCandidateArea(container.transform);
         }
@@ -815,7 +1012,7 @@ namespace SengokuChronicle.Editor
             {
                 Undo.RecordObject(rect, UndoName);
                 rect.anchorMin = rect.anchorMax = rect.pivot = new Vector2(0.5f, 0.5f);
-                rect.anchoredPosition = new Vector2(0f, -36f);
+                rect.anchoredPosition = RowCandidateAreaPosition;
                 rect.sizeDelta = new Vector2(CandidateAreaWidth, CandidateAreaHeight);
             }
 
@@ -834,11 +1031,63 @@ namespace SengokuChronicle.Editor
             grid.constraintCount = CandidateColumns;
         }
 
+        /// <summary>
+        /// Resolves every authored industry control, then writes both the live and the
+        /// serialized panel references. Create and repair share it so the two paths cannot
+        /// bind different control sets.
+        /// </summary>
+        private static void BindIndustryPanel(Scene scene, IndustryPanel panel, GameSession session,
+            GameObject panelRoot, Button open, Button close, Text title, Text resources, Text block,
+            Text message, Text report, GameObject farmRow, GameObject tradingRow,
+            Transform farmContainer, Transform tradingContainer, GameObject template, out string error)
+        {
+            Transform farmStatus = Require(scene, FarmStatusTextName);
+            Transform farmDetail = Require(scene, FarmDetailTextName);
+            Transform farmAssignee = Require(scene, FarmAssigneeTextName);
+            Transform farmUnassign = Require(scene, FarmUnassignButtonName);
+            Transform tradingStatus = Require(scene, TradingStatusTextName);
+            Transform tradingDetail = Require(scene, TradingDetailTextName);
+            Transform tradingAssignee = Require(scene, TradingAssigneeTextName);
+            Transform tradingUnassign = Require(scene, TradingUnassignButtonName);
+            Transform preview = Require(scene, PreviewTextName);
+            Transform confirm = Require(scene, ConfirmButtonName);
+            Transform cancel = Require(scene, CancelButtonName);
+            if (farmStatus == null || farmDetail == null || farmAssignee == null ||
+                farmUnassign == null || tradingStatus == null || tradingDetail == null ||
+                tradingAssignee == null || tradingUnassign == null || preview == null ||
+                confirm == null || cancel == null)
+            {
+                error = "Complete SC-019 industry controls could not be resolved.";
+                return;
+            }
+
+            Text farmDetailText = farmDetail.GetComponent<Text>();
+            Text tradingDetailText = tradingDetail.GetComponent<Text>();
+            Text previewText = preview.GetComponent<Text>();
+            Button confirmButton = confirm.GetComponent<Button>();
+            Button cancelButton = cancel.GetComponent<Button>();
+
+            panel.BindReferences(session, panelRoot, open, close, title, resources, block, message,
+                report, farmRow, farmStatus.GetComponent<Text>(), farmAssignee.GetComponent<Text>(),
+                farmUnassign.GetComponent<Button>(), farmContainer, tradingRow,
+                tradingStatus.GetComponent<Text>(), tradingAssignee.GetComponent<Text>(),
+                tradingUnassign.GetComponent<Button>(), tradingContainer, template, false,
+                farmDetailText, tradingDetailText, previewText, confirmButton, cancelButton);
+            SetSerializedReferences(panel, session, panelRoot, open, close, title, resources, block,
+                message, report, farmRow, farmStatus.GetComponent<Text>(),
+                farmAssignee.GetComponent<Text>(), farmUnassign.GetComponent<Button>(), farmContainer,
+                tradingRow, tradingStatus.GetComponent<Text>(), tradingAssignee.GetComponent<Text>(),
+                tradingUnassign.GetComponent<Button>(), tradingContainer, template,
+                farmDetailText, tradingDetailText, previewText, confirmButton, cancelButton);
+            error = null;
+        }
+
         private static void SetSerializedReferences(IndustryPanel panel, GameSession session,
             GameObject panelRoot, Button open, Button close, Text title, Text resources, Text block,
             Text message, Text report, GameObject farmRow, Text farmStatus, Text farmAssignee,
             Button farmUnassign, Transform farmContainer, GameObject tradingRow, Text tradingStatus,
-            Text tradingAssignee, Button tradingUnassign, Transform tradingContainer, GameObject template)
+            Text tradingAssignee, Button tradingUnassign, Transform tradingContainer, GameObject template,
+            Text farmDetail, Text tradingDetail, Text preview, Button confirm, Button cancel)
         {
             var serialized = new SerializedObject(panel);
             serialized.FindProperty("gameSession").objectReferenceValue = session;
@@ -852,15 +1101,20 @@ namespace SengokuChronicle.Editor
             serialized.FindProperty("reportText").objectReferenceValue = report;
             serialized.FindProperty("rowFarm").objectReferenceValue = farmRow;
             serialized.FindProperty("farmStatusText").objectReferenceValue = farmStatus;
+            serialized.FindProperty("farmDetailText").objectReferenceValue = farmDetail;
             serialized.FindProperty("farmAssigneeText").objectReferenceValue = farmAssignee;
             serialized.FindProperty("farmUnassignButton").objectReferenceValue = farmUnassign;
             serialized.FindProperty("farmCandidateContainer").objectReferenceValue = farmContainer;
             serialized.FindProperty("rowTradingHouse").objectReferenceValue = tradingRow;
             serialized.FindProperty("tradingStatusText").objectReferenceValue = tradingStatus;
+            serialized.FindProperty("tradingDetailText").objectReferenceValue = tradingDetail;
             serialized.FindProperty("tradingAssigneeText").objectReferenceValue = tradingAssignee;
             serialized.FindProperty("tradingUnassignButton").objectReferenceValue = tradingUnassign;
             serialized.FindProperty("tradingCandidateContainer").objectReferenceValue = tradingContainer;
             serialized.FindProperty("candidateTemplate").objectReferenceValue = template;
+            serialized.FindProperty("previewText").objectReferenceValue = preview;
+            serialized.FindProperty("confirmButton").objectReferenceValue = confirm;
+            serialized.FindProperty("cancelButton").objectReferenceValue = cancel;
             serialized.ApplyModifiedPropertiesWithoutUndo();
         }
 
