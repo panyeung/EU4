@@ -476,8 +476,8 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(_panel.VisibleNodeCount, Is.EqualTo(6),
                 "pregnancy status must not add a scene node");
 
-            Assert.That(FamilyTreeLayout.NodeHeight, Is.EqualTo(88f),
-                "M04B must not change the shared family-tree geometry");
+            Assert.That(FamilyTreeLayout.NodeHeight, Is.EqualTo(120f),
+                "shared card height is fixed and a pregnancy label must not resize it");
             RectTransform pregnantCard = FindNode(M2FixedScenario.ChieId);
             Assert.That(pregnantCard, Is.Not.Null);
             Assert.That(pregnantCard.sizeDelta.y, Is.EqualTo(FamilyTreeLayout.NodeHeight));
