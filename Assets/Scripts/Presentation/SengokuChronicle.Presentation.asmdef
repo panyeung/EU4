@@ -5,7 +5,8 @@
     "SengokuChronicle.Application",
     "SengokuChronicle.Domain",
     "SengokuChronicle.Events",
-    "SengokuChronicle.Persistence"
+    "SengokuChronicle.Persistence",
+    "Unity.InputSystem"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],

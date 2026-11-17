@@ -13,23 +13,24 @@ namespace SengokuChronicle.Editor
     /// <summary>
     /// Transactional generator for the M08 campaign review overlay. It builds one fixed
     /// root under the existing Canvas, a full-screen page with a centred card, a
-    /// scrollable sourced-history body, one continue button and the status line. The
-    /// page starts hidden; CampaignReviewPanel shows it only while a real 55-year or
-    /// 100-year review is pending. Everything is created in one Undo group, validated
-    /// before saving, and rolled back through Undo on failure without reloading the scene.
-    /// An existing page whose only defect is its Canvas order is moved back under the M6
-    /// title in one undoable step instead of being rebuilt.
+    /// scrollable sourced-history body, a continue action, a new-scenario action that opens
+    /// the title overlay's selector, and the status line. The page starts hidden;
+    /// CampaignReviewPanel shows it only while a real 55-year or 100-year review is pending.
+    /// Everything is created in one Undo group, validated before saving, and rolled back
+    /// through Undo on failure without reloading the scene. An existing page whose only
+    /// defect is its Canvas order is moved back under the M6 title in one undoable step
+    /// instead of being rebuilt.
     /// </summary>
     public static class AddM08CampaignReviewPanel
     {
         public const string ScenePath = "Assets/Scenes/FoundationScene.unity";
         public const string RootName = CampaignReviewPanel.RootObjectName;
-        // Canvas siblings share the M6 title overlay's ordering contract: Unity renders
-        // later siblings on top, so the full-screen title and the tactical modal are the
-        // only overlays allowed above everything else on the Canvas.
-        public const string TitleRootName = "M6TitleRoot";
-        public const string EventChoiceRootName = "EventChoiceRoot";
-        public const string TacticalOverlayName = TacticalMissionPanel.OverlayObjectName;
+        // Canvas siblings share one ranked overlay band (CanvasOverlayOrder): the campaign
+        // review renders above the M02 page and the M03 inspector and beneath the full-screen
+        // M6 title, EventChoiceRoot and the last M06 tactical modal.
+        public const string TitleRootName = CanvasOverlayOrder.TitleRootName;
+        public const string EventChoiceRootName = CanvasOverlayOrder.EventChoiceRootName;
+        public const string TacticalOverlayName = CanvasOverlayOrder.TacticalOverlayName;
         public const string PageName = CampaignReviewPanel.PageObjectName;
         public const string CardName = CampaignReviewPanel.CardObjectName;
         public const string TitleTextName = "M08CampaignReviewTitleText";
@@ -42,6 +43,9 @@ namespace SengokuChronicle.Editor
         public const string ButtonRowName = "M08CampaignReviewButtonRow";
         public const string ContinueButtonName = "M08CampaignReviewContinueButton";
         public const string ContinueLabelName = "M08CampaignReviewContinueLabel";
+        public const string NewScenarioButtonName = CampaignReviewPanel.NewScenarioButtonName;
+        public const string NewScenarioLabelName = CampaignReviewPanel.NewScenarioLabelName;
+        public const string ContinueCaption = "继续家族";
 
         private const string MenuPath = "Tools/Sengoku Chronicle/Add M08 Campaign Review Panel";
         private const string UndoName = "Add M08 Campaign Review Panel";
@@ -59,6 +63,12 @@ namespace SengokuChronicle.Editor
         private const float ReferenceCardWidth = 1120f;
         private const float ReferenceCardHeight = 640f;
         private const float PageMargin = 32f;
+        // Action row geometry. The two actions sit side by side, centred together, and each
+        // stays inside the authored card before any layout pass runs.
+        private const float ActionRowHeight = 52f;
+        private const float ActionButtonWidth = 380f;
+        private const float ActionButtonHeight = 42f;
+        private const float ActionButtonGap = 12f;
 
         public enum UpdateResult
         {
@@ -108,8 +118,14 @@ namespace SengokuChronicle.Editor
             {
                 if (Validate(scene, out string error))
                     return UpdateResult.Success;
+                // A page generated before the two-action shape has no new-scenario entry and
+                // a status line that predates the readable ink. Only that known generated
+                // hierarchy is replaced, so the older scene upgrades without manual deletion;
+                // any other invalid page keeps the refusal path below.
+                if (IsLegacyGeneratedPage(scene, canvas))
+                    return Rebuild(scene, canvas, session, save, null, true);
                 return RepairableOrderError(error)
-                    ? RepairOrdering(scene, canvas, save)
+                    ? RepairOrdering(scene, canvas, save, beforeValidation)
                     : UpdateResult.ExistingCampaignPanel;
             }
 
@@ -118,145 +134,45 @@ namespace SengokuChronicle.Editor
             if (design.x < 960f || design.y < 540f)
                 return UpdateResult.InsufficientSpace;
 
+            return Rebuild(scene, canvas, session, save, beforeValidation, false);
+        }
+
+        /// <summary>
+        /// Creates, or replaces a legacy generated page with, the whole review hierarchy inside
+        /// one Undo group. Replacement is limited to <see cref="IsLegacyGeneratedPage"/>, so
+        /// nothing outside the review root is deleted. The shared overlay band is repaired
+        /// before validation, because a page or succession root saved by an older updater can
+        /// be in the wrong slot. A failure rolls the Undo group back and restores the exact
+        /// Canvas child order found before the attempt.
+        /// </summary>
+        private static UpdateResult Rebuild(Scene scene, Transform canvas, GameSession session,
+            bool save, Action<GameObject> beforeValidation, bool replaceExisting)
+        {
+            Transform[] orderBefore = Children(canvas);
             Undo.IncrementCurrentGroup();
             int group = Undo.GetCurrentGroup();
             Undo.SetCurrentGroupName(UndoName);
             UpdateResult failure = UpdateResult.Failed;
             try
             {
-                GameObject root = Create(scene, canvas, RootName);
-                PlaceBelowTitleOverlay(canvas, root.transform);
-                RectTransform rootRect = root.GetComponent<RectTransform>();
-                rootRect.anchorMin = Vector2.zero;
-                rootRect.anchorMax = Vector2.one;
-                rootRect.offsetMin = Vector2.zero;
-                rootRect.offsetMax = Vector2.zero;
+                // Sibling order lives in the parent RectTransform, so record the parent too.
+                Undo.RegisterCompleteObjectUndo(canvas, UndoName);
+                if (replaceExisting)
+                {
+                    Transform legacy = canvas.Find(RootName);
+                    if (legacy == null)
+                        throw new InvalidOperationException(
+                            "The legacy campaign review root vanished before it could be replaced.");
+                    Undo.DestroyObjectImmediate(legacy.gameObject);
+                }
 
-                Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-                if (font == null)
-                    throw new InvalidOperationException("Missing built-in UI font.");
-
-                GameObject pageObject = Create(scene, rootRect, PageName, typeof(Image));
-                RectTransform page = pageObject.GetComponent<RectTransform>();
-                page.anchorMin = Vector2.zero;
-                page.anchorMax = Vector2.one;
-                page.offsetMin = Vector2.zero;
-                page.offsetMax = Vector2.zero;
-                Image pageImage = pageObject.GetComponent<Image>();
-                pageImage.color = SengokuUiTheme.WithAlpha(SengokuUiTheme.IndigoBackdrop, 0.96f);
-                pageImage.raycastTarget = true;
-                pageObject.SetActive(false);
-
-                GameObject cardObject = Create(scene, page, CardName, typeof(Image),
-                    typeof(VerticalLayoutGroup));
-                RectTransform card = cardObject.GetComponent<RectTransform>();
-                card.anchorMin = card.anchorMax = card.pivot = new Vector2(0.5f, 0.5f);
-                card.anchoredPosition = Vector2.zero;
-                card.sizeDelta = CardSize(design);
-                Image cardImage = cardObject.GetComponent<Image>();
-                cardImage.color = SengokuUiTheme.IndigoPanel;
-                cardImage.raycastTarget = true;
-
-                VerticalLayoutGroup layout = cardObject.GetComponent<VerticalLayoutGroup>();
-                layout.padding = new RectOffset(24, 24, 22, 20);
-                layout.spacing = 8f;
-                layout.childControlWidth = true;
-                layout.childControlHeight = true;
-                layout.childForceExpandWidth = true;
-                layout.childForceExpandHeight = false;
-                layout.childAlignment = TextAnchor.UpperCenter;
-
-                Text title = CreateText(scene, card, TitleTextName, font, 30,
-                    new Vector2(1000f, 40f), TextAnchor.MiddleLeft, SengokuUiTheme.Gold,
-                    "家族评价");
-                AddPreferredHeight(title.gameObject, 40f);
-
-                Text context = CreateText(scene, card, ContextTextName, font, 15,
-                    new Vector2(1000f, 40f), TextAnchor.UpperLeft, SengokuUiTheme.Parchment,
-                    "剧本来源与评价日期");
-                AddPreferredHeight(context.gameObject, 40f);
-
-                GameObject scrollObject = Create(scene, card, BodyScrollName, typeof(Image),
-                    typeof(ScrollRect), typeof(LayoutElement));
-                Image scrollImage = scrollObject.GetComponent<Image>();
-                scrollImage.color = SengokuUiTheme.WithAlpha(SengokuUiTheme.ParchmentDeep, 0.16f);
-                scrollImage.raycastTarget = true;
-                LayoutElement scrollLayout = scrollObject.GetComponent<LayoutElement>();
-                scrollLayout.minHeight = 180f;
-                scrollLayout.flexibleHeight = 1f;
-
-                GameObject viewportObject = Create(scene, scrollObject.transform,
-                    BodyViewportName, typeof(Image), typeof(RectMask2D));
-                RectTransform viewport = viewportObject.GetComponent<RectTransform>();
-                viewport.anchorMin = Vector2.zero;
-                viewport.anchorMax = Vector2.one;
-                viewport.offsetMin = new Vector2(8f, 6f);
-                viewport.offsetMax = new Vector2(-8f, -6f);
-                Image viewportImage = viewportObject.GetComponent<Image>();
-                viewportImage.color = new Color(1f, 1f, 1f, 0.01f);
-                viewportImage.raycastTarget = true;
-
-                GameObject contentObject = Create(scene, viewport, BodyContentName,
-                    typeof(VerticalLayoutGroup), typeof(ContentSizeFitter));
-                RectTransform content = contentObject.GetComponent<RectTransform>();
-                content.anchorMin = new Vector2(0f, 1f);
-                content.anchorMax = new Vector2(1f, 1f);
-                content.pivot = new Vector2(0.5f, 1f);
-                content.anchoredPosition = Vector2.zero;
-                content.sizeDelta = Vector2.zero;
-                VerticalLayoutGroup contentLayout =
-                    contentObject.GetComponent<VerticalLayoutGroup>();
-                contentLayout.padding = new RectOffset(4, 4, 4, 4);
-                contentLayout.spacing = 4f;
-                contentLayout.childControlWidth = true;
-                contentLayout.childControlHeight = true;
-                contentLayout.childForceExpandWidth = true;
-                contentLayout.childForceExpandHeight = false;
-                ContentSizeFitter contentFitter =
-                    contentObject.GetComponent<ContentSizeFitter>();
-                contentFitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
-                contentFitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
-
-                ScrollRect scroll = scrollObject.GetComponent<ScrollRect>();
-                scroll.content = content;
-                scroll.viewport = viewport;
-                scroll.horizontal = false;
-                scroll.vertical = true;
-                scroll.movementType = ScrollRect.MovementType.Clamped;
-
-                Text body = CreateText(scene, content, BodyTextName, font, 17,
-                    Vector2.zero, TextAnchor.UpperLeft, SengokuUiTheme.Parchment, string.Empty);
-                body.horizontalOverflow = HorizontalWrapMode.Wrap;
-                body.verticalOverflow = VerticalWrapMode.Overflow;
-                // The body Text is the first block template. CampaignReviewPanel clones it
-                // per bounded block, because one Text cannot render the 89,212-character
-                // 55-year review: its mesh exceeds the uGUI CanvasRenderer limit and the
-                // whole viewport renders blank. The content's VerticalLayoutGroup stacks
-                // the blocks with Text's own preferred height, in body order.
-
-                Text status = CreateText(scene, card, StatusTextName, font, 14,
-                    new Vector2(1000f, 20f), TextAnchor.MiddleLeft, SengokuUiTheme.GoldDim,
-                    string.Empty);
-                AddPreferredHeight(status.gameObject, 20f);
-
-                GameObject rowObject = Create(scene, card, ButtonRowName, typeof(LayoutElement));
-                rowObject.GetComponent<LayoutElement>().preferredHeight = 52f;
-                Button cont = CreateButton(scene, rowObject.transform, ContinueButtonName, font,
-                    "继续家族", new Vector2(380f, 42f), 16);
-                Text label = cont.GetComponentInChildren<Text>(true);
-                if (label != null)
-                    label.name = ContinueLabelName;
-
-                CampaignReviewPanel panel = Undo.AddComponent<CampaignReviewPanel>(root);
-                panel.BindReferences(session, pageObject, title, context, body, label, status, cont);
-                pageObject.SetActive(false);
-                EditorUtility.SetDirty(panel);
-
+                GameObject root = BuildPanel(scene, canvas, session);
                 beforeValidation?.Invoke(root);
+                CanvasOverlayOrder.PlaceBandAboveUnranked(canvas);
+                Undo.FlushUndoRecordObjects();
                 failure = UpdateResult.ValidationFailed;
                 if (!Validate(scene, out string error))
                     throw new InvalidOperationException(error);
-                Undo.FlushUndoRecordObjects();
                 EditorSceneManager.MarkSceneDirty(scene);
                 failure = UpdateResult.SaveFailed;
                 if (save && !EditorSceneManager.SaveScene(scene))
@@ -268,11 +184,210 @@ namespace SengokuChronicle.Editor
             {
                 Undo.FlushUndoRecordObjects();
                 Undo.RevertAllDownToGroup(group);
+                RestoreOrder(canvas, orderBefore);
                 Debug.LogWarning($"M08 campaign review updater rolled back: {exception.Message} " +
                                  "Scene may remain dirty; inspect it before saving.");
                 return failure;
             }
         }
+
+        /// <summary>Builds the generated review hierarchy beneath the existing Canvas.</summary>
+        private static GameObject BuildPanel(Scene scene, Transform canvas, GameSession session)
+        {
+            GameObject root = Create(scene, canvas, RootName);
+            PlaceBelowTitleOverlay(canvas, root.transform);
+            RectTransform rootRect = root.GetComponent<RectTransform>();
+            rootRect.anchorMin = Vector2.zero;
+            rootRect.anchorMax = Vector2.one;
+            rootRect.offsetMin = Vector2.zero;
+            rootRect.offsetMax = Vector2.zero;
+
+            Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            if (font == null)
+                throw new InvalidOperationException("Missing built-in UI font.");
+
+            GameObject pageObject = Create(scene, rootRect, PageName, typeof(Image));
+            RectTransform page = pageObject.GetComponent<RectTransform>();
+            page.anchorMin = Vector2.zero;
+            page.anchorMax = Vector2.one;
+            page.offsetMin = Vector2.zero;
+            page.offsetMax = Vector2.zero;
+            Image pageImage = pageObject.GetComponent<Image>();
+            pageImage.color = SengokuUiTheme.WithAlpha(SengokuUiTheme.IndigoBackdrop, 0.96f);
+            pageImage.raycastTarget = true;
+            pageObject.SetActive(false);
+
+            GameObject cardObject = Create(scene, page, CardName, typeof(Image),
+                typeof(VerticalLayoutGroup));
+            RectTransform card = cardObject.GetComponent<RectTransform>();
+            card.anchorMin = card.anchorMax = card.pivot = new Vector2(0.5f, 0.5f);
+            card.anchoredPosition = Vector2.zero;
+            card.sizeDelta = CardSize(ResolveDesignSize(canvas as RectTransform));
+            Image cardImage = cardObject.GetComponent<Image>();
+            cardImage.color = SengokuUiTheme.IndigoPanel;
+            cardImage.raycastTarget = true;
+
+            VerticalLayoutGroup layout = cardObject.GetComponent<VerticalLayoutGroup>();
+            layout.padding = new RectOffset(24, 24, 22, 20);
+            layout.spacing = 8f;
+            layout.childControlWidth = true;
+            layout.childControlHeight = true;
+            layout.childForceExpandWidth = true;
+            layout.childForceExpandHeight = false;
+            layout.childAlignment = TextAnchor.UpperCenter;
+
+            Text title = CreateText(scene, card, TitleTextName, font, 30,
+                new Vector2(1000f, 40f), TextAnchor.MiddleLeft, SengokuUiTheme.Gold,
+                "家族评价");
+            AddPreferredHeight(title.gameObject, 40f);
+
+            Text context = CreateText(scene, card, ContextTextName, font, 15,
+                new Vector2(1000f, 40f), TextAnchor.UpperLeft, SengokuUiTheme.Parchment,
+                "剧本来源与评价日期");
+            AddPreferredHeight(context.gameObject, 40f);
+
+            GameObject scrollObject = Create(scene, card, BodyScrollName, typeof(Image),
+                typeof(ScrollRect), typeof(LayoutElement));
+            Image scrollImage = scrollObject.GetComponent<Image>();
+            scrollImage.color = SengokuUiTheme.WithAlpha(SengokuUiTheme.ParchmentDeep, 0.16f);
+            scrollImage.raycastTarget = true;
+            LayoutElement scrollLayout = scrollObject.GetComponent<LayoutElement>();
+            scrollLayout.minHeight = 180f;
+            scrollLayout.flexibleHeight = 1f;
+
+            GameObject viewportObject = Create(scene, scrollObject.transform,
+                BodyViewportName, typeof(Image), typeof(RectMask2D));
+            RectTransform viewport = viewportObject.GetComponent<RectTransform>();
+            viewport.anchorMin = Vector2.zero;
+            viewport.anchorMax = Vector2.one;
+            viewport.offsetMin = new Vector2(8f, 6f);
+            viewport.offsetMax = new Vector2(-8f, -6f);
+            Image viewportImage = viewportObject.GetComponent<Image>();
+            viewportImage.color = new Color(1f, 1f, 1f, 0.01f);
+            viewportImage.raycastTarget = true;
+
+            GameObject contentObject = Create(scene, viewport, BodyContentName,
+                typeof(VerticalLayoutGroup), typeof(ContentSizeFitter));
+            RectTransform content = contentObject.GetComponent<RectTransform>();
+            content.anchorMin = new Vector2(0f, 1f);
+            content.anchorMax = new Vector2(1f, 1f);
+            content.pivot = new Vector2(0.5f, 1f);
+            content.anchoredPosition = Vector2.zero;
+            content.sizeDelta = Vector2.zero;
+            VerticalLayoutGroup contentLayout =
+                contentObject.GetComponent<VerticalLayoutGroup>();
+            contentLayout.padding = new RectOffset(4, 4, 4, 4);
+            contentLayout.spacing = 4f;
+            contentLayout.childControlWidth = true;
+            contentLayout.childControlHeight = true;
+            contentLayout.childForceExpandWidth = true;
+            contentLayout.childForceExpandHeight = false;
+            ContentSizeFitter contentFitter =
+                contentObject.GetComponent<ContentSizeFitter>();
+            contentFitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+            contentFitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+            ScrollRect scroll = scrollObject.GetComponent<ScrollRect>();
+            scroll.content = content;
+            scroll.viewport = viewport;
+            scroll.horizontal = false;
+            scroll.vertical = true;
+            scroll.movementType = ScrollRect.MovementType.Clamped;
+
+            Text body = CreateText(scene, content, BodyTextName, font, 17,
+                Vector2.zero, TextAnchor.UpperLeft, SengokuUiTheme.Parchment, string.Empty);
+            body.horizontalOverflow = HorizontalWrapMode.Wrap;
+            body.verticalOverflow = VerticalWrapMode.Overflow;
+            // The body Text is the first block template. CampaignReviewPanel clones it
+            // per bounded block, because one Text cannot render the 89,212-character
+            // 55-year review: its mesh exceeds the uGUI CanvasRenderer limit and the
+            // whole viewport renders blank. The content's VerticalLayoutGroup stacks
+            // the blocks with Text's own preferred height, in body order.
+
+            Text status = CreateText(scene, card, StatusTextName, font, 14,
+                new Vector2(1000f, 20f), TextAnchor.MiddleLeft,
+                CampaignReviewPanel.StatusTextColor, string.Empty);
+            AddPreferredHeight(status.gameObject, 20f);
+
+            GameObject rowObject = Create(scene, card, ButtonRowName, typeof(LayoutElement));
+            RectTransform row = rowObject.GetComponent<RectTransform>();
+            // The card's VerticalLayoutGroup owns this row at runtime. Sizing it up front
+            // keeps the two actions inside the card for the containment check, which runs
+            // before any canvas layout pass.
+            row.anchorMin = row.anchorMax = row.pivot = new Vector2(0.5f, 0.5f);
+            row.anchoredPosition = Vector2.zero;
+            row.sizeDelta = new Vector2(card.rect.size.x - 48f, ActionRowHeight);
+            rowObject.GetComponent<LayoutElement>().preferredHeight = ActionRowHeight;
+            float actionOffset = (ActionButtonWidth + ActionButtonGap) * 0.5f;
+            Button cont = CreateButton(scene, row, ContinueButtonName, font, ContinueCaption,
+                new Vector2(ActionButtonWidth, ActionButtonHeight), 16);
+            cont.GetComponent<RectTransform>().anchoredPosition =
+                new Vector2(-actionOffset, 0f);
+            Text label = cont.GetComponentInChildren<Text>(true);
+            if (label != null)
+                label.name = ContinueLabelName;
+
+            Button startNew = CreateButton(scene, row, NewScenarioButtonName, font,
+                CampaignReviewPanel.NewScenarioLabel,
+                new Vector2(ActionButtonWidth, ActionButtonHeight), 16);
+            startNew.GetComponent<RectTransform>().anchoredPosition =
+                new Vector2(actionOffset, 0f);
+            Text startNewLabel = startNew.GetComponentInChildren<Text>(true);
+            if (startNewLabel != null)
+                startNewLabel.name = NewScenarioLabelName;
+
+            CampaignReviewPanel panel = Undo.AddComponent<CampaignReviewPanel>(root);
+            panel.BindReferences(session, pageObject, title, context, body, label, status, cont,
+                startNew, startNewLabel, TitleScreen(scene));
+            pageObject.SetActive(false);
+            EditorUtility.SetDirty(panel);
+            return root;
+        }
+
+        /// <summary>
+        /// True only for the page shape this generator produced before the new-scenario action
+        /// and the readable status ink existed: the whole known hierarchy is present and every
+        /// object under the root carries a generated name. That narrow match lets the updater
+        /// replace an old tool-generated page without manual deletion while refusing a page a
+        /// user added objects to. A page that already has the new-scenario action is never
+        /// rebuilt, so a structural defect there keeps the existing refusal.
+        /// </summary>
+        private static bool IsLegacyGeneratedPage(Scene scene, Transform canvas)
+        {
+            Transform[] roots = Named(scene, RootName);
+            CampaignReviewPanel[] panels = Components<CampaignReviewPanel>(scene);
+            if (roots.Length != 1 || panels.Length != 1 ||
+                roots[0].parent != canvas || panels[0].transform != roots[0])
+                return false;
+            Transform root = roots[0];
+            if (FindDeep(root, NewScenarioButtonName) != null)
+                return false;
+            string[] required =
+            {
+                PageName, CardName, TitleTextName, ContextTextName, BodyScrollName,
+                BodyViewportName, BodyContentName, BodyTextName, StatusTextName,
+                ButtonRowName, ContinueButtonName, ContinueLabelName
+            };
+            for (int i = 0; i < required.Length; i++)
+                if (FindDeep(root, required[i]) == null)
+                    return false;
+
+            Transform[] all = root.GetComponentsInChildren<Transform>(true);
+            for (int i = 0; i < all.Length; i++)
+                if (!IsGeneratedObjectName(all[i].name))
+                    return false;
+            return true;
+        }
+
+        /// <summary>Every name the generator owns inside the review root.</summary>
+        private static bool IsGeneratedObjectName(string name) =>
+            name == RootName || name == PageName || name == CardName ||
+            name == TitleTextName || name == ContextTextName || name == BodyScrollName ||
+            name == BodyViewportName || name == BodyContentName || name == BodyTextName ||
+            name == StatusTextName || name == ButtonRowName || name == ContinueButtonName || name == ContinueLabelName ||
+            name == NewScenarioButtonName || name == NewScenarioLabelName ||
+            (name != null && name.StartsWith(BodyTextName + CampaignReviewPanel.BodyBlockNameSuffix,
+                StringComparison.Ordinal));
 
         public static bool Validate(Scene scene, out string error)
         {
@@ -364,6 +479,33 @@ namespace SengokuChronicle.Editor
                     "Campaign review body must be a vertical scroll whose content stacks " +
                     "bounded, auto-sized Text blocks from a top anchor.");
 
+            // The scrollbar is created at runtime in the body scroll's own scene. When a saved
+            // page already owns one, it must be the generated 24 px column with a handle, and
+            // the viewport must reserve that column so the bar never covers wrapped text.
+            RectTransform viewportRect = (RectTransform)viewport;
+            bool authoredInset =
+                Inset(viewportRect.offsetMin, 8f, 6f) && Inset(viewportRect.offsetMax, -8f, -6f);
+            bool reservedInset =
+                Inset(viewportRect.offsetMin, 8f, 6f) &&
+                Inset(viewportRect.offsetMax,
+                    -(2f + CampaignReviewPanel.ScrollbarWidth + 8f), -6f);
+            if (!authoredInset && !reservedInset)
+                return Invalid(out error,
+                    "Campaign review body viewport must keep the authored inset or reserve " +
+                    "the 24 px scrollbar column.");
+            Scrollbar authoredBar = scrollComponent.verticalScrollbar;
+            if (authoredBar != null)
+            {
+                RectTransform barRect = authoredBar.transform as RectTransform;
+                if (authoredBar.transform.parent != scroll || barRect == null ||
+                    Mathf.Abs(barRect.rect.width - CampaignReviewPanel.ScrollbarWidth) > 0.01f ||
+                    authoredBar.handleRect == null ||
+                    authoredBar.handleRect.parent != barRect)
+                    return Invalid(out error,
+                        "Campaign review body scrollbar must be a 24 px column inside the " +
+                        "scroll with its own handle.");
+            }
+
             Text label = FindText(page, ContinueLabelName);
             Button cont = FindButton(page, ContinueButtonName);
             if (cont == null || label == null || label.font == null ||
@@ -377,6 +519,46 @@ namespace SengokuChronicle.Editor
                 return Invalid(out error,
                     "Campaign review continue button or label is missing, unbound or outside the card.");
 
+            Transform row = card.Find(ButtonRowName);
+            Button startNew = FindButton(page, NewScenarioButtonName);
+            Text startNewLabel = FindText(page, NewScenarioLabelName);
+            if (row == null || row.parent != card || startNew == null || startNewLabel == null ||
+                startNew == cont || startNewLabel.font == null ||
+                startNewLabel.transform.parent != startNew.transform ||
+                startNew.transform.parent != row ||
+                !startNew.interactable || startNew.transform.childCount != 1 ||
+                startNew.targetGraphic == null ||
+                startNew.targetGraphic.gameObject != startNew.gameObject ||
+                startNewLabel.text != CampaignReviewPanel.NewScenarioLabel ||
+                !Bound(panel, "newScenarioButton", startNew) ||
+                !Bound(panel, "newScenarioLabelText", startNewLabel) ||
+                !Contained((RectTransform)startNew.transform, cardRect))
+                return Invalid(out error,
+                    "Campaign review new-scenario button or label is missing, unbound or " +
+                    "outside the card.");
+
+            TitleScreenController[] titles = Components<TitleScreenController>(scene);
+            if (titles.Length > 1)
+                return Invalid(out error,
+                    "Expected at most one TitleScreenController to own the scenario selector.");
+            if (titles.Length == 1)
+            {
+                if (!Bound(panel, "titleScreenController", titles[0]))
+                    return Invalid(out error,
+                        "Campaign review new-scenario action must point at the scene's " +
+                        "TitleScreenController.");
+            }
+            else if (Reference(panel, "titleScreenController") != null)
+                return Invalid(out error,
+                    "Campaign review title reference must stay empty when the scene has no " +
+                    "TitleScreenController.");
+
+            // WCAG 1.4.3: the 14 px status line reports a refused action, so it needs the
+            // 4.5:1 normal-text ratio against the authored card, not the large-text 3:1.
+            if (!MeetsNormalTextContrast(status.color, card.GetComponent<Image>().color))
+                return Invalid(out error,
+                    "Campaign review status text must reach 4.5:1 against the card.");
+
             if (title.text.Length == 0 || context.text.Length == 0)
                 return Invalid(out error,
                     "Campaign review header text must be initialized.");
@@ -385,44 +567,41 @@ namespace SengokuChronicle.Editor
 
         /// <summary>
         /// Unity renders later Canvas siblings above earlier ones, so the review overlay must
-        /// sit under the M6 title overlay. AddM6TitleScreen.Validate requires the title to be
+        /// sit above the M02 page and the M03 inspector, below a pending succession decision,
+        /// and under the M6 title overlay. AddM6TitleScreen.Validate requires the title to be
         /// the sibling immediately below EventChoiceRoot and allows nothing else above it, and
         /// AddM06TacticalMissionPanel.Validate requires the tactical overlay to stay last.
-        /// The root is created at the end of the Canvas, so this moves it under the
-        /// title/event pair instead of leaving it above the title and the tactical modal.
+        /// The root is created at the end of the Canvas, so this places it in its rank slot
+        /// from <see cref="CanvasOverlayOrder"/> without shifting the roots around it.
         /// </summary>
         private static void PlaceBelowTitleOverlay(Transform canvas, Transform root) =>
-            root.SetSiblingIndex(ResolveOrderIndex(canvas));
-
-        /// <summary>
-        /// Canvas index the review root renders at: below the M6 title overlay, or directly
-        /// below the M06 tactical overlay when no title exists. Creating the root last and
-        /// moving it here shifts the title and EventChoiceRoot above it one step up together.
-        /// </summary>
-        private static int ResolveOrderIndex(Transform canvas)
-        {
-            Transform title = canvas.Find(TitleRootName);
-            Transform tactical = canvas.Find(TacticalOverlayName);
-            int index = title != null ? title.GetSiblingIndex()
-                : tactical != null ? tactical.GetSiblingIndex()
-                : canvas.childCount - 1;
-            return Mathf.Clamp(index, 0, canvas.childCount - 1);
-        }
-
-        /// <summary>
-        /// Only a misplaced review root can be repaired. Title/EventChoiceRoot adjacency is
-        /// reported separately because moving the review root cannot fix it.
-        /// </summary>
-        private static bool RepairableOrderError(string error) =>
-            error == TacticalLastError || error == TacticalOrderError || error == TitleOrderError;
+            CanvasOverlayOrder.PlaceAtRank(canvas, root);
 
         /// <summary>
         /// A complete generated page saved by an older revision can carry nothing but the
-        /// wrong Canvas order. Moving the existing root back under the M6 title in one Undo
-        /// group repairs the scene without rebuilding it; anything else stays refused, and a
-        /// failed re-validation restores the previous order.
+        /// wrong Canvas order. Only a misplaced root is repairable. Title/EventChoiceRoot
+        /// adjacency and a misplaced sibling root are reported separately because moving the
+        /// review root alone cannot fix them, and the repair validates the whole shared band
+        /// (M02, M03, SC-010, title, event choice, tactical) before it reports success.
         /// </summary>
-        private static UpdateResult RepairOrdering(Scene scene, Transform canvas, bool save)
+        private static bool RepairableOrderError(string error) =>
+            error == TacticalLastError || error == TacticalOrderError || error == TitleOrderError ||
+            error == CanvasOverlayOrder.CampaignReviewAboveDailyActionError ||
+            error == CanvasOverlayOrder.CampaignReviewAboveInspectorError ||
+            (error != null && error.StartsWith(CanvasOverlayOrder.RankOrderError,
+                StringComparison.Ordinal));
+
+        /// <summary>
+        /// A complete generated page saved by an older revision can carry nothing but the
+        /// wrong Canvas order. Restoring the shared overlay band in one Undo group repairs the
+        /// scene without rebuilding it. Only roots that are out of order move, so a correctly
+        /// placed M02 page, M03 inspector, succession root or M06 modal keeps its slot;
+        /// anything else stays refused, and a failed re-validation restores the exact previous
+        /// order. The tactical modal is put back last even when the band ranks already ascend,
+        /// because an unranked root saved after it is the only defect then.
+        /// </summary>
+        private static UpdateResult RepairOrdering(Scene scene, Transform canvas, bool save,
+            Action<GameObject> beforeValidation)
         {
             Transform[] roots = Named(scene, RootName);
             CampaignReviewPanel[] panels = Components<CampaignReviewPanel>(scene);
@@ -430,12 +609,7 @@ namespace SengokuChronicle.Editor
                 panels[0].transform != roots[0] || roots[0].parent != canvas)
                 return UpdateResult.ExistingCampaignPanel;
 
-            Transform root = roots[0];
-            int originalIndex = root.GetSiblingIndex();
-            int targetIndex = ResolveOrderIndex(canvas);
-            if (targetIndex == originalIndex)
-                return UpdateResult.ExistingCampaignPanel;
-
+            Transform[] orderBefore = Children(canvas);
             Undo.IncrementCurrentGroup();
             int group = Undo.GetCurrentGroup();
             Undo.SetCurrentGroupName(UndoName);
@@ -444,8 +618,12 @@ namespace SengokuChronicle.Editor
             {
                 // Sibling order lives in the parent RectTransform, so record the parent too.
                 Undo.RegisterCompleteObjectUndo(canvas, UndoName);
-                root.SetSiblingIndex(targetIndex);
+                Transform tactical = canvas.Find(TacticalOverlayName);
+                if (tactical != null && tactical.GetSiblingIndex() != canvas.childCount - 1)
+                    tactical.SetAsLastSibling();
+                CanvasOverlayOrder.RepairBand(canvas);
                 Undo.FlushUndoRecordObjects();
+                beforeValidation?.Invoke(roots[0].gameObject);
                 if (!Validate(scene, out string error))
                     throw new InvalidOperationException(error);
                 EditorSceneManager.MarkSceneDirty(scene);
@@ -461,20 +639,45 @@ namespace SengokuChronicle.Editor
                 Undo.RevertAllDownToGroup(group);
                 // Sibling order lives in the parent's child list and must be restored even
                 // if the parent undo record is not.
-                if (root.GetSiblingIndex() != originalIndex)
-                {
-                    root.SetSiblingIndex(originalIndex);
-                    EditorUtility.SetDirty(root);
-                }
+                RestoreOrder(canvas, orderBefore);
                 Debug.LogWarning($"M08 campaign review updater rolled back: {exception.Message} " +
                                  "Scene may remain dirty; inspect it before saving.");
                 return failure;
             }
         }
 
+        /// <summary>Snapshot of the Canvas child order, used to roll back a failed repair.</summary>
+        private static Transform[] Children(Transform canvas)
+        {
+            var children = new Transform[canvas.childCount];
+            for (int i = 0; i < children.Length; i++)
+                children[i] = canvas.GetChild(i);
+            return children;
+        }
+
+        /// <summary>Puts the captured Canvas child order back after a failed repair.</summary>
+        private static void RestoreOrder(Transform canvas, Transform[] order)
+        {
+            if (canvas == null || order == null)
+                return;
+            bool moved = false;
+            for (int i = 0; i < order.Length; i++)
+            {
+                Transform child = order[i];
+                if (child == null || child.parent != canvas || child.GetSiblingIndex() == i)
+                    continue;
+                child.SetSiblingIndex(i);
+                moved = true;
+            }
+            if (moved)
+                EditorUtility.SetDirty(canvas);
+        }
+
         /// <summary>
         /// The generated ordering is validated with the reviewed overlay, so a later edit
-        /// cannot append the root back above the M6 title or the M06 tactical modal.
+        /// cannot append the root back above the M6 title, above the M02 page, above the M03
+        /// inspector or above the M06 tactical modal, and an updater run in another order
+        /// cannot silently invert the band.
         /// </summary>
         private static bool Ordered(Transform canvas, Transform root, out string error)
         {
@@ -490,16 +693,28 @@ namespace SengokuChronicle.Editor
             }
 
             Transform title = canvas.Find(TitleRootName);
-            if (title == null)
-                return true;
-            if (index >= title.GetSiblingIndex())
-                return Invalid(out error, TitleOrderError);
+            if (title != null)
+            {
+                if (index >= title.GetSiblingIndex())
+                    return Invalid(out error, TitleOrderError);
 
-            Transform eventRoot = canvas.Find(EventChoiceRootName);
-            if (eventRoot != null &&
-                title.GetSiblingIndex() != eventRoot.GetSiblingIndex() - 1)
-                return Invalid(out error, EventOrderError);
-            return true;
+                Transform eventRoot = canvas.Find(EventChoiceRootName);
+                if (eventRoot != null &&
+                    title.GetSiblingIndex() != eventRoot.GetSiblingIndex() - 1)
+                    return Invalid(out error, EventOrderError);
+            }
+
+            Transform dailyAction = canvas.Find(CanvasOverlayOrder.DailyActionRootName);
+            if (dailyAction != null && index <= dailyAction.GetSiblingIndex())
+                return Invalid(out error, CanvasOverlayOrder.CampaignReviewAboveDailyActionError);
+
+            Transform inspector = canvas.Find(CanvasOverlayOrder.InspectorRootName);
+            if (inspector != null && index <= inspector.GetSiblingIndex())
+                return Invalid(out error, CanvasOverlayOrder.CampaignReviewAboveInspectorError);
+
+            // The review's own slot can be right while another pair in the band is inverted;
+            // the shared check keeps the whole band on one contract, not just this root.
+            return CanvasOverlayOrder.ValidateBand(canvas, out error);
         }
 
         private static Vector2 CardSize(Vector2 design) => new Vector2(
@@ -558,6 +773,10 @@ namespace SengokuChronicle.Editor
             Mathf.Abs(rect.offsetMin.x) < 0.5f && Mathf.Abs(rect.offsetMin.y) < 0.5f &&
             Mathf.Abs(rect.offsetMax.x) < 0.5f && Mathf.Abs(rect.offsetMax.y) < 0.5f;
 
+        /// <summary>One authored viewport inset, within the tolerance a saved scene keeps.</summary>
+        private static bool Inset(Vector2 actual, float x, float y) =>
+            Mathf.Abs(actual.x - x) < 0.5f && Mathf.Abs(actual.y - y) < 0.5f;
+
         /// <summary>
         /// The scroll content grows downward from the top of the viewport. The panel resets a
         /// new review body to anchored Y zero, which is the first line only while this holds.
@@ -605,6 +824,45 @@ namespace SengokuChronicle.Editor
             SerializedProperty property = new SerializedObject(target).FindProperty(field);
             return property != null && property.objectReferenceValue == expected;
         }
+
+        private static UnityEngine.Object Reference(UnityEngine.Object target, string field)
+        {
+            if (target == null)
+                return null;
+            SerializedProperty property = new SerializedObject(target).FindProperty(field);
+            return property != null ? property.objectReferenceValue : null;
+        }
+
+        /// <summary>
+        /// The scene's title controller, when the M6 generator has already run. It is the only
+        /// owner of the scenario selector, so the review borrows it instead of starting a
+        /// campaign itself. A scene without one still generates, and the panel resolves the
+        /// reference at runtime before the action is first used.
+        /// </summary>
+        private static TitleScreenController TitleScreen(Scene scene)
+        {
+            TitleScreenController[] controllers = Components<TitleScreenController>(scene);
+            return controllers.Length == 1 ? controllers[0] : null;
+        }
+
+        /// <summary>WCAG 1.4.3's normal-text ratio, used for the 14 px status line.</summary>
+        private static bool MeetsNormalTextContrast(Color foreground, Color background) =>
+            ContrastRatio(foreground, background) >= 4.5f;
+
+        private static float ContrastRatio(Color first, Color second)
+        {
+            float high = Mathf.Max(RelativeLuminance(first), RelativeLuminance(second));
+            float low = Mathf.Min(RelativeLuminance(first), RelativeLuminance(second));
+            return (high + 0.05f) / (low + 0.05f);
+        }
+
+        private static float RelativeLuminance(Color color) =>
+            0.2126f * LinearChannel(color.r) + 0.7152f * LinearChannel(color.g) +
+            0.0722f * LinearChannel(color.b);
+
+        private static float LinearChannel(float channel) => channel <= 0.04045f
+            ? channel / 12.92f
+            : Mathf.Pow((channel + 0.055f) / 1.055f, 2.4f);
 
         private static bool Invalid(out string error, string message)
         {

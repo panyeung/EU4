@@ -44,8 +44,8 @@ namespace SengokuChronicle.Editor
         private const string EducationRootName = "SC020EducationRoot";
         private const string ResearchRootName = "SC021ResearchRoot";
         private const string FormationRootName = "SC022FamilyFormationRoot";
-        private const string TitleRootName = "M6TitleRoot";
-        private const string EventRootName = "EventChoiceRoot";
+        private const string TitleRootName = CanvasOverlayOrder.TitleRootName;
+        private const string EventRootName = CanvasOverlayOrder.EventChoiceRootName;
         private const string UndoName = "Add M03 NPC AI Inspector";
 
         private static readonly Vector2 OpenButtonPosition = new Vector2(20f, -606f);
@@ -475,19 +475,11 @@ namespace SengokuChronicle.Editor
 
         private static void PlaceAboveMapHud(Transform canvas, Transform target)
         {
-            Transform title = canvas.Find(TitleRootName);
-            Transform eventRoot = canvas.Find(EventRootName);
-            int? anchorIndex = null;
-            if (title != null)
-                anchorIndex = title.GetSiblingIndex();
-            if (eventRoot != null)
-                anchorIndex = anchorIndex.HasValue
-                    ? Mathf.Min(anchorIndex.Value, eventRoot.GetSiblingIndex())
-                    : eventRoot.GetSiblingIndex();
-            if (anchorIndex.HasValue)
-                target.SetSiblingIndex(anchorIndex.Value);
-            else
-                target.SetAsLastSibling();
+            // The inspector is a read-only surface above the page but beneath the campaign
+            // review and the title band, so it takes its slot from the shared overlay order
+            // instead of anchoring on the title. Running this updater after M02 or M08 cannot
+            // put the inspector above an open campaign review.
+            CanvasOverlayOrder.PlaceAtRank(canvas, target);
         }
 
         private static readonly string[] GeneratedNames =
