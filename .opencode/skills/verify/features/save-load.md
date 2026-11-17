@@ -8,7 +8,7 @@ Status: a 2026-11-14 SC-013 Play Mode run exercised `SAVE-1` and the date/action
 portion of `SAVE-2` through the map UI using an isolated test store. It saved at
 `1560-05-02`, advanced to `1560-05-03`, then loaded back to `1560-05-02`; the head's
 completed training remained idle and the panel reported `已载入存档`.
-See [the M02 record](../../../../PROJECT_STATE.md#m02-每日行动与旅行基础2026-11-06).
+See the M02 row in [checkpoint.md](../../../../checkpoint.md#4-全部-checkpoint).
 That route did not establish every head/location/HUD field, pending succession (`SAVE-3`),
 or the empty-store refusal (`SAVE-4`). Those checks remain open for this recipe.
 

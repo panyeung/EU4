@@ -8,7 +8,7 @@ Status: the 2026-11-14 SC-013 Play Mode follow-up verified `MAP-1` and `MAP-2`:
 清洲 to 热田 previewed one day and arrival `1560-04-02`; confirming opened the 热田 town
 view and advanced the HUD to that date. The run used Pipeline UI handlers and did not
 check pointer hit-testing or map pixels. See the
-[travel and month-boundary record](../../../../docs/archive/verification-and-research-history.md#m02-travel-and-month-boundary-play-mode-follow-up-2026-11-14).
+[travel and month-boundary record](../../../../checkpoint.md#4-全部-checkpoint).
 The 2026-11-10 failure is historical. `MAP-3` still needs a recorded Play Mode check.
 `MAP-4` describes the current-town control's behavior; its current source is
 `WorldMapController.OnLocationClicked`, and it has not been independently replayed here.

@@ -8,7 +8,7 @@ Status: `CLOCK-1` and `CLOCK-2` proven on 2026-11-10 (`1560 年 4 月 1 日` →
 `1560 年 4 月 2 日` → `结束月份` → `1560 年 5 月 1 日`). `CLOCK-3` and `CLOCK-4` are still mapped
 from the code and older playtest guides, not driven.
 
-The [2026-11-14 follow-up](../../../../docs/archive/verification-and-research-history.md#m02-travel-and-month-boundary-play-mode-follow-up-2026-11-14)
+The [2026-11-14 follow-up](../../../../checkpoint.md#4-全部-checkpoint)
 also verified a pending story event keeping the date at `1560-05-01`, and a one-day
 training action completing across April 30 to May 1 with one month-end control action.
 These observations do not close the separate succession and adult-handoff checks.

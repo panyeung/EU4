@@ -74,12 +74,8 @@ exactly four H2 sections in this order: `Sub-features`, `How to get to it (user 
 
 ## Design references
 
-- [M07 three-layer integration design](../../../../docs/superpowers/specs/2026-11-11-m07-three-layer-integration-design.md)
-  records the approved rules and values.
-- [M07 implementation plan](../../../../docs/superpowers/plans/2026-11-11-m07-three-layer-integration.md)
-  records the approved result table, save migration and verification scope.
-- [M07 runtime verification](../../../../docs/reports/m07-runtime-verification.md) records the
-  2026-11-12 compile, EditMode, scene and Play Mode evidence with its limits.
-- [M08A demography design](../../../../docs/superpowers/specs/2026-11-12-m08-demography-design.md)
-  and [M08 campaign review report](../../../../docs/reports/m08-campaign-review.md#m08a-家族人口动态切片2026-11-12)
-  record the approved demographic rules and the current slice evidence.
+- [checkpoint.md](../../../../checkpoint.md) holds the design plan, the approved M07 result table and
+  thresholds, the M08A demographic rules, the M08B market rules, and every recorded checkpoint.
+- [ui设计规划.md](../../../../ui设计规划.md) holds the page design for these recipes.
+- Runtime evidence lives under `Logs/verify/`, not in a design doc. The 2026-11-12 M07 run left
+  `Logs/verify/20261112-*` records with its own limits.
