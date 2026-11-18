@@ -389,6 +389,13 @@ namespace SengokuChronicle.Tests.EditMode
                 SC022FamilyFormationScenario.MarriageCandidateOneName);
             panel.ClickMarriageCandidate(candidateIndex);
             Assert.That(panel.MarriageConfirmInteractable, Is.False);
+            Assert.That(panel.HasPreviewStrip, Is.True);
+            Assert.That(panel.PreviewLine, Does.Contain("当前不可登记"));
+            Assert.That(panel.PreviewLine, Does.Contain("确认按钮已禁用"));
+            Assert.That(panel.PreviewLine, Does.Contain("本次不会写入"));
+            Assert.That(panel.PreviewLine, Does.Not.Contain("确认后登记"));
+            Assert.That(panel.MarriageCommitCount, Is.Zero);
+            Assert.That(_session.ChronicleEntries, Is.Empty);
         }
 
         private string[] Labels(System.Func<int, string> label, int count)

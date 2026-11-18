@@ -21,6 +21,12 @@ namespace SengokuChronicle.Presentation
         public const string MarriageCandidatePrefix = "SC022MarriageCandidate_";
         public const string AdoptionMemberPrefix = "SC022AdoptionMember_";
         public const string AdoptionCandidatePrefix = "SC022AdoptionCandidate_";
+        public const string PreviewStripName = "SC022FormationPreview";
+        public const string PreviewTextName = "SC022FormationPreviewText";
+        /// <summary>Serialized help line the preview replaces while a pair is complete.</summary>
+        public const string FamilyFormationHelpName = "SC022FamilyFormationHelpText";
+        private const float PreviewHeight = 44f;
+        private const float PreviewMaximumHeight = 68f;
 
         [SerializeField] private GameSession gameSession;
         [SerializeField] private GameObject panelRoot;
@@ -62,6 +68,10 @@ namespace SengokuChronicle.Presentation
         private PersonId _selectedMarriageCandidate;
         private PersonId _selectedAdoptionMember;
         private PersonId _selectedAdoptionCandidate;
+        private GameObject _previewStrip;
+        private Text _previewText;
+        private Text _helpText;
+        private bool _previewPrefersAdoption;
 
         public bool IsBound =>
             gameSession != null && panelRoot != null && openButton != null && closeButton != null &&
@@ -122,6 +132,14 @@ namespace SengokuChronicle.Presentation
         public string AdoptionMemberLabel(int index) => LabelOf(_adoptionMembers, index);
         public string AdoptionCandidateLabel(int index) => LabelOf(_adoptionCandidates, index);
 
+        /// <summary>
+        /// One-line preview of the selected pair: recorded kinship path, the SC-022
+        /// rule outcome and what confirmation will register.
+        /// </summary>
+        public string PreviewLine => _previewText != null ? _previewText.text : string.Empty;
+
+        public bool HasPreviewStrip => _previewStrip != null && _previewStrip.activeSelf;
+
         public void BindReferences(GameSession session, GameObject panel, Button open, Button close,
             Text title, Text blockReason,
             Text marriageMemberText, Transform marriageMembers, Button marriageMemberButton,
@@ -159,6 +177,8 @@ namespace SengokuChronicle.Presentation
             _selectedMarriageCandidate = default;
             _selectedAdoptionMember = default;
             _selectedAdoptionCandidate = default;
+            _previewPrefersAdoption = false;
+            DestroyPreviewStrip();
             Subscribe();
             // Never build button clones in the editor: they would be serialized into
             // the scene without listeners and intercept pointer clicks.
@@ -215,6 +235,7 @@ namespace SengokuChronicle.Presentation
             RefreshMarriageText(view);
             RefreshAdoptionText(view);
             RefreshMessages(view);
+            RefreshPreview(view);
             if (marriageMemberContainer is RectTransform marriageRect)
                 LayoutRebuilder.ForceRebuildLayoutImmediate(marriageRect);
             if (adoptionMemberContainer is RectTransform adoptionRect)
@@ -332,8 +353,191 @@ namespace SengokuChronicle.Presentation
             string candidateName = view.CandidateDisplayName(_selectedAdoptionCandidate);
             adoptionCandidateInfo.text = "将办理：" + memberName + " 收养 " + candidateName +
                                          "（养子/养女）\n确认后新增成员与收养关系，" +
-                                         "不改变继承状态，不可撤销。";
+                                         "不可撤销；被收养者按继承规则具备继承资格，" +
+                                         "当前继承阶段不变。";
             adoptionConfirmButton.interactable = view.CanEdit;
+        }
+
+        /// <summary>
+        /// Shows the recorded kinship path, the SC-022 rule outcome and the effect of
+        /// confirmation for the currently selected pair. The consequence text is shown in
+        /// full: it occupies the panel's help band while a pair is complete and the generic
+        /// help copy returns as soon as no pair is selected.
+        /// </summary>
+        private void RefreshPreview(FamilyFormationView view)
+        {
+            Text strip = EnsurePreviewStrip();
+            if (strip == null)
+                return;
+
+            bool marriageReady = !_selectedMarriageMember.IsEmpty &&
+                                 !_selectedMarriageCandidate.IsEmpty;
+            bool adoptionReady = !_selectedAdoptionMember.IsEmpty &&
+                                 !_selectedAdoptionCandidate.IsEmpty;
+            string line = null;
+            if (marriageReady && (!adoptionReady || !_previewPrefersAdoption))
+                line = BuildPreviewLine(view, true, _selectedMarriageMember,
+                    _selectedMarriageCandidate);
+            else if (adoptionReady)
+                line = BuildPreviewLine(view, false, _selectedAdoptionMember,
+                    _selectedAdoptionCandidate);
+
+            bool show = !string.IsNullOrEmpty(line);
+            _previewStrip.SetActive(show);
+            if (_helpText != null)
+                _helpText.gameObject.SetActive(!show);
+            if (!show)
+            {
+                strip.text = string.Empty;
+                return;
+            }
+
+            strip.text = line;
+            FitPreviewStrip(line);
+        }
+
+        private string BuildPreviewLine(FamilyFormationView view, bool marriage, PersonId memberId,
+            PersonId candidateId)
+        {
+            KinshipGraph kinship = gameSession != null && gameSession.Succession != null &&
+                                   gameSession.Succession.World != null
+                ? gameSession.Succession.World.Kinship
+                : null;
+            string path = FamilyKinshipPath.Describe(kinship, memberId, candidateId,
+                personId => view.CandidateDisplayName(personId));
+
+            // A blocked family state overrides the per-pair rule result: the panel cannot
+            // submit at all, so the preview must say why instead of reporting "allowed".
+            string verdict;
+            if (!view.CanEdit)
+            {
+                verdict = string.IsNullOrWhiteSpace(view.BlockReason)
+                    ? "当前不可登记"
+                    : "当前不可登记 —— " + view.BlockReason.Trim();
+            }
+            else if (marriage)
+            {
+                verdict = FamilyFormationRules.IsDirectLineRelation(kinship, memberId, candidateId)
+                    ? "直系血亲或养亲，禁止通婚"
+                    : "非直系，允许登记配偶";
+            }
+            else
+            {
+                verdict = FamilyFormationRules.WouldCreateAdoptionCycle(kinship, memberId,
+                    candidateId)
+                    ? "会形成亲子环路，禁止收养"
+                    : "不形成亲子环路，允许登记收养";
+            }
+
+            string member = view.CandidateDisplayName(memberId);
+            string candidate = view.CandidateDisplayName(candidateId);
+            // A blocked state must not describe the write as if it will happen: the confirm
+            // button is disabled, so the preview states the real consequence (nothing is
+            // written until the pending state is cleared) and keeps the rule text intact.
+            string consequence;
+            if (!view.CanEdit)
+            {
+                consequence = "确认按钮已禁用，本次不会写入成员、亲属事实或编年史；" +
+                              "解除上方提示的待处理状态后，再按同一路径重新确认。";
+            }
+            else if (marriage)
+            {
+                consequence = "确认后登记 " + member + " ↔ " + candidate +
+                              " 的配偶关系并写入家族编年史，不可撤销。";
+            }
+            else
+            {
+                consequence = "确认后登记 " + member + " 收养 " + candidate +
+                              " 的养子/养女关系并写入家族编年史，不可撤销；" +
+                              "被收养者按继承规则具备继承资格，当前继承阶段不变。";
+            }
+            return "路径：" + path + "\n校验（SC-022）：" + verdict + " ｜ 预览：" + consequence;
+        }
+
+        private void FitPreviewStrip(string line)
+        {
+            if (_previewText == null || _previewStrip == null ||
+                !(_previewStrip.transform is RectTransform stripRect))
+                return;
+            // The text rect is stretched inside the strip with fixed insets, so its wrap
+            // width already matches the strip. Measure that width, then grow the strip to
+            // the measured height instead of truncating the consequence.
+            float needed = _previewText.preferredHeight + 6f;
+            float height = Mathf.Clamp(needed, PreviewHeight, PreviewMaximumHeight);
+            stripRect.sizeDelta = new Vector2(stripRect.sizeDelta.x, height);
+        }
+
+        private Text EnsurePreviewStrip()
+        {
+            if (_previewText != null)
+                return _previewText;
+            if (!IsBound || !(panelRoot.transform is RectTransform panelRect))
+                return null;
+
+            _helpText = FindHelpText();
+            RectTransform helpRect = _helpText != null
+                ? _helpText.transform as RectTransform
+                : null;
+
+            _previewStrip = new GameObject(PreviewStripName, typeof(RectTransform),
+                typeof(CanvasRenderer), typeof(Image));
+            _previewStrip.transform.SetParent(panelRoot.transform, false);
+            var stripRect = (RectTransform)_previewStrip.transform;
+            stripRect.anchorMin = stripRect.anchorMax = stripRect.pivot = new Vector2(0.5f, 0.5f);
+            stripRect.localScale = Vector3.one;
+            float panelHeight = panelRect.rect.height > 1f ? panelRect.rect.height : 620f;
+            float panelWidth = panelRect.rect.width > 1f ? panelRect.rect.width : 920f;
+            if (helpRect != null && helpRect.rect.height > 1f)
+            {
+                stripRect.sizeDelta = new Vector2(helpRect.rect.width, helpRect.rect.height);
+                stripRect.anchoredPosition = helpRect.anchoredPosition;
+            }
+            else
+            {
+                stripRect.sizeDelta = new Vector2(Mathf.Max(320f, panelWidth - 60f), PreviewHeight);
+                stripRect.anchoredPosition = new Vector2(0f, -panelHeight / 2f + 84f);
+            }
+            Image background = _previewStrip.GetComponent<Image>();
+            background.color = SengokuUiTheme.ParchmentDeep;
+            background.raycastTarget = false;
+
+            var textObject = new GameObject(PreviewTextName, typeof(RectTransform),
+                typeof(CanvasRenderer), typeof(Text));
+            textObject.transform.SetParent(_previewStrip.transform, false);
+            var textRect = (RectTransform)textObject.transform;
+            textRect.anchorMin = Vector2.zero;
+            textRect.anchorMax = Vector2.one;
+            textRect.offsetMin = new Vector2(10f, 3f);
+            textRect.offsetMax = new Vector2(-10f, -3f);
+            _previewText = textObject.GetComponent<Text>();
+            _previewText.font = UnityEngine.Application.isPlaying
+                ? SengokuUiTheme.Serif
+                : Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            _previewText.fontSize = 12;
+            _previewText.color = SengokuUiTheme.Ink;
+            _previewText.alignment = TextAnchor.UpperLeft;
+            _previewText.horizontalOverflow = HorizontalWrapMode.Wrap;
+            _previewText.verticalOverflow = VerticalWrapMode.Overflow;
+            _previewText.raycastTarget = false;
+
+            _previewStrip.hideFlags = HideFlags.DontSave;
+            foreach (Transform child in _previewStrip.GetComponentsInChildren<Transform>(true))
+                child.gameObject.hideFlags = HideFlags.DontSave;
+            _previewStrip.SetActive(false);
+            return _previewText;
+        }
+
+        /// <summary>
+        /// The panel's static help line shares its band with the preview. It is found by
+        /// the generator's fixed child name; when a differently built panel has no such
+        /// line the preview keeps its own band and nothing else is touched.
+        /// </summary>
+        private Text FindHelpText()
+        {
+            Transform help = panelRoot != null
+                ? panelRoot.transform.Find(FamilyFormationHelpName)
+                : null;
+            return help != null ? help.GetComponent<Text>() : null;
         }
 
         private void RefreshMessages(FamilyFormationView view)
@@ -361,6 +565,7 @@ namespace SengokuChronicle.Presentation
                 {
                     button.onClick.AddListener(() =>
                     {
+                        _previewPrefersAdoption = !marriage;
                         if (marriage)
                         {
                             _selectedMarriageMember = captured.PersonId;
@@ -401,6 +606,7 @@ namespace SengokuChronicle.Presentation
                 {
                     button.onClick.AddListener(() =>
                     {
+                        _previewPrefersAdoption = !marriage;
                         if (marriage)
                             _selectedMarriageCandidate = captured.PersonId;
                         else
@@ -548,6 +754,27 @@ namespace SengokuChronicle.Presentation
             ClearRows();
             if (panelRoot != null)
                 panelRoot.SetActive(false);
+        }
+
+        /// <summary>
+        /// Removes the runtime preview and gives the serialized help line its band back,
+        /// so a rebind or teardown never leaves the panel without its own copy.
+        /// </summary>
+        private void DestroyPreviewStrip()
+        {
+            if (_helpText != null)
+                _helpText.gameObject.SetActive(true);
+            if (_previewStrip != null)
+            {
+                _previewStrip.SetActive(false);
+                if (UnityEngine.Application.isPlaying)
+                    Destroy(_previewStrip);
+                else
+                    DestroyImmediate(_previewStrip);
+            }
+            _previewStrip = null;
+            _previewText = null;
+            _helpText = null;
         }
 
         private void ClearRows()

@@ -43,6 +43,14 @@ namespace SengokuChronicle.Editor
         public const string AdoptionConfirmButtonName = "SC022AdoptionConfirmButton";
         public const string AdoptionMessageName = "SC022AdoptionMessage";
         public const string HelpName = "SC022FamilyFormationHelpText";
+        /// <summary>
+        /// Static help copy under the two columns. Adoption makes the adopted person a
+        /// lawful successor under <c>SuccessionService.IsSuccessorRole</c>, so the copy
+        /// must not claim inheritance is unaffected; only the current phase is unchanged.
+        /// </summary>
+        public const string HelpText =
+            "选择家人与候选人后，确认会立即写入成员身份、亲属事实和家族编年史；" +
+            "正式关系不可撤销；被收养者按继承规则具备继承资格，当前继承阶段不变。";
         public const string CloseButtonName = "SC022FamilyFormationCloseButton";
         public const string TitleButtonName = "SC022FamilyFormationDemoButton";
         public const string MenuPath = "Tools/Sengoku Chronicle/Add SC-022 Family Formation";
@@ -210,6 +218,11 @@ namespace SengokuChronicle.Editor
                 if (child.parent != panel)
                     return Invalid(out error,
                         "All SC-022 family-formation controls must be direct children of the panel.");
+
+            Text helpCopy = help.GetComponent<Text>();
+            if (helpCopy == null || helpCopy.text != HelpText)
+                return Invalid(out error,
+                    "The SC-022 help line does not carry the current adoption copy; re-run the updater.");
 
             if (!ValidateContainer(marriageMembers, marriageMemberTemplate, out error))
                 return false;
@@ -555,9 +568,7 @@ namespace SengokuChronicle.Editor
                 adoptionMessage.color = new Color(0.65f, 0.86f, 1f, 1f);
                 adoptionMessage.gameObject.SetActive(false);
 
-                Text help = CreateText(scene, panelRect, HelpName, font,
-                    "选择家人与候选人后，确认会立即写入成员身份、亲属事实和家族编年史；" +
-                    "正式关系不可撤销，普通收养不改变继承状态。",
+                Text help = CreateText(scene, panelRect, HelpName, font, HelpText,
                     0f, -190f, 860f, 44f, 13, TextAnchor.MiddleCenter);
                 help.color = new Color(0.75f, 0.9f, 1f, 1f);
                 Button close = CreateButton(scene, panelRect, CloseButtonName, font, "关闭",
@@ -725,6 +736,14 @@ namespace SengokuChronicle.Editor
                 blockReason.gameObject.SetActive(false);
                 marriageMessage.gameObject.SetActive(false);
                 adoptionMessage.gameObject.SetActive(false);
+                // Copy lives in the scene too, so a repair pass must rewrite it; otherwise a
+                // stale line survives every regeneration of an existing hierarchy.
+                Text helpLabel = help.GetComponent<Text>();
+                if (helpLabel == null)
+                    throw new InvalidOperationException("The SC-022 help line has no Text component.");
+                Undo.RecordObject(helpLabel, UndoName);
+                helpLabel.text = HelpText;
+                EditorUtility.SetDirty(helpLabel);
 
                 FamilyFormationPanel component = root.GetComponent<FamilyFormationPanel>();
                 if (component == null)
