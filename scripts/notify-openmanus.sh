@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Task-completion notice: always recorded locally, sent through hermes once a target is configured.
+# 任务完成通知。先落本地记录，配置了发送目标后再经 hermes 发出。
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
