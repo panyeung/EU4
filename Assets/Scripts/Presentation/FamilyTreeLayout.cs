@@ -135,7 +135,12 @@ namespace SengokuChronicle.Presentation
     public static class FamilyTreeLayout
     {
         public const float NodeWidth = 196f;
-        public const float NodeHeight = 88f;
+        /// <summary>
+        /// Tall enough for the longest reference card, whose name plus head/heir marker
+        /// wraps to five 14 pt lines (80 px in the 120 px text column), plus the selection
+        /// stamp band and insets the roster reserves inside the card, with slack left over.
+        /// </summary>
+        public const float NodeHeight = 120f;
         public const float HorizontalGap = 36f;
         public const float VerticalGap = 56f;
         public const float SectionGap = 44f;

@@ -426,6 +426,7 @@ namespace SengokuChronicle.Tests.EditMode
         public void UpdaterPlacesRootAboveMapAndBelowTitleAndRejectsPriorOverlap()
         {
             Create("M2WorldMapRoot", _canvas);
+            Transform familyRoster = Create("FamilyRosterRoot", _canvas).transform;
             Transform title = Create("M6TitleRoot", _canvas).transform;
 
             Assert.That(AddSC010SuccessionPanel.Update(_scene),
@@ -435,6 +436,8 @@ namespace SengokuChronicle.Tests.EditMode
 
             Assert.That(root.GetSiblingIndex(), Is.GreaterThan(map.GetSiblingIndex()),
                 "SuccessionRoot must render above the map/town HUD.");
+            Assert.That(root.GetSiblingIndex(), Is.GreaterThan(familyRoster.GetSiblingIndex()),
+                "the succession/crisis decision must render above the opaque family page.");
             Assert.That(root.GetSiblingIndex(), Is.LessThan(title.GetSiblingIndex()),
                 "SuccessionRoot must remain below the full-screen title overlay.");
             Assert.That(AddSC010SuccessionPanel.Validate(_scene, out string error), Is.True, error);

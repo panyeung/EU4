@@ -584,6 +584,12 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(root, Is.Not.Null);
             Assert.That(root.GetSiblingIndex(), Is.GreaterThan(dailyAction.GetSiblingIndex()));
             Assert.That(root.GetSiblingIndex(), Is.GreaterThan(inspector.GetSiblingIndex()));
+            Assert.That(dailyAction, Is.Not.Null);
+            Assert.That(dailyAction.GetSiblingIndex(), Is.LessThan(root.GetSiblingIndex()),
+                "M08 campaign review must render above the opaque M02 page.");
+            Assert.That(dailyAction.GetSiblingIndex(), Is.LessThan(inspector.GetSiblingIndex()));
+            Assert.That(inspector.GetSiblingIndex(), Is.LessThan(root.GetSiblingIndex()),
+                "M08 campaign review must render above the M03 inspector.");
             Assert.That(root.GetSiblingIndex(), Is.LessThan(title.GetSiblingIndex()),
                 "M08CampaignReviewRoot must render below the full-screen M6 title overlay.");
             Assert.That(title.GetSiblingIndex(), Is.EqualTo(eventRoot.GetSiblingIndex() - 1),
@@ -804,6 +810,44 @@ namespace SengokuChronicle.Tests.EditMode
                 "repairing the review must preserve succession priority");
             Assert.That(CanvasOverlayOrder.ValidateBand(canvas, out string bandError), Is.True,
                 bandError);
+        }
+
+        [Test]
+        public void Updater_UndoRestoresAnInspectorOrderRepair()
+        {
+            BuildM6TitleAndTacticalLayers();
+            Assert.That(AddM6TitleScreen.Update(scene),
+                Is.EqualTo(AddM6TitleScreen.UpdateResult.Success));
+            Assert.That(AddM06TacticalMissionPanel.Update(scene),
+                Is.EqualTo(AddM06TacticalMissionPanel.UpdateResult.Success));
+            Transform dailyAction = Create(AddM02DailyActionPanel.RootName, canvas).transform;
+            Transform inspector = Create(CanvasOverlayOrder.InspectorRootName, canvas).transform;
+            dailyAction.SetSiblingIndex(canvas.Find(AddM08CampaignReviewPanel.TitleRootName)
+                .GetSiblingIndex());
+            inspector.SetSiblingIndex(canvas.Find(AddM08CampaignReviewPanel.TitleRootName)
+                .GetSiblingIndex());
+            Assert.That(AddM08CampaignReviewPanel.Update(scene),
+                Is.EqualTo(AddM08CampaignReviewPanel.UpdateResult.Success));
+
+            Transform root = canvas.Find(AddM08CampaignReviewPanel.RootName);
+            root.SetSiblingIndex(inspector.GetSiblingIndex());
+            string[] invalidOrder = Enumerable.Range(0, canvas.childCount)
+                .Select(i => canvas.GetChild(i).name).ToArray();
+            Assert.That(AddM08CampaignReviewPanel.Validate(scene, out string defect), Is.False);
+            Assert.That(defect, Does.Contain(CanvasOverlayOrder.InspectorRootName));
+
+            Assert.That(AddM08CampaignReviewPanel.Update(scene),
+                Is.EqualTo(AddM08CampaignReviewPanel.UpdateResult.Success));
+            Assert.That(AddM08CampaignReviewPanel.Validate(scene, out string repaired), Is.True,
+                repaired);
+            Assert.That(inspector.GetSiblingIndex(), Is.LessThan(root.GetSiblingIndex()));
+
+            Undo.PerformUndo();
+            string[] undoneOrder = Enumerable.Range(0, canvas.childCount)
+                .Select(i => canvas.GetChild(i).name).ToArray();
+            CollectionAssert.AreEqual(invalidOrder, undoneOrder);
+            Assert.That(AddM08CampaignReviewPanel.Validate(scene, out string undone), Is.False);
+            Assert.That(undone, Does.Contain(CanvasOverlayOrder.InspectorRootName));
         }
 
         [Test]

@@ -234,6 +234,8 @@ namespace SengokuChronicle.Tests.EditMode
             const float width = FamilyTreeLayout.NodeWidth;
             const float height = FamilyTreeLayout.NodeHeight;
             const float gap = FamilyTreeLayout.HorizontalGap;
+            float step = FamilyTreeLayout.NodeHeight + FamilyTreeLayout.VerticalGap;
+            float clearance = FamilyTreeRouting.CardClearance;
             var left = new FamilyTreeNodePlacement(leftId, new FamilyTreePoint(0f, 0f),
                 new FamilyTreeSize(width, height), 1, FamilyTreeLayoutSection.Generation);
             var right = new FamilyTreeNodePlacement(rightId,
@@ -242,12 +244,15 @@ namespace SengokuChronicle.Tests.EditMode
             var middle = new FamilyTreeNodePlacement(middleId,
                 new FamilyTreePoint(width + gap, 0f), new FamilyTreeSize(width, height), 1,
                 FamilyTreeLayoutSection.Generation);
+            // The two blockers span every standard lane of the middle column, so the
+            // fixture keeps its "all six candidates blocked" premise at any card height.
             var above = new FamilyTreeNodePlacement(aboveId,
-                new FamilyTreePoint(width + gap, -321f),
-                new FamilyTreeSize(width, 320f), 1, FamilyTreeLayoutSection.Generation);
+                new FamilyTreePoint(width + gap, -clearance - step * 2f - height),
+                new FamilyTreeSize(width, height + step * 2f + clearance * 2f), 1,
+                FamilyTreeLayoutSection.Generation);
             var below = new FamilyTreeNodePlacement(belowId,
                 new FamilyTreePoint(width + gap, height + 1f),
-                new FamilyTreeSize(width, 320f), 1, FamilyTreeLayoutSection.Generation);
+                new FamilyTreeSize(width, step * 3f), 1, FamilyTreeLayoutSection.Generation);
             var placements = new[] { left, middle, right, above, below };
 
             List<List<FamilyTreePoint>> standard = StandardSpouseCandidates(left, right);
