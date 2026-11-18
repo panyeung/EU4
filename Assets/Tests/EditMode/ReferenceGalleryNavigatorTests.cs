@@ -568,7 +568,11 @@ namespace SengokuChronicle.Tests.EditMode
         [Test]
         public void ShowPage_Household_PresentsRosterIndustryMonthEventAndPendingDecisions()
         {
+            const float householdCardHalfWidth = 380f;
+            const float householdCardHalfHeight = 280f;
             GameSession session = GameSession.NewGame();
+            typeof(GameSession).GetProperty(nameof(GameSession.LastEventMessage))
+                .GetSetMethod(true).Invoke(session, new object[] { "本月事件布局测试" });
             _objects.Add(session.gameObject);
             GameObject host = Create("CanvasHost", typeof(RectTransform));
             ((RectTransform)host.transform).sizeDelta = new Vector2(1280f, 720f);
@@ -588,6 +592,7 @@ namespace SengokuChronicle.Tests.EditMode
             var householdPanel = Create("IndustryPanel", typeof(RectTransform),
                 typeof(CanvasRenderer), typeof(Image));
             householdPanel.transform.SetParent(host.transform, false);
+            ((RectTransform)householdPanel.transform).sizeDelta = new Vector2(760f, 560f);
             var roots = new[]
             {
                 new ReferenceGalleryPageRoot(eventRoot,
@@ -623,12 +628,46 @@ namespace SengokuChronicle.Tests.EditMode
                 Assert.That(FindDeep(headRail, "HouseholdHeir").GetComponent<Text>().text,
                     Is.EqualTo(session.FixedHeirSummary));
 
-            // The industry panel keeps the centre appointments column.
+            // The industry panel keeps the centre appointments column at its authored
+            // aspect: one uniform scale into the free band, centred there, never over the
+            // month block or the right column.
             RectTransform panelRect = (RectTransform)householdPanel.transform;
-            Assert.That(panelRect.anchoredPosition,
-                Is.EqualTo(ReferenceGalleryNavigator.HouseholdIndustryPosition));
-            Assert.That(Vector2.Scale(panelRect.sizeDelta, panelRect.localScale),
-                Is.EqualTo(ReferenceGalleryNavigator.HouseholdIndustrySize));
+            float bandLeft = ReferenceGalleryNavigator.HouseholdHeadRailPosition.x +
+                             ReferenceGalleryNavigator.HouseholdHeadRailSize.x * 0.5f +
+                             ReferenceGalleryNavigator.HouseholdIndustryBandGap;
+            float bandRight = ReferenceGalleryNavigator.PendingRailPosition.x -
+                              ReferenceGalleryNavigator.PendingRailSize.x * 0.5f -
+                              ReferenceGalleryNavigator.HouseholdIndustryBandGap;
+            float bandTop = ReferenceGalleryNavigator.HouseholdHeadRailPosition.y +
+                            ReferenceGalleryNavigator.HouseholdHeadRailSize.y * 0.5f;
+            float bandBottom = -360f + ReferenceGalleryNavigator.HouseholdIndustryPageMargin;
+            Vector2 visual = Vector2.Scale(panelRect.sizeDelta, panelRect.localScale);
+            Assert.That(panelRect.localScale.y, Is.EqualTo(panelRect.localScale.x).Within(0.0001f),
+                "the embedded panel is scaled uniformly, never squashed");
+            Assert.That(visual.x, Is.LessThanOrEqualTo(bandRight - bandLeft + 0.01f));
+            Assert.That(visual.y, Is.LessThanOrEqualTo(bandTop - bandBottom + 0.01f));
+            Assert.That(panelRect.anchoredPosition.x,
+                Is.EqualTo((bandLeft + bandRight) * 0.5f).Within(0.01f),
+                "the panel is centred in the measured household band");
+            Assert.That(panelRect.anchoredPosition.y,
+                Is.EqualTo((bandTop + bandBottom) * 0.5f).Within(0.01f));
+            Rect householdCard = Rect.MinMaxRect(-householdCardHalfWidth,
+                -householdCardHalfHeight, householdCardHalfWidth, householdCardHalfHeight);
+            Rect panelCardBounds = WorldRect(panelRect);
+            Assert.That(householdCard.Contains(panelCardBounds.min) &&
+                        householdCard.Contains(panelCardBounds.max), Is.True,
+                "the fitted industry panel stays inside the 760x560 household card");
+            Transform monthBlock = navigator.HouseholdComposition != null
+                ? FindDeep(navigator.HouseholdComposition.transform, "HouseholdMonthEvent")
+                : null;
+            Assert.That(monthBlock, Is.Not.Null,
+                "the fixture supplies live month text so the month region is actually built");
+            Rect monthWorld = WorldRect((RectTransform)monthBlock);
+            Assert.That(householdCard.Contains(monthWorld.min) &&
+                        householdCard.Contains(monthWorld.max), Is.True,
+                "the month region stays inside the household card, not only the canvas");
+            Assert.That(panelCardBounds.Overlaps(monthWorld), Is.False,
+                "the industry panel never covers the month block");
 
             // Pending decisions come from the live queue; absent data stays absent.
             string[] pendingIds = session.EventRuntimeStateForSave.pendingEventIds;
@@ -656,8 +695,16 @@ namespace SengokuChronicle.Tests.EditMode
             // No invisible raycast blockers anywhere in the composition.
             foreach (Image image in navigator.HouseholdComposition
                          .GetComponentsInChildren<Image>(true))
+            {
+                if (image.name == "HouseholdIndustryScrollViewport")
+                {
+                    Assert.That(image.raycastTarget, Is.True,
+                        "the visible scroll viewport must receive wheel and drag input");
+                    continue;
+                }
                 Assert.That(image.raycastTarget, Is.False,
                     "household decorations must not block raycasts");
+            }
             if (navigator.PendingEventsRail != null && navigator.PendingEventsRail.activeSelf)
                 Assert.That(navigator.PendingEventsRail.GetComponent<Image>().raycastTarget,
                     Is.False);
@@ -728,10 +775,250 @@ namespace SengokuChronicle.Tests.EditMode
                 "the industry controller root remains full-screen for its child controls");
             Assert.That(rootRect.offsetMin, Is.EqualTo(Vector2.zero));
             Assert.That(rootRect.offsetMax, Is.EqualTo(Vector2.zero));
-            Assert.That(Vector2.Scale(panelRect.sizeDelta, panelRect.localScale),
-                Is.EqualTo(ReferenceGalleryNavigator.HouseholdIndustrySize));
-            Assert.That(panelRect.anchoredPosition,
-                Is.EqualTo(ReferenceGalleryNavigator.HouseholdIndustryPosition));
+            // The panel keeps its authored 760x560 rect and is scaled uniformly into the
+            // centre band, so its parchment always contains its own children. 620 was the
+            // old non-uniform width; the height follows from the same factor now.
+            float fitScale = panelRect.localScale.x;
+            Assert.That(panelRect.localScale.y, Is.EqualTo(fitScale).Within(0.0001f),
+                "the embedded panel is scaled uniformly, never squashed");
+            Assert.That(panelRect.sizeDelta, Is.EqualTo(new Vector2(760f, 560f)),
+                "the authored rect is the parchment the content is measured against");
+            float bandLeft = ReferenceGalleryNavigator.HouseholdHeadRailPosition.x +
+                             ReferenceGalleryNavigator.HouseholdHeadRailSize.x * 0.5f +
+                             ReferenceGalleryNavigator.HouseholdIndustryBandGap;
+            float bandRight = ReferenceGalleryNavigator.PendingRailPosition.x -
+                              ReferenceGalleryNavigator.PendingRailSize.x * 0.5f -
+                              ReferenceGalleryNavigator.HouseholdIndustryBandGap;
+            float bandTop = ReferenceGalleryNavigator.HouseholdHeadRailPosition.y +
+                            ReferenceGalleryNavigator.HouseholdHeadRailSize.y * 0.5f;
+            float bandBottom = -360f + ReferenceGalleryNavigator.HouseholdIndustryPageMargin;
+            Vector2 visual = Vector2.Scale(panelRect.sizeDelta, panelRect.localScale);
+            Assert.That(visual.x, Is.LessThanOrEqualTo(bandRight - bandLeft + 0.01f),
+                "the panel never exceeds the free centre band");
+            Assert.That(visual.y, Is.LessThanOrEqualTo(bandTop - bandBottom + 0.01f));
+            Assert.That(panelRect.anchoredPosition.x,
+                Is.EqualTo((bandLeft + bandRight) * 0.5f).Within(0.01f));
+            Assert.That(panelRect.anchoredPosition.y,
+                Is.EqualTo((bandTop + bandBottom) * 0.5f).Within(0.01f));
+        }
+
+        [TestCase(1280f, 720f, true, 492f, 40f)]
+        [TestCase(1402.17f, 657.27f, true, 492f, 40f)]
+        [TestCase(800f, 200f, false, 184f, 0f)]
+        public void ShowPage_Household_TallPanelUsesReadableScrollViewportAndReservesMonthStrip(
+            float viewportWidth, float viewportHeight, bool expectMonthBlock, float expectedPanelHeight,
+            float expectedMonthHeight)
+        {
+            GameSession session = GameSession.NewGame();
+            typeof(GameSession).GetProperty(nameof(GameSession.LastEventMessage))
+                .GetSetMethod(true).Invoke(session, new object[] { "本月布局边界测试" });
+            _objects.Add(session.gameObject);
+
+            GameObject host = Create("CanvasHost", typeof(RectTransform));
+            ((RectTransform)host.transform).sizeDelta = new Vector2(viewportWidth, viewportHeight);
+            GameObject panel = Create("IndustryPanel", typeof(RectTransform),
+                typeof(CanvasRenderer), typeof(Image));
+            panel.transform.SetParent(host.transform, false);
+            ((RectTransform)panel.transform).sizeDelta = new Vector2(760f, 700f);
+            Button[] buttons = new Button[ReferenceGalleryNavigator.PageCount];
+            for (int i = 0; i < buttons.Length; i++)
+                buttons[i] = CreateButton("Button" + i);
+            ReferenceGalleryNavigator navigator = Create("Navigator", typeof(RectTransform))
+                .AddComponent<ReferenceGalleryNavigator>();
+            navigator.transform.SetParent(host.transform, false);
+            navigator.BindReferences(new[]
+            {
+                new ReferenceGalleryPageRoot(panel, ReferenceGalleryPageMask.Household)
+            }, buttons, Create("Character"), Create("Family"), panel, Create("Map"),
+                buttons[0], Create("Navigation"), Create("Header"));
+            navigator.BindGameSession(session);
+
+            navigator.ShowPage(ReferenceGalleryPage.Household);
+
+            Rect card = navigator.LastHouseholdCardRect;
+            Rect fittedPanel = navigator.LastHouseholdIndustryPanelRect;
+            Assert.That(fittedPanel.height, Is.EqualTo(expectedPanelHeight).Within(0.01f),
+                "the month strip leaves a stable scroll viewport regardless of canvas aspect");
+            Assert.That(navigator.LastHouseholdIndustryFit.Readable, Is.EqualTo(expectMonthBlock),
+                "a scrollable tall panel keeps its authored readable scale when the card can host it");
+            Assert.That(navigator.HouseholdIndustryBelowReadableScale, Is.EqualTo(!expectMonthBlock));
+            Assert.That(card.Contains(fittedPanel.min) && card.Contains(fittedPanel.max), Is.True,
+                "the viewport stays within the explicit household card");
+            if (expectMonthBlock)
+            {
+                Transform viewport = FindDeep(navigator.HouseholdComposition.transform,
+                    "HouseholdIndustryScrollViewport");
+                Assert.That(viewport, Is.Not.Null);
+                ScrollRect scroll = viewport.GetComponent<ScrollRect>();
+                Assert.That(scroll, Is.Not.Null);
+                Assert.That(scroll.vertical, Is.True);
+                Assert.That(scroll.horizontal, Is.False);
+                Assert.That(scroll.content, Is.Not.Null);
+                Assert.That(panel.transform.IsChildOf(scroll.content), Is.True,
+                    "the complete tall panel remains reachable in the scroll content");
+            }
+            Transform month = FindDeep(navigator.HouseholdComposition.transform,
+                "HouseholdMonthEvent");
+            Assert.That(month != null, Is.EqualTo(expectMonthBlock),
+                "a summary block exists only when the card can reserve its minimum height");
+            Assert.That(FindDeep(navigator.HouseholdComposition.transform,
+                "HouseholdMonthEventTitle") != null, Is.EqualTo(expectMonthBlock),
+                "an omitted summary does not leave a floating 本月 title");
+
+            if (month != null)
+            {
+                Rect monthRect = WorldRect((RectTransform)month);
+                Assert.That(card.Contains(monthRect.min) && card.Contains(monthRect.max), Is.True,
+                    "the month block stays inside the card");
+                Assert.That(monthRect.Overlaps(fittedPanel), Is.False,
+                    "the month block never overlaps the fitted panel");
+                Assert.That(monthRect.height,
+                    Is.EqualTo(expectedMonthHeight).Within(0.01f),
+                    "the summary occupies only its actual reserved strip");
+            }
+        }
+
+        [TestCase(1280f, 720f, 560f, false)]
+        [TestCase(1280f, 600f, 560f, false)]
+        [TestCase(1402.17f, 657.27f, 560f, false)]
+        [TestCase(1280f, 600f, 700f, true)]
+        [TestCase(1280f, 720f, 700f, true)]
+        [TestCase(1402.17f, 657.27f, 700f, true)]
+        public void ShowPage_Household_AuthoredPanelWithMonthSummaryRemainsReadable(
+            float logicalCanvasWidth, float logicalCanvasHeight, float authoredPanelHeight,
+            bool expectScroll)
+        {
+            GameSession session = GameSession.NewGame();
+            typeof(GameSession).GetProperty(nameof(GameSession.LastEventMessage))
+                .GetSetMethod(true).Invoke(session, new object[] { "本月布局边界测试" });
+            _objects.Add(session.gameObject);
+
+            GameObject host = Create("CanvasHost", typeof(RectTransform));
+            ((RectTransform)host.transform).sizeDelta =
+                new Vector2(logicalCanvasWidth, logicalCanvasHeight);
+            GameObject panel = Create("IndustryPanel", typeof(RectTransform),
+                typeof(CanvasRenderer), typeof(Image));
+            panel.transform.SetParent(host.transform, false);
+            ((RectTransform)panel.transform).sizeDelta = new Vector2(760f, authoredPanelHeight);
+            Button[] buttons = new Button[ReferenceGalleryNavigator.PageCount];
+            for (int i = 0; i < buttons.Length; i++)
+                buttons[i] = CreateButton("Button" + i);
+            ReferenceGalleryNavigator navigator = Create("Navigator", typeof(RectTransform))
+                .AddComponent<ReferenceGalleryNavigator>();
+            navigator.transform.SetParent(host.transform, false);
+            navigator.BindReferences(new[]
+            {
+                new ReferenceGalleryPageRoot(panel, ReferenceGalleryPageMask.Household)
+            }, buttons, Create("Character"), Create("Family"), panel, Create("Map"),
+                buttons[0], Create("Navigation"), Create("Header"));
+            navigator.BindGameSession(session);
+
+            navigator.ShowPage(ReferenceGalleryPage.Household);
+
+            Assert.That(navigator.LastHouseholdIndustryFit.Readable, Is.True,
+                "the SC-019 panel must meet the readable floor beside live month text");
+            Assert.That(navigator.HouseholdIndustryBelowReadableScale, Is.False);
+            Transform month = FindDeep(navigator.HouseholdComposition.transform,
+                "HouseholdMonthEvent");
+            Assert.That(month, Is.Not.Null);
+            Rect card = navigator.LastHouseholdCardRect;
+            Rect monthRect = WorldRect((RectTransform)month);
+            Assert.That(card.Contains(monthRect.min) && card.Contains(monthRect.max), Is.True,
+                "the live summary remains inside the household card");
+            if (expectScroll)
+            {
+                Transform viewport = FindDeep(navigator.HouseholdComposition.transform,
+                    "HouseholdIndustryScrollViewport");
+                Assert.That(viewport, Is.Not.Null,
+                    "the taller M05 industry panel needs a readable scroll viewport");
+                ScrollRect scroll = viewport.GetComponent<ScrollRect>();
+                Assert.That(scroll, Is.Not.Null);
+                Assert.That(scroll.vertical, Is.True);
+                Assert.That(scroll.horizontal, Is.False);
+                Assert.That(viewport.GetComponent<Image>().raycastTarget, Is.True,
+                    "the visible viewport receives pointer scrolling without making decorations raycastable");
+                Assert.That(scroll.viewport, Is.EqualTo(viewport as RectTransform));
+                Assert.That(viewport.GetComponent<RectMask2D>(), Is.Not.Null,
+                    "overflow must be clipped to the visible viewport");
+                Assert.That(scroll.content, Is.Not.Null);
+                Assert.That(panel.transform.IsChildOf(scroll.content), Is.True,
+                    "the complete tall panel must remain reachable inside the viewport");
+                Rect viewportRect = WorldRect((RectTransform)viewport);
+                Assert.That(card.Contains(viewportRect.min) && card.Contains(viewportRect.max), Is.True);
+                Assert.That(scroll.content.rect.height, Is.GreaterThan(viewportRect.height),
+                    "the scroll content must extend beyond the viewport for vertical scrolling");
+                Rect contentRect = WorldRect(scroll.content);
+                Rect panelContentRect = WorldRect((RectTransform)panel.transform);
+                Assert.That(panelContentRect.xMin, Is.EqualTo(contentRect.xMin).Within(0.01f));
+                Assert.That(panelContentRect.xMax, Is.EqualTo(contentRect.xMax).Within(0.01f));
+                Assert.That(panelContentRect.yMin, Is.EqualTo(contentRect.yMin).Within(0.01f));
+                Assert.That(panelContentRect.yMax, Is.EqualTo(contentRect.yMax).Within(0.01f),
+                    "the panel fills the scroll content so none of it is stranded outside the scroll range");
+                Assert.That(viewportRect.Overlaps(monthRect), Is.False,
+                    "the scroll viewport and month strip must not overlap");
+            }
+            else
+            {
+                Rect panelRect = WorldRect((RectTransform)panel.transform);
+                Assert.That(card.Contains(panelRect.min) && card.Contains(panelRect.max), Is.True);
+                Assert.That(panelRect.Overlaps(monthRect), Is.False,
+                    "the live summary strip and embedded parchment must not overlap");
+            }
+        }
+
+        [Test]
+        public void ShowPage_Household_ReparentsAuthoredChildAndReflowsAfterResize()
+        {
+            GameSession session = GameSession.NewGame();
+            typeof(GameSession).GetProperty(nameof(GameSession.LastEventMessage))
+                .GetSetMethod(true).Invoke(session, new object[] { "本月布局边界测试" });
+            _objects.Add(session.gameObject);
+
+            GameObject host = Create("CanvasHost", typeof(RectTransform));
+            RectTransform hostRect = (RectTransform)host.transform;
+            hostRect.sizeDelta = new Vector2(1280f, 720f);
+            GameObject industryRoot = Create("IndustryRoot", typeof(RectTransform));
+            industryRoot.transform.SetParent(host.transform, false);
+            GameObject panel = Create("IndustryPanel", typeof(RectTransform),
+                typeof(CanvasRenderer), typeof(Image));
+            panel.transform.SetParent(industryRoot.transform, false);
+            ((RectTransform)panel.transform).sizeDelta = new Vector2(760f, 700f);
+            Button[] buttons = new Button[ReferenceGalleryNavigator.PageCount];
+            for (int i = 0; i < buttons.Length; i++)
+                buttons[i] = CreateButton("Button" + i);
+            GameObject map = Create("MapRoot", typeof(RectTransform));
+            ReferenceGalleryNavigator navigator = Create("Navigator", typeof(RectTransform))
+                .AddComponent<ReferenceGalleryNavigator>();
+            navigator.transform.SetParent(host.transform, false);
+            navigator.BindReferences(new[]
+            {
+                new ReferenceGalleryPageRoot(industryRoot, ReferenceGalleryPageMask.Household)
+            }, buttons, Create("Character"), Create("Family"), industryRoot, map,
+                buttons[0], Create("Navigation"), Create("Header"));
+            navigator.BindGameSession(session);
+
+            navigator.ShowPage(ReferenceGalleryPage.Household);
+            Transform firstViewport = FindDeep(navigator.HouseholdComposition.transform,
+                "HouseholdIndustryScrollViewport");
+            Assert.That(firstViewport, Is.Not.Null);
+            Assert.That(panel.transform.IsChildOf(FindDeep(firstViewport,
+                "HouseholdIndustryScrollContent")), Is.True);
+            Assert.That(WorldRect((RectTransform)firstViewport).height,
+                Is.EqualTo(492f).Within(0.01f));
+
+            navigator.ShowPage(ReferenceGalleryPage.Map);
+            hostRect.sizeDelta = new Vector2(1280f, 550f);
+            navigator.ShowPage(ReferenceGalleryPage.Household);
+
+            Transform resizedViewport = FindDeep(navigator.HouseholdComposition.transform,
+                "HouseholdIndustryScrollViewport");
+            Assert.That(resizedViewport, Is.Not.Null);
+            Assert.That(panel.transform.IsChildOf(FindDeep(resizedViewport,
+                "HouseholdIndustryScrollContent")), Is.True,
+                "the original IndustryPanel must be restored and reparented on every household entry");
+            Assert.That(WorldRect((RectTransform)resizedViewport).height,
+                Is.EqualTo(470f).Within(0.01f),
+                "returning to the household page recomputes the viewport for the resized canvas");
         }
 
         [Test]
@@ -1491,6 +1778,15 @@ namespace SengokuChronicle.Tests.EditMode
             Vector2 secondPosition, Vector2 secondSize)
         {
             return RectsOverlap(firstPosition, firstSize, secondPosition, secondSize);
+        }
+
+        private static Rect WorldRect(RectTransform rect)
+        {
+            var corners = new Vector3[4];
+            rect.GetWorldCorners(corners);
+            float minX = corners[0].x, maxX = corners[2].x;
+            float minY = corners[0].y, maxY = corners[2].y;
+            return Rect.MinMaxRect(minX, minY, maxX, maxY);
         }
 
         private static bool RectsOverlap(Vector2 firstPosition, Vector2 firstSize,

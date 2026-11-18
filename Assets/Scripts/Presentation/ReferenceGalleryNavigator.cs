@@ -83,6 +83,11 @@ namespace SengokuChronicle.Presentation
         private GameObject _eventsEmptyState;
         private GameObject _householdComposition;
         private GameObject _pendingEventsRail;
+        private RectTransform _householdIndustryPanel;
+        private Vector2 _householdIndustryAuthored;
+        private bool _householdIndustryScrolls;
+        private Transform _householdIndustryHomeParent;
+        private int _householdIndustryHomeSibling = -1;
         private Vector2 _lastPageSize;
 
         public bool IsBound
@@ -146,17 +151,60 @@ namespace SengokuChronicle.Presentation
         }
 
         public GameObject HouseholdComposition => _householdComposition;
+        /// <summary>Last fit applied to the embedded industry panel (diagnostics/tests).</summary>
+        public HouseholdIndustryFitResult LastHouseholdIndustryFit { get; private set; }
+        /// <summary>True when the household card forced a sub-readable industry panel scale.</summary>
+        public bool HouseholdIndustryBelowReadableScale { get; private set; }
+        /// <summary>The household card the panel and the month block are kept inside.</summary>
+        public Rect LastHouseholdCardRect { get; private set; }
+        /// <summary>The fitted industry panel rect, in page units.</summary>
+        public Rect LastHouseholdIndustryPanelRect { get; private set; }
         public GameObject PendingEventsRail => _pendingEventsRail;
 
         /// <summary>
-        /// Household page regions in design (canvas-centred) units: centre column
-        /// holds the appointments/industry panel with the month-event block below
-        /// it, the left rail lists the live roster, the right rail pending decisions.
+        /// Household page reference regions in design (canvas-centred) units. The centre band
+        /// holds the appointments/industry panel at its authored aspect inside the 760x560
+        /// household card, the left rail lists the live roster, and the right column stacks
+        /// the pending decisions. The month summary is placed on the card itself, so
+        /// <see cref="HouseholdMonthEventPosition"/> only records its authored slot.
         /// </summary>
         public static readonly Vector2 HouseholdIndustrySize = new Vector2(620f, 456f);
         public static readonly Vector2 HouseholdIndustryPosition = new Vector2(38f, 48f);
-        public static readonly Vector2 HouseholdMonthEventSize = new Vector2(620f, 116f);
-        public static readonly Vector2 HouseholdMonthEventPosition = new Vector2(38f, -296f);
+        /// <summary>Gap between the head rail, the page edge and the embedded industry panel.</summary>
+        public const float HouseholdIndustryBandGap = 16f;
+        /// <summary>Safe page margin used under the panel band.</summary>
+        public const float HouseholdIndustryPageMargin = 24f;
+        /// <summary>Authored size used when a scene panel has no usable serialized rect.</summary>
+        public const float HouseholdIndustryFallbackWidth = 760f;
+        public const float HouseholdIndustryFallbackHeight = 700f;
+        /// <summary>
+        /// The household card the SC-019 panel is embedded in, as the scene authors it. The
+        /// panel may be authored taller (760x700 after the M05 change); it is then fitted to
+        /// this card and reported as sub-readable instead of silently overflowing it.
+        /// </summary>
+        public const float HouseholdCardWidth = 760f;
+        public const float HouseholdCardHeight = 560f;
+        /// <summary>Clearance the panel and the month block keep from the household card edge.</summary>
+        public const float HouseholdCardEdgeInset = 8f;
+        /// <summary>
+        /// Authored month-summary tile. The placed block inherits at most this height from it
+        /// but is derived from the household card (<c>TryGetHouseholdMonthBlockRect</c>),
+        /// because the authored right-column slot lies outside the 760x560 card.
+        /// </summary>
+        public static readonly Vector2 HouseholdMonthEventSize = new Vector2(252f, 320f);
+        /// <summary>
+        /// Clearance between the month summary and the industry panel. The fit reserves the
+        /// strip plus this gap before it solves the panel scale.
+        /// </summary>
+        public const float HouseholdMonthGap = HouseholdIndustryBandGap * 0.5f;
+        /// <summary>
+        /// Smallest strip that carries the summary's 18 px title and one 13 px body line
+        /// inside its own surface. A card that cannot leave this much room above the fitted
+        /// panel gets no summary block at all instead of a clipped one.
+        /// </summary>
+        public const float HouseholdMonthMinimumHeight = 40f;
+        /// <summary>Authored right-column slot of the month tile; the card strip replaces it.</summary>
+        public static readonly Vector2 HouseholdMonthEventPosition = new Vector2(486f, -192f);
         public static readonly Vector2 HouseholdHeadRailSize = new Vector2(184f, 636f);
         public static readonly Vector2 HouseholdHeadRailPosition = new Vector2(-384f, -42f);
         public static readonly Vector2 PendingRailSize = new Vector2(252f, 240f);
@@ -228,6 +276,14 @@ namespace SengokuChronicle.Presentation
                 StyleMapPage();
             else if (_currentPage == ReferenceGalleryPage.Family)
                 StyleFamilyPage();
+            else if (_currentPage == ReferenceGalleryPage.Household)
+            {
+                // The panel fit and the month strip are derived from the page size, so a
+                // resize would otherwise leave the card at the old geometry.
+                StyleHouseholdPage();
+                BuildHouseholdComposition();
+                UpdatePendingRail();
+            }
         }
 
         private void OnDisable()
@@ -1015,11 +1071,23 @@ namespace SengokuChronicle.Presentation
                         SetChildRect(panelRect, "FamilyRosterTitleText", new Vector2(0, 280), new Vector2(width - 40, 36));
                         SetChildRect(panelRect, "FamilyRosterLegendText", new Vector2(0, compact ? 240 : 246),
                             new Vector2(width - 40, compact ? 40 : 22));
-                        SetChildRect(panelRect, "FamilyRosterScroll", new Vector2(0, 5), new Vector2(width - 60, 410));
-                        SetChildRect(panelRect, "FamilyRosterHeirText", new Vector2(0, -239), new Vector2(width - 60, 34));
+                        // The roster owns the graph geometry: it reserves the selected-person
+                        // column when the card is wide enough and reports the remaining viewport.
+                        roster.ApplyPageLayout();
+                        float scrollWidth = roster.HasDetailColumn
+                            ? roster.AppliedScrollWidth
+                            : width - 60f;
+                        float scrollCenterX = roster.HasDetailColumn
+                            ? roster.AppliedScrollCenterX
+                            : 0f;
+                        SetChildRect(panelRect, "FamilyRosterScroll",
+                            new Vector2(scrollCenterX, 5), new Vector2(scrollWidth, 410));
+                        SetChildRect(panelRect, "FamilyRosterHeirText", new Vector2(0, -239),
+                            new Vector2(width - 60, 34));
                         ScrollRect graphScroll = panelRect.Find("FamilyRosterScroll")?.GetComponent<ScrollRect>();
                         if (graphScroll != null)
-                            ConfigureFamilyRosterScrollbar(panelRect, graphScroll, width - 60);
+                            ConfigureFamilyRosterScrollbar(panelRect, graphScroll, scrollWidth,
+                                scrollCenterX);
                         Image panelImage = panelRect.GetComponent<Image>();
                         if (panelImage != null)
                         {
@@ -1096,7 +1164,7 @@ namespace SengokuChronicle.Presentation
         }
 
         private static void ConfigureFamilyRosterScrollbar(RectTransform panel, ScrollRect graphScroll,
-            float width)
+            float width, float centerX = 0f)
         {
             const string scrollbarName = "FamilyRosterHorizontalScrollbar";
             Transform existing = panel.Find(scrollbarName);
@@ -1106,7 +1174,7 @@ namespace SengokuChronicle.Presentation
             RectTransform scrollbarRect = scrollbarObject.GetComponent<RectTransform>();
             scrollbarRect.SetParent(panel, false);
             scrollbarRect.anchorMin = scrollbarRect.anchorMax = scrollbarRect.pivot = new Vector2(0.5f, 0.5f);
-            scrollbarRect.anchoredPosition = new Vector2(0, -210);
+            scrollbarRect.anchoredPosition = new Vector2(centerX, -210);
             scrollbarRect.sizeDelta = new Vector2(width, 12);
 
             Transform handleTransform = scrollbarObject.transform.Find("Handle");
@@ -1142,12 +1210,353 @@ namespace SengokuChronicle.Presentation
                 graphScroll.horizontalScrollbarSpacing = 2;
         }
 
+        /// <summary>
+        /// Places the embedded SC-019 panel inside the household card the page really paints.
+        /// The card is the explicit 760x560 layout rect recorded by
+        /// <see cref="StyleHouseholdPage"/>, so a taller authored panel is judged against the
+        /// surface it must stay on instead of the navigator's 1280x720 parent.
+        ///
+        /// The month summary keeps its strip at the card top, so the panel gets the rectangle
+        /// below that strip: a viewport whose height depends on the card and band, never on
+        /// the authored height. The panel is scaled by width only and stays centred in the
+        /// free band while it fits the viewport; when the authored panel is taller, the
+        /// complete panel is placed in a vertical scroll viewport instead of being shrunk
+        /// below <see cref="HouseholdIndustryFit.ReadableScale"/>. A page too short to hold
+        /// the strip at all keeps the older card-centred uniform fit and omits the summary.
+        /// </summary>
+        private void ApplyEmbeddedIndustryFit(RectTransform panel, Vector2 authored, Rect card)
+        {
+            Rect band = HouseholdIndustryBand();
+            Vector2 centre = band.center;
+            float inset = HouseholdCardEdgeInset;
+            _householdIndustryPanel = panel;
+            _householdIndustryAuthored = authored;
+            _householdIndustryScrolls = false;
+            RestoreHouseholdIndustryPanelHome(panel);
+
+            float halfWidth = Mathf.Min(band.width * 0.5f,
+                Mathf.Min(centre.x - card.xMin, card.xMax - centre.x) - inset);
+            // The band centre must sit below the card's top edge for the summary strip to
+            // have room; a shorter card keeps the older card-centred fallback instead.
+            float cardTopHalf = card.yMax - centre.y - inset;
+            float stripTop = HouseholdMonthStripTop(card, band);
+            float topLimit = stripTop - HouseholdMonthMinimumHeight - HouseholdMonthGap;
+            float bottomLimit = Mathf.Max(band.yMin, card.yMin + inset);
+            float viewportHeight = topLimit - bottomLimit;
+            if (halfWidth <= 0f || cardTopHalf <= 0f || viewportHeight <= 0f)
+            {
+                // A page far smaller than the design canvas collapses the band outside the
+                // card, so there is no band fit to honour: keep the whole panel on the card
+                // and let the summary be omitted rather than clipped over it.
+                ApplyCardCentredIndustryFallback(panel, authored, card);
+                return;
+            }
+
+            float viewportWidth = halfWidth * 2f;
+            HouseholdIndustryFitResult fit = HouseholdIndustryFit.CalculateReadableViewport(
+                authored.x, authored.y, viewportWidth);
+            LastHouseholdIndustryFit = fit;
+            HouseholdIndustryBelowReadableScale = !fit.Readable;
+            if (fit.Height > viewportHeight + 0.5f)
+            {
+                // Taller than the viewport can show at once: keep the readable width scale
+                // and let the complete panel scroll vertically.
+                _householdIndustryScrolls = true;
+                LastHouseholdIndustryPanelRect = Rect.MinMaxRect(centre.x - viewportWidth * 0.5f,
+                    bottomLimit, centre.x + viewportWidth * 0.5f, topLimit);
+                if (!fit.Readable)
+                    WarnBelowReadableScale(card, authored, viewportWidth, viewportHeight, fit);
+                return;
+            }
+
+            // Keep the shipped band-centred composition, but never let the panel grow into
+            // the strip the summary reserved above it.
+            float centreY = Mathf.Min(centre.y, topLimit - fit.Height * 0.5f);
+            centreY = Mathf.Max(centreY, bottomLimit + fit.Height * 0.5f);
+            LastHouseholdIndustryPanelRect = new Rect(centre.x - fit.Width * 0.5f,
+                centreY - fit.Height * 0.5f, fit.Width, fit.Height);
+            if (!fit.Readable)
+                WarnBelowReadableScale(card, authored, viewportWidth, viewportHeight, fit);
+
+            panel.anchorMin = panel.anchorMax = panel.pivot = new Vector2(0.5f, 0.5f);
+            panel.sizeDelta = authored;
+            panel.localScale = new Vector3(fit.Scale, fit.Scale, 1f);
+            panel.anchoredPosition = new Vector2(centre.x, centreY);
+        }
+
+        /// <summary>
+        /// The page is too short for the summary strip, so the panel keeps the older uniform
+        /// fit centred on the card and the summary stays omitted.
+        /// </summary>
+        private void ApplyCardCentredIndustryFallback(RectTransform panel, Vector2 authored,
+            Rect card)
+        {
+            float inset = HouseholdCardEdgeInset;
+            float halfWidth = Mathf.Max(0f, card.width * 0.5f - inset);
+            float halfHeight = Mathf.Max(0f, card.height * 0.5f - inset);
+            HouseholdIndustryFitResult fit = HouseholdIndustryFit.Calculate(authored.x,
+                authored.y, halfWidth * 2f, halfHeight * 2f);
+            _householdIndustryScrolls = false;
+            LastHouseholdIndustryFit = fit;
+            LastHouseholdIndustryPanelRect = new Rect(card.center.x - fit.Width * 0.5f,
+                card.center.y - fit.Height * 0.5f, fit.Width, fit.Height);
+            HouseholdIndustryBelowReadableScale = !fit.Readable;
+            if (!fit.Readable)
+                WarnBelowReadableScale(card, authored, halfWidth * 2f, halfHeight * 2f, fit);
+
+            panel.anchorMin = panel.anchorMax = panel.pivot = new Vector2(0.5f, 0.5f);
+            panel.sizeDelta = authored;
+            panel.localScale = new Vector3(fit.Scale, fit.Scale, 1f);
+            panel.anchoredPosition = card.center;
+        }
+
+        private void WarnBelowReadableScale(Rect card, Vector2 authored, float availableWidth,
+            float availableHeight, HouseholdIndustryFitResult fit)
+        {
+            Debug.LogWarning(
+                "M04 household industry panel: the " + card.width.ToString("0") + "x" +
+                card.height.ToString("0") + " household card leaves " +
+                availableWidth.ToString("0") + "x" + availableHeight.ToString("0") +
+                " for the authored " + authored.x.ToString("0") + "x" +
+                authored.y.ToString("0") + " panel, so the readable fit is " +
+                fit.Scale.ToString("0.###") + ", below the readable floor " +
+                HouseholdIndustryFit.ReadableScale.ToString("0.###") +
+                ". Widen the card or add a panel scroll region instead of shrinking.");
+        }
+
+        /// <summary>
+        /// The authored industry panel for this page. The cached panel is preferred once it
+        /// has been resolved, so a refresh after the panel was hosted in the scroll viewport
+        /// keeps measuring the same scene object; a panel bound to a different page root is
+        /// rejected and resolved from the hierarchy instead.
+        /// </summary>
+        private RectTransform ResolveHouseholdIndustryPanel(Transform root)
+        {
+            if (_householdIndustryPanel != null && root != null &&
+                (_householdIndustryPanel == root ||
+                 _householdIndustryPanel.IsChildOf(root)))
+                return _householdIndustryPanel;
+            Transform industryPanel = root != null ? root.Find("IndustryPanel") : null;
+            if (industryPanel == null && householdPanelRoot != null &&
+                householdPanelRoot.name == "IndustryPanel")
+                industryPanel = householdPanelRoot.transform;
+            return industryPanel as RectTransform;
+        }
+
+        /// <summary>
+        /// Puts the panel back where the scene authored it. The scroll viewport is rebuilt
+        /// with the composition, so the panel must leave it before that composition is
+        /// cleared; otherwise clearing the viewport would destroy the scene panel with it.
+        /// </summary>
+        private void RestoreHouseholdIndustryPanelHome(RectTransform panel)
+        {
+            if (panel == null)
+                return;
+            if (_householdIndustryHomeParent == null)
+            {
+                _householdIndustryHomeParent = panel.parent;
+                _householdIndustryHomeSibling = panel.GetSiblingIndex();
+            }
+            if (_householdIndustryHomeParent == null || panel.parent == _householdIndustryHomeParent)
+                return;
+            panel.SetParent(_householdIndustryHomeParent, false);
+            int index = Mathf.Clamp(_householdIndustryHomeSibling, 0,
+                _householdIndustryHomeParent.childCount - 1);
+            panel.SetSiblingIndex(index);
+        }
+
+        private void RestoreHouseholdIndustryPanelHome()
+        {
+            RestoreHouseholdIndustryPanelHome(_householdIndustryPanel);
+        }
+
+        /// <summary>
+        /// Hosts the complete taller panel in a vertical-only scroll viewport under the
+        /// composition. The viewport keeps the rectangle the month strip left free, so the
+        /// summary never shares its band with the panel and the panel text keeps the readable
+        /// width scale; the rest of the panel is reached by scrolling rather than shrinking.
+        /// </summary>
+        private void BuildHouseholdIndustryScrollViewport()
+        {
+            RectTransform panel = _householdIndustryPanel;
+            Rect viewport = LastHouseholdIndustryPanelRect;
+            HouseholdIndustryFitResult fit = LastHouseholdIndustryFit;
+            if (panel == null || _householdComposition == null ||
+                viewport.width <= 1f || viewport.height <= 1f || fit.Scale <= 0f)
+                return;
+
+            var viewportObject = new GameObject("HouseholdIndustryScrollViewport",
+                typeof(RectTransform), typeof(CanvasRenderer), typeof(Image),
+                typeof(ScrollRect), typeof(RectMask2D));
+            viewportObject.transform.SetParent(_householdComposition.transform, false);
+            var viewportRect = (RectTransform)viewportObject.transform;
+            viewportRect.anchorMin = viewportRect.anchorMax = viewportRect.pivot =
+                new Vector2(0.5f, 0.5f);
+            viewportRect.sizeDelta = viewport.size;
+            viewportRect.anchoredPosition = viewport.center;
+            Image surface = viewportObject.GetComponent<Image>();
+            // The panel covers this rect completely at every scroll position; the graphic
+            // exists so wheel and drag events reach the ScrollRect.
+            surface.color = Color.clear;
+            surface.raycastTarget = true;
+
+            var contentObject = new GameObject("HouseholdIndustryScrollContent",
+                typeof(RectTransform));
+            contentObject.transform.SetParent(viewportRect, false);
+            var content = (RectTransform)contentObject.transform;
+            content.anchorMin = content.anchorMax = new Vector2(0.5f, 1f);
+            content.pivot = new Vector2(0.5f, 1f);
+            content.sizeDelta = new Vector2(viewport.width, fit.Height);
+            content.anchoredPosition = Vector2.zero;
+
+            ScrollRect scroll = viewportObject.GetComponent<ScrollRect>();
+            scroll.viewport = viewportRect;
+            scroll.content = content;
+            scroll.horizontal = false;
+            scroll.vertical = true;
+            scroll.movementType = ScrollRect.MovementType.Clamped;
+            scroll.scrollSensitivity = 24f;
+
+            panel.SetParent(content, false);
+            panel.anchorMin = panel.anchorMax = panel.pivot = new Vector2(0.5f, 0.5f);
+            panel.sizeDelta = _householdIndustryAuthored;
+            panel.localScale = new Vector3(fit.Scale, fit.Scale, 1f);
+            // The scaled panel is exactly the content size, so a zero offset centres it on
+            // the content rect; any vertical offset here would push it out of the scrollable
+            // range and leave blank viewport space at the top.
+            panel.anchoredPosition = Vector2.zero;
+        }
+
+        private static Vector2 AuthoredIndustryPanelSize(RectTransform panel)
+        {
+            Vector2 size = panel.sizeDelta;
+            if (size.x > 1f && size.y > 1f)
+                return size;
+            Vector2 rect = panel.rect.size;
+            if (rect.x > 1f && rect.y > 1f)
+                return rect;
+            return new Vector2(HouseholdIndustryFallbackWidth,
+                HouseholdIndustryFallbackHeight);
+        }
+
+        /// <summary>
+        /// The household card the page paints the industry panel and the month summary on: the
+        /// declared 760x560 layout rect, capped by the live page size so a smaller window still
+        /// contains it. It is an explicit generated/layout rect rather than a measurement of
+        /// the panel, so the fit and the summary always have a real surface to stay inside —
+        /// even when the scene panel is missing or authored taller (760x700 after the M05
+        /// change).
+        /// </summary>
+        private Rect HouseholdCardRect()
+        {
+            Vector2 page = PageSize();
+            float width = Mathf.Max(1f, Mathf.Min(HouseholdCardWidth, page.x));
+            float height = Mathf.Max(1f, Mathf.Min(HouseholdCardHeight, page.y));
+            return Rect.MinMaxRect(-width * 0.5f, -height * 0.5f, width * 0.5f, height * 0.5f);
+        }
+
+        /// <summary>
+        /// Free page space around the embedded panel: right of the head rail, left of the
+        /// pending-decision column, below the rail top and above the page margin. This is the
+        /// room the page offers; <see cref="ApplyEmbeddedIndustryFit"/> additionally limits it
+        /// to the household card. It never inspects the composition, so no region is measured
+        /// from a block that may not exist yet.
+        /// </summary>
+        private Rect HouseholdIndustryBand()
+        {
+            Vector2 page = PageSize();
+            float left = HouseholdHeadRailPosition.x + HouseholdHeadRailSize.x * 0.5f +
+                         HouseholdIndustryBandGap;
+            float right = page.x * 0.5f - HouseholdIndustryPageMargin;
+            // The pending-decision rail owns the right column whenever events are queued, so
+            // its slot stays free even while it is hidden.
+            float pendingLeft = PendingRailPosition.x - PendingRailSize.x * 0.5f -
+                                HouseholdIndustryBandGap;
+            if (pendingLeft < right)
+                right = pendingLeft;
+            float top = HouseholdHeadRailPosition.y + HouseholdHeadRailSize.y * 0.5f;
+            float bottom = -page.y * 0.5f + HouseholdIndustryPageMargin;
+            if (right <= left || top <= bottom)
+                return new Rect(left, bottom, 1f, 1f);
+            return new Rect(left, bottom, right - left, top - bottom);
+        }
+
+        /// <summary>
+        /// Top edge of the strip the month summary keeps above the industry panel: the lower
+        /// of the card and band tops, inset like every other card edge. The fit reserves the
+        /// space below it and the block fills it, so reserved space and drawn space agree.
+        /// </summary>
+        private float HouseholdMonthStripTop(Rect card, Rect band) =>
+            Mathf.Min(card.yMax, band.yMax) - HouseholdCardEdgeInset;
+
+        /// <summary>
+        /// The month summary's card rect: the free strip directly above the fitted panel, as
+        /// wide as the panel (never narrower than the authored tile) and never taller than the
+        /// authored tile. The bottom edge comes from
+        /// <see cref="LastHouseholdIndustryPanelRect"/> and the top edge is the lower of the
+        /// card edge and the band top, so the block cannot leave the card, cross the head rail
+        /// or overlap the panel.
+        ///
+        /// Returns false when there is nothing honest to draw: no explicit card, no placed
+        /// panel, or less than <see cref="HouseholdMonthMinimumHeight"/> of strip. The caller
+        /// then omits the block entirely instead of creating a zero-height one whose title
+        /// paints over the panel.
+        /// </summary>
+        private bool TryGetHouseholdMonthBlockRect(out Rect block)
+        {
+            block = default;
+            Rect card = LastHouseholdCardRect;
+            Rect panel = LastHouseholdIndustryPanelRect;
+            if (card.width <= 1f || card.height <= 1f ||
+                panel.width <= 1f || panel.height <= 1f)
+                return false;
+
+            float inset = HouseholdCardEdgeInset;
+            float bottom = panel.yMax + HouseholdMonthGap;
+            float height = Mathf.Min(
+                HouseholdMonthStripTop(card, HouseholdIndustryBand()) - bottom,
+                HouseholdMonthEventSize.y);
+            float width = Mathf.Min(card.width - inset * 2f,
+                Mathf.Max(panel.width, HouseholdMonthEventSize.x));
+            // The fit reserves exactly the minimum, so the binding aspect lands on it up to
+            // float error; anything clearly shorter is omitted rather than clipped.
+            const float tolerance = 0.01f;
+            if (height < HouseholdMonthMinimumHeight - tolerance || width <= 1f)
+                return false;
+
+            float centreX = Mathf.Clamp(panel.center.x, card.xMin + inset + width * 0.5f,
+                card.xMax - inset - width * 0.5f);
+            block = Rect.MinMaxRect(centreX - width * 0.5f, bottom, centreX + width * 0.5f,
+                bottom + height);
+            return true;
+        }
+
         private void StyleHouseholdPage()
         {
             if (householdPanelRoot == null)
                 return;
+            // A previous refresh may have hosted the panel in the composition's scroll
+            // viewport; bring it back before the authored hierarchy is read or restyled.
+            RestoreHouseholdIndustryPanelHome();
             SengokuUiTheme.ApplyFont(householdPanelRoot.transform);
             RectTransform root = householdPanelRoot.transform as RectTransform;
+            RectTransform panel = ResolveHouseholdIndustryPanel(householdPanelRoot.transform);
+            Transform industryPanel = panel != null ? panel.transform : null;
+            // This page's root can be the panel itself, and the root is stretched to the page
+            // below. The authored panel rect is measured before that stretch and the card is
+            // the explicit 760x560 layout rect, so neither one can silently become the parent
+            // canvas.
+            Vector2 authored = panel != null
+                ? AuthoredIndustryPanelSize(panel)
+                : new Vector2(HouseholdIndustryFallbackWidth, HouseholdIndustryFallbackHeight);
+            Rect card = HouseholdCardRect();
+            // Record the card here, before the fit, so the month strip and the public
+            // diagnostics always describe the surface this page paints — including a scene
+            // whose IndustryPanel child cannot be resolved (there is no canvas fallback).
+            LastHouseholdCardRect = card;
+            LastHouseholdIndustryPanelRect = default;
+            LastHouseholdIndustryFit = default;
+            HouseholdIndustryBelowReadableScale = false;
             if (root != null)
             {
                 root.anchorMin = Vector2.zero;
@@ -1155,18 +1564,10 @@ namespace SengokuChronicle.Presentation
                 root.offsetMin = root.offsetMax = Vector2.zero;
             }
 
-            Transform industryPanel = householdPanelRoot.transform.Find("IndustryPanel");
-            if (industryPanel == null && householdPanelRoot.name == "IndustryPanel")
-                industryPanel = householdPanelRoot.transform;
-            RectTransform panel = industryPanel as RectTransform;
             if (panel != null)
-            {
-                panel.anchorMin = panel.anchorMax = panel.pivot = new Vector2(0.5f, 0.5f);
-                panel.anchoredPosition = HouseholdIndustryPosition;
-                panel.sizeDelta = new Vector2(760f, 560f);
-                panel.localScale = new Vector3(
-                    HouseholdIndustrySize.x / 760f, HouseholdIndustrySize.y / 560f, 1f);
-            }
+                ApplyEmbeddedIndustryFit(panel, authored, card);
+            else
+                _householdIndustryScrolls = false;
             Image surface = industryPanel != null ? industryPanel.GetComponent<Image>() : null;
             if (surface != null)
             {
@@ -1205,6 +1606,7 @@ namespace SengokuChronicle.Presentation
 
         private void HideHouseholdComposition()
         {
+            RestoreHouseholdIndustryPanelHome();
             SetActiveIfNotNull(_householdComposition, false);
         }
 
@@ -1236,9 +1638,14 @@ namespace SengokuChronicle.Presentation
                 rootRect.anchorMax = Vector2.one;
                 rootRect.offsetMin = rootRect.offsetMax = Vector2.zero;
             }
+            // Clearing the composition destroys its scroll viewport, so the scene panel has
+            // to leave the viewport content first or it would be destroyed with it.
+            RestoreHouseholdIndustryPanelHome();
             _householdComposition.SetActive(true);
             _householdComposition.transform.SetAsLastSibling();
             ClearChildren(_householdComposition.transform);
+            if (_householdIndustryScrolls)
+                BuildHouseholdIndustryScrollViewport();
 
             GameDate date = session.WorldClock != null
                 ? session.WorldClock.CurrentDate
@@ -1290,30 +1697,38 @@ namespace SengokuChronicle.Presentation
                     Vector2.zero, new Vector2(0f, rowY), 12, SengokuUiTheme.InkSoft, 172f,
                     TextAnchor.MiddleLeft);
 
-            // Centre bottom: this month's settlement/event text, live data only.
-            List<string> monthLines = new List<string>();
+            // Month summary above the panel, on the household card: live data only.
+            var monthSources = new List<string>();
             IndustryMonthReport report = session.LastIndustryReport;
             if (report != null && !string.IsNullOrWhiteSpace(report.Summary))
-                monthLines.Add(report.Summary);
+                monthSources.Add(report.Summary);
             if (!string.IsNullOrWhiteSpace(session.LastIndustryMessage))
-                monthLines.Add(session.LastIndustryMessage);
+                monthSources.Add(session.LastIndustryMessage);
             if (!string.IsNullOrWhiteSpace(session.LastEventMessage))
-                monthLines.Add(session.LastEventMessage);
-            if (monthLines.Count > 0)
+                monthSources.Add(session.LastEventMessage);
+            IReadOnlyList<string> monthLines = HouseholdMonthSummary.Distinct(monthSources);
+            if (monthLines.Count > 0 && TryGetHouseholdMonthBlockRect(out Rect block))
             {
                 RectTransform monthBlock = CreateDecor("HouseholdMonthEvent",
-                    _householdComposition.transform, HouseholdMonthEventPosition,
-                    HouseholdMonthEventSize, SengokuUiTheme.IndigoPanel);
+                    _householdComposition.transform, block.center, block.size,
+                    SengokuUiTheme.IndigoPanel);
+                // The block is a wide, short strip, so the title sits beside the body instead
+                // of above it and the wrapped text keeps the block's full usable height.
+                float inset = HouseholdCardEdgeInset;
+                const float titleWidth = 56f;
+                float textWidth = Mathf.Max(1f, block.width - titleWidth - inset * 3f);
                 CreateLabel(monthBlock, "HouseholdMonthEventTitle", "本月", Vector2.zero,
-                    new Vector2(0f, 44f), 18, SengokuUiTheme.Gold, 200f, TextAnchor.MiddleLeft);
-                float y = 18f;
-                for (int i = 0; i < monthLines.Count && y >= -44f; i++)
-                {
-                    CreateLabel(monthBlock, "HouseholdMonthEventLine_" + i, monthLines[i],
-                        Vector2.zero, new Vector2(0f, y), 13, SengokuUiTheme.Parchment, 590f,
-                        TextAnchor.UpperLeft, true);
-                    y -= 26f;
-                }
+                    new Vector2(-block.width * 0.5f + inset + titleWidth * 0.5f, 0f), 18,
+                    SengokuUiTheme.Gold, titleWidth, TextAnchor.MiddleLeft);
+                // One wrapped body instead of fixed 26 px rows: a settlement report and the
+                // industry message carry the same sentence, and two wrapped rows overlapped.
+                CreateLabel(monthBlock, "HouseholdMonthEventBody",
+                    HouseholdMonthSummary.Join(monthLines), Vector2.zero,
+                    new Vector2(-block.width * 0.5f + inset * 2f + titleWidth + textWidth * 0.5f,
+                        0f), 13, SengokuUiTheme.Parchment, textWidth, TextAnchor.UpperLeft, true);
+                if (monthBlock.Find("HouseholdMonthEventBody") is RectTransform monthBody)
+                    monthBody.sizeDelta = new Vector2(textWidth,
+                        Mathf.Max(0f, block.height - inset * 2f));
             }
         }
 
