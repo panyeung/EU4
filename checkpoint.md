@@ -213,6 +213,8 @@
 
 | 日期 | 决策 | 一行理由 | 影响 |
 |---|---|---|---|
+| 2026-11-18 | 集成分支整体快进 `main`，不再逐支合并 | `t_122d4d5b` 独立复审 C1–C6 全 PASS，四支源码已在集成链里逐支过回归；让 `main` 与 `integration/v1-20261118` 同点，比再造五个合并提交少一层无法验证的中间态 | 用户 2026-11-18 授权；`main`、`origin/main`、`integration/v1-20261118` 同为 `2bca9d1`；只保留一个工作树 |
+| 2026-11-18 | 画布层序统一为 `CanvasLayerOrder`，删除 `CanvasOverlayOrder` | m04 与 m08 各带一套并行层序机制，合并后会同时生效；一个共享页面序才能让座次校验有唯一来源 | `Assets` 内 `CanvasOverlayOrder` 零命中；`CanvasLayerOrder.cs` 持七项页面序，`AddM08CampaignReviewPanel` 与 `AddSC010SuccessionPanel` 按共享序插入并校验，由 `CanvasLayerOrderTests` 与 `AddM08CampaignReviewPanelTests` 覆盖 |
 | 2026-11-18 | 主工作树未提交项按「与 `m00-closeout` 内容等价」处理，不再重复入库 | 69 项与 `e57dd06` 逐字节相同，差异只有行尾 LF/CRLF，另开提交只会造噪声 | 不新增镜像提交；后续收口以 `panyeung/m00-closeout` 为内容基准 |
 | 2026-11-18 | Editor 卡死按 PID 精确恢复，不整体杀 Unity | 同机同时跑着工作树的 Editor 实例，整体杀会连带丢掉它们的会话 | 只结束 PID 88424；重启后 96584 / 端口 7800，场景备份留 `Logs/recovery-20261118/` |
 | 2026-11-18 | Editor 重启后场景恢复改为显式 `open_scene` | `Library/LastSceneManagerSetup.txt` 是 `sceneSetups: []`，不会再自动恢复上一次场景 | 每次重启先 `unity command open_scene Assets/Scenes/FoundationScene.unity`，再谈验证 |
@@ -329,6 +331,7 @@
 
 | 日期 | ID | 内容 | 状态 | 证据 |
 |---|---|---|---|---|
+| 2026-11-18 | v1 集成 | 五个 UI 分支并入 `main`：层序统一为 `CanvasLayerOrder`、场景在 main 侧重放、全量回归与演示构建全过、独立复审 PASS | 进行中 | 全量 EditMode 2214/2214、Validator `PASS; Errors: 0`（源 `c291dd3`）；`Builds/Demo-v1-2bca9d1-r2/` 由 `2bca9d1` 干净工作树构建 `Succeeded`、`totalErrors=0`；用户最终验收未完成 |
 | 2026-11-18 | M00 | 主工作树未提交项与 `panyeung/m00-closeout` `e57dd06` 内容等价：35 个已跟踪修改文件 `git diff --ignore-cr-at-eol` 为 0 行，34 个未跟踪文件与同名 blob 剥 CR 后逐字节相同，仅 5 项是本地新增（合计 69 项等价） | 进行中 | `git status --porcelain -uall` 74 项（35 修改 / 39 未跟踪）；本地新增为 `Assets/Logs/verify/_scratch/t3193-00-now.png`、`Assets/Scenes/TestResults_20261108_072929.xml` 与其 `.meta`、`scripts/verify/SaveGatePlayProbe.cs`、`scripts/verify/SaveLoadPendingChecks.cs`；分支现头 `5141474` |
 | 2026-11-18 | M00 | Editor 卡死恢复：PID 88424 在一次测试超时后由 `RestoreSceneSetupTask` 抛 `IndexOutOfRangeException` 卡死主线程（pipeline 全超时、UIA 不可用），按 PID 结束该进程并重启为 PID 96584 / 端口 7800 | 进行中 | `unity pipeline list` 现报 `My project` 96584 / 7800 / 可达 true；场景备份 `Logs/recovery-20261118/scene-0.backup` 与 `__Backupscenes/0.backup` 各 835,768 字节，MD5 同为 `5ca370eb0407f1d1f1ac2131063ffd1e` |
 | 2026-11-18 | M00 | 场景恢复不再自动：`Library/LastSceneManagerSetup.txt` 内容为 `sceneSetups: []`，重启后须显式 `open_scene Assets/Scenes/FoundationScene.unity` | 进行中 | 核对时 `list_open_scenes` 报 FoundationScene 已加载、`isDirty=false`、`rootCount=4`；同刻 `editor_status` 报 `playMode=playing` |
@@ -412,39 +415,33 @@
 
 ## 5. 当前状态
 
-- `main` 在 `ca96f4f`（与 `origin/main` 同点），根目录混合未提交 WIP 保留（35 修改 / 39 未跟踪，`git status --porcelain -uall`）。其中 69 项与 `panyeung/m00-closeout` `e57dd06` 内容等价，仅 5 项为本轮本地新增。
-- 五个任务工作树。`m00-closeout` 在 `5141474`（已推送，工作区干净），`ui-m04-family` 在 `94e82bf`（28 项未提交），`ui-m05-management` 在 `b1d1062`（4 项），`ui-m06-m07-missions` 在 `d57ea7c`（16 项），`ui-m08-campaign` 在 `a25c969`（4 项）。
-- 本机三个 Editor 各占一个工程目录：`My project` PID 96584 / 端口 7800，`ui-m05-management` 145824 / 7802，`ui-m06-m07-missions` 152104 / 7801。派活前按 PID 与 `-projectPath` 对号，只操作本工程那一个。
-- 主工程 Editor 不再自动恢复场景：`Library/LastSceneManagerSetup.txt` 为 `sceneSetups: []`，重启后必须显式 `open_scene`。崩溃与恢复留档在 `Logs/recovery-20261118/`。
-- `.orchestrate/shadow-clan/` 只剩 `decisions.tsv`、`frontier.json`（`{}`）、`gates.md`（0 字节）与 inbox 目录，原 `status.md` 已不存在，验证台账仍为空。
-- M00 主工作树全量 2141/2141、Validator PASS/0，Play Mode 已到 SC-013 营地 HUD 期间 0 新 error；隔离槽存读档 `SAVE-1`～`SAVE-4` 全 PASS，用户最终验收未完成。工作树内容与 `panyeung/m00-closeout` `e57dd06` 等价，只是没在 `main` 上留提交。
-- M04 收口全绿：Validator `PASS; Errors: 0`、全量 EditMode 2023/2023、1280×720 Play Mode 通过；分支 `94e82bf` 已推送，剩 28 个未提交文件与 rebase。
-- M05 聚焦 42/42、全量 2008/2008、Validator PASS，SC-013 月结 Console 0/0/0，独立复审未完成。
-- M06/M07 全量 1997/1997，当前源码集无新的 EditMode、Validator 或 Play Mode 结果。
-- M08 聚焦 1/1，只读复审 PASS，仍缺真实输入模块、遮罩点击与全量 Play Mode 路径证据。
-- M09 全量 2092/2092，窗口拖动门未通过，普通发行构建入口未验证。
-- M08A 已观察自主婚姻、自然死亡、受孕与出生，最终验收未完成。
-- 默认存档与备份哈希未变，`1E61ED9C…CB92C` 与 `F1C0630E…CBE`。
+- `main`、`origin/main`、`integration/v1-20261118` 三点同一提交 `2bca9d1`（「语言合规：修正剩余 6 处「城镉菜单」错字为「城镇菜单」」）。`git log main..integration/v1-20261118` 输出为空。本节由收口卡 `t_080705e2` 用命令逐条读回，不是转述汇报。
+- 只有一个 Git 工作树，就是工程根目录 `C:\Users\panye\My project`；`git status --porcelain` 为空；`git worktree list` 只有一行。
+- 五个任务分支都已并入 `main`：`panyeung/m00-closeout`、`ui-m04-family`、`ui-m05-management`、`ui-m06-m07-missions`、`ui-m08-campaign` 逐个 `git merge-base --is-ancestor` 为真。相对合并起点 `d081c46` 共 51 个文件、+10077/−1821。
+- 全量 EditMode `2214/2214` passed、`failed=0`、`skipped=0`（2026-11-18 13:22:34Z–13:24:40Z，源提交 `c291dd3`），证据 `Logs/verify/20261118-integration-full/TestResults.xml`。F1 两条用例 `TownMenu_FacilitySlotsListRealTownEntries` 与 `TownMenu_FacilitySlotsStayEmptyWhenTheTownPageRenders` 在该 XML 内均为 Passed。
+- 场景 Validator `RESULT: PASS; Errors: 0`。证据 `Logs/verify/20261118-integration/scene-validator-c291dd3.txt` 末行，与 `Logs/SceneValidationReport.txt` 末行一致。
+- `c291dd3..2bca9d1` 两个提交只改注释与错字（4 个文件、−2/+7），未动逻辑、断言与场景。这是「测试证据基于 `c291dd3` 仍能代表 `2bca9d1`」的依据，由 `git diff -U0` 逐行读回。
+- Play Mode（隔离槽，源 `c291dd3`）：结束月份 1560-04-01→05-01 且资金 30→28、清洲四条当地委托可见、存读档往返、SAVE-3 改选继承读回、SAVE-4 空槽拒绝，全 PASS；真实存档槽 `sha256 1e61ed9c…` 与 mtime 未变。证据 `Logs/verify/20261118-integration/20261118-1348-core-loop.md`。
+- 演示构建：`Builds/Demo-v1-2bca9d1-r2/`，源提交 `2bca9d1`（干净工作树），`Succeeded`、`totalErrors=0`、218 个文件 183,882,557 B，exe 667,136 B、`sha256 7c5b8f3e…188247d`（本卡亲跑 `sha256sum` 核对）。唯一警告是 Pipeline 包自带的「No RuntimePipelineConfig asset found」，不再是「未编译改动」。Player 冒烟走通标题→开始新游戏→SC-013→营地 HUD（1560-04-01、清洲、贯 30）→结束月份（1560-05-01、贯 28）→清洲城镇页四条当地委托→任务页，`Player.log` 0 条 Exception/LogError/NullReference。
+- 画布层序已统一：`Assets` 内 `CanvasOverlayOrder` 零命中，`CanvasLayerOrder` 是唯一页面序来源。
+- 独立复审 `t_122d4d5b` 判 **PASS**，C1–C6 全过。
+- 仍未闭合：用户最终验收（M00）；M08 战役回顾面板的运行时打开；M09 真机窗口拖动；`Assets/Tests/PlayMode` 为空，运行时验证仍靠手工配方；其余 MINOR 见 §6。
+- 本机当前没有可连接的 Unity Editor（`unity command editor_status` 报未找到实例），任何复测前先 `unity open`。
 - 证据边界。M01 与 M08C 子切片的验收都不代表 M00 或 M02–M08 整体验收。
 
 ---
 
 ## 6. 下一步
 
-按依赖顺序，前一项不闭合不做下一项。开始任何 Unity 工作前，先 `unity pipeline list` 确认本工程只有 PID 96584 / 端口 7800 那一个实例，并显式 `unity command open_scene Assets/Scenes/FoundationScene.unity`（重启后不会自动恢复场景）。
+按依赖顺序，前一项不闭合不做下一项。开始任何 Unity 工作前先 `unity open` 拉起本工程 Editor，`unity pipeline list` 按 `-projectPath` 与 PID 对号后再动手。
 
-1. M00 收口（证据已齐，仅余用户最终验收）。隔离槽 SAVE-1～SAVE-4 全过：SAVE-3 待处理继承决定跨存读档存活（phase、候选人与家主读回一致）；SAVE-4 空槽位读档返回「尚未找到存档。」且日期/phase/候选人/家主四项全等。隔离方式是 `SaveSlotStore(<独立目录>)` 经 `SaveLoadPanel.SetStore` 注入，真实存档哈希未变。用户按 `Logs/verify/gate-20261118/` 下三份报告验收即可。
-2. M04 收口已完成（`94e82bf` 已推）。剩两件：把该工作树 28 个未提交文件按切片纳入提交，然后 rebase 到 `main`。
-3. 合并 M04 到 main（合并前须用户确认），再按 M05 → M06/M07 → M08 顺序重复同一收口流程。每个工作树合并后跑一次全量回归。
-4. M05 完成独立复审与验证任务，复核跨工作树集成后的家族内务布局。
-5. M06/M07 跑新源码集的 EditMode、Validator、Play Mode，执行委派结局存档读回断言。
-6. M06 补家主死亡后的继承选择、摄政与危机 Play Mode 路线。
-7. M08 补全量 EditMode、Validator、Play Mode 与 §14.2 长期模拟验收，再谈 M08 整体验收。
-8. M08A 补默认 seed 出生、完整配偶/孕期/RNG 往返与 v17 孕期 UI 存读档。
-9. M09 修窗口拖动输入路径，用真实硬件复验，验证普通发行构建无入口。
-10. 城镇活动条目。原「18 项中 7 passed、11 断言失败、只有可编译骨架」的结论已撤回（2026-11-18）：5 个 Town 测试文件 31 项断言随全量 EditMode 2141/2141 全绿。剩余只有一条：城镇活动的 Play Mode 点击路径尚未单独取证，与第 9 条的输入路径缺口一并处理。
-11. 未合入分支。SC-021 场景集成在 `panyeung/sc021-scene-integration`，SC-023 在 `origin/panyeung/sc023-seclusion`，都未合并未打 tag。
-12. 遗留清理。`Assets/Logs/verify/_scratch/` 下 5 张截图与其 `.meta` 待人工删除（`milestone-town`、`town-page`、`town-page2`、`t3193-00-now`、`t3193-01-now2`）；`%USERPROFILE%\AppData\LocalLow\DefaultCompany\My project\` 下 `M08C-PlayTest-20261114` 与 6 个 `ISO-*` 隔离槽目录待清；`Assets/Scenes/TestResults_20261108_072929.xml` 与其 `.meta` 待决定纳管或删除。
+1. **用户最终验收（唯一硬门）**：跑 `Builds/Demo-v1-2bca9d1-r2/Demo-v1-2bca9d1-r2.exe`，走标题→开始新游戏→SC-013→营地 HUD→结束月份→地图→清洲城镇页→当地委托。验收通过后由用户点头，才谈里程碑 tag。
+2. M08 战役回顾面板的运行时打开：面板只在真实 55 年阶段回顾或 100 年结局待处理时显示，需要一条长周期演示路线给证据。不以调试跳日期取证。
+3. M09 窗口拖动：手上没有真实硬件下的窗口拖动证据，需在可交互桌面上复验。
+4. `Assets/Tests/PlayMode` 目前为空，运行时验证全靠手工配方。要么补自动化，要么把「手工配方即口径」写进规格。
+5. MINOR 清理（`Assets/Scenes/` 的 stray `TestResults_*.xml`、`Assets/Logs/verify/_scratch/` 截图、隔离槽目录）需要批准。
+6. 未合入分支。SC-021 场景集成在 `panyeung/sc021-scene-integration`，SC-023 在 `origin/panyeung/sc023-seclusion`，都未合并未打 tag。
+7. 画布层序已统一为 `CanvasLayerOrder`，后续任何新面板都必须按这套共享序插入并让 `CanvasLayerOrderTests` 覆盖，不要再引入第二套顺序表。
 
 ---
 
