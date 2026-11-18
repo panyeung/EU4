@@ -136,9 +136,9 @@ namespace SengokuChronicle.Presentation
     {
         public const float NodeWidth = 196f;
         /// <summary>
-        /// Tall enough for the longest reference card, whose name plus head/heir marker
-        /// wraps to five 14 pt lines (80 px in the 120 px text column), plus the selection
-        /// stamp band and insets the roster reserves inside the card, with slack left over.
+        /// 足以容纳最长的参考卡：姓名加家主/继承人标记在 14 pt 下会换行成
+        /// 五行（在 120 px 的文本列里占 80 px），再加上选择印记带与名册在卡内
+        /// 预留的内边距，仍留有余量。
         /// </summary>
         public const float NodeHeight = 120f;
         public const float HorizontalGap = 36f;

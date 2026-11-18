@@ -244,8 +244,8 @@ namespace SengokuChronicle.Tests.EditMode
             var middle = new FamilyTreeNodePlacement(middleId,
                 new FamilyTreePoint(width + gap, 0f), new FamilyTreeSize(width, height), 1,
                 FamilyTreeLayoutSection.Generation);
-            // The two blockers span every standard lane of the middle column, so the
-            // fixture keeps its "all six candidates blocked" premise at any card height.
+            // 两个阻塞项跨越中列的所有标准车道，
+            // 因此夹具在任何卡片高度下都保持“六名候选全被阻塞”的前提。
             var above = new FamilyTreeNodePlacement(aboveId,
                 new FamilyTreePoint(width + gap, -clearance - step * 2f - height),
                 new FamilyTreeSize(width, height + step * 2f + clearance * 2f), 1,

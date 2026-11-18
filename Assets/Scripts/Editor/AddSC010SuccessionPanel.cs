@@ -82,8 +82,8 @@ namespace SengokuChronicle.Editor
         public static bool Validate(Scene scene, out string error) => Validate(scene, true, out error);
 
         /// <summary>
-        /// Full validation, or the same checks with the Canvas depth order skipped so a
-        /// hierarchy generated before the family page existed can be repaired in place.
+        /// 完整校验，或跳过 Canvas 深度次序的同一套检查，
+        /// 以便在家族页面出现之前生成的层级可以就地修复。
         /// </summary>
         private static bool Validate(Scene scene, bool checkDepth, out string error)
         {
@@ -124,13 +124,11 @@ namespace SengokuChronicle.Editor
             if (root.parent != canvases[0] || panels[0].transform != root || !root.gameObject.activeSelf)
                 return Invalid(out error, "SuccessionRoot must be active, be a direct Canvas child, and own the panel component.");
 
-            // The first version placed SuccessionRoot behind M2WorldMapRoot, so map/town
-            // graphics intercepted every click on the HUD buttons. The root must render
-            // above the map/town HUD and above the opaque family page, while remaining
-            // below the full-screen title and event-choice overlays. The family page
-            // covers the whole decision modal, so a succession or crisis choice is
-            // unreachable unless the root is raised over it. Both bounds come from the
-            // shared Canvas layer table instead of a guessed sibling index.
+            // 第一版把 SuccessionRoot 放在 M2WorldMapRoot 之后，地图/城镇图形
+            // 因此拦截了 HUD 按钮的所有点击。根节点必须渲染在地图/城镇 HUD 与
+            // 不透明的家族页面之上，同时仍位于全屏标题与事件选择覆盖层之下。
+            // 家族页面盖住了整个决策弹窗，若根节点不压在它上面，继承与危机选择
+            // 都点不到。上下界都取自共享 Canvas 层表，而不是猜一个兄弟索引。
             if (checkDepth)
             {
                 Transform canvas = canvases[0];
@@ -257,10 +255,10 @@ namespace SengokuChronicle.Editor
 
             if (Validate(scene, out _)) return UpdateResult.Success;
 
-            // A scene generated before the family page existed has a complete, bound
-            // hierarchy that is merely drawn beneath the opaque roster. Moving the
-            // existing root keeps its serialized references, so the depth is repaired
-            // in place inside its own Undo transaction instead of a rebuild.
+            // 家族页面出现之前生成的场景，层级完整且绑定齐全，
+            // 只是被画在不透明名册之下。移动既有根节点可保留其
+            // 序列化引用，因此深度在自身 Undo 事务内就地修复，
+            // 而不是重建。
             if (HasNamed(scene, RootName) && Validate(scene, false, out _))
                 return RepairDepth(scene, save);
 
@@ -387,9 +385,9 @@ namespace SengokuChronicle.Editor
         }
 
         /// <summary>
-        /// Moves an existing, fully bound root into the valid Canvas depth when only the
-        /// order is stale. The scene is saved, marked dirty, or rolled back exactly like
-        /// the structural path so a failed repair never leaves a half-moved scene.
+        /// 当只有次序过期时，把已有且绑定完整的根节点移到合法的
+        /// Canvas 深度。保存、标脏与回滚都和结构化路径完全一致，
+        /// 失败的修复绝不会留下移动了一半的场景。
         /// </summary>
         private static UpdateResult RepairDepth(Scene scene, bool save)
         {
@@ -407,7 +405,7 @@ namespace SengokuChronicle.Editor
             UpdateResult failure = UpdateResult.Failed;
             try
             {
-                // Sibling order is serialized on the parent RectTransform.
+                // 兄弟次序序列化在父 RectTransform 上。
                 Undo.RecordObject(canvas, UndoName);
                 PlaceInLayer(canvas, root, CanvasLayerOrder.CanvasLayer.Modal);
                 failure = UpdateResult.ValidationFailed;
@@ -418,7 +416,7 @@ namespace SengokuChronicle.Editor
                 EditorSceneManager.MarkSceneDirty(scene);
                 failure = UpdateResult.SaveFailed;
                 if (save && !EditorSceneManager.SaveScene(scene))
-                    throw new InvalidOperationException("Unity refused to save FoundationScene.");
+                    throw new InvalidOperationException("Unity 拒绝保存 FoundationScene。");
 
                 Undo.CollapseUndoOperations(group);
                 return UpdateResult.Success;
@@ -427,7 +425,7 @@ namespace SengokuChronicle.Editor
             {
                 Undo.FlushUndoRecordObjects();
                 Undo.RevertAllDownToGroup(group);
-                Debug.LogWarning($"SC-010 succession depth repair rolled back: {exception.Message} The scene may remain dirty; inspect it before saving.");
+                Debug.LogWarning($"SC-010 继承深度修复已回滚：{exception.Message} 场景可能仍为脏状态；保存前请检查。");
                 return failure;
             }
         }

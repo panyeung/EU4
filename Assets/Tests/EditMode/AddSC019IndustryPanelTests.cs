@@ -167,7 +167,7 @@ namespace SengokuChronicle.Tests.EditMode
 
             Assert.That(Find(AddSC019IndustryPanel.ConfirmButtonName).GetComponent<Button>(), Is.Not.Null);
             Assert.That(AddSC019IndustryPanel.Validate(_scene, out string restored), Is.True, restored);
-            Assert.That(_scene.path, Is.Empty, "repair must not save or reload the test scene");
+            Assert.That(_scene.path, Is.Empty, "修复不得保存或重载测试场景");
         }
 
         [Test]
@@ -183,11 +183,11 @@ namespace SengokuChronicle.Tests.EditMode
             var label = band.GetComponent<Text>();
             label.text = authored;
             Assert.That(label.preferredHeight, Is.LessThanOrEqualTo(authoredHeight),
-                "the authored band must hold the month-end settlement summary");
+                "原始带区必须容纳月末结算摘要");
 
             label.verticalOverflow = VerticalWrapMode.Overflow;
             Assert.That(AddSC019IndustryPanel.Validate(_scene, out _), Is.False,
-                "the bounded status band must not allow text to paint outside its rectangle");
+                "有界状态带不得让文字画到矩形之外");
             Assert.That(AddSC019IndustryPanel.Update(_scene),
                 Is.EqualTo(AddSC019IndustryPanel.UpdateResult.Success));
             Assert.That(label.verticalOverflow, Is.EqualTo(VerticalWrapMode.Truncate));
@@ -195,8 +195,8 @@ namespace SengokuChronicle.Tests.EditMode
             band.sizeDelta = new Vector2(band.sizeDelta.x, 24f);
             band.GetComponent<Text>().text = string.Empty;
             Assert.That(AddSC019IndustryPanel.Validate(_scene, out string tooShort), Is.False,
-                "a one-line band must be rejected before it can paint over the farm row");
-            Assert.That(tooShort, Does.Contain("multi-line status text"));
+                "单行带区必须在压到农田行之前被拒绝");
+            Assert.That(tooShort, Does.Contain("多行状态文字"));
 
             Assert.That(AddSC019IndustryPanel.Update(_scene),
                 Is.EqualTo(AddSC019IndustryPanel.UpdateResult.Success));
@@ -214,8 +214,8 @@ namespace SengokuChronicle.Tests.EditMode
 
             report.verticalOverflow = VerticalWrapMode.Overflow;
             Assert.That(AddSC019IndustryPanel.Validate(_scene, out string unbounded), Is.False,
-                "the report must not paint over the close control");
-            Assert.That(unbounded, Does.Contain("report"));
+                "报告不得压到关闭控件上");
+            Assert.That(unbounded, Does.Contain("报告"));
 
             Assert.That(AddSC019IndustryPanel.Update(_scene),
                 Is.EqualTo(AddSC019IndustryPanel.UpdateResult.Success));
@@ -238,17 +238,17 @@ namespace SengokuChronicle.Tests.EditMode
 
             Assert.That(scroll.transform.parent, Is.EqualTo(panel));
             Assert.That(viewport.parent, Is.EqualTo(scroll.transform),
-                "the raycast target must be above the ScrollRect in the pointer hierarchy");
+                "命中目标必须在指针层级中位于 ScrollRect 之上");
             Assert.That(content.parent, Is.EqualTo(viewport));
             Assert.That(report.transform.parent, Is.EqualTo(content));
             Assert.That(viewport.GetComponent<RectMask2D>(), Is.Not.Null);
             Assert.That(viewport.GetComponent<Image>().raycastTarget, Is.True,
-                "wheel and drag events must start from the viewport raycast surface");
+                "滚轮与拖拽事件必须从视口命中面开始");
             panel.gameObject.SetActive(true);
             Assert.That(ExecuteEvents.GetEventHandler<IScrollHandler>(viewport.gameObject),
-                Is.EqualTo(scroll.gameObject), "wheel input must resolve to the active ScrollRect");
+                Is.EqualTo(scroll.gameObject), "滚轮输入必须解析到活动的 ScrollRect");
             Assert.That(ExecuteEvents.GetEventHandler<IDragHandler>(viewport.gameObject),
-                Is.EqualTo(scroll.gameObject), "drag input must resolve to the active ScrollRect");
+                Is.EqualTo(scroll.gameObject), "拖拽输入必须解析到活动的 ScrollRect");
             panel.gameObject.SetActive(false);
             Assert.That(scroll.viewport, Is.EqualTo(viewport as RectTransform));
             Assert.That(scroll.content, Is.EqualTo(content as RectTransform));
@@ -258,8 +258,8 @@ namespace SengokuChronicle.Tests.EditMode
 
             report.horizontalOverflow = HorizontalWrapMode.Overflow;
             Assert.That(AddSC019IndustryPanel.Validate(_scene, out string unbounded), Is.False,
-                "report text must wrap horizontally so the report stays inside its viewport");
-            Assert.That(unbounded, Does.Contain("report"));
+                "报告文字必须横向换行，使报告留在视口内");
+            Assert.That(unbounded, Does.Contain("报告"));
 
             Assert.That(AddSC019IndustryPanel.Update(_scene),
                 Is.EqualTo(AddSC019IndustryPanel.UpdateResult.Success));
@@ -328,14 +328,14 @@ namespace SengokuChronicle.Tests.EditMode
 
             message.fontSize = 10;
             Assert.That(AddSC019IndustryPanel.Validate(_scene, out string fontError), Is.False);
-            Assert.That(fontError, Does.Contain("font size"));
+            Assert.That(fontError, Does.Contain("字号"));
             Assert.That(AddSC019IndustryPanel.Update(_scene),
                 Is.EqualTo(AddSC019IndustryPanel.UpdateResult.Success));
             Assert.That(message.fontSize, Is.EqualTo(14));
 
             message.alignment = TextAnchor.MiddleCenter;
             Assert.That(AddSC019IndustryPanel.Validate(_scene, out string alignmentError), Is.False);
-            Assert.That(alignmentError, Does.Contain("alignment"));
+            Assert.That(alignmentError, Does.Contain("对齐"));
             Assert.That(AddSC019IndustryPanel.Update(_scene),
                 Is.EqualTo(AddSC019IndustryPanel.UpdateResult.Success));
             Assert.That(message.alignment, Is.EqualTo(TextAnchor.MiddleLeft));
@@ -354,8 +354,8 @@ namespace SengokuChronicle.Tests.EditMode
             label.fontSize = expectedSize - 3;
 
             Assert.That(AddSC019IndustryPanel.Validate(_scene, out string error), Is.False,
-                objectName + " typography must be part of the generator contract");
-            Assert.That(error, Does.Contain("font size"));
+                objectName + " 的字体排版必须属于生成器约定");
+            Assert.That(error, Does.Contain("字号"));
             Assert.That(AddSC019IndustryPanel.Update(_scene),
                 Is.EqualTo(AddSC019IndustryPanel.UpdateResult.Success));
             Assert.That(label.fontSize, Is.EqualTo(expectedSize));

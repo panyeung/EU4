@@ -12,11 +12,11 @@ using SengokuChronicle.Domain;
 namespace SengokuChronicle.Presentation
 {
     /// <summary>
-    /// M08 campaign review overlay. It appears only while a real 55-year stage review or
-    /// 100-year 百年名门 review is pending, renders only sourced family facts, and offers two
-    /// actions: continue, and a new-scenario entry that opens the title overlay's existing
-    /// selector. Acknowledgement is owned by GameSession; this panel never changes time,
-    /// resources or the Phase 1 demo completion, and the selector only opens a page.
+    /// M08 战役回顾覆盖层。只在真的有 55 年阶段回顾或 100 年百年名门回顾
+    /// 待处理时出现，只渲染有来源的家族事实，并提供两个动作：继续，
+    /// 以及打开标题覆盖层既有选择器的新剧本入口。确认归 GameSession 掌管；
+    /// 本面板从不改动时间、资源或第一阶段 demo 的完成状态，
+    /// 选择器也只是打开一个页面。
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class CampaignReviewPanel : MonoBehaviour
@@ -29,13 +29,13 @@ namespace SengokuChronicle.Presentation
         /// <summary>Suffix that marks the second and later rendered body blocks.</summary>
         public const string BodyBlockNameSuffix = ".block.";
         /// <summary>
-        /// Secondary action that opens the title's scenario selector. It never starts a
-        /// scenario itself, so a review can be left for the selector without resetting the
-        /// running campaign, its date, resources or the save slot.
+        /// 打开标题剧本选择器的次要动作。它自己从不启动剧本，
+        /// 因此可以离开回顾去选择器，而不会重置正在运行的战役、
+        /// 其日期、资源或存档槽。
         /// </summary>
         public const string NewScenarioButtonName = "M08CampaignReviewNewScenarioButton";
         public const string NewScenarioLabelName = "M08CampaignReviewNewScenarioLabel";
-        /// <summary>Visible caption of the new-scenario action.</summary>
+        /// <summary>新剧本动作的可见标题。</summary>
         public const string NewScenarioLabel = "开始新剧本";
 
         /// <summary>
@@ -52,58 +52,57 @@ namespace SengokuChronicle.Presentation
         public const int MaxBodyBlockVertices = MaxBodyBlockCharacters * 4;
 
         /// <summary>
-        /// Floor for the fitted card. The card is authored at 1120x640, but the CanvasScaler
-        /// hands the canvas a different size in reference units on other aspects, so the card
-        /// scales down instead of clipping its header or continue row. This is a guardrail,
-        /// not a guarantee: at 0.25 the card still needs a 280x160 reference page. With
-        /// CanvasScaler 1280x720 and match 0.5 the page depends only on aspect, never on
-        /// resolution: 16:9 is 1280x720 (scale 1.00), 16:10 1214x759 (1.00), 4:3 1108x831
-        /// (0.946), 5:4 1073x859 (0.915), 21:9 1478x623 (0.899), 32:9 1810x509 (0.72). A page
-        /// below 280x160 would clamp here and could touch an edge, so an aspect wider than
-        /// about 48:9 must raise this floor rather than trust the 24 px margin.
+        /// 适配后卡片的下限。卡片按 1120x640 设计，但 CanvasScaler 在其它
+        /// 纵横比下给出的参考单位尺寸不同，因此卡片缩小，而不是裁掉标题行
+        /// 或继续行。这是护栏而非保证：取 0.25 时卡片仍需 280x160 的参考页面。
+        /// 在 CanvasScaler 1280x720、match 0.5 下，页面只取决于纵横比，
+        /// 与分辨率无关：16:9 为 1280x720（1.00），16:10 为 1214x759（1.00），
+        /// 4:3 为 1108x831（0.946），5:4 为 1073x859（0.915），
+        /// 21:9 为 1478x623（0.899），32:9 为 1810x509（0.72）。
+        /// 页面小于 280x160 会在此被夹住并可能贴边，因此宽于约 48:9 的纵横比
+        /// 必须抬高此下限，而不能指望 24 px 边距。
         /// </summary>
         public const float MinimumCardScale = 0.25f;
 
         /// <summary>
-        /// Visible margin the fitted card keeps from the page edges on every aspect. The card
-        /// is scaled against the page minus this margin, so it never touches the screen edge.
+        /// 适配后的卡片在任何纵横比下与页面边缘保持的可见边距。
+        /// 卡片按页面减去该边距缩放，因此永不贴到屏幕边缘。
         /// </summary>
         public const float PageSafeMargin = 24f;
 
         /// <summary>
-        /// Keyboard focus state of the continue control: a gold plate with dark ink. The
-        /// authored vermilion plate and its ColorTint selected colour (0.961) differ by about
-        /// 1.06:1, which is not a usable focus cue. The button tints its graphic, so the
-        /// rendered focused plate is about (187,158,101): Ink on that plate measures 5.24:1
-        /// and the tinted plate against the card 5.52:1 (the untinted theme pair is 5.67:1 and
-        /// 5.97:1). Both still clear AA text and the 3:1 focus-indicator minimum. Both colours
-        /// already belong to the shared theme, so nothing global changes.
+        /// 继续控件的键盘焦点状态：金色底版配深色墨字。原始朱红底版与其
+        /// ColorTint 选中色（0.961）相差约 1.06:1，无法作为可用的焦点提示。
+        /// 按钮会给图形着色，因此实际渲染的焦点底版约为 (187,158,101)：
+        /// 该底版上的墨字对比度为 5.24:1，着色底版相对卡片为 5.52:1
+        /// （未着色的主题配色为 5.67:1 与 5.97:1）。两者都满足 AA 正文
+        /// 与 3:1 的焦点指示下限。两种颜色都已在共享主题里，
+        /// 因此不改动任何全局设置。
         /// </summary>
         public static readonly Color FocusedButtonBackground = SengokuUiTheme.Gold;
         public static readonly Color FocusedButtonForeground = SengokuUiTheme.Ink;
 
         /// <summary>
-        /// Ink of the status line, which reports a failed or accepted continue action at 14 px.
-        /// The card is authored with IndigoPanel (34,43,61); Gold (195,164,105) measures 5.97:1
-        /// against it and clears WCAG 1.4.3's 4.5:1 for normal text. The previous GoldDim
-        /// (142,122,81) measured 3.41:1, so the one message that explains a refused action was
-        /// the hardest text in the overlay to read. Gold is already the theme's heading ink,
-        /// so nothing global changes.
+        /// 状态行的墨色，14 px 下报告继续动作失败或通过。卡片按 IndigoPanel
+        /// (34,43,61) 设计；Gold (195,164,105) 相对它测得 5.97:1，满足
+        /// WCAG 1.4.3 的正文 4.5:1。原先的 GoldDim (142,122,81) 测得
+        /// 3.41:1，于是这条解释操作被拒的唯一消息反而成了整个覆盖层
+        /// 最难读的文字。Gold 本就是主题的标题墨色，因此不改动任何全局设置。
         /// </summary>
         public static readonly Color StatusTextColor = SengokuUiTheme.Gold;
 
-        /// <summary>Runtime scrollbar the review adds when the generated scroll has none.</summary>
+        /// <summary>生成的滚动区没有滚动条时，回顾在运行时补上的滚动条。</summary>
         public const string ScrollbarObjectName = "M08CampaignReviewScrollbar";
         /// <summary>
-        /// Full pointer target of the review scrollbar. WCAG 2.2 2.5.8 asks for 24x24 CSS px;
-        /// the whole 24 px column is clickable, not only the drawn handle.
+        /// 回顾滚动条的完整指针目标。WCAG 2.2 2.5.8 要求 24x24 CSS px；
+        /// 整根 24 px 列都可点击，而不只是绘制出的手柄。
         /// </summary>
         public const float ScrollbarWidth = 24f;
 
         [Header("Dependencies")]
         [SerializeField] private GameSession gameSession;
-        // Only owner of the scenario selector. Bound by the scene generator when the M6 title
-        // overlay exists, and resolved once here before the action is first used otherwise.
+        // 剧本选择器的唯一所有者。M6 标题覆盖层存在时由场景生成器绑定，
+        // 否则在首次使用该动作之前于此处解析一次。
         [SerializeField] private TitleScreenController titleScreenController;
 
         [Header("UI")]
@@ -125,22 +124,22 @@ namespace SengokuChronicle.Presentation
         private string _bodyFullText;
         private ScrollRect _bodyScroll;
         private RectTransform _cardRect;
-        // Page size the card was last fitted to. LateUpdate compares it with the live page
-        // rect, so a window or canvas resize while the review is open re-fits the card.
+        // 卡片上次适配的页面尺寸。LateUpdate 与实时页面矩形比较，
+        // 因此回顾打开时窗口或画布缩放会重新适配卡片。
         private Vector2 _fittedPageSize = new Vector2(-1f, -1f);
-        // Selection that held keyboard focus before the overlay took it, so hiding the
-        // review returns focus instead of leaving a hidden action selected.
+        // 覆盖层取得焦点之前持有键盘焦点的选中对象，隐藏回顾时
+        // 把焦点还回去，而不是留下一个被选中的隐藏动作。
         private GameObject _previousSelection;
-        // True once the pre-review selection was captured. Null is a valid selection, so the
-        // captured state needs its own flag instead of a null check.
+        // 已捕获回顾前选中状态后为 true。null 是合法选中，
+        // 因此捕获状态需要自己的标志位，不能靠 null 判断。
         private bool _previousSelectionCaptured;
-        // Authored appearance and navigation of each review action, restored when the review
-        // drops focus so later keyboard use of either button is unchanged.
+        // 每个回顾动作的原始外观与导航，回顾释放焦点时恢复，
+        // 之后任一按钮的键盘使用都不受影响。
         private readonly FocusState _continueFocus = new FocusState();
         private readonly FocusState _newScenarioFocus = new FocusState();
         private Scrollbar _bodyScrollbar;
-        // A missing card is remembered so LateUpdate's refit does not run a Transform.Find
-        // every frame while the review is visible.
+        // 记录卡片缺失，免得回顾可见期间 LateUpdate 的重新适配
+        // 每帧都跑一次 Transform.Find。
         private bool _cardLookupFailed;
 
         public bool IsBound =>
@@ -160,14 +159,14 @@ namespace SengokuChronicle.Presentation
         public int StaticButtonBindingCount => _staticButtonBindings;
         /// <summary>Number of Text blocks the current body is rendered with.</summary>
         public int BodyBlockCount => _bodyBlocks.Count;
-        /// <summary>Uniform scale applied to the card so it stays inside the page.</summary>
+        /// <summary>套用到卡片上的统一缩放，使卡片留在页面内。</summary>
         public float CardScale => Card != null ? Card.localScale.x : 1f;
-        /// <summary>The scrollbar bound to the review body, created on first show if absent.</summary>
+        /// <summary>绑定到回顾正文的滚动条，首次显示时若缺失则创建。</summary>
         public Scrollbar BodyScrollbar => BodyScroll != null ? BodyScroll.verticalScrollbar : null;
         /// <summary>
-        /// True while the continue control holds the review's visible keyboard focus: it is the
-        /// current selection and the gold focus presentation is applied. Selection set by
-        /// somebody else without that presentation does not count.
+        /// 继续控件持有回顾可见键盘焦点期间为 true：
+        /// 它是当前选中对象且已应用金色焦点呈现。
+        /// 他人设置但未应用该呈现的选中不算。
         /// </summary>
         public bool IsContinueFocused
         {
@@ -180,8 +179,8 @@ namespace SengokuChronicle.Presentation
         }
 
         /// <summary>
-        /// True while the new-scenario action holds the review's visible keyboard focus, by the
-        /// same rule as <see cref="IsContinueFocused"/>.
+        /// 新剧本动作持有回顾可见键盘焦点期间为 true，
+        /// 判定规则同 <see cref="IsContinueFocused"/>。
         /// </summary>
         public bool IsNewScenarioFocused
         {
@@ -215,12 +214,11 @@ namespace SengokuChronicle.Presentation
             newScenarioButton = newScenarioControl;
             newScenarioLabelText = newScenarioLabel;
             titleScreenController = titleScreen;
-            // Refresh is a runtime path: it fits the card, paints keyboard focus and renders the
-            // review text and body blocks. The scene generator binds in EditMode and then saves,
-            // so snapshot the authored state first and put it back when the editor is not
-            // playing. Otherwise a bind with a pending review would bake the current game-view
-            // aspect into the saved card scale, a gold plate into the authored button colour,
-            // and review text plus cloned body blocks into the authored scene.
+            // Refresh 是运行时路径：它适配卡片、绘制键盘焦点并渲染回顾
+            // 文字与正文区块。场景生成器在 EditMode 绑定后保存，因此先
+            // 快照原始状态，编辑器不在播放时再放回去。否则带待处理回顾的
+            // 绑定会把当前游戏视图纵横比烘进保存的卡片缩放、把金色底版
+            // 烘进原始按钮颜色，还会把回顾文字与克隆的正文区块写进原始场景。
             RectTransform card = Card;
             Vector3 authoredCardScale = card != null ? card.localScale : Vector3.one;
             string authoredTitle = titleText != null ? titleText.text : null;
@@ -242,9 +240,8 @@ namespace SengokuChronicle.Presentation
         }
 
         /// <summary>
-        /// Puts the authored Text values and the single body-block template back after an
-        /// EditMode bind, so a generator pass cannot save rendered review content or cloned
-        /// body blocks into the scene.
+        /// EditMode 绑定后把原始 Text 值与单个正文区块模板放回，
+        /// 使生成器运行不会把渲染后的回顾内容或克隆的正文区块存进场景。
         /// </summary>
         private void RestoreAuthoredText(string title, string context, string body,
             string label, string status)
@@ -386,7 +383,7 @@ namespace SengokuChronicle.Presentation
             }
         }
 
-        /// <summary>The card that holds the header, body and continue row.</summary>
+        /// <summary>承载标题、正文与继续行的卡片。</summary>
         private RectTransform Card
         {
             get
@@ -394,8 +391,8 @@ namespace SengokuChronicle.Presentation
                 if (_cardRect == null && !_cardLookupFailed && panelRoot != null)
                 {
                     _cardRect = panelRoot.transform.Find(CardObjectName) as RectTransform;
-                    // Remember a miss so a renamed or moved card does not cost one
-                    // Transform.Find per frame while the review stays open.
+                    // 记住未命中，免得被改名或移走的卡片在回顾打开期间
+                    // 每帧都付一次 Transform.Find。
                     _cardLookupFailed = _cardRect == null;
                 }
                 return _cardRect;
@@ -403,10 +400,10 @@ namespace SengokuChronicle.Presentation
         }
 
         /// <summary>
-        /// Uniform scale that keeps the authored card inside the supplied page size. Never
-        /// above 1, because the authored card is the reference layout. The CanvasScaler gives
-        /// the canvas a narrower or shorter page on other aspect ratios, so the card scales
-        /// down instead of clipping its header or continue row.
+        /// 让原始卡片留在给定页面尺寸内的统一缩放。绝不超过 1，
+        /// 因为原始卡片就是参考布局。CanvasScaler 在其它纵横比下
+        /// 给画布的页面更窄或更矮，因此卡片缩小，
+        /// 而不是裁掉标题行或继续行。
         /// </summary>
         public static float FitScale(Vector2 availableSize, Vector2 cardSize)
         {
@@ -418,9 +415,9 @@ namespace SengokuChronicle.Presentation
         }
 
         /// <summary>
-        /// Fits the card to the current page, keeping <see cref="PageSafeMargin"/> visible on
-        /// every side. At the 1280x720 reference the card already fits, so the scale is 1. This
-        /// is also the resize path: an open review re-fits when the page size changes.
+        /// 把卡片适配到当前页面，四周都保留 <see cref="PageSafeMargin"/>。
+        /// 1280x720 参考尺寸下卡片本就合适，缩放为 1。这也是缩放窗口的路径：
+        /// 回顾打开时页面尺寸变化会重新适配。
         /// </summary>
         public void FitCardToPage()
         {
@@ -444,8 +441,8 @@ namespace SengokuChronicle.Presentation
         }
 
         /// <summary>
-        /// Re-fits the card after the page changed size, so an open review stays contained
-        /// while the window or canvas is resized.
+        /// 页面尺寸变化后重新适配卡片，
+        /// 使窗口或画布缩放期间打开的回顾仍留在页面内。
         /// </summary>
         private void RefitIfPageResized()
         {
@@ -457,22 +454,20 @@ namespace SengokuChronicle.Presentation
         }
 
         /// <summary>
-        /// Adds the visible scrollbar column once when the generated scroll has none. The
-        /// scene generator does not author one, and the review body is far taller than the
-        /// viewport, so without it a player has no cue that the history continues. The bar
-        /// reserves its own column in the right margin, so it never covers wrapped text.
+        /// 生成的滚动区没有滚动条时，补上一列可见滚动条。场景生成器不生成它，
+        /// 而回顾正文远高于视口，没有它玩家就看不出记录还有后续。
+        /// 滚动条在右边距里预留自己的列，因此永不盖住换行文字。
         /// <para>
-        /// Accessibility: the whole 24 px column is the pointer target, which meets WCAG 2.2
-        /// 2.5.8 (24x24) even though the drawn handle can be shorter; Page Up, Page Down,
-        /// Home and End are the keyboard equivalent. The PaperLine track blends to about
-        /// (174,160,133) over the scroll's ParchmentDeep 0.16 background, 3.67:1, and the Ink
-        /// handle is 5.22:1 against that track, so both parts clear 1.4.11's 3:1. The bar is
-        /// created in the scroll's own scene, not the active scene, so an EditMode fixture
-        /// that calls this cannot dirty the user's authored scene.
+        /// 无障碍：整根 24 px 列都是指针目标，满足 WCAG 2.2
+        /// 2.5.8（24x24），即使绘制出的手柄可能更短；Page Up、Page Down、
+        /// Home 与 End 是对应的键盘操作。PaperLine 轨道叠在滚动区
+        /// ParchmentDeep 0.16 背景上约为 (174,160,133)，对比度 3.67:1；
+        /// Ink 手柄相对该轨道为 5.22:1，两部分都满足 1.4.11 的 3:1。
+        /// 滚动条创建在滚动区自己的场景里，而不是活动场景，因此调用它的
+        /// EditMode 夹具不会弄脏用户的原始场景。
         /// </para>
-        /// <see cref="Refresh"/> calls this only while playing: creating objects inside the
-        /// scene generator's EditMode pass would bypass its Undo group. EditMode fixtures call
-        /// it directly.
+        /// <see cref="Refresh"/> 只在播放时调用它：在场景生成器的 EditMode
+        /// 阶段创建对象会绕过它的 Undo 组。EditMode 夹具直接调用本方法。
         /// </summary>
         public void EnsureBodyScrollbar()
         {
@@ -539,9 +534,9 @@ namespace SengokuChronicle.Presentation
         }
 
         /// <summary>
-        /// Creates a GameObject inside the supplied scene. The plain constructor would put it
-        /// in the active scene first and only a later reparent would move it; that marks the
-        /// active scene dirty in the Editor even after the object leaves it.
+        /// 在给定场景内创建 GameObject。直接用普通构造函数会先把它放进
+        /// 活动场景，只有之后重设父级才移走；即使对象已经离开，
+        /// 编辑器里的活动场景仍会被标脏。
         /// </summary>
         private static GameObject CreateInScene(Scene scene, string name, params Type[] components)
         {
@@ -552,9 +547,8 @@ namespace SengokuChronicle.Presentation
         }
 
         /// <summary>
-        /// Scrolls the body by a signed pixel amount, clamped to the content range. The
-        /// generated content is anchored and pivoted at the top, where a Y of zero is the
-        /// first line and a larger Y scrolls further down.
+        /// 按带符号的像素量滚动正文，并夹在内容范围内。生成的内容顶部
+        /// 锚定且轴心在上，Y 为零即第一行，Y 越大越往下滚。
         /// </summary>
         public void ScrollBodyBy(float delta)
         {
@@ -565,9 +559,9 @@ namespace SengokuChronicle.Presentation
         }
 
         /// <summary>
-        /// Moves the body to an absolute pixel offset from the first line, clamped to the
-        /// content range. Home and End use it directly, so they land on the ends even if the
-        /// scroll later stops clamping its own movement.
+        /// 把正文移到距第一行的绝对像素偏移，并夹在内容范围内。
+        /// Home 与 End 直接使用它，因此即使滚动组件之后不再夹住
+        /// 自身位移，它们也能落到两端。
         /// </summary>
         private void SetBodyOffset(float offset)
         {
@@ -582,11 +576,11 @@ namespace SengokuChronicle.Presentation
         }
 
         /// <summary>
-        /// Page Up, Page Down, Home and End scroll the review body while the overlay owns
-        /// keyboard input. Up and Down stay unbound on purpose: the project binds them to the
-        /// gameplay Move action, and PlayerMovement2D reads that action without a UI gate, so
-        /// binding them here would walk the character behind the overlay. A higher-priority
-        /// overlay keeps the keys for itself.
+        /// 覆盖层掌管键盘输入期间，Page Up、Page Down、Home 与 End
+        /// 滚动回顾正文。上下方向键故意不绑定：项目把它们绑到玩法
+        /// Move 动作，而 PlayerMovement2D 读取该动作时没有 UI 门禁，
+        /// 绑在这里会让角色在覆盖层背后走动。更高优先级的覆盖层
+        /// 会自己保留这些按键。
         /// </summary>
         private void HandleBodyKeyboardScroll()
         {
@@ -610,13 +604,12 @@ namespace SengokuChronicle.Presentation
         }
 
         /// <summary>
-        /// Gives the pending review keyboard focus, preferring the continue action. The page
-        /// blocks pointer input only, so without this a control selected behind the overlay
-        /// would still answer Enter. The previous selection and each action's authored
-        /// navigation and colours are captured once and restored when the review closes. The
-        /// gold plate and the navigation trap are applied even when Unity already holds this
-        /// control as the selected object: presentation follows focus itself, not the selection
-        /// transition into it.
+        /// 把键盘焦点交给待处理的回顾，优先给继续动作。页面只拦截指针输入，
+        /// 没有这一步，覆盖层背后被选中的控件仍会响应 Enter。
+        /// 回顾前选中对象以及每个动作的原始导航与颜色只捕获一次，
+        /// 回顾关闭时恢复。即使 Unity 已把该控件作为选中对象，
+        /// 也照样应用金色底版与导航陷阱：呈现跟随焦点本身，
+        /// 而不是进入该控件的选中切换。
         /// </summary>
         private void FocusReviewControl(Selectable control)
         {
@@ -630,7 +623,7 @@ namespace SengokuChronicle.Presentation
                 _previousSelection = system.currentSelectedGameObject;
                 _previousSelectionCaptured = true;
             }
-            // Only one action shows the focus cue at a time, so the other is put back first.
+            // 同一时刻只有一个动作显示焦点提示，因此先把另一个放回原状。
             if (control != continueButton)
                 ClearFocusState(continueButton, _continueFocus);
             if (control != newScenarioButton)
@@ -641,12 +634,11 @@ namespace SengokuChronicle.Presentation
         }
 
         /// <summary>
-        /// Keeps focus inside the review while it is open. A pointer click on the page clears
-        /// the selection and a click on the body scrollbar selects it, so both are reclaimed;
-        /// a control that another overlay selected on purpose is left alone. Either review
-        /// action keeps the focus it already holds, so Tab can move between them. An already
-        /// selected action still goes through the focus path, so a selection Unity set on its
-        /// own is painted and trapped too.
+        /// 回顾打开期间把焦点留在回顾内。指针点击页面会清空选中，
+        /// 点击正文滚动条会选中它，两者都会被重新收回；别的覆盖层
+        /// 有意选中的控件则不动。回顾的任一动作都保留自己已有的焦点，
+        /// 因此 Tab 可在两者之间移动。已被选中的动作仍走焦点路径，
+        /// 所以 Unity 自行设置的选中也会被绘制并困住。
         /// </summary>
         private void TrapReviewFocus()
         {
@@ -668,13 +660,12 @@ namespace SengokuChronicle.Presentation
         }
 
         /// <summary>
-        /// Tab moves keyboard focus between the review's two actions, which is the only way to
-        /// reach the second one while the navigation trap is on. Arrows stay unbound because
-        /// the project binds them to the gameplay Move action that PlayerMovement2D reads
-        /// without a UI gate; Tab is not a gameplay binding. The key check and the move are
-        /// separate so the focus step can be driven by a test or a probe that cannot deliver a
-        /// physical key edge (the Input System uses raw device input, so injected OS keys never
-        /// reach <see cref="Keyboard.current"/>).
+        /// Tab 在回顾的两个动作之间移动键盘焦点，这是导航陷阱开启时
+        /// 到达第二个动作的唯一方式。方向键不绑定，因为项目把它们
+        /// 绑到玩法 Move 动作，PlayerMovement2D 读取时没有 UI 门禁；
+        /// Tab 不是玩法绑定。按键检测与移动分开，便于测试或探针在
+        /// 无法产生物理按键边沿时驱动焦点步骤（Input System 使用原始
+        /// 设备输入，注入的操作系统按键到不了 <see cref="Keyboard.current"/>）。
         /// </summary>
         private void HandleFocusKeyboardNavigation()
         {
@@ -687,8 +678,8 @@ namespace SengokuChronicle.Presentation
         }
 
         /// <summary>
-        /// Moves the review's keyboard focus to its other action. Public so a test or a Play
-        /// Mode probe can exercise the Tab step where no physical key can be delivered.
+        /// 把回顾的键盘焦点移到另一个动作。公开是为了让测试或 Play Mode
+        /// 探针在无法投递物理按键时演练 Tab 步骤。
         /// </summary>
         public void FocusNextReviewAction()
         {
@@ -719,14 +710,13 @@ namespace SengokuChronicle.Presentation
         }
 
         /// <summary>
-        /// True while an overlay the design ranks above the review is waiting for the player:
-        /// an event choice, an active tactical mission, a pending succession decision
-        /// (<see cref="SuccessionState.IsPending"/> covers the heir choice, the regent choice
-        /// and the crisis decision), or the M6 title overlay. Those keep their own keyboard
-        /// focus. A succession decision is irreversible and blocks time, so the review yields
-        /// to it exactly as it yields to an event choice, and reclaims focus once the phase
-        /// returns to None. The title renders above this review and owns the selector the
-        /// new-scenario action opens, so it yields there too.
+        /// 设计上排在回顾之上的某个覆盖层正在等待玩家时为 true：
+        /// 事件选择、进行中的战术任务、待处理的继承决策
+        /// （<see cref="SuccessionState.IsPending"/> 涵盖继承人选择、摄政选择
+        /// 与危机决策），或 M6 标题覆盖层。它们各自保留键盘焦点。
+        /// 继承决策不可逆且锁住时间，因此回顾像让位给事件选择一样让给它，
+        /// 阶段回到 None 后再收回焦点。标题渲染在本回顾之上，并掌管
+        /// 新剧本动作要打开的选择器，因此那里也同样让位。
         /// </summary>
         private bool HasHigherPriorityOverlay()
         {
@@ -739,16 +729,16 @@ namespace SengokuChronicle.Presentation
         }
 
         /// <summary>
-        /// True while the bound title overlay is on screen. Only the serialized reference is
-        /// consulted, so a scene saved before this action existed costs no per-frame lookup;
-        /// the reference is resolved once the first time the action is used.
+        /// 绑定的标题覆盖层在屏上期间为 true。只查询序列化引用，
+        /// 因此在该动作出现之前保存的场景不承担逐帧查找；
+        /// 首次使用该动作时解析一次引用。
         /// </summary>
         private bool IsTitleOverlayVisible() =>
             titleScreenController != null && titleScreenController.IsTitleVisible;
 
         /// <summary>
-        /// Drops the review's focus without handing it to a control behind another overlay.
-        /// The remembered selection is kept, so the review reclaims focus when that overlay
+        /// 放下回顾的焦点，但不交给别的覆盖层背后的控件。
+        /// 记住的选中对象会保留，等那个覆盖层关闭后回顾再收回焦点。
         /// closes.
         /// </summary>
         private void ClearReviewFocus()
@@ -761,8 +751,7 @@ namespace SengokuChronicle.Presentation
         }
 
         /// <summary>
-        /// Returns focus and both actions' authored navigation and colours to the state before
-        /// the review opened.
+        /// 把焦点与两个动作的原始导航、颜色恢复到回顾打开之前的状态。
         /// </summary>
         private void ReleaseReviewFocus()
         {
@@ -779,8 +768,8 @@ namespace SengokuChronicle.Presentation
         }
 
         /// <summary>
-        /// The captured presentation of one review action. The label and control are refreshed
-        /// on every focus pass so a rebind cannot leave a stale reference behind.
+        /// 一个回顾动作被捕获的呈现。标签与控件在每次焦点处理时刷新，
+        /// 因此重绑定不会留下过期引用。
         /// </summary>
         private FocusState StateOf(Selectable control)
         {
@@ -802,12 +791,11 @@ namespace SengokuChronicle.Presentation
         }
 
         /// <summary>
-        /// Paints the focused review action as a gold plate with dark ink and traps its
-        /// navigation so the selection cannot leave the review. The authored vermilion plate
-        /// and the button's ColorTint selected colour differ by about 1.06:1, which reads as no
-        /// focus cue at all. The authored colours and navigation are captured once and the
-        /// focus colours are written on every call, so a control Unity already had selected is
-        /// still repainted.
+        /// 把获得焦点的回顾动作画成金色底版配深色墨字，并困住其导航，
+        /// 使选中无法离开回顾。原始朱红底版与按钮的 ColorTint 选中色
+        /// 相差约 1.06:1，等于完全没有焦点提示。原始颜色与导航只捕获一次，
+        /// 焦点颜色每次调用都重写，因此 Unity 已经选中的控件
+        /// 也会被重绘。
         /// </summary>
         private static void ApplyFocusPresentation(FocusState state)
         {
@@ -844,7 +832,7 @@ namespace SengokuChronicle.Presentation
                 state.Plate.color = FocusedButtonBackground;
         }
 
-        /// <summary>Puts one action's authored navigation, plate and label back.</summary>
+        /// <summary>把一个动作的原始导航、底版与标签放回。</summary>
         private static void ClearFocusState(Selectable control, FocusState state)
         {
             if (state == null)
@@ -866,8 +854,8 @@ namespace SengokuChronicle.Presentation
         }
 
         /// <summary>
-        /// One focusable review action's authored presentation, captured when the review paints
-        /// its focus and restored when it drops it.
+        /// 一个可聚焦回顾动作的原始呈现，回顾绘制焦点时捕获，
+        /// 释放焦点时恢复。
         /// </summary>
         private sealed class FocusState
         {
@@ -985,11 +973,10 @@ namespace SengokuChronicle.Presentation
         }
 
         /// <summary>
-        /// Opens the title overlay's existing scenario selector. The title only switches its
-        /// own page, so the running campaign, its date, resources and the save slot stay
-        /// exactly as they are; the player still has to pick a scenario entry to start one.
-        /// The title renders above this review, so the review yields keyboard focus while it
-        /// is up and reclaims it when the title closes.
+        /// 打开标题覆盖层既有的剧本选择器。标题只切换自己的页面，
+        /// 因此正在运行的战役、其日期、资源与存档槽保持原样；
+        /// 玩家仍须挑选一个剧本条目才会开始。标题渲染在本回顾之上，
+        /// 因此标题在屏期间回顾让出键盘焦点，标题关闭后再收回。
         /// </summary>
         public void OpenScenarioSelection()
         {
@@ -1000,16 +987,15 @@ namespace SengokuChronicle.Presentation
                 return;
             }
             title.ShowScenarioSelection();
-            // A title saved before the two-page migration has no selector page. Leave the
-            // player on the title's main menu instead of an empty overlay with no way back.
+            // 两页迁移之前保存的标题没有选择器页面。让玩家留在标题的
+            // 主菜单上，而不是进入一个无法返回的空覆盖层。
             if (!title.IsScenarioSelectionVisible)
                 title.ShowTitle();
         }
 
         /// <summary>
-        /// The serialized title controller, or the scene's one when a scene saved before this
-        /// action existed left the reference empty. Resolved once, so the per-frame focus check
-        /// never searches.
+        /// 序列化的标题控制器；若场景在此动作出现之前保存、引用为空，
+        /// 则取场景里的那一个。只解析一次，逐帧焦点检查因此不做搜索。
         /// </summary>
         private TitleScreenController ResolveTitleScreen()
         {
@@ -1036,8 +1022,8 @@ namespace SengokuChronicle.Presentation
                 continueButton.onClick.AddListener(_continueListener);
                 _staticButtonBindings++;
             }
-            // The new-scenario action is not counted in StaticButtonBindingCount, which reports
-            // the continue action's own listener invariant.
+            // 新剧本动作不计入 StaticButtonBindingCount，那个计数
+            // 报告的是继续动作自身的监听器不变量。
             if (newScenarioButton != null && _newScenarioListener == null)
             {
                 _newScenarioListener = OpenScenarioSelection;

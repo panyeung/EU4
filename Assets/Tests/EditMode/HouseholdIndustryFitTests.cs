@@ -6,8 +6,8 @@ namespace SengokuChronicle.Tests.EditMode
 {
     public sealed class HouseholdIndustryFitTests
     {
-        // Free central band on the 1280x720 reference canvas, between the head rail,
-        // pending-decision column, rail top and page margin.
+        // 1280x720 参考画布上的中央可用带区，位于首部轨道、
+        // 待决策列、轨道顶部与页面边距之间。
         private const float BandWidth = 620f;
         private const float BandHeight = 612f;
         private const float AuthoredWidth = 760f;
@@ -60,7 +60,7 @@ namespace SengokuChronicle.Tests.EditMode
                 400f, 300f);
 
             Assert.That(fit.Scale, Is.EqualTo(300f / 700f).Within(0.001f),
-                "the shorter band dimension bounds the uniform scale");
+                "较短的带区维度决定了统一缩放");
             Assert.That(fit.Readable, Is.False);
             Assert.That(fit.Height, Is.EqualTo(300f).Within(0.01f));
             Assert.That(fit.Width, Is.LessThanOrEqualTo(400f));

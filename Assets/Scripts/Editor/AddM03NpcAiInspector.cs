@@ -475,10 +475,10 @@ namespace SengokuChronicle.Editor
 
         private static void PlaceAboveMapHud(Transform canvas, Transform target)
         {
-            // The inspector is a read-only surface above the page but beneath the campaign
-            // review and the title band, so it takes its slot from the shared overlay order
-            // instead of anchoring on the title. Running this updater after M02 or M08 cannot
-            // put the inspector above an open campaign review.
+            // 查看器是页面之上、战役回顾与标题带之下的只读面，
+            // 因此它的座次取自共享覆盖层次序，而不是锚定在标题上。
+            // 在 M02 或 M08 之后运行本更新器，也不会把查看器
+            // 放到已打开的战役回顾之上。
             CanvasLayerOrder.PlaceAtRank(canvas, target);
         }
 

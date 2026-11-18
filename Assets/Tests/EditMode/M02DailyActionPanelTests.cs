@@ -263,7 +263,7 @@ namespace SengokuChronicle.Tests.EditMode
             Transform dailyAction = canvas.Find(AddM02DailyActionPanel.RootName);
             Assert.That(dailyAction, Is.Not.Null);
             Assert.That(dailyAction.GetSiblingIndex(), Is.LessThan(review.transform.GetSiblingIndex()),
-                "The opaque M02 page must remain beneath the M08 campaign review overlay.");
+                "不透明的 M02 页面必须留在 M08 战役回顾覆盖层之下。");
 
             ReferenceGalleryNavigator navigator = Find(AddM02DailyActionPanel.RootName)
                 .GetComponent<ReferenceGalleryNavigator>();
@@ -459,7 +459,7 @@ namespace SengokuChronicle.Tests.EditMode
 
             Transform dailyAction = Find(AddM02DailyActionPanel.RootName);
             Assert.That(dailyAction.GetSiblingIndex(), Is.LessThan(review.transform.GetSiblingIndex()),
-                "The M08 campaign review overlay must stay above the opaque M02 page after rebuild.");
+                "重建后 M08 战役回顾覆盖层必须仍在 M02 页面之上。");
             Assert.That(dailyAction.GetSiblingIndex(), Is.LessThan(inspector.GetSiblingIndex()));
             Assert.That(inspector.GetSiblingIndex(), Is.LessThan(review.transform.GetSiblingIndex()));
             Assert.That(review.transform.GetSiblingIndex(), Is.LessThan(title.GetSiblingIndex()));
@@ -573,13 +573,13 @@ namespace SengokuChronicle.Tests.EditMode
                 "an open modal must render above the Family shelf");
             Assert.That(successionRoot.GetSiblingIndex(),
                 Is.GreaterThan(canvas.Find("M03NpcAiInspectorRoot").GetSiblingIndex()),
-                "a pending succession decision ranks above the read-only inspector");
+                "待处理继承决策的名次高于只读查看器");
             Assert.That(successionRoot.GetSiblingIndex(),
                 Is.LessThan(canvas.Find("M6TitleRoot").GetSiblingIndex()),
-                "a pending succession decision must stay below the full-screen title");
+                "待处理继承决策必须留在全屏标题之下");
             Assert.That(successionRoot.GetSiblingIndex(),
                 Is.LessThan(canvas.Find("EventChoiceRoot").GetSiblingIndex()),
-                "a pending succession decision must stay below the event-choice overlay");
+                "待处理继承决策必须留在事件选择覆盖层之下");
             Assert.That(TopmostGraphic(canvas, point, true), Is.SameAs(confirmImage),
                 "the modal control, not the shelf launcher, receives the pointer");
         }
@@ -2107,7 +2107,7 @@ namespace SengokuChronicle.Tests.EditMode
             dailyAction = Find(AddM02DailyActionPanel.RootName);
             Assert.That(dailyAction.Find(AddM02DailyActionPanel.OpenButtonName)
                     .GetComponent<Button>().targetGraphic, Is.Not.Null,
-                "the updater must rebuild its invalidated page before reordering the overlay band");
+                "更新器必须先重建其失效页面，再重排覆盖层带区");
             Assert.That(dailyAction.GetSiblingIndex(), Is.LessThan(inspector.GetSiblingIndex()));
             Assert.That(inspector.GetSiblingIndex(), Is.LessThan(review.GetSiblingIndex()));
             Assert.That(review.GetSiblingIndex(), Is.LessThan(title.GetSiblingIndex()));
@@ -2124,13 +2124,13 @@ namespace SengokuChronicle.Tests.EditMode
 
             review.SetAsFirstSibling();
             Assert.That(AddM08CampaignReviewPanel.Validate(_scene, out _), Is.False,
-                "the setup represents a stale M08 order that enters the repair path");
+                "该设置代表进入修复路径的过期 M08 次序");
             Assert.That(AddM08CampaignReviewPanel.Update(_scene),
                 Is.EqualTo(AddM08CampaignReviewPanel.UpdateResult.Success));
             Assert.That(AddM02DailyActionPanel.Validate(_scene, out m02Error), Is.True,
-                "M08 repair must preserve the M02 page's overlay placement");
+                "M08 修复必须保留 M02 页面的覆盖层座次");
             Assert.That(AddM03NpcAiInspector.Validate(_scene, out m03Error), Is.True,
-                "M08 repair must preserve the M03 inspector's overlay placement");
+                "M08 修复必须保留 M03 查看器的覆盖层座次");
             Assert.That(AddM08CampaignReviewPanel.Validate(_scene, out m08Error), Is.True,
                 m08Error);
         }

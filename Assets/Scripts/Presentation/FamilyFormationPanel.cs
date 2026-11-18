@@ -23,7 +23,7 @@ namespace SengokuChronicle.Presentation
         public const string AdoptionCandidatePrefix = "SC022AdoptionCandidate_";
         public const string PreviewStripName = "SC022FormationPreview";
         public const string PreviewTextName = "SC022FormationPreviewText";
-        /// <summary>Serialized help line the preview replaces while a pair is complete.</summary>
+        /// <summary>预览在配对完整时替换的序列化帮助行。</summary>
         public const string FamilyFormationHelpName = "SC022FamilyFormationHelpText";
         private const float PreviewHeight = 44f;
         private const float PreviewMaximumHeight = 68f;
@@ -133,8 +133,8 @@ namespace SengokuChronicle.Presentation
         public string AdoptionCandidateLabel(int index) => LabelOf(_adoptionCandidates, index);
 
         /// <summary>
-        /// One-line preview of the selected pair: recorded kinship path, the SC-022
-        /// rule outcome and what confirmation will register.
+        /// 所选配对的一行预览：已记录的亲属路径、SC-022 规则结论
+        /// 以及确认后将登记的内容。
         /// </summary>
         public string PreviewLine => _previewText != null ? _previewText.text : string.Empty;
 
@@ -359,10 +359,9 @@ namespace SengokuChronicle.Presentation
         }
 
         /// <summary>
-        /// Shows the recorded kinship path, the SC-022 rule outcome and the effect of
-        /// confirmation for the currently selected pair. The consequence text is shown in
-        /// full: it occupies the panel's help band while a pair is complete and the generic
-        /// help copy returns as soon as no pair is selected.
+        /// 显示当前所选配对的已记录亲属路径、SC-022 规则结论与确认效果。
+        /// 后果文案完整显示：配对完整时占用面板的帮助带，
+        /// 一旦没有配对被选中，通用帮助文案立即恢复。
         /// </summary>
         private void RefreshPreview(FamilyFormationView view)
         {
@@ -406,8 +405,8 @@ namespace SengokuChronicle.Presentation
             string path = FamilyKinshipPath.Describe(kinship, memberId, candidateId,
                 personId => view.CandidateDisplayName(personId));
 
-            // A blocked family state overrides the per-pair rule result: the panel cannot
-            // submit at all, so the preview must say why instead of reporting "allowed".
+            // 家族状态被阻断时优先于单配对规则结果：面板根本无法提交，
+            // 因此预览必须说明原因，而不能报告“允许”。
             string verdict;
             if (!view.CanEdit)
             {
@@ -431,9 +430,9 @@ namespace SengokuChronicle.Presentation
 
             string member = view.CandidateDisplayName(memberId);
             string candidate = view.CandidateDisplayName(candidateId);
-            // A blocked state must not describe the write as if it will happen: the confirm
-            // button is disabled, so the preview states the real consequence (nothing is
-            // written until the pending state is cleared) and keeps the rule text intact.
+            // 阻断状态不能把这次写入描述成即将发生：确认按钮已禁用，
+            // 因此预览陈述真实后果（待处理状态清除前不会写入），
+            // 并保留规则文案不变。
             string consequence;
             if (!view.CanEdit)
             {
@@ -459,9 +458,8 @@ namespace SengokuChronicle.Presentation
             if (_previewText == null || _previewStrip == null ||
                 !(_previewStrip.transform is RectTransform stripRect))
                 return;
-            // The text rect is stretched inside the strip with fixed insets, so its wrap
-            // width already matches the strip. Measure that width, then grow the strip to
-            // the measured height instead of truncating the consequence.
+            // 文本矩形在条带内按固定内边距拉伸，换行宽度已与条带一致。
+            // 量出该宽度，再把条带增高到测得高度，而不是截断后果文案。
             float needed = _previewText.preferredHeight + 6f;
             float height = Mathf.Clamp(needed, PreviewHeight, PreviewMaximumHeight);
             stripRect.sizeDelta = new Vector2(stripRect.sizeDelta.x, height);
@@ -528,9 +526,9 @@ namespace SengokuChronicle.Presentation
         }
 
         /// <summary>
-        /// The panel's static help line shares its band with the preview. It is found by
-        /// the generator's fixed child name; when a differently built panel has no such
-        /// line the preview keeps its own band and nothing else is touched.
+        /// 面板的静态帮助行与预览共用一条带区。它按生成器固定的子节点名查找；
+        /// 若某个不同方式构建的面板没有这一行，预览保留自己的带区，
+        /// 不触碰其它任何东西。
         /// </summary>
         private Text FindHelpText()
         {
@@ -757,8 +755,8 @@ namespace SengokuChronicle.Presentation
         }
 
         /// <summary>
-        /// Removes the runtime preview and gives the serialized help line its band back,
-        /// so a rebind or teardown never leaves the panel without its own copy.
+        /// 移除运行时预览并把带区还给序列化帮助行，
+        /// 这样重绑定或销毁都不会让面板失去自己的文案。
         /// </summary>
         private void DestroyPreviewStrip()
         {

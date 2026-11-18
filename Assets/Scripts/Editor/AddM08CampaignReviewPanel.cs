@@ -11,15 +11,13 @@ using SengokuChronicle.Presentation;
 namespace SengokuChronicle.Editor
 {
     /// <summary>
-    /// Transactional generator for the M08 campaign review overlay. It builds one fixed
-    /// root under the existing Canvas, a full-screen page with a centred card, a
-    /// scrollable sourced-history body, a continue action, a new-scenario action that opens
-    /// the title overlay's selector, and the status line. The page starts hidden;
-    /// CampaignReviewPanel shows it only while a real 55-year or 100-year review is pending.
-    /// Everything is created in one Undo group, validated before saving, and rolled back
-    /// through Undo on failure without reloading the scene. An existing page whose only
-    /// defect is its Canvas order is moved back under the M6 title in one undoable step
-    /// instead of being rebuilt.
+    /// M08 战役回顾覆盖层的事务型生成器。它在既有 Canvas 之下建一个固定
+    /// 根节点：全屏页面、居中卡片、可滚动的来源记录正文、继续动作、
+    /// 打开标题覆盖层选择器的新剧本动作，以及状态行。页面初始隐藏；
+    /// CampaignReviewPanel 只在真的有 55 年或 100 年回顾待处理时显示它。
+    /// 所有对象都在同一个 Undo 组里创建，保存前先校验，失败时通过
+    /// Undo 回滚且不重载场景。既有页面若只有 Canvas 次序一项缺陷，
+    /// 就在一个可撤销步骤里移回 M6 标题之下，而不是重建。
     /// </summary>
     public static class AddM08CampaignReviewPanel
     {
@@ -62,8 +60,8 @@ namespace SengokuChronicle.Editor
         private const float ReferenceCardWidth = 1120f;
         private const float ReferenceCardHeight = 640f;
         private const float PageMargin = 32f;
-        // Action row geometry. The two actions sit side by side, centred together, and each
-        // stays inside the authored card before any layout pass runs.
+        // 动作行几何。两个动作并排、一起居中，各自在任何布局
+        // 计算之前就留在卡片内。
         private const float ActionRowHeight = 52f;
         private const float ActionButtonWidth = 380f;
         private const float ActionButtonHeight = 42f;
@@ -117,10 +115,10 @@ namespace SengokuChronicle.Editor
             {
                 if (Validate(scene, out string error))
                     return UpdateResult.Success;
-                // A page generated before the two-action shape has no new-scenario entry and
-                // a status line that predates the readable ink. Only that known generated
-                // hierarchy is replaced, so the older scene upgrades without manual deletion;
-                // any other invalid page keeps the refusal path below.
+                // 两动作形态之前生成的页面没有新剧本入口，
+                // 状态行也早于可读墨色。只替换这一已知的生成层级，
+                // 旧场景无需手工删除即可升级；其它非法页面仍走
+                // 下面的拒绝路径。
                 if (IsLegacyGeneratedPage(scene, canvas))
                     return Rebuild(scene, canvas, session, save, null, true);
                 return RepairableOrderError(error)
@@ -137,12 +135,11 @@ namespace SengokuChronicle.Editor
         }
 
         /// <summary>
-        /// Creates, or replaces a legacy generated page with, the whole review hierarchy inside
-        /// one Undo group. Replacement is limited to <see cref="IsLegacyGeneratedPage"/>, so
-        /// nothing outside the review root is deleted. The shared overlay band is repaired
-        /// before validation, because a page or succession root saved by an older updater can
-        /// be in the wrong slot. A failure rolls the Undo group back and restores the exact
-        /// Canvas child order found before the attempt.
+        /// 在同一个 Undo 组内创建整套回顾层级，或替换掉旧的生成页面。
+        /// 替换范围限于 <see cref="IsLegacyGeneratedPage"/>，因此回顾根节点
+        /// 之外的东西不会被删除。校验之前先修复共享覆盖层带区，
+        /// 因为旧更新器保存的页面或继承根节点可能坐在错误的槽位。
+        /// 失败时回滚整个 Undo 组，并恢复尝试前的 Canvas 子节点次序。
         /// </summary>
         private static UpdateResult Rebuild(Scene scene, Transform canvas, GameSession session,
             bool save, Action<GameObject> beforeValidation, bool replaceExisting)
@@ -154,14 +151,14 @@ namespace SengokuChronicle.Editor
             UpdateResult failure = UpdateResult.Failed;
             try
             {
-                // Sibling order lives in the parent RectTransform, so record the parent too.
+                // 兄弟次序保存在父 RectTransform 上，因此父节点也要记录。
                 Undo.RegisterCompleteObjectUndo(canvas, UndoName);
                 if (replaceExisting)
                 {
                     Transform legacy = canvas.Find(RootName);
                     if (legacy == null)
                         throw new InvalidOperationException(
-                            "The legacy campaign review root vanished before it could be replaced.");
+                            "旧的战役回顾根节点在被替换前已消失。");
                     Undo.DestroyObjectImmediate(legacy.gameObject);
                 }
 
@@ -190,7 +187,7 @@ namespace SengokuChronicle.Editor
             }
         }
 
-        /// <summary>Builds the generated review hierarchy beneath the existing Canvas.</summary>
+        /// <summary>在既有 Canvas 之下构建生成的回顾层级。</summary>
         private static GameObject BuildPanel(Scene scene, Transform canvas, GameSession session)
         {
             GameObject root = Create(scene, canvas, RootName);
@@ -203,7 +200,7 @@ namespace SengokuChronicle.Editor
 
             Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             if (font == null)
-                throw new InvalidOperationException("Missing built-in UI font.");
+                throw new InvalidOperationException("缺少内置 UI 字体。");
 
             GameObject pageObject = Create(scene, rootRect, PageName, typeof(Image));
             RectTransform page = pageObject.GetComponent<RectTransform>();
@@ -297,11 +294,11 @@ namespace SengokuChronicle.Editor
                 Vector2.zero, TextAnchor.UpperLeft, SengokuUiTheme.Parchment, string.Empty);
             body.horizontalOverflow = HorizontalWrapMode.Wrap;
             body.verticalOverflow = VerticalWrapMode.Overflow;
-            // The body Text is the first block template. CampaignReviewPanel clones it
-            // per bounded block, because one Text cannot render the 89,212-character
-            // 55-year review: its mesh exceeds the uGUI CanvasRenderer limit and the
-            // whole viewport renders blank. The content's VerticalLayoutGroup stacks
-            // the blocks with Text's own preferred height, in body order.
+            // 正文 Text 是第一个区块模板。CampaignReviewPanel 按块克隆它，
+            // 因为单个 Text 渲染不了 89,212 字符的 55 年回顾：网格超出
+            // uGUI CanvasRenderer 上限，整个视口会渲染成空白。
+            // 内容的 VerticalLayoutGroup 按正文顺序、以 Text 自身的首选高度
+            // 堆叠各区块。
 
             Text status = CreateText(scene, card, StatusTextName, font, 14,
                 new Vector2(1000f, 20f), TextAnchor.MiddleLeft,
@@ -310,9 +307,9 @@ namespace SengokuChronicle.Editor
 
             GameObject rowObject = Create(scene, card, ButtonRowName, typeof(LayoutElement));
             RectTransform row = rowObject.GetComponent<RectTransform>();
-            // The card's VerticalLayoutGroup owns this row at runtime. Sizing it up front
-            // keeps the two actions inside the card for the containment check, which runs
-            // before any canvas layout pass.
+            // 运行时由卡片的 VerticalLayoutGroup 掌管这一行。预先给出尺寸，
+            // 使包含性检查在任何 Canvas 布局计算之前就能确认两个动作
+            // 留在卡片内。
             row.anchorMin = row.anchorMax = row.pivot = new Vector2(0.5f, 0.5f);
             row.anchoredPosition = Vector2.zero;
             row.sizeDelta = new Vector2(card.rect.size.x - 48f, ActionRowHeight);
@@ -344,12 +341,11 @@ namespace SengokuChronicle.Editor
         }
 
         /// <summary>
-        /// True only for the page shape this generator produced before the new-scenario action
-        /// and the readable status ink existed: the whole known hierarchy is present and every
-        /// object under the root carries a generated name. That narrow match lets the updater
-        /// replace an old tool-generated page without manual deletion while refusing a page a
-        /// user added objects to. A page that already has the new-scenario action is never
-        /// rebuilt, so a structural defect there keeps the existing refusal.
+        /// 仅当页面是新剧本动作与可读状态墨色出现之前由本生成器产出的形态时为 true：
+        /// 已知层级完整，且根节点下每个对象都带生成名。这一狭窄匹配
+        /// 让更新器无需手工删除即可替换旧的工具生成页面，同时拒绝
+        /// 用户添加过对象的页面。已经带有新剧本动作的页面绝不重建，
+        /// 因此那里的结构缺陷仍保持既有拒绝。
         /// </summary>
         private static bool IsLegacyGeneratedPage(Scene scene, Transform canvas)
         {
@@ -378,7 +374,7 @@ namespace SengokuChronicle.Editor
             return true;
         }
 
-        /// <summary>Every name the generator owns inside the review root.</summary>
+        /// <summary>生成器在回顾根节点内拥有的全部名称。</summary>
         private static bool IsGeneratedObjectName(string name) =>
             name == RootName || name == PageName || name == CardName ||
             name == TitleTextName || name == ContextTextName || name == BodyScrollName ||
@@ -478,9 +474,9 @@ namespace SengokuChronicle.Editor
                     "Campaign review body must be a vertical scroll whose content stacks " +
                     "bounded, auto-sized Text blocks from a top anchor.");
 
-            // The scrollbar is created at runtime in the body scroll's own scene. When a saved
-            // page already owns one, it must be the generated 24 px column with a handle, and
-            // the viewport must reserve that column so the bar never covers wrapped text.
+            // 滚动条在正文滚动区自己的场景里运行时创建。若保存的页面
+            // 已经有一个，它必须是带手柄的 24 px 生成列，且视口必须
+            // 预留该列，使滚动条永不盖住换行文字。
             RectTransform viewportRect = (RectTransform)viewport;
             bool authoredInset =
                 Inset(viewportRect.offsetMin, 8f, 6f) && Inset(viewportRect.offsetMax, -8f, -6f);
@@ -490,8 +486,8 @@ namespace SengokuChronicle.Editor
                     -(2f + CampaignReviewPanel.ScrollbarWidth + 8f), -6f);
             if (!authoredInset && !reservedInset)
                 return Invalid(out error,
-                    "Campaign review body viewport must keep the authored inset or reserve " +
-                    "the 24 px scrollbar column.");
+                    "战役回顾正文视口必须保留原始内边距，或预留 " +
+                    "24 px 的滚动条列。");
             Scrollbar authoredBar = scrollComponent.verticalScrollbar;
             if (authoredBar != null)
             {
@@ -501,8 +497,8 @@ namespace SengokuChronicle.Editor
                     authoredBar.handleRect == null ||
                     authoredBar.handleRect.parent != barRect)
                     return Invalid(out error,
-                        "Campaign review body scrollbar must be a 24 px column inside the " +
-                        "scroll with its own handle.");
+                        "战役回顾正文滚动条必须是滚动区内带手柄的 " +
+                        "24 px 列。");
             }
 
             Text label = FindText(page, ContinueLabelName);
@@ -533,30 +529,30 @@ namespace SengokuChronicle.Editor
                 !Bound(panel, "newScenarioLabelText", startNewLabel) ||
                 !Contained((RectTransform)startNew.transform, cardRect))
                 return Invalid(out error,
-                    "Campaign review new-scenario button or label is missing, unbound or " +
-                    "outside the card.");
+                    "战役回顾新剧本按钮或标签缺失、未绑定，或位于" +
+                    "卡片之外。");
 
             TitleScreenController[] titles = Components<TitleScreenController>(scene);
             if (titles.Length > 1)
                 return Invalid(out error,
-                    "Expected at most one TitleScreenController to own the scenario selector.");
+                    "最多只允许一个 TitleScreenController 掌管剧本选择器。");
             if (titles.Length == 1)
             {
                 if (!Bound(panel, "titleScreenController", titles[0]))
                     return Invalid(out error,
-                        "Campaign review new-scenario action must point at the scene's " +
-                        "TitleScreenController.");
+                        "战役回顾新剧本动作必须指向场景中的 " +
+                        "TitleScreenController。");
             }
             else if (Reference(panel, "titleScreenController") != null)
                 return Invalid(out error,
-                    "Campaign review title reference must stay empty when the scene has no " +
-                    "TitleScreenController.");
+                    "场景没有 TitleScreenController 时，战役回顾的标题引用" +
+                    "必须保持为空。");
 
-            // WCAG 1.4.3: the 14 px status line reports a refused action, so it needs the
-            // 4.5:1 normal-text ratio against the authored card, not the large-text 3:1.
+            // WCAG 1.4.3：14 px 状态行用于报告被拒绝的操作，因此相对原始卡片
+            // 需要 4.5:1 的正文对比度，而不是大字的 3:1。
             if (!MeetsNormalTextContrast(status.color, card.GetComponent<Image>().color))
                 return Invalid(out error,
-                    "Campaign review status text must reach 4.5:1 against the card.");
+                    "战役回顾状态文字相对卡片的对比度必须达到 4.5:1。");
 
             if (title.text.Length == 0 || context.text.Length == 0)
                 return Invalid(out error,
@@ -576,11 +572,11 @@ namespace SengokuChronicle.Editor
             CanvasLayerOrder.PlaceAtRank(canvas, root);
 
         /// <summary>
-        /// A complete generated page saved by an older revision can carry nothing but the
-        /// wrong Canvas order. Only a misplaced root is repairable. Title/EventChoiceRoot
-        /// adjacency and a misplaced sibling root are reported separately because moving the
-        /// review root alone cannot fix them, and the repair validates the whole shared band
-        /// (M02, M03, SC-010, title, event choice, tactical) before it reports success.
+        /// 旧版本保存的完整生成页面，可能唯一的缺陷就是 Canvas 次序错误。
+        /// 只有放错位置的根节点可以修复。标题/EventChoiceRoot 相邻性问题
+        /// 与兄弟根节点错位会分别报告，因为只移动回顾根节点修不好它们；
+        /// 修复流程在报告成功之前会校验整条共享带区
+        /// （M02、M03、SC-010、标题、事件选择、战术弹窗）。
         /// </summary>
         private static bool RepairableOrderError(string error) =>
             error == TacticalLastError || error == TacticalOrderError || error == TitleOrderError ||
@@ -590,13 +586,13 @@ namespace SengokuChronicle.Editor
                 StringComparison.Ordinal));
 
         /// <summary>
-        /// A complete generated page saved by an older revision can carry nothing but the
-        /// wrong Canvas order. Restoring the shared overlay band in one Undo group repairs the
-        /// scene without rebuilding it. Only roots that are out of order move, so a correctly
-        /// placed M02 page, M03 inspector, succession root or M06 modal keeps its slot;
-        /// anything else stays refused, and a failed re-validation restores the exact previous
-        /// order. The tactical modal is put back last even when the band ranks already ascend,
-        /// because an unranked root saved after it is the only defect then.
+        /// 旧版本保存的完整生成页面，可能唯一的缺陷就是 Canvas 次序错误。
+        /// 在一个 Undo 组内恢复共享覆盖层带区即可修复场景，无需重建。
+        /// 只移动确实乱序的根节点，因此位置正确的 M02 页、M03 查看器、
+        /// 继承根节点或 M06 弹窗都保留原位；其它情况仍被拒绝，
+        /// 复校验失败会恢复准确的原先次序。即使带区名次已递增，
+        /// 战术弹窗也最后放回，因为此时唯一缺陷可能就是它后面
+        /// 保存了一个未排名根节点。
         /// </summary>
         private static UpdateResult RepairOrdering(Scene scene, Transform canvas, bool save,
             Action<GameObject> beforeValidation)
@@ -644,7 +640,7 @@ namespace SengokuChronicle.Editor
             }
         }
 
-        /// <summary>Snapshot of the Canvas child order, used to roll back a failed repair.</summary>
+        /// <summary>Canvas 子节点次序的快照，用于回滚失败的修复。</summary>
         private static Transform[] Children(Transform canvas)
         {
             var children = new Transform[canvas.childCount];
@@ -653,7 +649,7 @@ namespace SengokuChronicle.Editor
             return children;
         }
 
-        /// <summary>Puts the captured Canvas child order back after a failed repair.</summary>
+        /// <summary>修复失败后把捕获的 Canvas 子节点次序放回。</summary>
         private static void RestoreOrder(Transform canvas, Transform[] order)
         {
             if (canvas == null || order == null)
@@ -672,10 +668,9 @@ namespace SengokuChronicle.Editor
         }
 
         /// <summary>
-        /// The generated ordering is validated with the reviewed overlay, so a later edit
-        /// cannot append the root back above the M6 title, above the M02 page, above the M03
-        /// inspector or above the M06 tactical modal, and an updater run in another order
-        /// cannot silently invert the band.
+        /// 生成的次序按受审覆盖层校验，因此后续编辑无法把根节点
+        /// 追加回 M6 标题、M02 页、M03 查看器或 M06 战术弹窗之上，
+        /// 别的运行顺序的更新器也无法悄悄颠倒带区。
         /// </summary>
         private static bool Ordered(Transform canvas, Transform root, out string error)
         {
@@ -710,8 +705,8 @@ namespace SengokuChronicle.Editor
             if (inspector != null && index <= inspector.GetSiblingIndex())
                 return Invalid(out error, CanvasLayerOrder.CampaignReviewAboveInspectorError);
 
-            // The review's own slot can be right while another pair in the band is inverted;
-            // the shared check keeps the whole band on one contract, not just this root.
+            // 回顾自身的槽位可能正确，而带区里另一对次序相反；
+            // 共享校验让整条带区守同一份约定，而不只是这个根节点。
             return CanvasLayerOrder.ValidateBand(canvas, out error);
         }
 
@@ -771,7 +766,7 @@ namespace SengokuChronicle.Editor
             Mathf.Abs(rect.offsetMin.x) < 0.5f && Mathf.Abs(rect.offsetMin.y) < 0.5f &&
             Mathf.Abs(rect.offsetMax.x) < 0.5f && Mathf.Abs(rect.offsetMax.y) < 0.5f;
 
-        /// <summary>One authored viewport inset, within the tolerance a saved scene keeps.</summary>
+        /// <summary>一个原始视口内边距，容忍保存场景的误差。</summary>
         private static bool Inset(Vector2 actual, float x, float y) =>
             Mathf.Abs(actual.x - x) < 0.5f && Mathf.Abs(actual.y - y) < 0.5f;
 
@@ -832,10 +827,10 @@ namespace SengokuChronicle.Editor
         }
 
         /// <summary>
-        /// The scene's title controller, when the M6 generator has already run. It is the only
-        /// owner of the scenario selector, so the review borrows it instead of starting a
-        /// campaign itself. A scene without one still generates, and the panel resolves the
-        /// reference at runtime before the action is first used.
+        /// M6 生成器已运行时，场景里的标题控制器。它是剧本选择器的唯一
+        /// 所有者，因此回顾面板借用它，而不是自己开一局战役。
+        /// 没有它的场景仍能生成，面板会在首次使用该动作之前
+        /// 于运行时解析引用。
         /// </summary>
         private static TitleScreenController TitleScreen(Scene scene)
         {
@@ -843,7 +838,7 @@ namespace SengokuChronicle.Editor
             return controllers.Length == 1 ? controllers[0] : null;
         }
 
-        /// <summary>WCAG 1.4.3's normal-text ratio, used for the 14 px status line.</summary>
+        /// <summary>WCAG 1.4.3 的正文对比度，用于 14 px 状态行。</summary>
         private static bool MeetsNormalTextContrast(Color foreground, Color background) =>
             ContrastRatio(foreground, background) >= 4.5f;
 

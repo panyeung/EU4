@@ -3,10 +3,9 @@ using System;
 namespace SengokuChronicle.Presentation
 {
     /// <summary>
-    /// Horizontal split of the family roster page: the scrollable graph keeps the
-    /// left side and the selected-person detail column takes the right side.
-    /// Values are relative to the panel centre so callers can apply them directly
-    /// to centred RectTransforms. Pure math, no Unity types.
+    /// 家族名册页的横向分割：可滚动的图谱占左侧，选中人物详情栏占右侧。
+    /// 数值相对面板中心，调用方可以直接套用到居中的 RectTransform 上。
+    /// 纯数学，不依赖 Unity 类型。
     /// </summary>
     public readonly struct FamilyRosterSplit
     {
@@ -26,29 +25,28 @@ namespace SengokuChronicle.Presentation
     }
 
     /// <summary>
-    /// The family roster page cannot show the graph and the selected-person detail
-    /// column side by side at every width. This helper is the single place that
-    /// decides the split, so the page styler, the panel and the tests agree on the
-    /// geometry. When the panel is too narrow for two readable cards plus the column,
-    /// no split is returned and the panel switches to its stacked detail view instead
-    /// of shrinking a card or dropping the details.
+    /// 家族名册页并非在任何宽度下都能并排显示图谱与选中人物详情栏。
+    /// 本辅助类是唯一决定分割位置的地方，因此页面样式器、面板与测试
+    /// 对几何保持一致。面板太窄、放不下两张可读卡片加详情栏时，
+    /// 不返回分割结果，面板改用上下堆叠的详情视图，而不是压缩卡片
+    /// 或丢掉详情。
     /// </summary>
     public static class FamilyRosterDetailLayout
     {
-        /// <summary>Side margin already used by the serialized 700-wide scroll in a 760 panel.</summary>
+        /// <summary>760 宽面板里，序列化的 700 宽滚动区域已让出的侧边距。</summary>
         public const float SideInset = 30f;
-        /// <summary>Clear space between the graph viewport and the detail column.</summary>
+        /// <summary>图谱视口与详情栏之间的净空。</summary>
         public const float Gap = 14f;
         /// <summary>
-        /// Widest detail column. At the 760 panel this still leaves the two-card
-        /// viewport defined by <see cref="MinimumScrollWidth"/> inside the card.
+        /// 详情栏的最大宽度。在 760 面板下，卡片内仍能保留
+        /// <see cref="MinimumScrollWidth"/> 定义的两卡视口。
         /// </summary>
         public const float MaximumDetailWidth = 208f;
-        /// <summary>Narrowest detail column that keeps one full fact line readable.</summary>
+        /// <summary>仍能完整显示一行事实的最窄详情栏。</summary>
         public const float MinimumDetailWidth = 184f;
         /// <summary>
-        /// Width needed to show two person cards with the layout's own left and right
-        /// margins: both outer margins, both cards and the gap between them.
+        /// 显示两张人物卡所需的总宽度，含布局自身的左右边距：
+        /// 两侧外边距、两张卡以及两者之间的间隙。
         /// </summary>
         public const float MinimumScrollWidth = FamilyTreeLayout.Margin * 2f +
                                                 FamilyTreeLayout.NodeWidth * 2f +

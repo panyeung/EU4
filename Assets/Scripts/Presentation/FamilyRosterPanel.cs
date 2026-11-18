@@ -34,7 +34,7 @@ namespace SengokuChronicle.Presentation
         [SerializeField] private Text sectionTemplate;
         [SerializeField] private Text heirText;
 
-        /// <summary>Fixed root for the runtime-built selected-person column.</summary>
+        /// <summary>运行时构建的选中人物详情栏的固定根节点。</summary>
         public const string DetailRootName = "FamilyRosterDetailPanel";
         public const string DetailHeadingName = "FamilyRosterDetailHeading";
         public const string DetailScrollName = "FamilyRosterDetailScroll";
@@ -46,8 +46,8 @@ namespace SengokuChronicle.Presentation
         public const string CardHitName = "FamilyRosterCardHit";
         private const float DetailPadding = 8f;
         private const float ScrollbarWidth = 10f;
-        // The textual "已选" stamp owns a band under the card label so it never
-        // overprints the name/role lines, whose first line is the longest.
+        // 文字「已选」印记独占卡名下方的一条带区，因此永远不会
+        // 压住姓名/身份行，而这两行里第一行最长。
         private const float SelectedMarkInset = 6f;
         private const float SelectedMarkHeight = 16f;
         private const float SelectedMarkGap = 2f;
@@ -172,7 +172,7 @@ namespace SengokuChronicle.Presentation
         public string DetailTextLine => _detailText != null ? _detailText.text : string.Empty;
         public ScrollRect DetailScroll => _detailScroll;
         public Scrollbar DetailScrollbar => _detailScrollbar;
-        /// <summary>True while the narrow-width detail sheet covers the graph.</summary>
+        /// <summary>窄宽度下详情页覆盖图谱期间为 true。</summary>
         public bool DetailSheetVisible =>
             !_hasDetailColumn && _detailSheetVisible && _detailRoot != null &&
             _detailRoot.activeSelf;
@@ -180,7 +180,7 @@ namespace SengokuChronicle.Presentation
         public string DetailHeadingLine =>
             _detailHeading != null ? _detailHeading.text : string.Empty;
 
-        /// <summary>Viewport width the graph keeps after the detail column is reserved.</summary>
+        /// <summary>预留详情栏后图谱保留的视口宽度。</summary>
         public float AppliedScrollWidth => _appliedScrollWidth;
         public float AppliedScrollCenterX => _appliedScrollCenterX;
 
@@ -421,10 +421,10 @@ namespace SengokuChronicle.Presentation
         }
 
         /// <summary>
-        /// Selects one displayed person for the detail column. Unknown or empty IDs are
-        /// ignored so a click on a stale card can never point the column at a person
-        /// outside the current graph. Selection changes no session state. On a narrow
-        /// panel the detail sheet opens so the selected facts are never hidden.
+        /// 为详情栏选中一名已显示的人物。未知或空的 ID 会被忽略，
+        /// 因此点击过期的卡片绝不会把详情栏指向当前图谱之外的人。
+        /// 选中不改变任何会话状态。窄面板上详情页会打开，
+        /// 使选中人物的事实不会被藏起来。
         /// </summary>
         public void SelectPerson(PersonId personId)
         {
@@ -442,7 +442,7 @@ namespace SengokuChronicle.Presentation
             ApplySelectionHighlight();
         }
 
-        /// <summary>Closes the narrow-width detail sheet and returns to the graph.</summary>
+        /// <summary>关闭窄宽度详情页并回到图谱。</summary>
         public void CloseDetailSheet()
         {
             _detailSheetVisible = false;
@@ -451,11 +451,10 @@ namespace SengokuChronicle.Presentation
         }
 
         /// <summary>
-        /// Applies the page layout from the widths the page styler actually gave this
-        /// panel. A wide card shows the graph and the selected-person column side by
-        /// side; a narrow card keeps the full graph width and presents the same facts
-        /// in a stacked detail sheet that opens from a card selection. Nothing here
-        /// restores serialized geometry, and applying it twice is harmless.
+        /// 按页面样式器实际给本面板的宽度应用页面布局。宽卡片并排显示
+        /// 图谱与选中人物栏；窄卡片保留完整图谱宽度，并把同样的事实
+        /// 放进从卡片选中打开的堆叠详情页。这里不恢复任何序列化几何，
+        /// 重复应用也无副作用。
         /// </summary>
         public void ApplyPageLayout()
         {
@@ -509,8 +508,8 @@ namespace SengokuChronicle.Presentation
                 detailRect.anchoredPosition = new Vector2(split.DetailCenterX, liveY);
                 _detailRoot.SetActive(true);
             }
-            // The body was wrapped for the previous width; re-measure once here so a
-            // narrow-to-wide switch does not keep a too-short body.
+            // 正文是按先前宽度换行的；这里重新量一次，
+            // 免得从窄切宽后正文仍保持过短的高度。
             MeasureDetailBody(false);
         }
 
@@ -543,20 +542,18 @@ namespace SengokuChronicle.Presentation
             if (_detailRoot != null)
                 _detailRoot.SetActive(_hasDetailColumn || _detailSheetVisible);
             UpdateDetailChrome();
-            // Measure only once the body is visible: preferred height is read from the
-            // Text's own layout, and keeping the order visible-then-measure avoids a
-            // measurement taken on a deactivated panel.
+            // 正文可见后才量：首选高度取自 Text 自身的布局，
+            // 保持“先可见再测量”的顺序，避免在停用的面板上测量。
             MeasureDetailBody(true);
             if (_detailScroll != null)
                 _detailScroll.verticalNormalizedPosition = 1f;
         }
 
         /// <summary>
-        /// Wraps and measures the detail body for the width the live layout currently gives
-        /// it. A width change (narrow sheet to side column, or a resized page) re-measures,
-        /// because a height measured at the old width clips or leaves a gap. Layout events
-        /// call it with <paramref name="force"/> false, so unchanged widths cost one
-        /// comparison and no per-frame work.
+        /// 按当前实时布局给出的宽度换行并测量详情正文。宽度改变
+        /// （窄页切侧栏，或页面缩放）会重新测量，因为按旧宽度测得的高度
+        /// 会裁切或留空。布局事件调用时 <paramref name="force"/> 为 false，
+        /// 宽度未变时只做一次比较，不产生逐帧开销。
         /// </summary>
         private void MeasureDetailBody(bool force)
         {
@@ -569,8 +566,8 @@ namespace SengokuChronicle.Presentation
             if (!force && !widthChanged)
                 return;
 
-            // Set the width first: preferred height wraps against the current rect width,
-            // so measuring before the width is applied reports a wrong height.
+            // 先设宽度：首选高度按当前矩形宽度换行，
+            // 在应用宽度之前测量会得到错误高度。
             textRect.sizeDelta = new Vector2(width, textRect.sizeDelta.y);
             textRect.anchoredPosition = Vector2.zero;
             float height = Mathf.Max(1f, _detailText.preferredHeight);
@@ -581,8 +578,8 @@ namespace SengokuChronicle.Presentation
         }
 
         /// <summary>
-        /// The close control belongs to the stacked sheet only; the side-by-side column is
-        /// always visible, so it keeps its full width for facts.
+        /// 关闭控件只属于堆叠详情页；并排栏始终可见，
+        /// 因此保留完整宽度用于事实。
         /// </summary>
         private void UpdateDetailChrome()
         {
@@ -594,10 +591,10 @@ namespace SengokuChronicle.Presentation
         }
 
         /// <summary>
-        /// Player-facing detail for one selected person. Every line is read from the
-        /// graph snapshot, the live succession state or the recorded kinship facts.
-        /// Nothing is inferred: an absent life record, an unknown age or a person with
-        /// no recorded kinship says so instead of claiming a relationship.
+        /// 一名选中人物的面向玩家详情。每一行都取自图谱快照、
+        /// 实时继承状态或已记录的亲属事实。不做任何推断：
+        /// 缺失的生平记录、未知年龄、没有记录亲属关系的人都会如实说明，
+        /// 而不是编造关系。
         /// </summary>
         public string BuildDetailText(FamilyTreeGraphSnapshot graph,
             FamilyTreeLayoutResult layout, PersonId personId)
@@ -610,8 +607,8 @@ namespace SengokuChronicle.Presentation
             bool placed = layout != null && layout.TryGetNode(personId, out placement);
 
             var builder = new StringBuilder(320);
-            // The identity line matches the card exactly, including the head/heir mark, so
-            // the detail column and the graph never disagree about a person.
+            // 身份行与卡片完全一致，包括家主/继承人标记，
+            // 详情栏与图谱对同一个人的描述永远不会矛盾。
             string identityLine = FamilyTreeCardText.Format(node, placement);
             int lineBreak = identityLine.IndexOf('\n');
             builder.Append(lineBreak > 0 ? identityLine.Substring(0, lineBreak) : identityLine)
@@ -732,8 +729,8 @@ namespace SengokuChronicle.Presentation
         }
 
         /// <summary>
-        /// Gives the selected card keyboard focus once per open so arrow keys and Submit
-        /// reach the graph without a mouse. Nothing happens when no event system exists.
+        /// 每次打开时给选中卡片一次键盘焦点，使方向键与 Submit
+        /// 无需鼠标即可到达图谱。没有事件系统时什么都不做。
         /// </summary>
         public void FocusSelectedCard()
         {
@@ -795,8 +792,8 @@ namespace SengokuChronicle.Presentation
             }
             _detailHeading = heading;
 
-            // The viewport itself is raycastable so wheel and drag scrolling work, and a
-            // visible vertical scrollbar keeps long fact lists reachable and discoverable.
+            // 视口本身可命中，滚轮与拖拽滚动才有效；可见的
+            // 纵向滚动条让长事实列表可达、可发现。
             var scrollObject = new GameObject(DetailScrollName, typeof(RectTransform),
                 typeof(CanvasRenderer), typeof(Image), typeof(ScrollRect), typeof(RectMask2D));
             scrollObject.transform.SetParent(_detailRoot.transform, false);
@@ -920,9 +917,8 @@ namespace SengokuChronicle.Presentation
         }
 
         /// <summary>
-        /// Runtime detail objects must never be serialized into a scene: an editor-side
-        /// refresh, generator pass or test teardown would otherwise leave generated
-        /// clones behind in the saved hierarchy.
+        /// 运行时详情对象绝不能序列化进场景：否则编辑器侧刷新、
+        /// 生成器运行或测试销毁都会在保存的层级里留下生成的克隆。
         /// </summary>
         private static void MarkRuntimeOnly(GameObject root)
         {
@@ -981,25 +977,24 @@ namespace SengokuChronicle.Presentation
                     : KinCardColor;
             if (background != null)
             {
-                // The pointer surface above the card owns mouse hits; the card graphic
-                // still drives the keyboard button's tint so focus stays visible.
+                // 卡片上方的指针接收面负责鼠标命中；卡片图形
+                // 仍驱动键盘按钮的着色，使焦点保持可见。
                 background.raycastTarget = false;
                 background.color = cardColor;
             }
 
-            // Keyboard path: the card is a normal Selectable, so Tab/arrow focus and
-            // Submit work without a pointer. Pointer clicks arrive through the hit
-            // surface below, which rejects clicks that were actually a scroll drag.
+            // 键盘路径：卡片是普通 Selectable，Tab/方向键焦点与
+            // Submit 无需指针即可工作。指针点击由下方命中面接收，
+            // 它会拒绝实际属于滚动拖拽的点击。
             Button cardButton = card.GetComponent<Button>();
             if (cardButton == null)
                 cardButton = card.AddComponent<Button>();
             cardButton.targetGraphic = background;
             cardButton.navigation = new Navigation { mode = Navigation.Mode.Automatic };
             cardButton.transition = Selectable.Transition.ColorTint;
-            // ColorTint multiplies the target graphic's own colour, so the normal state must
-            // stay white: setting it to the card colour too would square the parchment and
-            // darken every card. The tint only brightens on highlight/selection and sinks
-            // slightly on press, which keeps state feedback without double tinting.
+            // ColorTint 会乘上目标图形自身的颜色，因此常态必须保持白色：
+            // 若常态也设成卡片色，羊皮纸会被平方、每张卡都变暗。
+            // 高亮/选中时只变亮，按下时略暗，既有状态反馈又不重复着色。
             cardButton.colors = new ColorBlock
             {
                 normalColor = Color.white,
@@ -1042,8 +1037,8 @@ namespace SengokuChronicle.Presentation
                 textRect.anchorMax = Vector2.one;
                 textRect.pivot = new Vector2(0.5f, 0.5f);
                 float leftInset = portrait != null ? PortraitWidth + 8f : 10f;
-                // The bottom inset reserves the selected-stamp band; without it the
-                // marker drawn below and the label share the same rect.
+                // 底边内边距为选中印记带预留空间；没有它，
+                // 下方绘制的标记与标签会占用同一个矩形。
                 textRect.offsetMin = new Vector2(leftInset,
                     SelectedMarkInset + SelectedMarkHeight + SelectedMarkGap);
                 textRect.offsetMax = new Vector2(-10f, -8f);
@@ -1067,10 +1062,9 @@ namespace SengokuChronicle.Presentation
                 portraitImage.raycastTarget = false;
             }
 
-            // Textual selected marker: the current selection is readable without
-            // relying on colour or hover, and it never edits the person card text.
-            // It sits in the footer band the label rect reserves, so the stamp and
-            // the name/role lines cannot overprint each other.
+            // 文字选中标记：当前选中无需依赖颜色或悬停即可读出，
+            // 且从不改写人物卡文字。它位于标签矩形预留的页脚带内，
+            // 印记与姓名/身份行不会互相压字。
             Text mark = Instantiate(sectionTemplate, card.transform);
             mark.gameObject.name = SelectedMarkName;
             mark.text = "已选";
@@ -1087,8 +1081,8 @@ namespace SengokuChronicle.Presentation
             mark.gameObject.hideFlags = HideFlags.DontSave;
             _selectedMarks.Add(mark.gameObject);
 
-            // Pointer surface: a drag that starts on a card scrolls the graph and never
-            // selects, and wheel scrolling still reaches the graph ScrollRect.
+            // 指针接收面：从卡片上起手的拖拽只滚动图谱、绝不选中，
+            // 滚轮滚动也仍能到达图谱 ScrollRect。
             var hitObject = new GameObject(CardHitName, typeof(RectTransform),
                 typeof(CanvasRenderer), typeof(Image));
             hitObject.transform.SetParent(card.transform, false);

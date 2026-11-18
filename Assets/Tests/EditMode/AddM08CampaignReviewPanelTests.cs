@@ -345,7 +345,7 @@ namespace SengokuChronicle.Tests.EditMode
         {
             EventSystem eventSystem = CreateTestEventSystem();
             Assert.That(eventSystem, Is.Not.Null,
-                "the focus test needs the EventSystem Unity routes UI selection through");
+                "焦点测试需要 EventSystem，Unity 通过它路由 UI 选中");
             GameObject selectionBeforeTest = eventSystem.currentSelectedGameObject;
             Button previousSelection = Create("PreviousSelection", canvas,
                 typeof(Image), typeof(Button)).GetComponent<Button>();
@@ -376,8 +376,8 @@ namespace SengokuChronicle.Tests.EditMode
                     Is.EqualTo(CampaignReviewPanel.FocusedButtonForeground));
                 Assert.That(continueButton.navigation.mode, Is.EqualTo(Navigation.Mode.None));
 
-                // Reapplying focus presentation must work even when Unity already holds this
-                // button as the selected object.
+                // 即使 Unity 已把该按钮作为选中对象，
+                // 也必须能重新应用焦点呈现。
                 continueImage.color = authoredBackground;
                 continueLabel.color = authoredForeground;
                 continueButton.navigation = authoredNavigation;
@@ -408,7 +408,7 @@ namespace SengokuChronicle.Tests.EditMode
             EventSystem eventSystem = CreateTestEventSystem();
             Assert.That(eventSystem, Is.Not.Null);
             Assert.That(EventSystem.current, Is.SameAs(eventSystem),
-                "the focus assertions must target the active EventSystem");
+                "焦点断言必须针对活动的 EventSystem");
             GameObject selectionBeforeTest = eventSystem.currentSelectedGameObject;
             Assert.That(AddM08CampaignReviewPanel.Update(scene),
                 Is.EqualTo(AddM08CampaignReviewPanel.UpdateResult.Success));
@@ -443,12 +443,12 @@ namespace SengokuChronicle.Tests.EditMode
                 InvokeLateUpdate(panel);
                 Assert.That(eventSystem.currentSelectedGameObject,
                     Is.EqualTo(continueButton.gameObject),
-                    "the open review must reclaim cleared keyboard focus");
+                    "打开的回顾必须收回被清空的键盘焦点");
 
                 pendingIds.Add("test.pending-event");
                 InvokeLateUpdate(panel);
                 Assert.That(eventSystem.currentSelectedGameObject, Is.Null,
-                    "a pending event choice owns focus ahead of the campaign review");
+                    "待处理事件选择优先于战役回顾持有焦点");
                 Assert.That(continueImage.color, Is.EqualTo(authoredBackground));
                 Assert.That(continueLabel.color, Is.EqualTo(authoredForeground));
                 Assert.That(continueButton.navigation, Is.EqualTo(authoredNavigation));
@@ -467,13 +467,13 @@ namespace SengokuChronicle.Tests.EditMode
                     eventSystem.SetSelectedGameObject(continueButton.gameObject);
                     InvokeLateUpdate(panel);
                     Assert.That(eventSystem.currentSelectedGameObject, Is.Null,
-                        phase + " owns focus ahead of the campaign review");
+                        phase + " 优先于战役回顾持有焦点");
                     Assert.That(continueImage.color, Is.EqualTo(authoredBackground),
-                        phase + " clears the review's focused presentation");
+                        phase + " 清除回顾的焦点呈现");
                     Assert.That(continueLabel.color, Is.EqualTo(authoredForeground),
-                        phase + " restores the authored label presentation");
+                        phase + " 恢复原始标签呈现");
                     Assert.That(continueButton.navigation, Is.EqualTo(authoredNavigation),
-                        phase + " releases the review's navigation trap");
+                        phase + " 释放回顾的导航陷阱");
                 }
 
                 session.Succession.Phase = SuccessionPhase.None;
@@ -586,10 +586,10 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(root.GetSiblingIndex(), Is.GreaterThan(inspector.GetSiblingIndex()));
             Assert.That(dailyAction, Is.Not.Null);
             Assert.That(dailyAction.GetSiblingIndex(), Is.LessThan(root.GetSiblingIndex()),
-                "M08 campaign review must render above the opaque M02 page.");
+                "M08 战役回顾必须渲染在不透明的 M02 页面之上。");
             Assert.That(dailyAction.GetSiblingIndex(), Is.LessThan(inspector.GetSiblingIndex()));
             Assert.That(inspector.GetSiblingIndex(), Is.LessThan(root.GetSiblingIndex()),
-                "M08 campaign review must render above the M03 inspector.");
+                "M08 战役回顾必须渲染在 M03 查看器之上。");
             Assert.That(root.GetSiblingIndex(), Is.LessThan(title.GetSiblingIndex()),
                 "M08CampaignReviewRoot must render below the full-screen M6 title overlay.");
             Assert.That(title.GetSiblingIndex(), Is.EqualTo(eventRoot.GetSiblingIndex() - 1),
@@ -653,17 +653,17 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(ranked.Select(child => CanvasLayerOrder.RankOf(child.name)),
                 Is.EqualTo(new[] { 0, 1, 2, 3, 4, 5, 6 }));
             Assert.That(CanvasLayerOrder.RankOf(AddSC010SuccessionPanel.RootName), Is.EqualTo(3),
-                "a pending succession decision must render above the campaign review");
+                "待处理的继承决策必须渲染在战役回顾之上");
             for (int i = 0; i < nonRankedSlots.Length; i++)
                 Assert.That(testCanvas.GetChild(nonRankedSlots[i]), Is.SameAs(nonRankedAtStart[i]),
-                    "normalizing the band must leave every unranked root in its slot");
+                    "规范化带区必须让每个未排名根节点留在原槽位");
             Assert.That(CanvasLayerOrder.ValidateBand(testCanvas, out string validError),
                 Is.True, validError);
 
             Transform[] normalized = testCanvas.Cast<Transform>().ToArray();
             CanvasLayerOrder.OrderRankedBand(testCanvas);
             Assert.That(testCanvas.Cast<Transform>().ToArray(), Is.EqualTo(normalized),
-                "normalizing a valid band a second time is idempotent");
+                "对合法带区再次规范化应幂等");
 
             Transform daily = testCanvas.Find(CanvasLayerOrder.DailyActionRootName);
             Transform inspector = testCanvas.Find(CanvasLayerOrder.InspectorRootName);
@@ -697,7 +697,7 @@ namespace SengokuChronicle.Tests.EditMode
                 testCanvas.Find(CanvasLayerOrder.TitleRootName).GetSiblingIndex() - 1));
             Assert.That(testCanvas.Cast<Transform>().Where(child => child != review).ToArray(),
                 Is.EqualTo(originalOthers),
-                "placing one root must preserve the relative order of every other Canvas child");
+                "放置一个根节点必须保持其它所有 Canvas 子节点的相对次序");
             Assert.That(CanvasLayerOrder.ValidateBand(testCanvas, out string error), Is.True, error);
         }
 
@@ -786,7 +786,7 @@ namespace SengokuChronicle.Tests.EditMode
 
             Transform review = canvas.Find(AddM08CampaignReviewPanel.RootName);
             Assert.That(succession.GetSiblingIndex(), Is.GreaterThan(review.GetSiblingIndex()),
-                "pending succession controls must render above the full-screen campaign review");
+                "待处理继承控件必须渲染在全屏战役回顾之上");
             Assert.That(CanvasLayerOrder.ValidateBand(canvas, out string initialBandError),
                 Is.True, initialBandError);
             review.SetSiblingIndex(dailyAction.GetSiblingIndex());
@@ -807,7 +807,7 @@ namespace SengokuChronicle.Tests.EditMode
                 Is.EqualTo(AddM08CampaignReviewPanel.UpdateResult.Success));
             Assert.That(review.GetSiblingIndex(), Is.GreaterThan(inspector.GetSiblingIndex()));
             Assert.That(succession.GetSiblingIndex(), Is.GreaterThan(review.GetSiblingIndex()),
-                "repairing the review must preserve succession priority");
+                "修复回顾必须保留继承优先级");
             Assert.That(CanvasLayerOrder.ValidateBand(canvas, out string bandError), Is.True,
                 bandError);
         }
@@ -858,8 +858,8 @@ namespace SengokuChronicle.Tests.EditMode
             GameObject hudAfterPanel = Create("UnrelatedHudPanel", canvas, typeof(Image));
             int count = ObjectCount();
             Assert.That(AddM08CampaignReviewPanel.Validate(scene, out string legacyError), Is.False);
-            Assert.That(legacyError, Does.Contain("new-scenario"),
-                "the fixture must reproduce the page saved before the new-scenario action");
+            Assert.That(legacyError, Does.Contain("新剧本"),
+                "夹具必须复现新剧本动作之前保存的页面");
 
             Assert.That(AddM08CampaignReviewPanel.Update(scene),
                 Is.EqualTo(AddM08CampaignReviewPanel.UpdateResult.Success));
@@ -867,9 +867,9 @@ namespace SengokuChronicle.Tests.EditMode
             Transform root = canvas.Find(AddM08CampaignReviewPanel.RootName);
             Assert.That(root, Is.Not.Null);
             Assert.That(root.gameObject, Is.Not.SameAs(legacyRoot),
-                "the legacy page is replaced by one complete generated page");
+                "旧页面被替换为一个完整的生成页面");
             Assert.That(ObjectCount(), Is.EqualTo(count + 2),
-                "the upgrade adds only the new-scenario button and its label");
+                "升级只新增新剧本按钮及其标签");
             Transform startNew = FindDeep(root, AddM08CampaignReviewPanel.NewScenarioButtonName);
             Assert.That(startNew, Is.Not.Null);
             Assert.That(startNew.GetComponent<Button>().interactable, Is.True);
@@ -878,13 +878,13 @@ namespace SengokuChronicle.Tests.EditMode
             Text status = FindDeep(root, AddM08CampaignReviewPanel.StatusTextName)
                 .GetComponent<Text>();
             Assert.That(status.color, Is.EqualTo(CampaignReviewPanel.StatusTextColor),
-                "the migrated status line must use the readable ink");
+                "迁移后的状态行必须使用可读墨色");
             Assert.That(decoy.transform.parent, Is.EqualTo(canvas));
             Assert.That(All(), Does.Contain(decoy.transform),
-                "an unrelated Canvas object must survive the migration");
+                "无关的 Canvas 对象必须在迁移后保留");
             Assert.That(All(), Does.Contain(hudAfterPanel.transform));
             Assert.That(root.GetSiblingIndex(), Is.GreaterThan(hudAfterPanel.transform.GetSiblingIndex()),
-                "the migrated overlay must render above a HUD root saved after it");
+                "迁移后的覆盖层必须渲染在之后保存的 HUD 根节点之上");
             Assert.That(root.GetSiblingIndex(), Is.GreaterThan(decoy.transform.GetSiblingIndex()));
             Assert.That(AddM08CampaignReviewPanel.Validate(scene, out string error), Is.True,
                 error);
@@ -892,15 +892,15 @@ namespace SengokuChronicle.Tests.EditMode
             Undo.PerformUndo();
 
             Transform restored = canvas.Find(AddM08CampaignReviewPanel.RootName);
-            Assert.That(restored, Is.Not.Null, "one Undo must restore the replaced legacy page");
+            Assert.That(restored, Is.Not.Null, "一次 Undo 必须恢复被替换的旧页面");
             Assert.That(restored.GetComponent<CampaignReviewPanel>(), Is.Not.Null);
             Assert.That(FindDeep(canvas, AddM08CampaignReviewPanel.NewScenarioButtonName), Is.Null);
             Assert.That(FindDeep(canvas, AddM08CampaignReviewPanel.ContinueButtonName), Is.Not.Null,
-                "the restored legacy page keeps its own hierarchy");
+                "恢复的旧页面保留自身层级");
             Assert.That(ObjectCount(), Is.EqualTo(count),
-                "Undo must remove every object the migration created");
+                "Undo 必须移除迁移创建的所有对象");
             Assert.That(AddM08CampaignReviewPanel.Validate(scene, out _), Is.False,
-                "the restored page is the legacy one again");
+                "恢复后的页面重新成为旧页面");
         }
 
         [Test]
@@ -916,14 +916,14 @@ namespace SengokuChronicle.Tests.EditMode
                 Is.EqualTo(AddM08CampaignReviewPanel.UpdateResult.ExistingCampaignPanel));
             Assert.That(canvas.Find(AddM08CampaignReviewPanel.RootName),
                 Is.SameAs(legacyRoot.transform),
-                "a page a user extended must not be deleted by the migration");
+                "用户扩展过的页面不得被迁移删除");
             Assert.That(FindDeep(canvas, AddM08CampaignReviewPanel.NewScenarioButtonName), Is.Null);
             Assert.That(ObjectCount(), Is.EqualTo(count));
         }
 
         /// <summary>
-        /// Rebuilds the page the first generator revision saved: the same names and hierarchy
-        /// without the new-scenario action, with the old GoldDim status ink.
+        /// 重建第一版生成器保存的页面：名称与层级相同，
+        /// 但没有新剧本动作，状态墨色为旧的 GoldDim。
         /// </summary>
         private GameObject BuildLegacyPanel(Transform parent)
         {
@@ -1033,7 +1033,7 @@ namespace SengokuChronicle.Tests.EditMode
             EventSystem eventSystem = CreateTestEventSystem();
             Assert.That(eventSystem, Is.Not.Null);
             Assert.That(EventSystem.current, Is.SameAs(eventSystem),
-                "the focus assertions must target the active EventSystem");
+                "焦点断言必须针对活动的 EventSystem");
             GameObject selectionBeforeTest = eventSystem.currentSelectedGameObject;
             Assert.That(AddM08CampaignReviewPanel.Update(scene),
                 Is.EqualTo(AddM08CampaignReviewPanel.UpdateResult.Success));
@@ -1056,7 +1056,7 @@ namespace SengokuChronicle.Tests.EditMode
                 panel.FocusNextReviewAction();
                 Assert.That(eventSystem.currentSelectedGameObject,
                     Is.EqualTo(startNew.gameObject),
-                    "Tab must reach the second action while the navigation trap is on");
+                    "导航陷阱开启时 Tab 必须能到达第二个动作");
                 Assert.That(panel.IsNewScenarioFocused, Is.True);
                 Assert.That(panel.IsContinueFocused, Is.False);
 
@@ -1065,15 +1065,15 @@ namespace SengokuChronicle.Tests.EditMode
                     Is.EqualTo(continueButton.gameObject));
                 Assert.That(panel.IsContinueFocused, Is.True);
 
-                // Submitting the selected control is the exact handler the Input System's
-                // Submit binding invokes. This fixture binds no title controller, so the
-                // action reports the missing title without changing campaign state.
+                // 提交选中控件正是 Input System Submit 绑定所调用的处理器。
+                // 本夹具没有绑定标题控制器，因此该动作只报告缺少标题，
+                // 不改动战役状态。
                 ExecuteEvents.Execute<ISubmitHandler>(startNew.gameObject,
                     new PointerEventData(eventSystem), ExecuteEvents.submitHandler);
                 Assert.That(status.text, Does.Contain("未找到标题界面"));
                 Assert.That(session.PendingCampaignReview,
                     Is.EqualTo(CampaignReviewMilestone.StageReview),
-                    "opening the selector route must not acknowledge the review");
+                    "打开选择器路线不得确认回顾");
             }
             finally
             {
@@ -1213,16 +1213,16 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(panel.BodyScrollbar.gameObject.name,
                 Is.EqualTo(CampaignReviewPanel.ScrollbarObjectName));
             Assert.That(panel.BodyScrollbar.gameObject.scene, Is.EqualTo(scroll.gameObject.scene),
-                "the generated scrollbar must stay in the scroll's preview scene");
+                "生成的滚动条必须留在滚动区的预览场景中");
             Assert.That(panel.BodyScrollbar.handleRect.gameObject.scene,
                 Is.EqualTo(scroll.gameObject.scene),
-                "the generated handle must stay in the scroll's preview scene");
+                "生成的手柄必须留在滚动区的预览场景中");
             Assert.That(scroll.GetComponentsInChildren<Scrollbar>(true), Has.Length.EqualTo(1));
             RectTransform viewport = (RectTransform)scroll.viewport;
             RectTransform track = (RectTransform)panel.BodyScrollbar.transform;
             Assert.That(track.rect.width, Is.EqualTo(24f).Within(0.01f));
             Assert.That(viewport.offsetMax.x, Is.EqualTo(-34f).Within(0.01f),
-                "the viewport reserves 2 px margin, a 24 px target and an 8 px gap");
+                "视口预留 2 px 边距、24 px 目标与 8 px 间隙");
             var viewportCorners = new Vector3[4];
             var trackCorners = new Vector3[4];
             viewport.GetWorldCorners(viewportCorners);
@@ -1231,7 +1231,7 @@ namespace SengokuChronicle.Tests.EditMode
             float trackLeft = scroll.transform.InverseTransformPoint(trackCorners[0]).x;
             Assert.That(trackLeft - viewportRight, Is.EqualTo(8f).Within(1f));
             float maximum = Mathf.Max(0f, scroll.content.rect.height - scroll.viewport.rect.height);
-            Assert.That(maximum, Is.GreaterThan(0f), "the realistic review body must overflow");
+            Assert.That(maximum, Is.GreaterThan(0f), "真实的回顾正文必须溢出");
 
             panel.ScrollBodyBy(float.MaxValue);
             Assert.That(scroll.content.anchoredPosition.y, Is.EqualTo(maximum).Within(1f));

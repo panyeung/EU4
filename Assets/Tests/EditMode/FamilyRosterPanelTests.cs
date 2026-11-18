@@ -190,7 +190,7 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(_panel.SelectedPersonId, Is.EqualTo(expected));
             Assert.That(_panel.DetailTextLine, Does.StartWith(displayName));
             Assert.That(_session.ChronicleEntries.Count, Is.EqualTo(chronicleCount),
-                "selecting a card is read-only and records no family event");
+                "选中卡片是只读的，不记录家族事件");
         }
 
         [Test]
@@ -210,9 +210,9 @@ namespace SengokuChronicle.Tests.EditMode
             Bounds markBounds = RectTransformUtility.CalculateRelativeRectTransformBounds(card, mark);
 
             Assert.That(labelBounds.Intersects(markBounds), Is.False,
-                "the textual selection marker must remain separate from the name/role lines");
+                "文字选中标记必须与姓名/身份行分开");
             Assert.That(label.preferredHeight, Is.LessThanOrEqualTo(label.rectTransform.rect.height + 0.5f),
-                "the full person label must fit inside its card instead of overflowing through the selected stamp");
+                "完整人物标签必须放在卡片内，不得溢出到选中印记上");
         }
 
         [Test]
@@ -225,7 +225,7 @@ namespace SengokuChronicle.Tests.EditMode
             Text heirLabel = heirCard.GetComponentsInChildren<Text>(true)
                 .Single(text => text.gameObject.name != FamilyRosterPanel.SelectedMarkName);
             Assert.That(heirLabel.text, Does.Contain("指定继承人"),
-                "the roster still contains the long designated-heir label this test guards");
+                "名册仍包含本测试守护的长指定继承人标签");
 
             RectTransform[] cards = _nodeLayerObject.GetComponentsInChildren<RectTransform>(true)
                 .Where(rect => rect.name.StartsWith("FamilyRosterNode_"))
@@ -241,8 +241,8 @@ namespace SengokuChronicle.Tests.EditMode
                     .Single(text => text.gameObject.name != FamilyRosterPanel.SelectedMarkName);
                 Assert.That(label.preferredHeight,
                     Is.LessThanOrEqualTo(label.rectTransform.rect.height + 0.5f),
-                    card.name + " label must fit inside its card rect instead of drawing " +
-                    "through the selected stamp");
+                    card.name + " 的标签必须放在卡片矩形内，不得画到" +
+                    "选中印记上");
             }
         }
 
@@ -263,9 +263,9 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(tighterSplit.ScrollWidth, Is.EqualTo(476f).Within(0.01f));
             Assert.That(tighterSplit.DetailWidth, Is.EqualTo(190f).Within(0.01f));
             Assert.That(FamilyRosterDetailLayout.TryCalculate(438f, out _), Is.False,
-                "the graph keeps the full two-card width and both margins");
+                "图谱保留完整两卡宽度与两侧边距");
             Assert.That(FamilyRosterDetailLayout.TryCalculate(400f, out _), Is.False,
-                "a narrow card hides the detail column rather than shrinking the graph below its minimum width");
+                "窄卡片隐藏详情栏，而不是把图谱缩到最小宽度以下");
         }
 
         [Test]
@@ -606,7 +606,7 @@ namespace SengokuChronicle.Tests.EditMode
                 "pregnancy status must not add a scene node");
 
             Assert.That(FamilyTreeLayout.NodeHeight, Is.EqualTo(120f),
-                "shared card height is fixed and a pregnancy label must not resize it");
+                "共享卡片高度固定，怀孕标签不得改变它");
             RectTransform pregnantCard = FindNode(M2FixedScenario.ChieId);
             Assert.That(pregnantCard, Is.Not.Null);
             Assert.That(pregnantCard.sizeDelta.y, Is.EqualTo(FamilyTreeLayout.NodeHeight));

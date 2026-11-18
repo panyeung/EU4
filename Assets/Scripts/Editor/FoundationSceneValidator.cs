@@ -178,9 +178,9 @@ namespace SengokuChronicle.Editor
                 !CanvasLayerOrder.ValidateBand(canvas.transform, out string overlayOrderError))
                 AddError(report, ref errors, overlayOrderError);
             else if (canvas != null)
-                report.AppendLine("PASS Canvas overlay depth order: M02 page, M03 inspector, campaign " +
-                                  "review, pending succession, M6 title, EventChoiceRoot and M06 tactical " +
-                                  "modal share one band order.");
+                report.AppendLine("PASS Canvas 覆盖层深度次序：M02 日常行动页、M03 查看器、战役" +
+                                  "回顾、待定继承、M6 标题、EventChoiceRoot 与 M06 战术" +
+                                  "弹窗共享同一条带次序。");
 
             if (controller != null)
             {

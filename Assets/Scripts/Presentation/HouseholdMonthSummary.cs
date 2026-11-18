@@ -4,11 +4,9 @@ using System.Collections.Generic;
 namespace SengokuChronicle.Presentation
 {
     /// <summary>
-    /// Builds the household "本月" body from the live month sources. The settlement
-    /// report and the industry message repeat the same text after a settlement, so the
-    /// page used to draw that sentence twice on a fixed 26 px pitch and the copies
-    /// overlapped. Lines are de-duplicated here, in order, and rendered as one flowing
-    /// block instead of fixed-pitch rows.
+    /// 从当月实时数据源拼出家宅「本月」正文。结算报告与产业消息在结算后会重复
+    /// 同一段文字，页面原先按固定 26 px 行距把这句话画了两遍，两份内容互相压住。
+    /// 这里按原有顺序去重，各行拼成一段连续文字，而不是固定行距的表格行。
     /// </summary>
     public static class HouseholdMonthSummary
     {
@@ -37,7 +35,7 @@ namespace SengokuChronicle.Presentation
             return result;
         }
 
-        /// <summary>Single wrapped body; each distinct source keeps its own paragraph.</summary>
+        /// <summary>单段自动换行正文；每个不同来源各自成段。</summary>
         public static string Join(IReadOnlyList<string> lines) =>
             string.Join("\n", Distinct(lines));
     }

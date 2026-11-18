@@ -7,11 +7,10 @@ using UnityEngine.UI;
 namespace SengokuChronicle.Presentation
 {
     /// <summary>
-    /// Pointer surface for one family roster card. It sits above the card's keyboard
-    /// button so a drag that starts on a card scrolls the graph instead of selecting a
-    /// person: a click only selects when the pointer stayed within
-    /// <see cref="DragThreshold"/> of where it went down, and drag events are forwarded
-    /// to the graph's <see cref="ScrollRect"/>. Selection stays read-only.
+    /// 单张家族名册卡片的指针接收面。它位于卡片的键盘按钮之上，
+    /// 因此在卡片上起手的拖拽会滚动图谱，而不是选中人物：只有指针抬起时
+    /// 仍停在 <see cref="DragThreshold"/> 范围内才算点击选中，
+    /// 拖拽事件则转发给图谱的 <see cref="ScrollRect"/>。选中始终保持只读。
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class FamilyRosterCardInteraction : MonoBehaviour, IPointerDownHandler,

@@ -766,9 +766,8 @@ namespace SengokuChronicle.Tests.EditMode
                 Assert.That(FindDeep(headRail, "HouseholdHeir").GetComponent<Text>().text,
                     Is.EqualTo(session.FixedHeirSummary));
 
-            // The industry panel keeps the centre appointments column at its authored
-            // aspect: one uniform scale into the free band, centred there, never over the
-            // month block or the right column.
+            // 产业面板让中央任命列保持原始纵横比：统一缩放放进可用带区，
+            // 在带区内居中，绝不压在月度区块或右列上。
             RectTransform panelRect = (RectTransform)householdPanel.transform;
             float bandLeft = ReferenceGalleryNavigator.HouseholdHeadRailPosition.x +
                              ReferenceGalleryNavigator.HouseholdHeadRailSize.x * 0.5f +
@@ -781,12 +780,12 @@ namespace SengokuChronicle.Tests.EditMode
             float bandBottom = -360f + ReferenceGalleryNavigator.HouseholdIndustryPageMargin;
             Vector2 visual = Vector2.Scale(panelRect.sizeDelta, panelRect.localScale);
             Assert.That(panelRect.localScale.y, Is.EqualTo(panelRect.localScale.x).Within(0.0001f),
-                "the embedded panel is scaled uniformly, never squashed");
+                "嵌入式面板按统一比例缩放，绝不压扁");
             Assert.That(visual.x, Is.LessThanOrEqualTo(bandRight - bandLeft + 0.01f));
             Assert.That(visual.y, Is.LessThanOrEqualTo(bandTop - bandBottom + 0.01f));
             Assert.That(panelRect.anchoredPosition.x,
                 Is.EqualTo((bandLeft + bandRight) * 0.5f).Within(0.01f),
-                "the panel is centred in the measured household band");
+                "面板在测得的家宅带区内居中");
             Assert.That(panelRect.anchoredPosition.y,
                 Is.EqualTo((bandTop + bandBottom) * 0.5f).Within(0.01f));
             Rect householdCard = Rect.MinMaxRect(-householdCardHalfWidth,
@@ -794,18 +793,18 @@ namespace SengokuChronicle.Tests.EditMode
             Rect panelCardBounds = WorldRect(panelRect);
             Assert.That(householdCard.Contains(panelCardBounds.min) &&
                         householdCard.Contains(panelCardBounds.max), Is.True,
-                "the fitted industry panel stays inside the 760x560 household card");
+                "适配后的产业面板留在 760x560 家宅卡片内");
             Transform monthBlock = navigator.HouseholdComposition != null
                 ? FindDeep(navigator.HouseholdComposition.transform, "HouseholdMonthEvent")
                 : null;
             Assert.That(monthBlock, Is.Not.Null,
-                "the fixture supplies live month text so the month region is actually built");
+                "夹具提供实时月度文字，月度区域才会真正构建");
             Rect monthWorld = WorldRect((RectTransform)monthBlock);
             Assert.That(householdCard.Contains(monthWorld.min) &&
                         householdCard.Contains(monthWorld.max), Is.True,
-                "the month region stays inside the household card, not only the canvas");
+                "月度区域留在家宅卡片内，而不只是画布内");
             Assert.That(panelCardBounds.Overlaps(monthWorld), Is.False,
-                "the industry panel never covers the month block");
+                "产业面板绝不覆盖月度区块");
 
             // Pending decisions come from the live queue; absent data stays absent.
             string[] pendingIds = session.EventRuntimeStateForSave.pendingEventIds;
@@ -837,7 +836,7 @@ namespace SengokuChronicle.Tests.EditMode
                 if (image.name == "HouseholdIndustryScrollViewport")
                 {
                     Assert.That(image.raycastTarget, Is.True,
-                        "the visible scroll viewport must receive wheel and drag input");
+                        "可见滚动视口必须接收滚轮与拖拽输入");
                     continue;
                 }
                 Assert.That(image.raycastTarget, Is.False,
@@ -913,14 +912,14 @@ namespace SengokuChronicle.Tests.EditMode
                 "the industry controller root remains full-screen for its child controls");
             Assert.That(rootRect.offsetMin, Is.EqualTo(Vector2.zero));
             Assert.That(rootRect.offsetMax, Is.EqualTo(Vector2.zero));
-            // The panel keeps its authored 760x560 rect and is scaled uniformly into the
-            // centre band, so its parchment always contains its own children. 620 was the
-            // old non-uniform width; the height follows from the same factor now.
+            // 面板保留原始 760x560 矩形并统一缩放放进中央带区，
+            // 因此其羊皮纸始终包含自身子节点。620 是旧的
+            // 非统一宽度；现在高度由同一系数推出。
             float fitScale = panelRect.localScale.x;
             Assert.That(panelRect.localScale.y, Is.EqualTo(fitScale).Within(0.0001f),
-                "the embedded panel is scaled uniformly, never squashed");
+                "嵌入式面板按统一比例缩放，绝不压扁");
             Assert.That(panelRect.sizeDelta, Is.EqualTo(new Vector2(760f, 560f)),
-                "the authored rect is the parchment the content is measured against");
+                "原始矩形是内容测量所依据的羊皮纸");
             float bandLeft = ReferenceGalleryNavigator.HouseholdHeadRailPosition.x +
                              ReferenceGalleryNavigator.HouseholdHeadRailSize.x * 0.5f +
                              ReferenceGalleryNavigator.HouseholdIndustryBandGap;
@@ -932,7 +931,7 @@ namespace SengokuChronicle.Tests.EditMode
             float bandBottom = -360f + ReferenceGalleryNavigator.HouseholdIndustryPageMargin;
             Vector2 visual = Vector2.Scale(panelRect.sizeDelta, panelRect.localScale);
             Assert.That(visual.x, Is.LessThanOrEqualTo(bandRight - bandLeft + 0.01f),
-                "the panel never exceeds the free centre band");
+                "面板绝不超出中央可用带区");
             Assert.That(visual.y, Is.LessThanOrEqualTo(bandTop - bandBottom + 0.01f));
             Assert.That(panelRect.anchoredPosition.x,
                 Is.EqualTo((bandLeft + bandRight) * 0.5f).Within(0.01f));
@@ -976,12 +975,12 @@ namespace SengokuChronicle.Tests.EditMode
             Rect card = navigator.LastHouseholdCardRect;
             Rect fittedPanel = navigator.LastHouseholdIndustryPanelRect;
             Assert.That(fittedPanel.height, Is.EqualTo(expectedPanelHeight).Within(0.01f),
-                "the month strip leaves a stable scroll viewport regardless of canvas aspect");
+                "无论画布纵横比如何，月度带区都留出稳定的滚动视口");
             Assert.That(navigator.LastHouseholdIndustryFit.Readable, Is.EqualTo(expectMonthBlock),
-                "a scrollable tall panel keeps its authored readable scale when the card can host it");
+                "卡片能承载时，可滚动的更高面板保持其原始可读比例");
             Assert.That(navigator.HouseholdIndustryBelowReadableScale, Is.EqualTo(!expectMonthBlock));
             Assert.That(card.Contains(fittedPanel.min) && card.Contains(fittedPanel.max), Is.True,
-                "the viewport stays within the explicit household card");
+                "视口留在显式家宅卡片内");
             if (expectMonthBlock)
             {
                 Transform viewport = FindDeep(navigator.HouseholdComposition.transform,
@@ -993,26 +992,26 @@ namespace SengokuChronicle.Tests.EditMode
                 Assert.That(scroll.horizontal, Is.False);
                 Assert.That(scroll.content, Is.Not.Null);
                 Assert.That(panel.transform.IsChildOf(scroll.content), Is.True,
-                    "the complete tall panel remains reachable in the scroll content");
+                    "完整高面板仍可在滚动内容中到达");
             }
             Transform month = FindDeep(navigator.HouseholdComposition.transform,
                 "HouseholdMonthEvent");
             Assert.That(month != null, Is.EqualTo(expectMonthBlock),
-                "a summary block exists only when the card can reserve its minimum height");
+                "只有卡片能预留最小高度时才存在摘要区块");
             Assert.That(FindDeep(navigator.HouseholdComposition.transform,
                 "HouseholdMonthEventTitle") != null, Is.EqualTo(expectMonthBlock),
-                "an omitted summary does not leave a floating 本月 title");
+                "省略摘要不会留下孤立的本月标题");
 
             if (month != null)
             {
                 Rect monthRect = WorldRect((RectTransform)month);
                 Assert.That(card.Contains(monthRect.min) && card.Contains(monthRect.max), Is.True,
-                    "the month block stays inside the card");
+                    "月度区块留在卡片内");
                 Assert.That(monthRect.Overlaps(fittedPanel), Is.False,
-                    "the month block never overlaps the fitted panel");
+                    "月度区块绝不与适配后的面板重叠");
                 Assert.That(monthRect.height,
                     Is.EqualTo(expectedMonthHeight).Within(0.01f),
-                    "the summary occupies only its actual reserved strip");
+                    "摘要只占用其实际预留的带区");
             }
         }
 
@@ -1054,7 +1053,7 @@ namespace SengokuChronicle.Tests.EditMode
             navigator.ShowPage(ReferenceGalleryPage.Household);
 
             Assert.That(navigator.LastHouseholdIndustryFit.Readable, Is.True,
-                "the SC-019 panel must meet the readable floor beside live month text");
+                "SC-019 面板在实时月度文字旁必须达到可读下限");
             Assert.That(navigator.HouseholdIndustryBelowReadableScale, Is.False);
             Transform month = FindDeep(navigator.HouseholdComposition.transform,
                 "HouseholdMonthEvent");
@@ -1062,45 +1061,45 @@ namespace SengokuChronicle.Tests.EditMode
             Rect card = navigator.LastHouseholdCardRect;
             Rect monthRect = WorldRect((RectTransform)month);
             Assert.That(card.Contains(monthRect.min) && card.Contains(monthRect.max), Is.True,
-                "the live summary remains inside the household card");
+                "实时摘要留在家宅卡片内");
             if (expectScroll)
             {
                 Transform viewport = FindDeep(navigator.HouseholdComposition.transform,
                     "HouseholdIndustryScrollViewport");
                 Assert.That(viewport, Is.Not.Null,
-                    "the taller M05 industry panel needs a readable scroll viewport");
+                    "更高的 M05 产业面板需要可读的滚动视口");
                 ScrollRect scroll = viewport.GetComponent<ScrollRect>();
                 Assert.That(scroll, Is.Not.Null);
                 Assert.That(scroll.vertical, Is.True);
                 Assert.That(scroll.horizontal, Is.False);
                 Assert.That(viewport.GetComponent<Image>().raycastTarget, Is.True,
-                    "the visible viewport receives pointer scrolling without making decorations raycastable");
+                    "可见视口接收指针滚动，同时不让装饰件成为命中目标");
                 Assert.That(scroll.viewport, Is.EqualTo(viewport as RectTransform));
                 Assert.That(viewport.GetComponent<RectMask2D>(), Is.Not.Null,
-                    "overflow must be clipped to the visible viewport");
+                    "溢出必须裁切到可见视口");
                 Assert.That(scroll.content, Is.Not.Null);
                 Assert.That(panel.transform.IsChildOf(scroll.content), Is.True,
-                    "the complete tall panel must remain reachable inside the viewport");
+                    "完整高面板必须仍可在视口内到达");
                 Rect viewportRect = WorldRect((RectTransform)viewport);
                 Assert.That(card.Contains(viewportRect.min) && card.Contains(viewportRect.max), Is.True);
                 Assert.That(scroll.content.rect.height, Is.GreaterThan(viewportRect.height),
-                    "the scroll content must extend beyond the viewport for vertical scrolling");
+                    "滚动内容必须超出视口高度才能纵向滚动");
                 Rect contentRect = WorldRect(scroll.content);
                 Rect panelContentRect = WorldRect((RectTransform)panel.transform);
                 Assert.That(panelContentRect.xMin, Is.EqualTo(contentRect.xMin).Within(0.01f));
                 Assert.That(panelContentRect.xMax, Is.EqualTo(contentRect.xMax).Within(0.01f));
                 Assert.That(panelContentRect.yMin, Is.EqualTo(contentRect.yMin).Within(0.01f));
                 Assert.That(panelContentRect.yMax, Is.EqualTo(contentRect.yMax).Within(0.01f),
-                    "the panel fills the scroll content so none of it is stranded outside the scroll range");
+                    "面板填满滚动内容，没有任何部分滞留在滚动范围之外");
                 Assert.That(viewportRect.Overlaps(monthRect), Is.False,
-                    "the scroll viewport and month strip must not overlap");
+                    "滚动视口与月度带区不得重叠");
             }
             else
             {
                 Rect panelRect = WorldRect((RectTransform)panel.transform);
                 Assert.That(card.Contains(panelRect.min) && card.Contains(panelRect.max), Is.True);
                 Assert.That(panelRect.Overlaps(monthRect), Is.False,
-                    "the live summary strip and embedded parchment must not overlap");
+                    "实时摘要带区与嵌入羊皮纸不得重叠");
             }
         }
 
@@ -1153,10 +1152,10 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(resizedViewport, Is.Not.Null);
             Assert.That(panel.transform.IsChildOf(FindDeep(resizedViewport,
                 "HouseholdIndustryScrollContent")), Is.True,
-                "the original IndustryPanel must be restored and reparented on every household entry");
+                "每次进入家宅页都必须恢复并重新挂载原来的 IndustryPanel");
             Assert.That(WorldRect((RectTransform)resizedViewport).height,
                 Is.EqualTo(470f).Within(0.01f),
-                "returning to the household page recomputes the viewport for the resized canvas");
+                "回到家宅页时会按缩放后的画布重新计算视口");
         }
 
         [Test]

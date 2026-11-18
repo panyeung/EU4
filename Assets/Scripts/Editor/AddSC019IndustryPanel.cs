@@ -81,9 +81,9 @@ namespace SengokuChronicle.Editor
         private const float PanelWidth = 760f;
         private const float PanelHeight = 700f;
 
-        // One authored geometry shared by creation and repair: a control whose repair
-        // position or size drifts from its creation position fails Validate on the same
-        // scene, so both paths read every value from here.
+        // 创建与修复共用同一套原始几何：控件修复后的位置或尺寸
+        // 一旦偏离创建位置，同一场景的 Validate 就会失败，
+        // 因此两条路径的每个数值都从这里读取。
         private const float ContentWidth = 700f;
         private const float TitleY = 325f;
         private const float TitleHeight = 38f;
@@ -91,9 +91,8 @@ namespace SengokuChronicle.Editor
         private const float ResourcesHeight = 30f;
         private const float BlockReasonY = 256f;
         private const float LineHeight = 24f;
-        // The status line carries month-end text, so it authors three lines of headroom
-        // instead of a single clipped line; a one-line band is what let the settlement
-        // summary paint over the farm row.
+        // 状态行承载月末文字，因此预留三行高度，而不是裁成一行的单行；
+        // 单行带区正是让结算摘要压到农田行上的原因。
         private const float MessageY = 214f;
         private const float MessageHeight = 56f;
         private const int MessageFontSize = 14;
@@ -101,8 +100,8 @@ namespace SengokuChronicle.Editor
         private const HorizontalWrapMode MessageWrap = HorizontalWrapMode.Wrap;
         private const VerticalWrapMode MessageOverflow = VerticalWrapMode.Truncate;
         private const float MessageLineHeightFactor = 1.16f;
-        // Create, repair and Validate share this capacity: the band must hold the panel's
-        // safe line budget before it is allowed to show a full status line.
+        // 创建、修复与 Validate 共用这一容量：带区必须容纳面板的安全行预算，
+        // 才允许显示完整状态行。
         private const float MessageCapacityHeight =
             IndustryPanel.StatusBandSafeLines * MessageFontSize * MessageLineHeightFactor;
         private const float PreviewY = -168f;
@@ -117,9 +116,8 @@ namespace SengokuChronicle.Editor
         private const float ReportY = -266f;
         private const float ReportHeight = 68f;
         private const int ReportFontSize = 14;
-        // The report carries the settlement, the market month and the shortage status, so
-        // it wraps horizontally and scrolls vertically inside its authored viewport instead
-        // of clipping long carried detail or painting over the close button.
+        // 报告承载结算、市场月与短缺状态，因此在原始视口内横向换行、
+        // 纵向滚动，而不是裁掉长段携带详情或压到关闭按钮上。
         private const HorizontalWrapMode ReportWrap = HorizontalWrapMode.Wrap;
         private const VerticalWrapMode ReportOverflow = VerticalWrapMode.Truncate;
         private const float ReportScrollbarWidth = 8f;
@@ -143,9 +141,9 @@ namespace SengokuChronicle.Editor
         private static readonly Vector2 RowUnassignSize = new Vector2(120f, 32f);
         private static readonly Vector2 RowCandidateAreaPosition = new Vector2(0f, -46f);
 
-        // The header crest sits left of the title line, inside the 760x700 modal. The
-        // title keeps its left-aligned text and moves just far enough right to clear it;
-        // both read the authored title geometry so create, repair and Validate agree.
+        // 标题纹章位于标题行左侧，仍在 760x700 弹窗内。标题保持左对齐，
+        // 只向右让出刚好避开纹章的距离；两者都读取原始标题几何，
+        // 使创建、修复与 Validate 一致。
         private static readonly Vector2 HeaderCrestPosition = new Vector2(-342f, TitleY);
         private static readonly Vector2 HeaderCrestSize = new Vector2(32f, 32f);
         private static readonly Vector2 TitlePosition = new Vector2(14f, TitleY);
@@ -260,8 +258,8 @@ namespace SengokuChronicle.Editor
                 farm.parent != panel || trading.parent != panel || preview.parent != panel ||
                 confirm.parent != panel || cancel.parent != panel)
                 return Invalid(out error,
-                    "Industry title, resources, block reason, message, rows, preview, actions, " +
-                    "report scroll area and close button must sit in their authored parents.");
+                    "产业标题、资源、阻塞原因、消息、各行、预览、动作、" +
+                    "报告滚动区与关闭按钮必须位于各自原始的父节点下。");
 
             if (!ValidateRow(scene, farm, FarmNameTextName, FarmStatusTextName, FarmDetailTextName,
                     FarmAssigneeTextName, FarmUnassignButtonName, FarmCandidateContainerName,
@@ -343,31 +341,31 @@ namespace SengokuChronicle.Editor
                 return Invalid(out error, "The industry message line must start hidden.");
             if (messageText.fontSize != MessageFontSize)
                 return Invalid(out error,
-                    "The industry message line must use the authored font size; re-run the generator.");
+                    "产业消息行必须使用原始字号；请重跑生成器。");
             if (messageText.alignment != MessageAlignment)
                 return Invalid(out error,
-                    "The industry message line must use the authored alignment; re-run the generator.");
+                    "产业消息行必须使用原始对齐方式；请重跑生成器。");
             if (messageText.horizontalOverflow != MessageWrap ||
                 messageText.verticalOverflow != MessageOverflow)
                 return Invalid(out error,
-                    "The industry message line must wrap and clip inside its band; re-run the generator.");
+                    "产业消息行必须在带区内换行并裁切；请重跑生成器。");
             float messageBandHeight = ((RectTransform)message).rect.height;
             if (Mathf.Abs(messageBandHeight - MessageHeight) > 0.5f ||
                 messageBandHeight + 0.5f < MessageCapacityHeight)
                 return Invalid(out error,
-                    "The industry message line must use the authored height and hold its " +
-                    "multi-line status text; re-run the generator.");
+                    "产业消息行必须使用原始高度，并容纳其" +
+                    "多行状态文字；请重跑生成器。");
             if (reportText.fontSize != ReportFontSize)
                 return Invalid(out error,
-                    "The industry report line must use the authored font size; re-run the generator.");
+                    "产业报告行必须使用原始字号；请重跑生成器。");
             if (reportText.verticalOverflow != ReportOverflow)
                 return Invalid(out error,
-                    "The industry report must clip inside its own region so it cannot paint " +
-                    "over the close control; re-run the generator.");
+                    "产业报告必须裁切在自身区域内，不得压到" +
+                    "关闭控件之上；请重跑生成器。");
             if (reportText.horizontalOverflow != ReportWrap)
                 return Invalid(out error,
-                    "The industry report must wrap horizontally inside its scroll viewport; " +
-                    "re-run the generator.");
+                    "产业报告必须在滚动视口内横向换行；" +
+                    "请重跑生成器。");
             ScrollRect reportScrollRect = reportScroll.GetComponent<ScrollRect>();
             Scrollbar reportBar = reportScrollbar.GetComponent<Scrollbar>();
             Image reportViewportImage = reportViewport.GetComponent<Image>();
@@ -383,9 +381,9 @@ namespace SengokuChronicle.Editor
                 reportBar.direction != Scrollbar.Direction.BottomToTop ||
                 !reportScrollbar.gameObject.activeSelf)
                 return Invalid(out error,
-                    "The industry report scroll area must wire a vertical scroll rect, " +
-                    "a raycastable masked viewport, its content and a visible scrollbar; " +
-                    "re-run the generator.");
+                    "产业报告滚动区必须接好纵向滚动矩形、" +
+                    "可命中的遮罩视口、其内容与可见滚动条；" +
+                    "请重跑生成器。");
             RectTransform reportViewportRect = reportViewport as RectTransform;
             RectTransform reportContentRect = reportContent as RectTransform;
             RectTransform reportScrollRectTransform = reportScroll as RectTransform;
@@ -399,21 +397,21 @@ namespace SengokuChronicle.Editor
                 Mathf.Abs(reportViewportRect.offsetMax.x) > 0.5f ||
                 Mathf.Abs(reportViewportRect.offsetMax.y) > 0.5f)
                 return Invalid(out error,
-                    "The industry report must keep its authored 700x68 viewport; re-run the generator.");
+                    "产业报告必须保留其原始的 700x68 视口；请重跑生成器。");
             if (reportContentRect.rect.height + 0.5f < ReportHeight ||
                 reportContentRect.rect.height + 0.5f < reportText.preferredHeight)
                 return Invalid(out error,
-                    "The industry report content must contain the whole report text so it can " +
-                    "be reached by scrolling; re-run the generator.");
+                    "产业报告内容必须容纳整份报告文字，以便" +
+                    "通过滚动到达；请重跑生成器。");
             if (previewLabel.fontSize != PreviewFontSize)
                 return Invalid(out error,
-                    "The industry preview line must use the authored font size; re-run the generator.");
+                    "产业预览行必须使用原始字号；请重跑生成器。");
             Text confirmLabel = confirm.GetComponentInChildren<Text>(true);
             Text cancelLabel = cancel.GetComponentInChildren<Text>(true);
             if (confirmLabel == null || cancelLabel == null ||
                 confirmLabel.fontSize != ActionFontSize || cancelLabel.fontSize != ActionFontSize)
                 return Invalid(out error,
-                    "The industry action buttons must use the authored font size; re-run the generator.");
+                    "产业动作按钮必须使用原始字号；请重跑生成器。");
             if (!titleText.text.Contains("产业"))
                 return Invalid(out error, "The industry panel title must contain 产业.");
 
@@ -928,8 +926,8 @@ namespace SengokuChronicle.Editor
         }
 
         /// <summary>
-        /// Applies the current row geometry and adds the detail line an older scene lacks.
-        /// Only the supplied row's own controls are touched.
+        /// 应用当前行几何，并补上旧场景缺少的详情行。
+        /// 只改动所给行自身的控件。
         /// </summary>
         private static void RepairRowControls(Scene scene, Font font,
             string nameText, string statusText, string detailText, string assigneeText,
@@ -950,8 +948,8 @@ namespace SengokuChronicle.Editor
         }
 
         /// <summary>
-        /// Adds the assignment preview line and its confirm/cancel buttons to a scene that
-        /// predates them. Both actions start hidden and are shown only for a pending choice.
+        /// 为早于任命预览的场景补上预览行与其确认/取消按钮。
+        /// 两个动作初始隐藏，只在有选择待确认时显示。
         /// </summary>
         private static void EnsurePreviewControls(Scene scene, Transform panel, Font font)
         {
@@ -969,9 +967,8 @@ namespace SengokuChronicle.Editor
         }
 
         /// <summary>
-        /// Re-applies the authored font sizes a repaired scene may still carry from an older
-        /// layout, so the preview, the action buttons and the month report wrap inside their
-        /// boxes, and keeps the report clipped to its own region.
+        /// 重新应用修复场景可能残留的旧布局字号，使预览、动作按钮
+        /// 与月度报告在各自框内换行，并让报告保持裁切在自身区域内。
         /// </summary>
         private static void NormalizePanelTypography(Scene scene)
         {
@@ -984,10 +981,9 @@ namespace SengokuChronicle.Editor
         }
 
         /// <summary>
-        /// The report viewport carries the month settlement, the market month and any carried
-        /// rollback/failure detail. The label wraps horizontally and clips vertically inside a
-        /// content rect that grows to the label's preferred height, so a long report stays
-        /// reachable through the report scrollbar instead of painting past the close button.
+        /// 报告视口承载月度结算、市场月以及任何携带的回滚/失败详情。
+        /// 标签横向换行、纵向裁切，内容矩形增高到标签首选高度，
+        /// 因此长报告可通过报告滚动条到达，而不会画过关闭按钮。
         /// </summary>
         private static void ApplyReportSettings(Text label)
         {
@@ -1003,9 +999,9 @@ namespace SengokuChronicle.Editor
         }
 
         /// <summary>
-        /// Creates or repairs the report scroll hierarchy for an existing report label: a
-        /// scroll rect, a masked viewport that keeps the authored 700x68 region, the content
-        /// rect that holds the whole report, and a visible vertical scrollbar.
+        /// 为既有报告标签创建或修复报告滚动层级：一个滚动矩形、
+        /// 一个保留原始 700x68 区域的遮罩视口、
+        /// 容纳整份报告的内容矩形，以及一条可见的纵向滚动条。
         /// </summary>
         private static void EnsureReportScrollArea(Scene scene, Transform panel, Transform report)
         {
@@ -1030,9 +1026,9 @@ namespace SengokuChronicle.Editor
             Image viewportImage = viewport.GetComponent<Image>();
             Undo.RecordObject(viewportImage, UndoName);
             viewportImage.color = new Color(1f, 1f, 1f, 0f);
-            // The viewport is the pointer surface inside the ScrollRect. Its transparent
-            // Image must be a raycast target so wheel and drag events bubble up the
-            // viewport -> ScrollRect chain instead of falling through to the panel image.
+            // 视口是 ScrollRect 内的指针接收面。它的透明 Image
+            // 必须可命中，滚轮与拖拽事件才会沿视口 → ScrollRect
+            // 冒泡，而不是穿透到面板图。
             viewportImage.raycastTarget = true;
             EditorUtility.SetDirty(viewportImage);
             RectTransform viewportRect = viewport as RectTransform;
@@ -1092,7 +1088,7 @@ namespace SengokuChronicle.Editor
             FitReportContent(reportLabel, (RectTransform)viewport, contentRect);
         }
 
-        /// <summary>Positions and wires the visible vertical scrollbar beside the viewport.</summary>
+        /// <summary>把可见纵向滚动条摆在视口旁并接好线。</summary>
         private static void ConfigureReportScrollbar(Scene scene, Transform bar)
         {
             SetRect(bar, new Vector2(ContentWidth * 0.5f + ReportScrollbarGap +
@@ -1132,7 +1128,7 @@ namespace SengokuChronicle.Editor
             EditorUtility.SetDirty(scrollbar);
         }
 
-        /// <summary>Grows the report content to the label's full height inside the viewport.</summary>
+        /// <summary>在视口内把报告内容增高到标签的完整高度。</summary>
         private static void FitReportContent(Text report, RectTransform viewport, RectTransform content)
         {
             if (content == null || viewport == null)
@@ -1151,7 +1147,7 @@ namespace SengokuChronicle.Editor
             Undo.SetTransformParent(child, parent, UndoName);
         }
 
-        /// <summary>Hides a control through the same Undo transaction as its repair.</summary>
+        /// <summary>通过与修复相同的 Undo 事务隐藏一个控件。</summary>
         private static void SetActiveRecorded(Transform target)
         {
             if (target == null || !target.gameObject.activeSelf)
@@ -1161,9 +1157,9 @@ namespace SengokuChronicle.Editor
         }
 
         /// <summary>
-        /// One authored contract for the status band: font, alignment, wrap and vertical
-        /// clipping. Creation and repair both apply it, and Validate rejects any scene that
-        /// differs, so a longer status can never overrun the band.
+        /// 状态带区的一份原始约定：字体、对齐、换行与纵向裁切。
+        /// 创建与修复都应用它，Validate 拒绝任何不一致的场景，
+        /// 因此更长的状态永远不会溢出带区。
         /// </summary>
         private static void ApplyStatusBandSettings(Text label)
         {
@@ -1265,11 +1261,10 @@ namespace SengokuChronicle.Editor
         }
 
         /// <summary>
-        /// Applies the approved M05 industry styling to the existing controls: the original
-        /// generated parchment tile on the modal surface, the shared parchment/indigo palette
-        /// on rows and text, and the generated clan crest in the header. Apart from adding the
-        /// crest and placing the title line that clears it, no control moves and none is
-        /// recreated, so assignments, controls and the authored modal geometry are unchanged.
+        /// 把已获批的 M05 产业样式应用到既有控件：弹窗面上原本生成的
+        /// 羊皮纸底纹，行与文字上的共享羊皮纸/靛蓝配色，以及页眉里
+        /// 生成的家族纹章。除了添加纹章并把标题行让到避开它的位置，
+        /// 不改动也不重建任何控件，因此绑定、控件与原始弹窗几何都保持不变。
         /// </summary>
         private static void ApplyArt(Scene scene, Transform root, Transform panel)
         {
@@ -1427,9 +1422,8 @@ namespace SengokuChronicle.Editor
         }
 
         /// <summary>
-        /// Resolves every authored industry control, then writes both the live and the
-        /// serialized panel references. Create and repair share it so the two paths cannot
-        /// bind different control sets.
+        /// 解析每个原始产业控件，然后写入实时与序列化的面板引用。
+        /// 创建与修复共用它，使两条路径不会绑定不同的控件集。
         /// </summary>
         private static void BindIndustryPanel(Scene scene, IndustryPanel panel, GameSession session,
             GameObject panelRoot, Button open, Button close, Text title, Text resources, Text block,
@@ -1452,7 +1446,7 @@ namespace SengokuChronicle.Editor
                 tradingAssignee == null || tradingUnassign == null || preview == null ||
                 confirm == null || cancel == null)
             {
-                error = "Complete SC-019 industry controls could not be resolved.";
+                error = "无法解析完整的 SC-019 产业控件。";
                 return;
             }
 

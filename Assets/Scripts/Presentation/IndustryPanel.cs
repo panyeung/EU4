@@ -41,31 +41,30 @@ namespace SengokuChronicle.Presentation
         [SerializeField] private Button confirmButton;
         [SerializeField] private Button cancelButton;
 
-        /// <summary>Reason shown when the scene has no confirmation controls.</summary>
+        /// <summary>场景没有确认控件时显示的说明。</summary>
         public const string ConfirmUnboundNotice =
             "任命确认控件未绑定，本页暂不能选择候选人；请重新生成产业面板。";
 
         /// <summary>
-        /// Lines the authored status band can hold before the panel stops echoing the full
-        /// text. The generator derives its band height from this budget.
+        /// 原始状态带在面板停止回显全文之前能容纳的行数。
+        /// 生成器据此推导带区高度。
         /// </summary>
         public const int StatusBandSafeLines = 3;
 
         /// <summary>
-        /// Concise status used when the full message is too long for the band. It points at
-        /// the report without claiming an outcome, so a rollback or a rejected action is
-        /// never restated as a completed settlement.
+        /// 全文超出带区时使用的简短状态。它指向报告区，而不宣称结果，
+        /// 因此回滚或被拒的操作永远不会被说成已完成的结算。
         /// </summary>
         public const string ReportPointerStatus = "本页状态文字较长，完整内容见下方报告，可上下滚动查看。";
 
         /// <summary>
-        /// Separator between a carried status message and the report facts it precedes.
-        /// The report region is the only other text surface this panel owns.
+        /// 携带状态消息与其后报告事实之间的分隔符。
+        /// 报告区是本面板拥有的唯一另一处文字面。
         /// </summary>
         private const string ReportCarrySeparator = " ｜ ";
 
-        // Authored report band in the 760x700 panel. The household gallery presents a
-        // 760x560 card, so the live band lifts and shortens to stay inside that card.
+        // 760x700 面板里原始的报告带。家宅陈列展示 760x560 的卡片，
+        // 因此实时带区会上移并缩短，以留在那张卡片内。
         private const float ReportBandHeight = 68f;
         private const float ReportBandCenterY = -266f;
         private const float ReportBandBottomMargin = 4f;
@@ -84,9 +83,9 @@ namespace SengokuChronicle.Presentation
         private readonly List<PersonId> _eligiblePeople = new List<PersonId>();
 
         /// <summary>
-        /// Required bindings. The message band is not listed: a scene authored before it
-        /// existed still works, and the block-reason label carries the same notices the
-        /// band would show. No other optional control can disable the panel.
+        /// 必需的绑定。消息带不在此列：在它出现之前构建的场景仍然可用，
+        /// 阻塞原因标签承载了带区会显示的同样提示。
+        /// 其它可选控件都不能让面板失效。
         /// </summary>
         public bool IsBound =>
             gameSession != null && panelRoot != null && openButton != null && closeButton != null &&
@@ -103,13 +102,13 @@ namespace SengokuChronicle.Presentation
         public string MessageLine => messageText != null ? messageText.text : string.Empty;
         public bool MessageVisible => messageText != null && messageText.gameObject.activeSelf;
 
-        /// <summary>True when the band shows <see cref="ReportPointerStatus"/> instead of the full text.</summary>
+        /// <summary>带区显示 <see cref="ReportPointerStatus"/> 而非全文时为 true。</summary>
         public bool StatusPointerActive { get; private set; }
 
-        /// <summary>Lines the band can hold with the authored font and height.</summary>
+        /// <summary>按原始字体与高度，带区能容纳的行数。</summary>
         public int StatusBandLineBudget { get; private set; }
 
-        /// <summary>Wrapped line count of the full message at the band width; 0 when unmeasured.</summary>
+        /// <summary>全文在带区宽度下的换行行数；未测量时为 0。</summary>
         public int StatusLineCount { get; private set; }
         public string ReportLine => reportText != null ? reportText.text : string.Empty;
         public string FarmStatus => farmStatusText != null ? farmStatusText.text : string.Empty;
@@ -128,10 +127,10 @@ namespace SengokuChronicle.Presentation
         public string PreviewLine => previewText != null ? previewText.text : string.Empty;
         public bool PreviewVisible => previewText != null && previewText.gameObject.activeSelf;
 
-        /// <summary>Industry awaiting confirmation; empty when nothing is selected.</summary>
+        /// <summary>待确认的产业；没有选中时为空。</summary>
         public string PendingIndustryId => _pendingIndustryId;
 
-        /// <summary>Person awaiting confirmation; empty when nothing is selected.</summary>
+        /// <summary>待确认的人物；没有选中时为空。</summary>
         public PersonId PendingPersonId => _pendingPersonId;
         public bool HasPendingAssignment => !string.IsNullOrEmpty(_pendingIndustryId);
         public bool ConfirmVisible => confirmButton != null && confirmButton.gameObject.activeSelf;
@@ -139,9 +138,8 @@ namespace SengokuChronicle.Presentation
         public bool CancelVisible => cancelButton != null && cancelButton.gameObject.activeSelf;
 
         /// <summary>
-        /// A scene authored before the confirm controls existed can project appointments but
-        /// cannot commit them. Selection is refused and explained instead of becoming a
-        /// one-click dead end.
+        /// 在确认控件出现之前构建的场景可以预演任命，但无法提交。
+        /// 选中会被拒绝并说明原因，而不是变成一键死路。
         /// </summary>
         public bool CanConfirmSelection => confirmButton != null && cancelButton != null;
         public int EligibleCandidateTotal => _eligiblePeople.Count;
@@ -256,8 +254,8 @@ namespace SengokuChronicle.Presentation
         }
 
         /// <summary>
-        /// Hides the page and drops any unconfirmed choice, so reopening never restores a
-        /// selection the player could no longer see when they left.
+        /// 隐藏页面并丢弃未确认的选择，因此重新打开不会恢复
+        /// 玩家离开时已无法看到的选中。
         /// </summary>
         public void Close()
         {
@@ -285,12 +283,12 @@ namespace SengokuChronicle.Presentation
             blockReasonText.text = view.BlockReason;
             blockReasonText.gameObject.SetActive(showBlock);
 
-            // The band is measured before the rows so a message that cannot fit becomes a
-            // report pointer, and the full text is then handed to the report region.
+            // 先量带区再排行，放不下的消息会变成报告指针，
+            // 全文随后交给报告区。
             string reportLine = BuildReportLine(view);
             string statusLine = SelectStatusLine(view.LastMessage);
-            // Whatever the band cannot show stays readable in the report region instead of
-            // vanishing behind the band's authored truncation.
+            // 带区显示不了的内容仍留在报告区可读，
+            // 而不是消失在带区原始的截断里。
             if (CarriesFullMessage(view.LastMessage) &&
                 !ContainsReportText(reportLine, view.LastMessage))
                 reportLine = CarryIntoReport(reportLine, view.LastMessage);
@@ -300,8 +298,8 @@ namespace SengokuChronicle.Presentation
                 messageText.gameObject.SetActive(statusLine.Length > 0);
             }
 
-            // A selection the domain can no longer accept is dropped before the rows are
-            // rebuilt, so no candidate keeps a marker or a preview for an invalid choice.
+            // 领域已无法接受的选中会在重建行之前丢弃，
+            // 因此没有候选会为无效选择保留标记或预览。
             if (HasPendingAssignment && !CanStillAssign(view, _pendingIndustryId, _pendingPersonId))
                 ClearPending();
 
@@ -312,9 +310,8 @@ namespace SengokuChronicle.Presentation
                 tradingCandidateContainer);
             RebuildCandidateLayout();
 
-            // The report label wraps horizontally, and the scrolled content grows to the
-            // complete carried text so a rollback or long settlement stays reachable instead
-            // of being clipped inside the authored viewport.
+            // 报告标签横向换行，滚动内容增高到完整携带文字的高度，
+            // 因此回滚或长结算仍可达，而不是被裁在原始视口里。
             reportText.horizontalOverflow = HorizontalWrapMode.Wrap;
             reportText.verticalOverflow = VerticalWrapMode.Truncate;
             reportText.text = reportLine;
@@ -323,9 +320,8 @@ namespace SengokuChronicle.Presentation
         }
 
         /// <summary>
-        /// Picks the status text. The band is bounded, so a message that needs more lines
-        /// than it can show is replaced by a report pointer and handed to the report
-        /// region, which is the surface that keeps it.
+        /// 选择状态文字。带区有界，因此需要行数超过可显示量的消息
+        /// 会被换成报告指针并交给报告区，由那里保存全文。
         /// </summary>
         private string SelectStatusLine(string message)
         {
@@ -344,8 +340,8 @@ namespace SengokuChronicle.Presentation
         }
 
         /// <summary>
-        /// True when the band is not showing the message in full: it has no label, it shows
-        /// the report pointer, or it could not be measured against its authored band.
+        /// 带区未完整显示消息时为 true：没有标签、显示的是报告指针，
+        /// 或无法按原始带区测量。
         /// </summary>
         private bool CarriesFullMessage(string message) =>
             !string.IsNullOrWhiteSpace(message) &&
@@ -353,9 +349,8 @@ namespace SengokuChronicle.Presentation
              StatusBandLineBudget <= 0);
 
         /// <summary>
-        /// Grows the scrolled report content to the label's full wrapped height while the
-        /// authored viewport keeps its own size. A scene without the scroll hierarchy keeps
-        /// the previous clipping behavior instead of failing.
+        /// 把滚动的报告内容增高到标签完整换行高度，原始视口尺寸不变。
+        /// 没有滚动层级的场景保持原先的裁切行为，而不是报错。
         /// </summary>
         private void FitReportRegion()
         {
@@ -366,8 +361,8 @@ namespace SengokuChronicle.Presentation
                 viewport.GetComponent<RectMask2D>() == null)
                 return;
 
-            // The viewport is nested under its ScrollRect, so the scroll object is an
-            // ancestor and receives wheel and drag events that bubble from the viewport.
+            // 视口嵌套在其 ScrollRect 之下，因此滚动对象是祖先，
+            // 能收到从视口冒泡上来的滚轮与拖拽事件。
             ScrollRect scroll = viewport.GetComponentInParent<ScrollRect>(true);
             FitReportBandToPanel(scroll, viewport);
 
@@ -382,9 +377,8 @@ namespace SengokuChronicle.Presentation
         }
 
         /// <summary>
-        /// Keeps the authored 700x68 report band inside the live panel. The household page
-        /// applies a shorter card than the panel authors, so the band is lifted and shortened
-        /// to stay between the action row and the card's lower edge.
+        /// 让原始的 700x68 报告带留在实时面板内。家宅页面使用的卡片比面板
+        /// 原始尺寸矮，因此带区上移并缩短，留在动作行与卡片下沿之间。
         /// </summary>
         private void FitReportBandToPanel(ScrollRect scroll, RectTransform viewport)
         {
@@ -443,14 +437,14 @@ namespace SengokuChronicle.Presentation
             reportLine.IndexOf(message, System.StringComparison.Ordinal) >= 0;
 
         /// <summary>
-        /// The carried message leads the report so the feedback the player just triggered
-        /// keeps the visible lines; the month facts follow in the same scrolled region, which
-        /// keeps the whole report inside its authored viewport.
+        /// 携带的消息排在报告之前，因此玩家刚触发的反馈保留可见行；
+        /// 月度事实紧随其后，仍在同一滚动区内，
+        /// 使整份报告留在原始视口内。
         /// </summary>
         private static string CarryIntoReport(string reportLine, string message) =>
             string.IsNullOrEmpty(reportLine) ? message : message + ReportCarrySeparator + reportLine;
 
-        /// <summary>Rendered lines available in the band, measured with its own font and height.</summary>
+        /// <summary>带区可用的渲染行数，按其自身字体与高度测量。</summary>
         private int ComputeStatusBandLineBudget()
         {
             if (!TryBuildStatusSettings(out TextGenerationSettings settings, out Rect band))
@@ -461,7 +455,7 @@ namespace SengokuChronicle.Presentation
             return lineHeight <= 0f ? 0 : Mathf.FloorToInt((band.height + 0.5f) / lineHeight);
         }
 
-        /// <summary>Wrapped line count of one candidate message at the band width.</summary>
+        /// <summary>一条候选消息在带区宽度下的换行行数。</summary>
         private int CountStatusLines(string message)
         {
             if (!TryBuildStatusSettings(out TextGenerationSettings settings, out _))
@@ -472,8 +466,8 @@ namespace SengokuChronicle.Presentation
         }
 
         /// <summary>
-        /// Measurement settings for the band. Vertical overflow is forced open so a long
-        /// candidate is measured in full instead of being clamped by the authored truncation.
+        /// 带区的测量设置。强制开启纵向溢出，使长候选被完整测量，
+        /// 而不是被原始截断夹住。
         /// </summary>
         private bool TryBuildStatusSettings(out TextGenerationSettings settings, out Rect band)
         {
@@ -541,9 +535,9 @@ namespace SengokuChronicle.Presentation
         }
 
         /// <summary>
-        /// Authored per-month input and output of one industry, taken from the read-only
-        /// catalog rule. Fields the catalog does not define (location) stay hidden instead
-        /// of being invented, and a missing definition hides the line entirely.
+        /// 一个产业原始的月度投入与产出，取自只读图鉴规则。
+        /// 图鉴未定义的字段（地点）保持隐藏而不是编造，
+        /// 缺少定义时整行隐藏。
         /// </summary>
         private static void RefreshDetail(Text detailText, IndustryDefinition definition)
         {
@@ -620,8 +614,8 @@ namespace SengokuChronicle.Presentation
                 Button button = buttonObject.GetComponent<Button>();
                 if (button != null)
                 {
-                    // Without the confirm controls a click could only change the highlight,
-                    // so the candidates stay disabled and the preview explains why.
+                    // 没有确认控件时，点击只能改变高亮，
+                    // 因此候选保持禁用，由预览说明原因。
                     button.interactable = canSelect;
                     PersonId captured = personId;
                     string capturedIndustry = industryId;
@@ -634,7 +628,7 @@ namespace SengokuChronicle.Presentation
             }
         }
 
-        /// <summary>Counts each selectable person once even when both rows list them.</summary>
+        /// <summary>每个可选人物只计一次，即使两行都列出他。</summary>
         private void RememberEligible(PersonId personId)
         {
             for (int i = 0; i < _eligiblePeople.Count; i++)
@@ -648,8 +642,8 @@ namespace SengokuChronicle.Presentation
             string.Equals(_pendingIndustryId, industryId, System.StringComparison.Ordinal);
 
         /// <summary>
-        /// Selecting a candidate only previews the appointment; the domain changes when
-        /// the player confirms. Cancel clears the preview and writes nothing.
+        /// 选中候选只预演任命；领域在玩家确认时才改变。
+        /// 取消清空预览，不写入任何内容。
         /// </summary>
         public void SelectPending(string industryId, PersonId personId)
         {
@@ -669,8 +663,8 @@ namespace SengokuChronicle.Presentation
                 gameSession.TryAssignIndustry(_pendingIndustryId, _pendingPersonId);
             if (result.Succeeded)
                 ClearPending();
-            // Success already publishes SessionStateChanged; refresh a rejection or a cleared
-            // preview here so the panel never shows a stale preview.
+            // 成功时 SessionStateChanged 已发布；这里刷新被拒或已清空的
+            // 预览，使面板永不显示过期预览。
             if (IsOpen)
                 Refresh();
         }
@@ -691,9 +685,9 @@ namespace SengokuChronicle.Presentation
         }
 
         /// <summary>
-        /// Paints the pending recipient and the confirm/cancel choices. A scene authored
-        /// before the preview label existed has nowhere to paint that text, so the reason
-        /// for the disabled candidates goes to the message line it already binds instead.
+        /// 绘制待定对象与确认/取消选项。预览标签出现之前构建的场景
+        /// 没有地方绘制该文字，因此候选禁用的原因改写到它已绑定的
+        /// 消息行上。
         /// </summary>
         private void RefreshPendingPreview(IndustryView view)
         {
@@ -719,10 +713,9 @@ namespace SengokuChronicle.Presentation
         }
 
         /// <summary>
-        /// Keeps the disabled candidates explainable on a pre-preview scene. The message
-        /// line is the surface such a scene already binds; the block-reason line is used
-        /// only when the message line is missing, and existing domain text keeps its place
-        /// after the notice rather than being replaced.
+        /// 让预览出现之前的场景也能解释候选为何禁用。消息行是这类场景
+        /// 已绑定的面；只有消息行缺失时才用阻塞原因行，
+        /// 且既有领域文字排在提示之后，而不是被替换。
         /// </summary>
         private void ShowConfirmUnboundNotice()
         {
@@ -753,9 +746,8 @@ namespace SengokuChronicle.Presentation
         }
 
         /// <summary>
-        /// Preview of a pending appointment built from the catalog rule and the projected
-        /// slots only. It restates the authored monthly rule; the monthly settlement stays
-        /// the single authority on whether the month operates.
+        /// 仅按图鉴规则与预演槽位构建的待定任命预览。它复述原始的月度规则；
+        /// 月份是否运作仍以月度结算为唯一权威。
         /// </summary>
         private string BuildPreviewLine(IndustryView view)
         {
@@ -871,11 +863,10 @@ namespace SengokuChronicle.Presentation
         }
 
         /// <summary>
-        /// The household page resizes this panel to its 560-high card after the first refresh,
-        /// so a report band fitted for the authored 700-high page would hang outside the card.
-        /// LateUpdate runs after that layout change and before the frame is drawn, which is the
-        /// first point where the live height is known and the band can still be re-fitted for
-        /// the card the player actually sees.
+        /// 家宅页面会在首次刷新后把本面板调到 560 高的卡片，因此按原始
+        /// 700 高页面适配的报告带会悬在卡片之外。LateUpdate 在该布局变化
+        /// 之后、绘制帧之前运行，这是已知实时高度、且带区仍能按玩家
+        /// 实际看到的卡片重新适配的第一个时点。
         /// </summary>
         private void LateUpdate()
         {

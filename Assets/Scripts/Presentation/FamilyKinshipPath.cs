@@ -6,16 +6,15 @@ using SengokuChronicle.Domain;
 namespace SengokuChronicle.Presentation
 {
     /// <summary>
-    /// Read-only shortest kinship path between two stable person IDs. The family
-    /// formation page uses it to show the recorded relationship path before the
-    /// player confirms a marriage or an adoption. It only walks facts that already
-    /// exist in <see cref="KinshipGraph"/> and never adds, removes or infers a link.
-    /// Parent/child and adoption facts are directed, so every rendered step names the
-    /// direction that was actually recorded instead of implying a symmetric relation.
+    /// 两个稳定人物 ID 之间的只读最短亲属路径。家族组建页用它
+    /// 在玩家确认婚姻或收养之前显示已记录的关系路径。它只走
+    /// <see cref="KinshipGraph"/> 中已有的事实，绝不新增、删除或推断关系。
+    /// 亲子与收养事实带方向，因此渲染出的每一步都按实际记录的方向
+    /// 标注，而不会暗示关系对称。
     /// </summary>
     public static class FamilyKinshipPath
     {
-        /// <summary>Longer chains are reported as not shown rather than printed in full.</summary>
+        /// <summary>更长的亲属链报告为未展开，而不是整段打印。</summary>
         public const int MaximumSteps = 6;
         public const string NoRecordedPathText = "未记录亲属关系";
         public const string SelfText = "本人";
@@ -49,11 +48,10 @@ namespace SengokuChronicle.Presentation
         }
 
         /// <summary>
-        /// Player-facing path such as <c>晴信 —亲子·子→ 正綱 —亲子·子→ 信正</c>. Each step
-        /// names the next person's recorded role, so a path walked against a directed
-        /// fact reads <c>信正 —亲子·父母→ 正綱</c> instead of implying that 信正 is the
-        /// parent. Names come from the supplied resolver so the caller keeps its own
-        /// display naming.
+        /// 面向玩家的路径，形如 <c>晴信 —亲子·子→ 正綱 —亲子·子→ 信正</c>。
+        /// 每一步标注下一个人被记录的角色，因此逆着有向事实走出的路径
+        /// 读作 <c>信正 —亲子·父母→ 正綱</c>，而不会暗示 信正 是父母。
+        /// 姓名来自调用方传入的解析器，显示命名仍由调用方决定。
         /// </summary>
         public static string Describe(KinshipGraph graph, PersonId from, PersonId to,
             Func<PersonId, string> nameOf)
@@ -81,7 +79,7 @@ namespace SengokuChronicle.Presentation
             return builder.ToString();
         }
 
-        /// <summary>Recorded kinship kind, with no direction implied.</summary>
+        /// <summary>已记录的亲属种类，不暗示方向。</summary>
         public static string KindName(KinshipType type)
         {
             switch (type)
@@ -95,9 +93,9 @@ namespace SengokuChronicle.Presentation
         }
 
         /// <summary>
-        /// One fact line for a person: <c>亲子（子女）：正綱</c> when the subject is the
-        /// recorded parent/adopter, <c>亲子（父母）：晴信</c> when the subject is the
-        /// recorded child. Sibling and spouse facts carry no direction.
+        /// 人物的一条事实行：主体是记录中的父母/收养人时为 <c>亲子（子女）：正綱</c>，
+        /// 主体是记录中的子女时为 <c>亲子（父母）：晴信</c>。
+        /// 手足与配偶事实不带方向。
         /// </summary>
         public static string FactLabel(KinshipLink link, PersonId subject)
         {
@@ -108,8 +106,8 @@ namespace SengokuChronicle.Presentation
         }
 
         /// <summary>
-        /// What the other endpoint is to <paramref name="subject"/>, read from the
-        /// recorded direction of the fact. Empty for symmetric kinds.
+        /// 另一个端点相对 <paramref name="subject"/> 是什么身份，取自该事实
+        /// 记录的方向。对称种类返回空串。
         /// </summary>
         public static string StepRoleName(KinshipLink link, PersonId subject)
         {

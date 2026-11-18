@@ -89,9 +89,9 @@ namespace SengokuChronicle.Tests.EditMode
             IndustryPanel panel = Panel();
             panel.Open();
 
-            // The detail label is authored from the read-only catalog rule, so the exact text
-            // (upkeep, separator and output order) is what the player reads. A blank or
-            // loosely-matching line would hide a wrong rule behind a passing test.
+            // 详情标签取自只读图鉴规则，因此玩家读到的就是精确文字
+            // （维护费、分隔符与产出次序）。空白或宽松匹配的行
+            // 会让错误规则藏在通过的测试背后。
             Assert.That(panel.FarmDetail,
                 Is.EqualTo("每月规则：维护 1 物资（自留存）｜产出 +2 资金、+4 物资、+4 粮食"));
             Assert.That(panel.TradingDetail,
@@ -110,20 +110,20 @@ namespace SengokuChronicle.Tests.EditMode
             RectTransform reportRect = (RectTransform)Find(AddSC019IndustryPanel.ReportScrollName);
             Assert.That(reportRect.rect.height, Is.EqualTo(68f).Within(0.1f));
 
-            // ReferenceGalleryNavigator applies the household card size after the panel's
-            // first refresh. The next frame must re-fit the report before it is drawn.
+            // ReferenceGalleryNavigator 在面板首次刷新后套用家宅卡片尺寸。
+            // 下一帧必须在绘制之前重新适配报告。
             panelRect.sizeDelta = new Vector2(panelRect.sizeDelta.x, 560f);
             var lateUpdate = typeof(IndustryPanel).GetMethod("LateUpdate",
                 BindingFlags.Instance | BindingFlags.NonPublic);
             Assert.That(lateUpdate, Is.Not.Null,
-                "the panel must observe its post-open household layout change");
+                "面板必须察觉其打开后的家宅布局变化");
             lateUpdate.Invoke(panel, null);
 
             float reportBottom = reportRect.anchoredPosition.y - reportRect.rect.height * 0.5f;
             Assert.That(reportBottom, Is.GreaterThanOrEqualTo(-panelRect.rect.height * 0.5f + 3.9f),
-                "the report band must remain above the household card's bottom margin");
+                "报告带必须留在家宅卡片的下边距之上");
             Assert.That(reportRect.rect.height, Is.LessThan(68f),
-                "the report band must use the shorter household card layout on first open");
+                "首次打开时报告带必须采用较矮的家宅卡片布局");
         }
 
         [Test]
@@ -224,7 +224,7 @@ namespace SengokuChronicle.Tests.EditMode
             panel.Open();
             Assert.That(panel.CanConfirmSelection, Is.True);
             Assert.That(panel.ConfirmInteractable, Is.False,
-                "confirmation is unavailable until a candidate is selected");
+                "未选中候选前无法确认");
             Assert.That(panel.FarmCandidateLabel(0), Does.Contain("剩余 4/4"));
 
             panel.ClickFarmCandidate(0);
@@ -235,14 +235,14 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(panel.ConfirmInteractable, Is.True);
             string pendingLabel = panel.FarmCandidateLabel(0);
             Assert.That(pendingLabel, Does.StartWith("▶ "),
-                "the candidate list marks the pending choice");
+                "候选列表标出待确认的选择");
             string pendingName = pendingLabel.Substring(2, pendingLabel.IndexOf("（") - 2);
             Assert.That(panel.PreviewLine, Does.Contain("已选择：" + pendingName + " → "));
             Assert.That(panel.PreviewLine, Does.Contain("待确认"));
             Assert.That(panel.PreviewLine, Does.Contain("每月规则："),
-                "the preview exposes the selected post's consequence");
+                "预览暴露所选职位的后果");
             Assert.That(_session.Industry.Slot(IndustryCatalog.FarmId).AssigneeId.IsEmpty, Is.True,
-                "candidate selection is only a preview until confirmed");
+                "确认之前候选选中只是预演");
             string firstAssignee = panel.PendingPersonId.Value;
 
             panel.ClickConfirm();
@@ -259,7 +259,7 @@ namespace SengokuChronicle.Tests.EditMode
             string committedState = JsonUtility.ToJson(_session.CaptureSave());
             panel.ClickConfirm();
             Assert.That(JsonUtility.ToJson(_session.CaptureSave()), Is.EqualTo(committedState),
-                "a repeated confirmation with no pending selection is a no-op");
+                "没有待确认选择时重复确认是无操作");
 
             panel.ClickFarmCandidate(0);
             panel.Refresh();
@@ -268,10 +268,10 @@ namespace SengokuChronicle.Tests.EditMode
             string replacementName = replacementLabel.Substring(2, replacementLabel.IndexOf("（") - 2);
             Assert.That(panel.PreviewLine, Does.Contain("已选择：" + replacementName + " → "));
             Assert.That(panel.PreviewLine, Does.Contain("替换现任"),
-                "replacement preview identifies the current holder");
+                "替换预览标出当前任职者");
             Assert.That(panel.ConfirmInteractable, Is.True);
             Assert.That(_session.Industry.Slot(IndustryCatalog.FarmId).AssigneeId.Value,
-                Is.EqualTo(firstAssignee), "replacement selection must not commit early");
+                Is.EqualTo(firstAssignee), "替换选择不得提前提交");
             panel.ClickConfirm();
             panel.Refresh();
             Assert.That(_session.Industry.Slot(IndustryCatalog.FarmId).AssigneeId.Value,
@@ -286,17 +286,17 @@ namespace SengokuChronicle.Tests.EditMode
             IndustryPanel panel = Panel();
             panel.Open();
             Assert.That(panel.EligibleCandidateTotal, Is.EqualTo(6),
-                "every eligible family member is counted once across both posts");
+                "每名符合条件的家庭成员在两个职位上只计一次");
 
             panel.ClickFarmCandidate(0);
             panel.ClickConfirm();
             panel.Refresh();
 
             Assert.That(panel.EligibleCandidateTotal, Is.EqualTo(5),
-                "the appointed person no longer has the work units for either post");
+                "已任命的人不再有任一职位所需的工作量");
             Assert.That(panel.FarmCandidateCount, Is.EqualTo(5));
             Assert.That(panel.TradingCandidateCount, Is.EqualTo(5),
-                "both rows list the same five remaining people");
+                "两行列出同样剩下的五个人");
         }
 
         [Test]
@@ -312,7 +312,7 @@ namespace SengokuChronicle.Tests.EditMode
             panel.Open();
 
             Assert.That(panel.IsBound, Is.True,
-                "legacy optional controls must not prevent the rest of the panel from binding");
+                "旧版可选控件不得阻止面板其余部分绑定");
             Assert.That(panel.CanConfirmSelection, Is.False);
             Assert.That(panel.FarmCandidateCount, Is.GreaterThan(0));
             Button candidate = _scene.GetRootGameObjects()
@@ -320,7 +320,7 @@ namespace SengokuChronicle.Tests.EditMode
                 .First(button => button.name.StartsWith(
                     "IndustryCandidate_" + IndustryCatalog.FarmId + "_"));
             Assert.That(candidate.interactable, Is.False,
-                "legacy candidate buttons must not imply a working one-click assignment");
+                "旧版候选按钮不得暗示一键任命可用");
             candidate.onClick.Invoke();
             Assert.That(panel.HasPendingAssignment, Is.False);
             Assert.That(panel.MessageVisible, Is.True);
@@ -340,7 +340,7 @@ namespace SengokuChronicle.Tests.EditMode
 
             panel.Open();
             Assert.That(panel.IsBound, Is.True,
-                "the message label is optional when the block-reason label can carry its fallback");
+                "阻塞原因标签可承载回退时，消息标签是可选的");
             Assert.That(panel.IsOpen, Is.True);
             Button candidate = _scene.GetRootGameObjects()
                 .SelectMany(root => root.GetComponentsInChildren<Button>(true))
@@ -349,7 +349,7 @@ namespace SengokuChronicle.Tests.EditMode
             candidate.onClick.Invoke();
 
             Assert.That(panel.IsOpen, Is.True,
-                "an absent optional message label must not disable the rest of the panel");
+                "缺少可选消息标签不得禁用面板其余部分");
             Assert.That(panel.BlockReasonVisible, Is.True);
             Assert.That(panel.BlockReasonLine, Does.Contain(IndustryPanel.ConfirmUnboundNotice));
         }
@@ -375,7 +375,7 @@ namespace SengokuChronicle.Tests.EditMode
 
             Assert.That(panel.HasPendingAssignment, Is.False);
             Assert.That(panel.PreviewVisible, Is.True,
-                "the idle preview hint remains available after cancelling a selection");
+                "取消选择后空闲预览提示仍然可用");
             Assert.That(panel.PreviewLine, Does.Contain("选择一名家人后确认任命"));
             Assert.That(panel.ConfirmVisible, Is.False);
             Assert.That(panel.CancelVisible, Is.False);
@@ -394,21 +394,21 @@ namespace SengokuChronicle.Tests.EditMode
             panel.Refresh();
             PersonId candidate = panel.PendingPersonId;
             Assert.That(candidate.IsEmpty, Is.False,
-                "the fixture needs a real candidate before it can select one explicitly");
+                "夹具需要真实候选才能显式选中一个");
 
             panel.ClickCancel();
             panel.Refresh();
             Assert.That(panel.PendingIndustryId, Is.EqualTo(string.Empty),
-                "cancelling the preview clears the industry as well as the person");
+                "取消预览同时清空产业与人选");
 
             panel.SelectPending(IndustryCatalog.FarmId, candidate);
             Assert.That(panel.PendingIndustryId, Is.EqualTo("industry.farm"));
             Assert.That(panel.PendingIndustryId, Is.EqualTo(IndustryCatalog.FarmId),
-                "the pending industry is the selected post, not the selected person");
+                "待定产业是所选职位，而不是所选人物");
 
             panel.SelectPending(IndustryCatalog.TradingHouseId, candidate);
             Assert.That(panel.PendingIndustryId, Is.EqualTo("industry.trading-house"),
-                "re-selecting another post replaces the pending industry");
+                "重选另一个职位会替换待定产业");
 
             panel.ClickCancel();
             panel.Refresh();
@@ -443,7 +443,7 @@ namespace SengokuChronicle.Tests.EditMode
             panel.Open();
 
             Assert.That(panel.HasPendingAssignment, Is.False,
-                "reopening must not preserve a hidden, unconfirmed assignment");
+                "重新打开不得保留隐藏的未确认任命");
             Assert.That(panel.ConfirmVisible, Is.False);
             Assert.That(_session.Industry.Slot(IndustryCatalog.FarmId).AssigneeId,
                 Is.EqualTo(before.AssigneeId));
@@ -464,7 +464,7 @@ namespace SengokuChronicle.Tests.EditMode
             panel.Refresh();
 
             Assert.That(panel.HasPendingAssignment, Is.False,
-                "a candidate already assigned elsewhere must not remain confirmable");
+                "已任命到别处的人选不得仍可确认");
             Assert.That(panel.ConfirmVisible, Is.False);
             Assert.That(_session.Industry.Slot(IndustryCatalog.FarmId).AssigneeId.IsEmpty, Is.True);
         }
@@ -477,7 +477,7 @@ namespace SengokuChronicle.Tests.EditMode
             panel.ClickTradingCandidate(0);
             panel.Refresh();
             Assert.That(_session.Industry.Slot(IndustryCatalog.TradingHouseId).AssigneeId.IsEmpty,
-                Is.True, "candidate selection does not mutate the assignment");
+                Is.True, "候选选中不改变任命");
             panel.ClickConfirm();
             panel.Refresh();
             Assert.That(_session.Industry.Slot(IndustryCatalog.TradingHouseId).AssigneeId.IsEmpty, Is.False);
@@ -623,16 +623,16 @@ namespace SengokuChronicle.Tests.EditMode
             var farm = (RectTransform)Find(AddSC019IndustryPanel.FarmRowName);
 
             Assert.That(panel.MessageVisible, Is.True,
-                "the settled month publishes a status message");
+                "已结算月份发布状态消息");
             Assert.That(panel.MessageLine, Does.StartWith("农庄"),
-                "the message is the month settlement summary");
+                "该消息是月度结算摘要");
             Assert.That(label.preferredHeight, Is.LessThanOrEqualTo(band.rect.height),
-                "the settlement summary must wrap inside the authored status band");
+                "结算摘要必须在原始状态带内换行");
 
             float textBottom = band.anchoredPosition.y - label.preferredHeight * 0.5f;
             float farmTop = farm.anchoredPosition.y + farm.rect.height * 0.5f;
             Assert.That(textBottom, Is.GreaterThan(farmTop),
-                "the rendered settlement text must stay above the farm row");
+                "渲染出的结算文字必须留在农田行之上");
         }
 
         [Test]
@@ -662,7 +662,7 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(panel.StatusPointerActive, Is.True);
             Assert.That(panel.MessageLine, Is.EqualTo(IndustryPanel.ReportPointerStatus));
             Assert.That(panel.ReportLine, Does.Contain(fullSummary),
-                "the detailed monthly report retains the complete settlement text");
+                "详细月度报告保留完整结算文字");
         }
 
         [Test]
@@ -681,10 +681,10 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(panel.StatusPointerActive, Is.True);
             Assert.That(panel.MessageLine, Is.EqualTo(IndustryPanel.ReportPointerStatus));
             Assert.That(panel.ReportLine, Does.Contain(longMessage),
-                "a long non-settlement action message must remain fully readable outside the clipped band");
+                "长动作消息必须完整可读，不受被裁切的带区限制");
             Assert.That(Find("IndustryReportContent").GetComponent<RectTransform>().rect.height,
                 Is.GreaterThan(Find("IndustryReportViewport").GetComponent<RectTransform>().rect.height),
-                "long action detail must remain reachable by scrolling");
+                "长动作详情必须可滚动到达");
         }
 
         [Test]
@@ -702,13 +702,13 @@ namespace SengokuChronicle.Tests.EditMode
             panel.Open();
 
             Assert.That(panel.StatusLineCount, Is.GreaterThan(panel.StatusBandLineBudget),
-                "the fixture must overflow the authored status band, not sit at its capacity");
+                "夹具必须溢出原始状态带，而不是恰好达到容量");
             Assert.That(panel.StatusPointerActive, Is.True);
             Assert.That(panel.MessageLine, Does.Not.Contain("已完成"),
-                "a long rollback message must not be replaced by a success claim");
+                "长回滚消息不得被换成成功声明");
             Assert.That(panel.MessageLine, Is.EqualTo(IndustryPanel.ReportPointerStatus));
             Assert.That(panel.ReportLine, Does.Contain(rollbackMessage),
-                "the report must retain the rollback reason in full");
+                "报告必须完整保留回滚原因");
 
             ScrollRect scroll = Find("IndustryReportScrollRect").GetComponent<ScrollRect>();
             RectTransform viewport = Find("IndustryReportViewport") as RectTransform;
@@ -719,16 +719,16 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(scroll.content, Is.EqualTo(content));
             Assert.That(scroll.viewport, Is.EqualTo(viewport));
             Assert.That(content.rect.height, Is.GreaterThan(viewport.rect.height),
-                "long rollback detail must extend beyond the viewport and remain reachable by scrolling");
+                "长回滚详情必须超出视口并可滚动到达");
             Assert.That(content.rect.height + 0.5f, Is.GreaterThanOrEqualTo(report.preferredHeight),
-                "the scroll content must contain the complete report text");
+                "滚动内容必须容纳完整报告文字");
             Canvas.ForceUpdateCanvases();
             float maxScroll = content.rect.height - viewport.rect.height;
             float initialOffset = content.anchoredPosition.y;
             Assert.That(maxScroll, Is.GreaterThan(0f));
             scroll.verticalNormalizedPosition = 0f;
             Assert.That(content.anchoredPosition.y, Is.EqualTo(maxScroll).Within(1f),
-                "moving to the bottom must expose the end of the full report content");
+                "移到底部必须露出完整报告内容的末尾");
             Assert.That(content.anchoredPosition.y, Is.GreaterThan(initialOffset));
         }
 

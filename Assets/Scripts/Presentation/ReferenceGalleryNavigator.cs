@@ -151,59 +151,58 @@ namespace SengokuChronicle.Presentation
         }
 
         public GameObject HouseholdComposition => _householdComposition;
-        /// <summary>Last fit applied to the embedded industry panel (diagnostics/tests).</summary>
+        /// <summary>最近一次套用到嵌入式产业面板的适配结果（诊断/测试用）。</summary>
         public HouseholdIndustryFitResult LastHouseholdIndustryFit { get; private set; }
-        /// <summary>True when the household card forced a sub-readable industry panel scale.</summary>
+        /// <summary>家宅卡片迫使产业面板缩到可读比例以下时为 true。</summary>
         public bool HouseholdIndustryBelowReadableScale { get; private set; }
-        /// <summary>The household card the panel and the month block are kept inside.</summary>
+        /// <summary>面板与月度区块被约束在其内的家宅卡片。</summary>
         public Rect LastHouseholdCardRect { get; private set; }
-        /// <summary>The fitted industry panel rect, in page units.</summary>
+        /// <summary>适配后的产业面板矩形，以页面单位计。</summary>
         public Rect LastHouseholdIndustryPanelRect { get; private set; }
         public GameObject PendingEventsRail => _pendingEventsRail;
 
         /// <summary>
-        /// Household page reference regions in design (canvas-centred) units. The centre band
-        /// holds the appointments/industry panel at its authored aspect inside the 760x560
-        /// household card, the left rail lists the live roster, and the right column stacks
-        /// the pending decisions. The month summary is placed on the card itself, so
-        /// <see cref="HouseholdMonthEventPosition"/> only records its authored slot.
+        /// 家宅页面在设计单位（画布居中）下的参考区域。中带在 760x560
+        /// 家宅卡片内按原始纵横比放置任命/产业面板，左轨列出实时名册，
+        /// 右列堆叠待处理决策。月度摘要放在卡片本身上，因此
+        /// <see cref="HouseholdMonthEventPosition"/> 只记录其原始槽位。
         /// </summary>
         public static readonly Vector2 HouseholdIndustrySize = new Vector2(620f, 456f);
         public static readonly Vector2 HouseholdIndustryPosition = new Vector2(38f, 48f);
-        /// <summary>Gap between the head rail, the page edge and the embedded industry panel.</summary>
+        /// <summary>首部轨道、页面边缘与嵌入式产业面板之间的间隙。</summary>
         public const float HouseholdIndustryBandGap = 16f;
-        /// <summary>Safe page margin used under the panel band.</summary>
+        /// <summary>面板带区下方使用的安全页面边距。</summary>
         public const float HouseholdIndustryPageMargin = 24f;
-        /// <summary>Authored size used when a scene panel has no usable serialized rect.</summary>
+        /// <summary>场景面板没有可用序列化矩形时使用的原始尺寸。</summary>
         public const float HouseholdIndustryFallbackWidth = 760f;
         public const float HouseholdIndustryFallbackHeight = 700f;
         /// <summary>
-        /// The household card the SC-019 panel is embedded in, as the scene authors it. The
-        /// panel may be authored taller (760x700 after the M05 change); it is then fitted to
-        /// this card and reported as sub-readable instead of silently overflowing it.
+        /// 场景原始设计的、嵌入 SC-019 面板的家宅卡片。面板允许更高
+        /// （M05 变更后为 760x700）；此时按本卡片适配，并报告为低于可读比例，
+        /// 而不是悄悄溢出卡片。
         /// </summary>
         public const float HouseholdCardWidth = 760f;
         public const float HouseholdCardHeight = 560f;
-        /// <summary>Clearance the panel and the month block keep from the household card edge.</summary>
+        /// <summary>面板与月度区块距家宅卡片边缘保留的净空。</summary>
         public const float HouseholdCardEdgeInset = 8f;
         /// <summary>
-        /// Authored month-summary tile. The placed block inherits at most this height from it
-        /// but is derived from the household card (<c>TryGetHouseholdMonthBlockRect</c>),
-        /// because the authored right-column slot lies outside the 760x560 card.
+        /// 原始的月度摘要底块。放置后的区块最多继承该高度，
+        /// 但尺寸由家宅卡片推导（<c>TryGetHouseholdMonthBlockRect</c>），
+        /// 因为原始右列槽位落在 760x560 卡片之外。
         /// </summary>
         public static readonly Vector2 HouseholdMonthEventSize = new Vector2(252f, 320f);
         /// <summary>
-        /// Clearance between the month summary and the industry panel. The fit reserves the
-        /// strip plus this gap before it solves the panel scale.
+        /// 月度摘要与产业面板之间的净空。适配流程在求解面板缩放之前
+        /// 预留这条带区加上该间隙。
         /// </summary>
         public const float HouseholdMonthGap = HouseholdIndustryBandGap * 0.5f;
         /// <summary>
-        /// Smallest strip that carries the summary's 18 px title and one 13 px body line
-        /// inside its own surface. A card that cannot leave this much room above the fitted
-        /// panel gets no summary block at all instead of a clipped one.
+        /// 能容纳摘要 18 px 标题与一行 13 px 正文的最小带区。
+        /// 卡片若无法在适配后的面板上方留出这么多空间，
+        /// 就完全不画摘要区块，而不是画一个被裁掉的。
         /// </summary>
         public const float HouseholdMonthMinimumHeight = 40f;
-        /// <summary>Authored right-column slot of the month tile; the card strip replaces it.</summary>
+        /// <summary>月度底块的原始右列槽位；卡片带区会替代它。</summary>
         public static readonly Vector2 HouseholdMonthEventPosition = new Vector2(486f, -192f);
         public static readonly Vector2 HouseholdHeadRailSize = new Vector2(184f, 636f);
         public static readonly Vector2 HouseholdHeadRailPosition = new Vector2(-384f, -42f);
@@ -278,8 +277,8 @@ namespace SengokuChronicle.Presentation
                 StyleFamilyPage();
             else if (_currentPage == ReferenceGalleryPage.Household)
             {
-                // The panel fit and the month strip are derived from the page size, so a
-                // resize would otherwise leave the card at the old geometry.
+                // 面板适配与月度带区都由页面尺寸推导，否则缩放窗口
+                // 会把卡片留在旧几何上。
                 StyleHouseholdPage();
                 BuildHouseholdComposition();
                 UpdatePendingRail();
@@ -1087,8 +1086,8 @@ namespace SengokuChronicle.Presentation
                         SetChildRect(panelRect, "FamilyRosterTitleText", new Vector2(0, 280), new Vector2(width - 40, 36));
                         SetChildRect(panelRect, "FamilyRosterLegendText", new Vector2(0, compact ? 240 : 246),
                             new Vector2(width - 40, compact ? 40 : 22));
-                        // The roster owns the graph geometry: it reserves the selected-person
-                        // column when the card is wide enough and reports the remaining viewport.
+                        // 名册掌管图谱几何：卡片够宽时为选中人物列预留空间，
+                        // 并报告剩余视口。
                         roster.ApplyPageLayout();
                         float scrollWidth = roster.HasDetailColumn
                             ? roster.AppliedScrollWidth
@@ -1227,18 +1226,18 @@ namespace SengokuChronicle.Presentation
         }
 
         /// <summary>
-        /// Places the embedded SC-019 panel inside the household card the page really paints.
-        /// The card is the explicit 760x560 layout rect recorded by
-        /// <see cref="StyleHouseholdPage"/>, so a taller authored panel is judged against the
-        /// surface it must stay on instead of the navigator's 1280x720 parent.
+        /// 把嵌入式 SC-019 面板放进页面实际绘制的家宅卡片内。
+        /// 卡片是 <see cref="StyleHouseholdPage"/> 记录的显式 760x560 布局矩形，
+        /// 因此更高的原始面板按其必须留在其上的面来判定，
+        /// 而不是按导航器的 1280x720 父级。
         ///
-        /// The month summary keeps its strip at the card top, so the panel gets the rectangle
-        /// below that strip: a viewport whose height depends on the card and band, never on
-        /// the authored height. The panel is scaled by width only and stays centred in the
-        /// free band while it fits the viewport; when the authored panel is taller, the
-        /// complete panel is placed in a vertical scroll viewport instead of being shrunk
-        /// below <see cref="HouseholdIndustryFit.ReadableScale"/>. A page too short to hold
-        /// the strip at all keeps the older card-centred uniform fit and omits the summary.
+        /// 月度摘要占用卡片顶部的带区，因此面板得到带区下方的矩形：
+        /// 视口高度取决于卡片与带区，绝不取决于原始高度。
+        /// 面板只按宽度缩放，在放得下时于可用带区内居中；
+        /// 原始面板更高时，把完整面板放进纵向滚动视口，
+        /// 而不是缩到 <see cref="HouseholdIndustryFit.ReadableScale"/> 以下。
+        /// 页面太矮、连带区都放不下时，保留较早的卡片居中统一适配，
+        /// 并省略摘要。
         /// </summary>
         private void ApplyEmbeddedIndustryFit(RectTransform panel, Vector2 authored, Rect card)
         {
@@ -1252,8 +1251,8 @@ namespace SengokuChronicle.Presentation
 
             float halfWidth = Mathf.Min(band.width * 0.5f,
                 Mathf.Min(centre.x - card.xMin, card.xMax - centre.x) - inset);
-            // The band centre must sit below the card's top edge for the summary strip to
-            // have room; a shorter card keeps the older card-centred fallback instead.
+            // 带区中心必须位于卡片上沿之下，摘要带区才有空间；
+            // 更矮的卡片改用较早的卡片居中回退方案。
             float cardTopHalf = card.yMax - centre.y - inset;
             float stripTop = HouseholdMonthStripTop(card, band);
             float topLimit = stripTop - HouseholdMonthMinimumHeight - HouseholdMonthGap;
@@ -1261,9 +1260,9 @@ namespace SengokuChronicle.Presentation
             float viewportHeight = topLimit - bottomLimit;
             if (halfWidth <= 0f || cardTopHalf <= 0f || viewportHeight <= 0f)
             {
-                // A page far smaller than the design canvas collapses the band outside the
-                // card, so there is no band fit to honour: keep the whole panel on the card
-                // and let the summary be omitted rather than clipped over it.
+                // 页面远小于设计画布时，带区会塌到卡片之外，
+                // 没有可遵守的带区适配：让整块面板留在卡片上，
+                // 省略摘要，而不是把它裁到面板上。
                 ApplyCardCentredIndustryFallback(panel, authored, card);
                 return;
             }
@@ -1275,8 +1274,8 @@ namespace SengokuChronicle.Presentation
             HouseholdIndustryBelowReadableScale = !fit.Readable;
             if (fit.Height > viewportHeight + 0.5f)
             {
-                // Taller than the viewport can show at once: keep the readable width scale
-                // and let the complete panel scroll vertically.
+                // 高过视口一次能显示的高度：保留可读的宽度缩放，
+                // 让完整面板纵向滚动。
                 _householdIndustryScrolls = true;
                 LastHouseholdIndustryPanelRect = Rect.MinMaxRect(centre.x - viewportWidth * 0.5f,
                     bottomLimit, centre.x + viewportWidth * 0.5f, topLimit);
@@ -1285,8 +1284,8 @@ namespace SengokuChronicle.Presentation
                 return;
             }
 
-            // Keep the shipped band-centred composition, but never let the panel grow into
-            // the strip the summary reserved above it.
+            // 保留既有的带区居中构图，但绝不让面板长进摘要
+            // 在上方预留的带区。
             float centreY = Mathf.Min(centre.y, topLimit - fit.Height * 0.5f);
             centreY = Mathf.Max(centreY, bottomLimit + fit.Height * 0.5f);
             LastHouseholdIndustryPanelRect = new Rect(centre.x - fit.Width * 0.5f,
@@ -1301,8 +1300,8 @@ namespace SengokuChronicle.Presentation
         }
 
         /// <summary>
-        /// The page is too short for the summary strip, so the panel keeps the older uniform
-        /// fit centred on the card and the summary stays omitted.
+        /// 页面太矮，放不下摘要带区，因此面板保留较早的
+        /// 卡片居中统一适配，摘要继续省略。
         /// </summary>
         private void ApplyCardCentredIndustryFallback(RectTransform panel, Vector2 authored,
             Rect card)
@@ -1330,21 +1329,20 @@ namespace SengokuChronicle.Presentation
             float availableHeight, HouseholdIndustryFitResult fit)
         {
             Debug.LogWarning(
-                "M04 household industry panel: the " + card.width.ToString("0") + "x" +
-                card.height.ToString("0") + " household card leaves " +
-                availableWidth.ToString("0") + "x" + availableHeight.ToString("0") +
-                " for the authored " + authored.x.ToString("0") + "x" +
-                authored.y.ToString("0") + " panel, so the readable fit is " +
-                fit.Scale.ToString("0.###") + ", below the readable floor " +
+                "M04 家宅产业面板：家宅卡片 " + card.width.ToString("0") + "x" +
+                card.height.ToString("0") + " 只为原始 " +
+                authored.x.ToString("0") + "x" + authored.y.ToString("0") +
+                " 面板留出 " + availableWidth.ToString("0") + "x" +
+                availableHeight.ToString("0") + "，因此可读适配为 " +
+                fit.Scale.ToString("0.###") + "，低于可读下限 " +
                 HouseholdIndustryFit.ReadableScale.ToString("0.###") +
-                ". Widen the card or add a panel scroll region instead of shrinking.");
+                "。请加宽卡片或给面板加滚动区，而不是继续缩小。");
         }
 
         /// <summary>
-        /// The authored industry panel for this page. The cached panel is preferred once it
-        /// has been resolved, so a refresh after the panel was hosted in the scroll viewport
-        /// keeps measuring the same scene object; a panel bound to a different page root is
-        /// rejected and resolved from the hierarchy instead.
+        /// 本页面的原始产业面板。解析过一次后优先使用缓存面板，
+        /// 因此面板被托进滚动视口后的刷新仍测量同一个场景对象；
+        /// 绑定到别的页面根节点的面板会被拒绝，改从层级解析。
         /// </summary>
         private RectTransform ResolveHouseholdIndustryPanel(Transform root)
         {
@@ -1360,9 +1358,8 @@ namespace SengokuChronicle.Presentation
         }
 
         /// <summary>
-        /// Puts the panel back where the scene authored it. The scroll viewport is rebuilt
-        /// with the composition, so the panel must leave it before that composition is
-        /// cleared; otherwise clearing the viewport would destroy the scene panel with it.
+        /// 把面板放回场景原始位置。滚动视口随构图一起重建，
+        /// 因此面板必须在构图清空之前离开它；否则清空视口会连场景面板一起销毁。
         /// </summary>
         private void RestoreHouseholdIndustryPanelHome(RectTransform panel)
         {
@@ -1387,10 +1384,10 @@ namespace SengokuChronicle.Presentation
         }
 
         /// <summary>
-        /// Hosts the complete taller panel in a vertical-only scroll viewport under the
-        /// composition. The viewport keeps the rectangle the month strip left free, so the
-        /// summary never shares its band with the panel and the panel text keeps the readable
-        /// width scale; the rest of the panel is reached by scrolling rather than shrinking.
+        /// 把完整的更高面板托进构图下方的纯纵向滚动视口。
+        /// 视口保留月度带区让出的矩形，因此摘要永不与面板共用带区，
+        /// 面板文字也保持可读的宽度缩放；面板其余部分靠滚动到达，
+        /// 而不是缩小。
         /// </summary>
         private void BuildHouseholdIndustryScrollViewport()
         {
@@ -1411,8 +1408,8 @@ namespace SengokuChronicle.Presentation
             viewportRect.sizeDelta = viewport.size;
             viewportRect.anchoredPosition = viewport.center;
             Image surface = viewportObject.GetComponent<Image>();
-            // The panel covers this rect completely at every scroll position; the graphic
-            // exists so wheel and drag events reach the ScrollRect.
+            // 面板在任何滚动位置都完整覆盖该矩形；图形存在只是为了
+            // 让滚轮与拖拽事件到达 ScrollRect。
             surface.color = Color.clear;
             surface.raycastTarget = true;
 
@@ -1437,9 +1434,9 @@ namespace SengokuChronicle.Presentation
             panel.anchorMin = panel.anchorMax = panel.pivot = new Vector2(0.5f, 0.5f);
             panel.sizeDelta = _householdIndustryAuthored;
             panel.localScale = new Vector3(fit.Scale, fit.Scale, 1f);
-            // The scaled panel is exactly the content size, so a zero offset centres it on
-            // the content rect; any vertical offset here would push it out of the scrollable
-            // range and leave blank viewport space at the top.
+            // 缩放后的面板正好等于内容尺寸，因此零偏移可使其在内容矩形内居中；
+            // 此处任何纵向偏移都会把它推出可滚动范围，
+            // 并在视口顶部留出空白。
             panel.anchoredPosition = Vector2.zero;
         }
 
@@ -1456,12 +1453,11 @@ namespace SengokuChronicle.Presentation
         }
 
         /// <summary>
-        /// The household card the page paints the industry panel and the month summary on: the
-        /// declared 760x560 layout rect, capped by the live page size so a smaller window still
-        /// contains it. It is an explicit generated/layout rect rather than a measurement of
-        /// the panel, so the fit and the summary always have a real surface to stay inside —
-        /// even when the scene panel is missing or authored taller (760x700 after the M05
-        /// change).
+        /// 页面绘制产业面板与月度摘要所用的家宅卡片：声明的 760x560 布局矩形，
+        /// 并按实时页面尺寸封顶，使更小的窗口也能容纳它。
+        /// 它是显式的生成/布局矩形，而不是对面板的测量，
+        /// 因此适配与摘要总有真实的面可留在其内——
+        /// 即使场景面板缺失或原始尺寸更高（M05 变更后为 760x700）。
         /// </summary>
         private Rect HouseholdCardRect()
         {
@@ -1472,11 +1468,10 @@ namespace SengokuChronicle.Presentation
         }
 
         /// <summary>
-        /// Free page space around the embedded panel: right of the head rail, left of the
-        /// pending-decision column, below the rail top and above the page margin. This is the
-        /// room the page offers; <see cref="ApplyEmbeddedIndustryFit"/> additionally limits it
-        /// to the household card. It never inspects the composition, so no region is measured
-        /// from a block that may not exist yet.
+        /// 嵌入式面板周围的可用页面空间：首部轨道右侧、待处理决策列左侧、
+        /// 轨道顶部之下、页面边距之上。这是页面提供的空间；
+        /// <see cref="ApplyEmbeddedIndustryFit"/> 还会把它限制在家宅卡片内。
+        /// 它从不检查构图，因此没有区域是测量自可能尚不存在的区块。
         /// </summary>
         private Rect HouseholdIndustryBand()
         {
@@ -1484,8 +1479,8 @@ namespace SengokuChronicle.Presentation
             float left = HouseholdHeadRailPosition.x + HouseholdHeadRailSize.x * 0.5f +
                          HouseholdIndustryBandGap;
             float right = page.x * 0.5f - HouseholdIndustryPageMargin;
-            // The pending-decision rail owns the right column whenever events are queued, so
-            // its slot stays free even while it is hidden.
+            // 有待处理事件时右列归待处理决策轨所有，
+            // 因此它的槽位即使隐藏也要空着。
             float pendingLeft = PendingRailPosition.x - PendingRailSize.x * 0.5f -
                                 HouseholdIndustryBandGap;
             if (pendingLeft < right)
@@ -1498,25 +1493,22 @@ namespace SengokuChronicle.Presentation
         }
 
         /// <summary>
-        /// Top edge of the strip the month summary keeps above the industry panel: the lower
-        /// of the card and band tops, inset like every other card edge. The fit reserves the
-        /// space below it and the block fills it, so reserved space and drawn space agree.
+        /// 月度摘要保留在产业面板上方带区的顶边：取卡片与带区顶部较低者，
+        /// 并像其它卡片边缘一样内缩。适配流程预留其下方空间，
+        /// 区块填充该空间，因此预留与绘制一致。
         /// </summary>
         private float HouseholdMonthStripTop(Rect card, Rect band) =>
             Mathf.Min(card.yMax, band.yMax) - HouseholdCardEdgeInset;
 
         /// <summary>
-        /// The month summary's card rect: the free strip directly above the fitted panel, as
-        /// wide as the panel (never narrower than the authored tile) and never taller than the
-        /// authored tile. The bottom edge comes from
-        /// <see cref="LastHouseholdIndustryPanelRect"/> and the top edge is the lower of the
-        /// card edge and the band top, so the block cannot leave the card, cross the head rail
-        /// or overlap the panel.
+        /// 月度摘要的卡片矩形：适配后面板正上方的可用带区，宽度与面板相同
+        /// （不窄于原始底块），高度不超过原始底块。底边来自
+        /// <see cref="LastHouseholdIndustryPanelRect"/>，顶边取卡片边缘与带区
+        /// 顶部较低者，因此区块不会离开卡片、越过首部轨道或与面板重叠。
         ///
-        /// Returns false when there is nothing honest to draw: no explicit card, no placed
-        /// panel, or less than <see cref="HouseholdMonthMinimumHeight"/> of strip. The caller
-        /// then omits the block entirely instead of creating a zero-height one whose title
-        /// paints over the panel.
+        /// 没有可如实绘制的内容时返回 false：没有显式卡片、没有已放置的面板，
+        /// 或带区小于 <see cref="HouseholdMonthMinimumHeight"/>。
+        /// 此时调用方完全省略该区块，而不是创建一个标题压在面板上的零高度区块。
         /// </summary>
         private bool TryGetHouseholdMonthBlockRect(out Rect block)
         {
@@ -1534,8 +1526,8 @@ namespace SengokuChronicle.Presentation
                 HouseholdMonthEventSize.y);
             float width = Mathf.Min(card.width - inset * 2f,
                 Mathf.Max(panel.width, HouseholdMonthEventSize.x));
-            // The fit reserves exactly the minimum, so the binding aspect lands on it up to
-            // float error; anything clearly shorter is omitted rather than clipped.
+            // 适配流程正好预留最小值，因此绑定纵横比在浮点误差内落在其上；
+            // 明显更矮的一律省略而不是裁切。
             const float tolerance = 0.01f;
             if (height < HouseholdMonthMinimumHeight - tolerance || width <= 1f)
                 return false;
@@ -1551,24 +1543,24 @@ namespace SengokuChronicle.Presentation
         {
             if (householdPanelRoot == null)
                 return;
-            // A previous refresh may have hosted the panel in the composition's scroll
-            // viewport; bring it back before the authored hierarchy is read or restyled.
+            // 上一次刷新可能已把面板托进构图的滚动视口；
+            // 在读取或重新设计原始层级之前先把它带回来。
             RestoreHouseholdIndustryPanelHome();
             SengokuUiTheme.ApplyFont(householdPanelRoot.transform);
             RectTransform root = householdPanelRoot.transform as RectTransform;
             RectTransform panel = ResolveHouseholdIndustryPanel(householdPanelRoot.transform);
             Transform industryPanel = panel != null ? panel.transform : null;
-            // This page's root can be the panel itself, and the root is stretched to the page
-            // below. The authored panel rect is measured before that stretch and the card is
-            // the explicit 760x560 layout rect, so neither one can silently become the parent
+            // 本页面的根节点可能就是面板本身，而根节点在下面被拉伸到页面。
+            // 原始面板矩形在该拉伸之前测量，卡片是显式的 760x560 布局矩形，
+            // 因此两者都不会悄悄变成父画布。
             // canvas.
             Vector2 authored = panel != null
                 ? AuthoredIndustryPanelSize(panel)
                 : new Vector2(HouseholdIndustryFallbackWidth, HouseholdIndustryFallbackHeight);
             Rect card = HouseholdCardRect();
-            // Record the card here, before the fit, so the month strip and the public
-            // diagnostics always describe the surface this page paints — including a scene
-            // whose IndustryPanel child cannot be resolved (there is no canvas fallback).
+            // 适配之前先在此记录卡片，使月度带区与公开诊断始终描述
+            // 本页面绘制的面——包括 IndustryPanel 子节点无法解析的场景
+            // （没有画布回退）。
             LastHouseholdCardRect = card;
             LastHouseholdIndustryPanelRect = default;
             LastHouseholdIndustryFit = default;
@@ -1654,8 +1646,8 @@ namespace SengokuChronicle.Presentation
                 rootRect.anchorMax = Vector2.one;
                 rootRect.offsetMin = rootRect.offsetMax = Vector2.zero;
             }
-            // Clearing the composition destroys its scroll viewport, so the scene panel has
-            // to leave the viewport content first or it would be destroyed with it.
+            // 清空构图会销毁其滚动视口，因此场景面板必须先离开视口内容，
+            // 否则会随之被销毁。
             RestoreHouseholdIndustryPanelHome();
             _householdComposition.SetActive(true);
             _householdComposition.transform.SetAsLastSibling();
@@ -1713,7 +1705,7 @@ namespace SengokuChronicle.Presentation
                     Vector2.zero, new Vector2(0f, rowY), 12, SengokuUiTheme.InkSoft, 172f,
                     TextAnchor.MiddleLeft);
 
-            // Month summary above the panel, on the household card: live data only.
+            // 面板上方的月度摘要，放在家宅卡片上：只用实时数据。
             var monthSources = new List<string>();
             IndustryMonthReport report = session.LastIndustryReport;
             if (report != null && !string.IsNullOrWhiteSpace(report.Summary))
@@ -1728,16 +1720,16 @@ namespace SengokuChronicle.Presentation
                 RectTransform monthBlock = CreateDecor("HouseholdMonthEvent",
                     _householdComposition.transform, block.center, block.size,
                     SengokuUiTheme.IndigoPanel);
-                // The block is a wide, short strip, so the title sits beside the body instead
-                // of above it and the wrapped text keeps the block's full usable height.
+                // 区块是宽而矮的条带，因此标题在正文旁边而不是上方，
+                // 换行文字可占用区块的完整可用高度。
                 float inset = HouseholdCardEdgeInset;
                 const float titleWidth = 56f;
                 float textWidth = Mathf.Max(1f, block.width - titleWidth - inset * 3f);
                 CreateLabel(monthBlock, "HouseholdMonthEventTitle", "本月", Vector2.zero,
                     new Vector2(-block.width * 0.5f + inset + titleWidth * 0.5f, 0f), 18,
                     SengokuUiTheme.Gold, titleWidth, TextAnchor.MiddleLeft);
-                // One wrapped body instead of fixed 26 px rows: a settlement report and the
-                // industry message carry the same sentence, and two wrapped rows overlapped.
+                // 用一段换行正文代替固定 26 px 的行：结算报告与产业消息
+                // 携带同一句话，两行换行会互相压住。
                 CreateLabel(monthBlock, "HouseholdMonthEventBody",
                     HouseholdMonthSummary.Join(monthLines), Vector2.zero,
                     new Vector2(-block.width * 0.5f + inset * 2f + titleWidth + textWidth * 0.5f,

@@ -44,9 +44,9 @@ namespace SengokuChronicle.Editor
         public const string AdoptionMessageName = "SC022AdoptionMessage";
         public const string HelpName = "SC022FamilyFormationHelpText";
         /// <summary>
-        /// Static help copy under the two columns. Adoption makes the adopted person a
-        /// lawful successor under <c>SuccessionService.IsSuccessorRole</c>, so the copy
-        /// must not claim inheritance is unaffected; only the current phase is unchanged.
+        /// 两列下方的静态帮助文案。收养会让被收养人成为
+        /// <c>SuccessionService.IsSuccessorRole</c> 下的合法继承人，因此文案
+        /// 不得声称继承不受影响；改变的只是当前阶段。
         /// </summary>
         public const string HelpText =
             "选择家人与候选人后，确认会立即写入成员身份、亲属事实和家族编年史；" +
@@ -222,7 +222,7 @@ namespace SengokuChronicle.Editor
             Text helpCopy = help.GetComponent<Text>();
             if (helpCopy == null || helpCopy.text != HelpText)
                 return Invalid(out error,
-                    "The SC-022 help line does not carry the current adoption copy; re-run the updater.");
+                    "SC-022 帮助行未携带当前的收养文案；请重跑生成器。");
 
             if (!ValidateContainer(marriageMembers, marriageMemberTemplate, out error))
                 return false;
@@ -736,11 +736,11 @@ namespace SengokuChronicle.Editor
                 blockReason.gameObject.SetActive(false);
                 marriageMessage.gameObject.SetActive(false);
                 adoptionMessage.gameObject.SetActive(false);
-                // Copy lives in the scene too, so a repair pass must rewrite it; otherwise a
-                // stale line survives every regeneration of an existing hierarchy.
+                // 文案也存在场景里，修复流程必须重写它；否则旧文案会在
+                // 既有层级的每次重建中留存下来。
                 Text helpLabel = help.GetComponent<Text>();
                 if (helpLabel == null)
-                    throw new InvalidOperationException("The SC-022 help line has no Text component.");
+                    throw new InvalidOperationException("SC-022 帮助行没有 Text 组件。");
                 Undo.RecordObject(helpLabel, UndoName);
                 helpLabel.text = HelpText;
                 EditorUtility.SetDirty(helpLabel);
