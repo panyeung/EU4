@@ -39,9 +39,6 @@ namespace SengokuChronicle.Editor
         public const string MenuPath = "Tools/Sengoku Chronicle/Add SC-010 Succession Panel";
 
         private const string CanvasName = "Canvas";
-        private const string MapRootName = "M2WorldMapRoot";
-        private const string TitleRootName = "M6TitleRoot";
-        private const string EventChoiceRootName = "EventChoiceRoot";
         private const string UndoName = "Add SC-010 Succession Panel";
 
         public enum UpdateResult
@@ -82,7 +79,13 @@ namespace SengokuChronicle.Editor
         public static UpdateResult Update(Scene scene, Action<GameObject> beforeValidation) =>
             Execute(scene, false, beforeValidation);
 
-        public static bool Validate(Scene scene, out string error)
+        public static bool Validate(Scene scene, out string error) => Validate(scene, true, out error);
+
+        /// <summary>
+        /// Full validation, or the same checks with the Canvas depth order skipped so a
+        /// hierarchy generated before the family page existed can be repaired in place.
+        /// </summary>
+        private static bool Validate(Scene scene, bool checkDepth, out string error)
         {
             error = null;
             if (!scene.IsValid() || !scene.isLoaded)
@@ -123,19 +126,20 @@ namespace SengokuChronicle.Editor
 
             // The first version placed SuccessionRoot behind M2WorldMapRoot, so map/town
             // graphics intercepted every click on the HUD buttons. The root must render
-            // above the map/town HUD, while remaining below the full-screen title and
-            // event-choice overlays.
-            Transform canvas = canvases[0];
-            Transform mapRoot = canvas.Find(MapRootName);
-            Transform titleRoot = canvas.Find(TitleRootName);
-            Transform eventRoot = canvas.Find(EventChoiceRootName);
-            if (mapRoot != null && root.GetSiblingIndex() <= mapRoot.GetSiblingIndex())
-                return Invalid(out error,
-                    "SuccessionRoot must render above the map/town HUD so its buttons receive raycasts.");
-            if (titleRoot != null && root.GetSiblingIndex() >= titleRoot.GetSiblingIndex())
-                return Invalid(out error, "SuccessionRoot must render below the title overlay.");
-            if (eventRoot != null && root.GetSiblingIndex() >= eventRoot.GetSiblingIndex())
-                return Invalid(out error, "SuccessionRoot must render below the event-choice overlay.");
+            // above the map/town HUD and above the opaque family page, while remaining
+            // below the full-screen title and event-choice overlays. The family page
+            // covers the whole decision modal, so a succession or crisis choice is
+            // unreachable unless the root is raised over it. Both bounds come from the
+            // shared Canvas layer table instead of a guessed sibling index.
+            if (checkDepth)
+            {
+                Transform canvas = canvases[0];
+                string[] siblingNames = canvas.Cast<Transform>().Select(child => child.name).ToArray();
+                if (CanvasLayerOrder.TryFindViolation(siblingNames, root.GetSiblingIndex(),
+                        CanvasLayerOrder.CanvasLayer.Modal, out string offender,
+                        out CanvasLayerOrder.CanvasLayer offenderLayer, out bool mustRenderAbove))
+                    return Invalid(out error, OrderError(offender, offenderLayer, mustRenderAbove));
+            }
             if (hud.parent != root || !hud.gameObject.activeSelf)
                 return Invalid(out error, "SuccessionHud must be an active direct child of SuccessionRoot.");
             if (modal.parent != root || modal.gameObject.activeSelf)
@@ -253,6 +257,13 @@ namespace SengokuChronicle.Editor
 
             if (Validate(scene, out _)) return UpdateResult.Success;
 
+            // A scene generated before the family page existed has a complete, bound
+            // hierarchy that is merely drawn beneath the opaque roster. Moving the
+            // existing root keeps its serialized references, so the depth is repaired
+            // in place inside its own Undo transaction instead of a rebuild.
+            if (HasNamed(scene, RootName) && Validate(scene, false, out _))
+                return RepairDepth(scene, save);
+
             if (HasNamed(scene, RootName) || HasNamed(scene, HudName) || HasNamed(scene, HeadName) ||
                 HasNamed(scene, StatusName) || HasNamed(scene, RetireName) ||
                 HasNamed(scene, CrisisDemoName) || HasNamed(scene, FeedbackName) ||
@@ -273,7 +284,7 @@ namespace SengokuChronicle.Editor
                 if (font == null) throw new InvalidOperationException("Missing built-in UI font.");
 
                 GameObject rootObject = Create(scene, canvas, RootName);
-                PlaceAboveMapHud(canvas, rootObject.transform);
+                PlaceInLayer(canvas, rootObject.transform, CanvasLayerOrder.CanvasLayer.Modal);
                 RectTransform rootRect = rootObject.GetComponent<RectTransform>();
                 rootRect.anchorMin = Vector2.zero;
                 rootRect.anchorMax = Vector2.one;
@@ -375,17 +386,93 @@ namespace SengokuChronicle.Editor
             }
         }
 
-        private static void PlaceAboveMapHud(Transform canvas, Transform root)
+        /// <summary>
+        /// Moves an existing, fully bound root into the valid Canvas depth when only the
+        /// order is stale. The scene is saved, marked dirty, or rolled back exactly like
+        /// the structural path so a failed repair never leaves a half-moved scene.
+        /// </summary>
+        private static UpdateResult RepairDepth(Scene scene, bool save)
         {
-            // Insert just below the first full-screen overlay so the HUD sits above the
-            // map/town controls but never covers the title screen or an event modal.
-            Transform title = canvas.Find(TitleRootName);
-            Transform eventRoot = canvas.Find(EventChoiceRootName);
-            Transform anchor = title != null ? title : eventRoot;
-            if (anchor != null)
-                root.SetSiblingIndex(anchor.GetSiblingIndex());
-            else
-                root.SetAsLastSibling();
+            Transform canvas = scene.GetRootGameObjects()
+                .Where(go => go.name == CanvasName && go.GetComponent<Canvas>() != null)
+                .Select(go => go.transform)
+                .SingleOrDefault();
+            Transform root = FindNamed(scene, RootName);
+            if (canvas == null || root == null)
+                return UpdateResult.Failed;
+
+            Undo.IncrementCurrentGroup();
+            int group = Undo.GetCurrentGroup();
+            Undo.SetCurrentGroupName(UndoName);
+            UpdateResult failure = UpdateResult.Failed;
+            try
+            {
+                // Sibling order is serialized on the parent RectTransform.
+                Undo.RecordObject(canvas, UndoName);
+                PlaceInLayer(canvas, root, CanvasLayerOrder.CanvasLayer.Modal);
+                failure = UpdateResult.ValidationFailed;
+                if (!Validate(scene, out string error))
+                    throw new InvalidOperationException(error);
+
+                Undo.FlushUndoRecordObjects();
+                EditorSceneManager.MarkSceneDirty(scene);
+                failure = UpdateResult.SaveFailed;
+                if (save && !EditorSceneManager.SaveScene(scene))
+                    throw new InvalidOperationException("Unity refused to save FoundationScene.");
+
+                Undo.CollapseUndoOperations(group);
+                return UpdateResult.Success;
+            }
+            catch (Exception exception)
+            {
+                Undo.FlushUndoRecordObjects();
+                Undo.RevertAllDownToGroup(group);
+                Debug.LogWarning($"SC-010 succession depth repair rolled back: {exception.Message} The scene may remain dirty; inspect it before saving.");
+                return failure;
+            }
+        }
+
+        /// <summary>
+        /// 座次违规的断言文字。沿用原有措辞（地图/城镇 HUD、不透明家族页、标题覆盖层、
+        /// 事件选择覆盖层），只在末尾补出真正违规的兄弟名，方便在场景里定位。
+        /// </summary>
+        private static string OrderError(string offender, CanvasLayerOrder.CanvasLayer offenderLayer,
+            bool mustRenderAbove)
+        {
+            string detail = $" (offender: {offender}, {CanvasLayerOrder.Describe(offenderLayer)})";
+            if (mustRenderAbove)
+            {
+                switch (offenderLayer)
+                {
+                    case CanvasLayerOrder.CanvasLayer.MapHud:
+                        return "SuccessionRoot must render above the map/town HUD so its buttons receive raycasts." + detail;
+                    case CanvasLayerOrder.CanvasLayer.Page:
+                        return "SuccessionRoot must render above the opaque family page so its decision modal is not covered." + detail;
+                    default:
+                        return $"SuccessionRoot must render above the {CanvasLayerOrder.Describe(offenderLayer)}." + detail;
+                }
+            }
+            switch (offenderLayer)
+            {
+                case CanvasLayerOrder.CanvasLayer.TitleOverlay:
+                    return "SuccessionRoot must render below the title overlay." + detail;
+                case CanvasLayerOrder.CanvasLayer.EventChoiceOverlay:
+                    return "SuccessionRoot must render below the event-choice overlay." + detail;
+                default:
+                    return $"SuccessionRoot must render below the {CanvasLayerOrder.Describe(offenderLayer)}." + detail;
+            }
+        }
+
+        private static void PlaceInLayer(Transform canvas, Transform root,
+            CanvasLayerOrder.CanvasLayer layer)
+        {
+            // 座次由共享层序表决定：插到第一个更高层兄弟之前，没有更高层兄弟时放到末端。
+            // 索引按「其它兄弟」算，因为 SetSiblingIndex 会先摘掉自身再按新序列插入。
+            string[] others = canvas.Cast<Transform>()
+                .Where(child => child != root)
+                .Select(child => child.name)
+                .ToArray();
+            root.SetSiblingIndex(CanvasLayerOrder.InsertIndex(others, layer));
         }
 
         private static void ConfigureVerticalLayout(VerticalLayoutGroup layout, int spacing)

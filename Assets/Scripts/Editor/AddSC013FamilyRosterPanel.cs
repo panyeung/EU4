@@ -44,9 +44,6 @@ namespace SengokuChronicle.Editor
         public const string MenuPath = "Tools/Sengoku Chronicle/Add SC-013 Family Roster Panel";
 
         private const string CanvasName = "Canvas";
-        private const string MapRootName = "M2WorldMapRoot";
-        private const string TitleRootName = "M6TitleRoot";
-        private const string EventChoiceRootName = "EventChoiceRoot";
         private const string UndoName = "Add SC-017 Family Graph Panel";
 
         // Legacy SC-013 row hierarchy names, used only to recognise and replace the
@@ -140,16 +137,12 @@ namespace SengokuChronicle.Editor
                     "FamilyRosterRoot must be active, be a direct Canvas child, and own both components.");
 
             Transform canvas = canvases[0];
-            Transform mapRoot = canvas.Find(MapRootName);
-            Transform titleRoot = canvas.Find(TitleRootName);
-            Transform eventRoot = canvas.Find(EventChoiceRootName);
-            if (mapRoot != null && root.GetSiblingIndex() <= mapRoot.GetSiblingIndex())
-                return Invalid(out error,
-                    "FamilyRosterRoot must render above the map/town HUD so its buttons receive raycasts.");
-            if (titleRoot != null && root.GetSiblingIndex() >= titleRoot.GetSiblingIndex())
-                return Invalid(out error, "FamilyRosterRoot must render below the title overlay.");
-            if (eventRoot != null && root.GetSiblingIndex() >= eventRoot.GetSiblingIndex())
-                return Invalid(out error, "FamilyRosterRoot must render below the event-choice overlay.");
+            // 座次由共享层序表判定：页面必须高于地图/城镇 HUD，低于弹窗与两个全屏覆盖层。
+            string[] siblingNames = canvas.Cast<Transform>().Select(child => child.name).ToArray();
+            if (CanvasLayerOrder.TryFindViolation(siblingNames, root.GetSiblingIndex(),
+                    CanvasLayerOrder.CanvasLayer.Page, out string offender,
+                    out CanvasLayerOrder.CanvasLayer offenderLayer, out bool mustRenderAbove))
+                return Invalid(out error, OrderError(offender, offenderLayer, mustRenderAbove));
 
             if (open.parent != root || !open.gameObject.activeSelf)
                 return Invalid(out error, "The roster open button must be an active direct child of the root.");
@@ -307,7 +300,7 @@ namespace SengokuChronicle.Editor
                     Undo.DestroyObjectImmediate(legacyRoot.gameObject);
 
                 GameObject rootObject = Create(scene, canvas, RootName);
-                PlaceAboveMapHud(canvas, rootObject.transform);
+                PlaceInLayer(canvas, rootObject.transform, CanvasLayerOrder.CanvasLayer.Page);
                 RectTransform rootRect = rootObject.GetComponent<RectTransform>();
                 rootRect.anchorMin = Vector2.zero;
                 rootRect.anchorMax = Vector2.one;
@@ -631,21 +624,39 @@ namespace SengokuChronicle.Editor
                    Components<M2EndingPanel>(scene).Length != 0;
         }
 
-        private static void PlaceAboveMapHud(Transform canvas, Transform root)
+        /// <summary>
+        /// 座次违规的断言文字。沿用原有措辞（地图/城镇 HUD、标题覆盖层、事件选择覆盖层），
+        /// 只在末尾补出真正违规的兄弟名，方便在场景里定位。
+        /// </summary>
+        private static string OrderError(string offender, CanvasLayerOrder.CanvasLayer offenderLayer,
+            bool mustRenderAbove)
         {
-            Transform title = canvas.Find(TitleRootName);
-            Transform eventRoot = canvas.Find(EventChoiceRootName);
-            int? anchorIndex = null;
-            if (title != null)
-                anchorIndex = title.GetSiblingIndex();
-            if (eventRoot != null)
-                anchorIndex = anchorIndex.HasValue
-                    ? Mathf.Min(anchorIndex.Value, eventRoot.GetSiblingIndex())
-                    : eventRoot.GetSiblingIndex();
-            if (anchorIndex.HasValue)
-                root.SetSiblingIndex(anchorIndex.Value);
-            else
-                root.SetAsLastSibling();
+            string detail = $" (offender: {offender}, {CanvasLayerOrder.Describe(offenderLayer)})";
+            if (mustRenderAbove)
+                return offenderLayer == CanvasLayerOrder.CanvasLayer.MapHud
+                    ? "FamilyRosterRoot must render above the map/town HUD so its buttons receive raycasts." + detail
+                    : $"FamilyRosterRoot must render above the {CanvasLayerOrder.Describe(offenderLayer)}." + detail;
+            switch (offenderLayer)
+            {
+                case CanvasLayerOrder.CanvasLayer.TitleOverlay:
+                    return "FamilyRosterRoot must render below the title overlay." + detail;
+                case CanvasLayerOrder.CanvasLayer.EventChoiceOverlay:
+                    return "FamilyRosterRoot must render below the event-choice overlay." + detail;
+                default:
+                    return $"FamilyRosterRoot must render below the {CanvasLayerOrder.Describe(offenderLayer)}." + detail;
+            }
+        }
+
+        private static void PlaceInLayer(Transform canvas, Transform root,
+            CanvasLayerOrder.CanvasLayer layer)
+        {
+            // 座次由共享层序表决定：插到第一个更高层兄弟之前，没有更高层兄弟时放到末端。
+            // 索引按「其它兄弟」算，因为 SetSiblingIndex 会先摘掉自身再按新序列插入。
+            string[] others = canvas.Cast<Transform>()
+                .Where(child => child != root)
+                .Select(child => child.name)
+                .ToArray();
+            root.SetSiblingIndex(CanvasLayerOrder.InsertIndex(others, layer));
         }
 
         private static void Stretch(RectTransform rect)
