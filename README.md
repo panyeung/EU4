@@ -2,7 +2,7 @@
 
 Unity 6（URP 2D）的战国忍者家族模拟游戏。核心是一座城、一个家族、一个可以结束月份推进的循环。
 
-**当前状态：未完成（PARTIAL）。** 可以构建、可以启动、核心循环可玩，但仍有未闭合的 [MAJOR] 缺口：四个任务工作树未合并进 `main`，用户最终验收未完成，M05 独立复审未通过。逐条清单见下方「已知缺口」，完整证据见 [docs/reports/20261118-completion-report.md](docs/reports/20261118-completion-report.md)。
+**当前状态：未完成（PARTIAL）。** 可以构建、可以启动、核心循环可玩，但仍有未闭合的 [MAJOR] 缺口：四个任务工作树未合并进 `main`，用户最终验收未完成，M05 独立复审未通过，F1 城镇设施槽的实现已不在树中（唯一副本在快照提交 `f69295b`，已推送 origin）。逐条清单见下方「已知缺口」，完整证据见 [docs/reports/20261118-completion-report.md](docs/reports/20261118-completion-report.md)。
 
 ## 环境要求
 
@@ -62,11 +62,13 @@ scripts/copy-testresults.sh Logs/verify/<证据目录>     # 跑完立刻复制�
 | MAJOR | 四个任务工作树未合并进 `main`：`ui-m04-family` 840b2dd、`ui-m05-management` b1d1062、`ui-m06-m07-missions` d57ea7c、`ui-m08-campaign` a25c969 | 本批任务没有集成卡。场景不参与三方合并，需在 `main` 侧重放 updater 并重跑 Validator |
 | MAJOR | M00 用户最终验收未完成 | 需用户本人。Play Mode 已到 SC-013 营地 HUD，存读档往返已由后续卡实测通过 |
 | MAJOR | M05 独立复审未通过 | 唯一一次独立复审判 FAIL：3 处公开成员零断言，裁切/滚动实现与三条回滚测试只存在于未提交工作区 |
+| MAJOR | F1 城镇设施槽的实现不在 `main`，也不在任何任务分支 | 只有快照提交 `f69295b`（已推送 origin）里有 blob `01a0b97`/`6d288c0`。恢复卡已开。恢复前城镇菜单那三个设施槽退回「未开放」占位 |
+| MAJOR | `main` 工作树的在途副本在 2026-11-17 21:17:53 被外部重置清掉 | M04 的在途新增文件已不在工作树，但已在 `panyeung/ui-m04-family` 上提交，可从该分支取回，不是永久损失 |
 | MINOR | SAVE-3（待决继承跨存读档）只到会话层 | 等价用例 `SuccessionSaveTests.CaptureSave_AtPendingDecision_RoundTripsPhaseAndCandidates` 覆盖，Play Mode 级未单独跑 |
 | MINOR | M09 窗口拖动只在合成输入下验过 | 需真实硬件与可交互桌面 |
 | MINOR | 构建含 1 条 `uncompiled code changes` 警告 | 构建基于含未提交改动的工作树，产物与 `main` HEAD 不完全对应 |
 | MINOR | 成品 Player 约 22 条 URP 后处理着色器被剥离 | Bloom/景深/运动模糊在构建产物中不生效，属着色器变体裁剪 |
-| MINOR | 城镇菜单三个 `Facility1..3Text` 节点仍在场景里 | 运行时已清空并禁用（审计 F1 代码侧已修），删节点属场景改动 |
+| MINOR | 城镇菜单三个 `Facility1..3Text` 节点仍在场景里 | 运行时文本与禁用状态跟随 F1 的实现；实现不在树里时退回「未开放」占位。删节点属场景改动 |
 | MINOR | 世界地图屏「NPC 自主性」按钮与「清洲」卡片局部重叠 | 目视记录，未判定是否为设计意图 |
 | MINOR | 剧本选择页两条按钮显示名均为「SC-010」 | 内部标识是 SC-013 样例，命名与文案不一致，未改 |
 | MINOR | 选 SC-013 后单帧读到「日期未初始化」 | 面板切换期绑定时序，未稳定复现 |
