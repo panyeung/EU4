@@ -449,6 +449,77 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
+        public void DebugModeEntry_InvokedWhileTheTitleIsHidden_DoesNotStartASession()
+        {
+            // A verification harness invokes onClick directly, so it can press the entry
+            // even when the hidden title overlay leaves it off screen. Entering Debug Mode
+            // from that state silently converted an ordinary campaign into a debug session
+            // whose player slot is rejected.
+            Assert.That(_controller.StartNewGame(), Is.True);
+            Assert.That(_controller.IsTitleVisible, Is.False);
+            Assert.That(_debugEntryButton.gameObject.activeInHierarchy, Is.False,
+                "the entry must not be on screen over an ordinary campaign.");
+
+            _debugEntryButton.onClick.Invoke();
+
+            Assert.That(_session.IsDebugSessionActive, Is.False,
+                "invoking the hidden entry must not create a debug session.");
+            Assert.That(_debugPanel.IsOpen, Is.False);
+            Assert.That(_session.CurrentDebugSession, Is.Null);
+            Assert.That(_controller.IsTitleVisible, Is.False,
+                "a refused entry must not change the current screen.");
+            Assert.That(_controller.LastOperationSucceeded, Is.False);
+            Assert.That(_controller.Status, Does.Contain("标题页"));
+            Assert.That(_session.Succession.World.Family.Id,
+                Is.EqualTo(new FamilyId("family.akechi.sc013")),
+                "the refused entry must leave the ordinary campaign untouched.");
+            Assert.That(_controller.SlotLoadCount, Is.Zero);
+        }
+
+        [Test]
+        public void NormalStart_PlayerSlotRoundTripsDateFamilyAndResources()
+        {
+            Assert.That(_controller.StartNewGame(), Is.True);
+            Assert.That(_session.IsDebugSessionActive, Is.False);
+            Assert.That(_debugPanel.IsOpen, Is.False, "the debug window stays closed.");
+
+            GameDate savedDate = _session.WorldClock.CurrentDate;
+            int savedFunds = _session.Industry.Resources.Funds;
+            int savedSupplies = _session.Industry.Resources.Supplies;
+            PersonId savedHead = _session.Succession.HeadPersonId;
+
+            SaveOperationResult saved = _session.SaveTo(_store);
+            Assert.That(saved.Succeeded, Is.True, saved.Message);
+            Assert.That(_store.Exists(), Is.True);
+
+            Assert.That(_session.WorldClock.AdvanceOneDay(), Is.True);
+            Assert.That(_session.WorldClock.CurrentDate, Is.Not.EqualTo(savedDate));
+
+            SaveOperationResult loaded = _session.LoadFrom(_store);
+            Assert.That(loaded.Succeeded, Is.True, loaded.Message);
+            Assert.That(_session.WorldClock.CurrentDate, Is.EqualTo(savedDate));
+            Assert.That(_session.Industry.Resources.Funds, Is.EqualTo(savedFunds));
+            Assert.That(_session.Industry.Resources.Supplies, Is.EqualTo(savedSupplies));
+            Assert.That(_session.Succession.HeadPersonId, Is.EqualTo(savedHead));
+        }
+
+        [Test]
+        public void DebugModeEntry_PlayerSlotSaveIsStillRejectedAndWritesNothing()
+        {
+            _debugEntryButton.onClick.Invoke();
+            Assert.That(_session.IsDebugSessionActive, Is.True);
+
+            SaveOperationResult result = _session.SaveTo(_store);
+
+            Assert.That(result.Succeeded, Is.False);
+            Assert.That(result.Message, Is.EqualTo("调试会话不会写入玩家存档。"));
+            Assert.That(_store.Exists(), Is.False,
+                "a debug session must not create a player slot.");
+            Assert.That(File.Exists(_store.FilePath), Is.False,
+                "a debug session must not write a player slot file.");
+        }
+
+        [Test]
         public void NormalStartAfterDebugMode_LeavesTheDebugSessionAndClosesTheWindow()
         {
             _debugEntryButton.onClick.Invoke();

@@ -184,7 +184,11 @@ namespace SengokuChronicle.Tests.EditMode
                 Is.EqualTo(AddM09DebugMode.UpdateResult.Success));
             Transform root = Single(AddM09DebugMode.RootName);
             Assert.That(root.GetComponent<DebugModePanel>(), Is.Null);
-            Assert.That(Controller().StartDebugSession(), Is.True);
+            // A preview scene never runs MonoBehaviour lifecycle, so the start page has to be
+            // shown explicitly; the real Start() does this before the entry can be pressed.
+            TitleScreenController controller = Controller();
+            controller.ShowTitle();
+            Assert.That(controller.StartDebugSession(), Is.True);
 
             DebugModePanel panel = root.GetComponent<DebugModePanel>();
             Assert.That(panel, Is.Not.Null,

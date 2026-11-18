@@ -827,6 +827,21 @@ namespace SengokuChronicle.Presentation
                 return false;
             }
 
+            // Debug Mode may only be entered from the visible start page, or reopened while
+            // its own isolated session is already live. The authored entry is a plain
+            // UnityEvent, and an automation harness (or any script) can invoke onClick
+            // directly even while the entry is inactive under a hidden title overlay; that
+            // path used to start a debug session over an ordinary campaign and silently make
+            // its player slot unsavable. A scene with no title root keeps the historical
+            // direct-call behaviour, matching how the entry is treated as always visible there.
+            bool titleShown = titleRoot == null || IsTitleVisible;
+            if (!titleShown && !gameSession.IsDebugSessionActive)
+            {
+                LastOperationSucceeded = false;
+                SetStatus("Debug 入口只在标题页可用，当前未进入调试会话。");
+                return false;
+            }
+
             DebugModePanel panel = EnsureDebugPanel();
             if (panel == null)
             {
