@@ -451,28 +451,27 @@ namespace SengokuChronicle.Tests.EditMode
         [Test]
         public void DebugModeEntry_InvokedWhileTheTitleIsHidden_DoesNotStartASession()
         {
-            // A verification harness invokes onClick directly, so it can press the entry
-            // even when the hidden title overlay leaves it off screen. Entering Debug Mode
-            // from that state silently converted an ordinary campaign into a debug session
-            // whose player slot is rejected.
+            // 验证脚本直接调用 onClick，因此即使隐藏的标题层让入口不在屏幕上，
+            // 也仍能把它按下去。从这个状态进入 Debug 模式会把普通战役
+            // 变成玩家槽被拒的调试会话。
             Assert.That(_controller.StartNewGame(), Is.True);
             Assert.That(_controller.IsTitleVisible, Is.False);
             Assert.That(_debugEntryButton.gameObject.activeInHierarchy, Is.False,
-                "the entry must not be on screen over an ordinary campaign.");
+                "普通战役进行中，入口不应出现在屏幕上。");
 
             _debugEntryButton.onClick.Invoke();
 
             Assert.That(_session.IsDebugSessionActive, Is.False,
-                "invoking the hidden entry must not create a debug session.");
+                "按动隐藏的入口不应创建调试会话。");
             Assert.That(_debugPanel.IsOpen, Is.False);
             Assert.That(_session.CurrentDebugSession, Is.Null);
             Assert.That(_controller.IsTitleVisible, Is.False,
-                "a refused entry must not change the current screen.");
+                "被拒绝的入口不应改变当前界面。");
             Assert.That(_controller.LastOperationSucceeded, Is.False);
             Assert.That(_controller.Status, Does.Contain("标题页"));
             Assert.That(_session.Succession.World.Family.Id,
                 Is.EqualTo(new FamilyId("family.akechi.sc013")),
-                "the refused entry must leave the ordinary campaign untouched.");
+                "被拒绝的入口不应改动普通战役。");
             Assert.That(_controller.SlotLoadCount, Is.Zero);
         }
 
@@ -481,7 +480,7 @@ namespace SengokuChronicle.Tests.EditMode
         {
             Assert.That(_controller.StartNewGame(), Is.True);
             Assert.That(_session.IsDebugSessionActive, Is.False);
-            Assert.That(_debugPanel.IsOpen, Is.False, "the debug window stays closed.");
+            Assert.That(_debugPanel.IsOpen, Is.False, "调试窗口应保持关闭。");
 
             GameDate savedDate = _session.WorldClock.CurrentDate;
             int savedFunds = _session.Industry.Resources.Funds;
@@ -514,9 +513,9 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(result.Succeeded, Is.False);
             Assert.That(result.Message, Is.EqualTo("调试会话不会写入玩家存档。"));
             Assert.That(_store.Exists(), Is.False,
-                "a debug session must not create a player slot.");
+                "调试会话不应创建玩家存档槽。");
             Assert.That(File.Exists(_store.FilePath), Is.False,
-                "a debug session must not write a player slot file.");
+                "调试会话不应写入玩家存档文件。");
         }
 
         [Test]

@@ -827,13 +827,11 @@ namespace SengokuChronicle.Presentation
                 return false;
             }
 
-            // Debug Mode may only be entered from the visible start page, or reopened while
-            // its own isolated session is already live. The authored entry is a plain
-            // UnityEvent, and an automation harness (or any script) can invoke onClick
-            // directly even while the entry is inactive under a hidden title overlay; that
-            // path used to start a debug session over an ordinary campaign and silently make
-            // its player slot unsavable. A scene with no title root keeps the historical
-            // direct-call behaviour, matching how the entry is treated as always visible there.
+            // 只在标题页可见时允许进入调试会话；会话已激活时则允许重开窗口。
+            // 场景里的入口是普通 UnityEvent，验证脚本或任意代码可以直接 onClick.Invoke()，
+            // 即使入口在隐藏的标题层下 active 为假也拦不住；该路径曾在普通战役中打开
+            // 调试会话，使玩家槽存档被拒。没有 titleRoot 的历史场景沿用「标题视为可见」
+            // 的既有判定，与 RefreshDebugEntry() 一致。
             bool titleShown = titleRoot == null || IsTitleVisible;
             if (!titleShown && !gameSession.IsDebugSessionActive)
             {
