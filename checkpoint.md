@@ -427,7 +427,7 @@
 - 画布层序已统一：`Assets` 内 `CanvasOverlayOrder` 零命中，`CanvasLayerOrder` 是唯一页面序来源。
 - 独立复审 `t_122d4d5b` 判 **PASS**，C1–C6 全过。
 - 仍未闭合：用户最终验收（M00）；M08 战役回顾面板的运行时打开；M09 真机窗口拖动；`Assets/Tests/PlayMode` 为空，运行时验证仍靠手工配方；其余 MINOR 见 §6。
-- 本次状态核对时，本机唯一 Unity Editor 为 PID `93704`，项目路径为 `C:\Users\panye\My project`，Unity `6000.6.6f1`，Pipeline 端口 `7800` 可达；`editor_status` 为 `ready`、`compiling=false`、`playMode=stopped`。后续 Unity 工作开始前重新核对进程、`-projectPath` 与 Pipeline；已有实例时复用，不启动第二实例。
+- 本次状态核对时，本机唯一 Unity Editor 为 PID `93704`，项目路径为 `C:\Users\panye\My project`，Unity `6000.6.6f1`，Pipeline 端口 `7800` 可达。依据是 `Logs/verify/20261118-m08-full-verification.md` 记录的 2026-11-18 20:18:31Z / 20:18:35Z / 20:18:40Z 连续三次 `status=ready`，以及本次一次只读 `editor_status` 查询（`lastHeartbeat` 2026-11-18T23:33:38Z）返回 `ready`、`compiling=false`、`playMode=stopped`。这只代表 Editor 可连接，不代表运行时行为。后续 Unity 工作开始前重新核对进程、`-projectPath` 与 Pipeline；已有实例时复用，不启动第二实例。
 - 证据边界。M01 与 M08C 子切片的验收都不代表 M00 或 M02–M08 整体验收。
 
 ---

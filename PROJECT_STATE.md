@@ -11,7 +11,7 @@
 - `main` 与 `origin/main` 同步。游戏代码基线为 `2bca9d1`。之后的主线提交只更新文档。本文件最初在 `feature/project-state-docs` 独立工作树编写；该文档分支已合入 `main`，不代表当前分支状态。
 - Unity 版本：`6000.6.6f1`，URP 2D，Windows。
 - 主工作树：`C:\Users\panye\My project`，基线工作区干净。本文件最初在 `feature/project-state-docs` 独立工作树编写，以免干扰 v1 演示签核。
-- 当前本工程唯一 Unity Editor 为 PID `93704`，Unity `6000.6.6f1`，Pipeline 端口 `7800` 可达；`editor_status` 返回 `ready`、`compiling=false`、`playMode=stopped`。每次 Unity 操作前重查进程及 `-projectPath`，不得启动第二实例。
+- 本工程当前有单一 Unity Editor 实例：PID `93704`，`6000.6.6f1`，Pipeline 端口 `7800`，`-projectPath` 为 `C:\Users\panye\My project`。连接状态有两份证据：`Logs/verify/20261118-m08-full-verification.md` 记录 2026-11-18 20:18:31Z / 20:18:35Z / 20:18:40Z 连续三次 `status=ready`、`playMode=stopped`、`compiling=false`；本次文档核对另做一次只读查询，`lastHeartbeat` 为 2026-11-18T23:33:38Z，返回 `ready`、`playMode=stopped`。这些只说明 Editor 可连接，不代表运行时行为。任何 Unity 操作前重查进程、`-projectPath` 与 `unity pipeline list`；已有实例时复用，不得启动第二实例，也不得据此启动 batchmode。
 
 ## 当前阶段
 
