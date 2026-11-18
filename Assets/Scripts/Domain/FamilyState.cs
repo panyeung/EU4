@@ -133,6 +133,24 @@ namespace SengokuChronicle.Domain
             return true;
         }
 
+#pragma warning disable UAC0009 // the approved Debug Mode plan requires the Editor/development build boundary
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        /// <summary>
+        /// Replaces the whole roster with an already-validated snapshot. This exists only
+        /// so a rejected debug transaction can restore the exact pre-command roster; the
+        /// normal production path never rewrites committed membership wholesale.
+        /// </summary>
+        internal void RestoreMembers(IReadOnlyList<FamilyMembership> members)
+        {
+            _members.Clear();
+            if (members == null)
+                return;
+            for (int i = 0; i < members.Count; i++)
+                _members[members[i].PersonId] = members[i].Role;
+        }
+#endif
+#pragma warning restore UAC0009
+
         public override string ToString() => Id + " " + _displayName;
     }
 }

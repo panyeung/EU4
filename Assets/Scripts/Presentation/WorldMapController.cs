@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using SengokuChronicle.Application;
@@ -747,6 +748,79 @@ namespace SengokuChronicle.Presentation
                 if (returnToMapButton != null)
                     returnToMapButton.transform.SetAsLastSibling();
             }
+            if (townOverviewPanel != null)
+                townOverviewPanel.Refresh();
+        }
+
+        public void OpenTownActivity(TownLocalActions.Kind kind)
+        {
+            if (!_inTownMenu || gameSession == null)
+                return;
+
+            bool isAvailable = false;
+            IReadOnlyList<TownLocalActions.Entry> entries = TownLocalActions.GetAvailable(gameSession);
+            for (int i = 0; i < entries.Count; i++)
+            {
+                if (entries[i].Kind == kind)
+                {
+                    isAvailable = true;
+                    break;
+                }
+            }
+            if (!isAvailable)
+                return;
+            if ((kind == TownLocalActions.Kind.SupplyShortage ||
+                 kind == TownLocalActions.Kind.SealedLetter ||
+                 kind == TownLocalActions.Kind.MarketTally) && supplyShortageMissionPanel == null)
+                return;
+            if (kind == TownLocalActions.Kind.EscortCommission && shadowEscortCommissionPanel == null)
+                return;
+            if (kind == TownLocalActions.Kind.TacticalMission && tacticalMissionPanel == null)
+                return;
+
+            if (kind != TownLocalActions.Kind.SupplyShortage && supplyShortageMissionPanel != null)
+                supplyShortageMissionPanel.Close();
+            if (kind != TownLocalActions.Kind.EscortCommission && shadowEscortCommissionPanel != null)
+                shadowEscortCommissionPanel.Close();
+            if (kind != TownLocalActions.Kind.TacticalMission && tacticalMissionPanel != null)
+                tacticalMissionPanel.Close();
+
+            switch (kind)
+            {
+                case TownLocalActions.Kind.SupplyShortage:
+                case TownLocalActions.Kind.SealedLetter:
+                case TownLocalActions.Kind.MarketTally:
+                    if (supplyShortageMissionPanel == null)
+                        return;
+                    supplyShortageMissionPanel.Bind(gameSession);
+                    if (!supplyShortageMissionPanel.IsOpen)
+                        supplyShortageMissionPanel.Open();
+                    bool showOtherMissions = kind != TownLocalActions.Kind.SupplyShortage;
+                    if (supplyShortageMissionPanel.IsM4bPage != showOtherMissions)
+                        supplyShortageMissionPanel.ToggleMissionBoardPage();
+                    supplyShortageMissionPanel.transform.SetAsLastSibling();
+                    if (returnToMapButton != null)
+                        returnToMapButton.transform.SetAsLastSibling();
+                    break;
+
+                case TownLocalActions.Kind.EscortCommission:
+                    if (shadowEscortCommissionPanel == null)
+                        return;
+                    shadowEscortCommissionPanel.Bind(gameSession);
+                    if (!shadowEscortCommissionPanel.IsOpen)
+                        shadowEscortCommissionPanel.Open();
+                    shadowEscortCommissionPanel.transform.SetAsLastSibling();
+                    break;
+
+                case TownLocalActions.Kind.TacticalMission:
+                    if (tacticalMissionPanel == null)
+                        return;
+                    tacticalMissionPanel.Bind(gameSession);
+                    if (!tacticalMissionPanel.IsOpen)
+                        tacticalMissionPanel.Open();
+                    break;
+            }
+
             if (townOverviewPanel != null)
                 townOverviewPanel.Refresh();
         }

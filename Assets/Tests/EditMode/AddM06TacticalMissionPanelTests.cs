@@ -1127,27 +1127,6 @@ namespace SengokuChronicle.Tests.EditMode
         private static int MinimumFontSize(Text text) =>
             text.name == AddM06TacticalMissionPanel.TitleTextName ? 20 : 13;
 
-        /// <summary>
-        /// The live runtime serif face. The theme caches the dynamic OS font in a static, and
-        /// a previous EditMode session can destroy that font while the cached "resolved" flag
-        /// survives, which hands out a destroyed handle whose Font.name access throws
-        /// MissingReferenceException. Re-resolving through the same theme policy once gives
-        /// this test a live face with the exact family list and fallback the player sees;
-        /// the page Text then holds it for the duration of the measurement.
-        /// </summary>
-        private static Font RuntimeSerif()
-        {
-            Font font = SengokuUiTheme.Serif;
-            if (font != null)
-                return font;
-            typeof(SengokuUiTheme)
-                .GetField("_serifResolved",
-                    System.Reflection.BindingFlags.Static |
-                    System.Reflection.BindingFlags.NonPublic)
-                ?.SetValue(null, false);
-            return SengokuUiTheme.Serif;
-        }
-
         private static Color Backdrop(Text text, Transform page, RectTransform bandRect,
             Color bandColor)
         {
@@ -1276,8 +1255,9 @@ namespace SengokuChronicle.Tests.EditMode
             // The saved scene must keep the serializable built-in font, and the panel only
             // swaps in the CJK serif while playing. EditMode never enters play mode, so this
             // test applies the same runtime face before measuring; otherwise it would measure
-            // legacy metrics for type the player never sees.
-            Font runtimeFont = RuntimeSerif();
+            // legacy metrics for type the player never sees. The theme re-resolves a cache
+            // whose handle no longer exists, so this read cannot return a dead face.
+            Font runtimeFont = SengokuUiTheme.Serif;
             Assert.That(runtimeFont == null, Is.False,
                 "the runtime serif must be a live font handle, not a destroyed one");
             string face = runtimeFont.name;

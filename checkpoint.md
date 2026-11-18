@@ -1,6 +1,6 @@
 # 《影之一族》checkpoint 与设计规划
 
-更新时间 2026-11-17。基线 `main` `a3828bd`（根目录另有混合未提交 WIP）。
+更新时间 2026-11-17。当前工作分支 `panyeung/m00-closeout`（自 `main@86518cf` 分出），基线提交 `0b9b1a8`。
 本文是设计规划、全部 checkpoint、当前状态与下一步的唯一入口。UI 与美术资产见 [ui设计规划.md](ui设计规划.md)。代理协作规则见 [AGENTS.md](AGENTS.md)。
 
 规则：新 checkpoint 只往第 4 节表格加一行，长过程记录留在 `Logs/`，不要往本文追加叙述段。
@@ -336,6 +336,7 @@
 | 2026-11-18 | v1 可玩里程碑 | 第 6 条存读档 BLOCKED：正常开局（SC-010 标准样例）下点存档被拒，`SaveLoadPanel.Status=调试会话不会写入玩家存档。`，`slotExists=False`；同时 `M09DebugModeRoot` 的 `DebugClose`/`DebugTab0-4`/`DebugReset`/`DebugExit` 可交互，而场景文件 `m_IsActive: 0`，说明 DebugSession 是运行期被激活的，触发来源未定位 | 待验证 | 隔离槽已生效（`store=…\ISO-Milestone-20261118`、`isDefault=False`、`titleControllersRedirected=1`）；真实槽 SHA-256 `1e61ed9c…`/`f1c0630e…` 与 mtime 全程未变；最小复现四步写在证据文件末节 |
 | 2026-11-18 | v1 基线 | 本轮实测全量 EditMode 2141/2141（0 失败，05:21:21Z–05:22:31Z）与场景 Validator `PASS; Errors: 0`，测试与 Validator 证据见 `Logs/verify/20261118-milestone/` | 进行中 | 作业 `bc1a32ce920d461fbe4f929335f22258`；`TestResults.xml` 副本与 `Logs/SceneValidationReport.txt` 末行 |
 | 2026-11-18 | M00 | 撤回「城镇活动只有可编译骨架」：该结论已过期，行为与断言已落地 | 进行中 | 5 个 Town 测试文件共 31 个 `[Test]`（Entry 7 / Routing 6 / LocalActions 5 / OverviewResident 1 / UpdateTownOverview 12）；最新全量 `TestResults.xml` 2026-11-18T04:41:54Z–04:43:11Z，`testcasecount=2141`、`passed=2141`、`failed=0` |
+| 2026-11-17 | M05 | 独立复审**未通过**：`tester` 只读复核 `panyeung/ui-m05-management@2f8b7b2` 后判定「已推送提交不包含 checkpoint 声称的实现」——`ScrollRect` / `CarryIntoReport` / `LateUpdate` / `FitReportRegion` 与三条裁切回滚回归测试全部只存在于该工作树**未提交**区；工作区实测为 45/45、2010→2012/2012，`2f8b7b2` 对应的是旧的 42/42、2008/2008 | 待验证 | 任务卡 `t_e2ddb378` 评论（C1 结构合规通过、C2 有疑点、C3 存档兼容通过、C4 既有行为不变通过、C5 证据不自洽、C6 合并风险）；另有 `docs/PLAYTEST_GUIDES.md` 在 main 已删除、工作树仍修改的 modify/delete 冲突。修正后已推送 `b1d1062`，复审待跑 |
 | 2026-11-17 | M00 | 主工作树 M00 证据链全项通过：Validator `PASS; Errors: 0`、EditMode 2141/2141、Play Mode 到 SC-013 营地 HUD（1560-04-01 / 清洲）期间新增 error 0、隔离槽存读档 SAVE-1～SAVE-4 全过 | 进行中 | `Logs/verify/gate-20261118/` 下 `report.md`、`save-isolated.md`、`save-gate.md`；真实存档 `1e61ed9c…` 与备份 `f1c0630e…` 前后哈希未变；SAVE-3 改在 SC-010 标准样例验（SC-013 退休被家议链门控、无候选选择界面）；用户最终验收未完成 |
 | 2026-11-17 | M04 | 收口全绿：场景层序缺陷已修（新增共享 `CanvasLayerOrder`，SuccessionRoot 6→17 压住家族名册页），Validator `PASS; Errors: 0`、全量 EditMode 2023/2023、1280×720 Play Mode 到 SC-013 期间 0 新 error | 进行中 | 分支 `94e82bf` 已推 `origin`；`ui-m04-family/Logs/verify/m04-closure-20261118/report.md`、`m04-fix-20261118/report.md`；仍差 28 个未提交文件未入分支（2026-11-18 复核 `git status --porcelain -uall`） |
 | 2026-11-17 | M04 | 场景语义 diff 复核：3541 对象、`m_Name` 1908、`m_SizeDelta` 834、`m_AnchoredPosition` 多重集前后全等；真实差异仅 36 处 `LayoutElement.m_MinSize` 归一为 10 与 3 处 `-0` 旋转归一 | 待验证 | 16257 增 / 16252 删几乎全是 Unity 重序列化；该工作树的 EditMode 与 Play Mode 证据另计 |

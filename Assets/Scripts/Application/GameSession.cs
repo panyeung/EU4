@@ -1,3 +1,8 @@
+// Unity 6.6 deprecates the DEVELOPMENT_BUILD directive (UAC0009). The approved
+// Debug Mode plan requires a compile-time boundary that exists only in the Editor
+// and development builds, so the directive stays and its deprecation notice is
+// silenced for this file only.
+#pragma warning disable UAC0009
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -208,6 +213,12 @@ namespace SengokuChronicle.Application
         public bool EventCatalogReady => _eventEngine != null && _eventEngine.IsReady;
         public EventCatalogData EventCatalog => _eventCatalog;
         public EventTextCatalog EventText => _eventTextCatalog;
+
+        /// <summary>
+        /// Scenario tag of the active fixed demonstration; empty for an ordinary game.
+        /// Read-only option-gating facts must use this instead of building save data.
+        /// </summary>
+        public string ActiveEventScenarioId => _eventScenarioId ?? string.Empty;
 
         /// <summary>Read-only SC-012 record view in append order.</summary>
         public IReadOnlyList<FamilyChronicleEntry> ChronicleEntries =>
@@ -1002,6 +1013,11 @@ namespace SengokuChronicle.Application
             CharacterDevelopmentState development, IndustryState industry, string eventScenarioId,
             string campaignOriginId)
         {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            // Any start/restart path leaves the isolated debug session, so a stale debug
+            // flag can never keep save or load blocked for an ordinary game.
+            ClearDebugSessionOnSessionStart();
+#endif
             WorldClock = new WorldClock(startDate);
             _campaignProgress = CreateCampaignProgress(startDate, campaignOriginId);
             CurrentLocation = LocationId.Kiyosu;
@@ -1053,7 +1069,13 @@ namespace SengokuChronicle.Application
             LastDailyActionOutcomes = new DailyActionResult[0];
             LastDailyActionMessage = string.Empty;
             InitializeNpcAutonomy();
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            // A debug entry, reset or exit holds this back so it can publish exactly one
+            // coherent state instead of a transient "debug marker already cleared" state.
+            PublishSessionStateChanged();
+#else
             SessionStateChanged?.Invoke();
+#endif
         }
 
         /// <summary>
@@ -2601,6 +2623,9 @@ namespace SengokuChronicle.Application
         /// <summary>Captures the current runtime state as versioned save data.</summary>
         public SaveData CaptureSave()
         {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            CaptureSaveObserved?.Invoke();
+#endif
             EnsureRelationships();
             EnsureRandomState();
             EnsureEventRuntimeState();
@@ -2664,6 +2689,11 @@ namespace SengokuChronicle.Application
         /// </summary>
         public SaveOperationResult TryApplySave(SaveData data)
         {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            if (IsDebugSessionActive)
+                return SaveOperationResult.Failure(SaveErrorCode.InvalidData,
+                    "调试会话只驻留内存，不会读取玩家存档。");
+#endif
             // A public apply is a load boundary too: replacing the campaign would drop the
             // session-only operation without a terminal cost or chronicle row.
             if (IsTacticalMissionActive)
@@ -2883,6 +2913,13 @@ namespace SengokuChronicle.Application
         /// <summary>Saves the current session to the supplied single slot.</summary>
         public SaveOperationResult SaveTo(SaveSlotStore store)
         {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            // Reject before any capture or slot I/O so a debug session can never write,
+            // overwrite or back up a player save.
+            if (IsDebugSessionActive)
+                return SaveOperationResult.Failure(SaveErrorCode.WriteFailed,
+                    "调试会话不会写入玩家存档。");
+#endif
             if (IsTacticalMissionActive)
                 return SaveOperationResult.Failure(SaveErrorCode.WriteFailed,
                     "潜入正在进行：无法存档。请先完成或撤退。");
@@ -2895,6 +2932,13 @@ namespace SengokuChronicle.Application
         /// <summary>Loads the supplied single slot and applies it atomically.</summary>
         public SaveOperationResult LoadFrom(SaveSlotStore store)
         {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            // Reject before the slot is even read: a debug session must never adopt a
+            // player save into its isolated state.
+            if (IsDebugSessionActive)
+                return SaveOperationResult.Failure(SaveErrorCode.ReadFailed,
+                    "调试会话不会读取玩家存档。");
+#endif
             if (IsTacticalMissionActive)
                 return SaveOperationResult.Failure(SaveErrorCode.ReadFailed,
                     "潜入正在进行：无法读档。请先完成或撤退。");
@@ -5711,3 +5755,4 @@ namespace SengokuChronicle.Application
         }
     }
 }
+#pragma warning restore UAC0009

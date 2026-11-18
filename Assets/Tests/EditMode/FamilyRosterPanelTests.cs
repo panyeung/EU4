@@ -229,7 +229,7 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
-        public void PortraitKeyFor_UsesIdentityDataOnlyAndAlwaysHasFallback()
+        public void PortraitKeyFor_UsesIdentityDataAndGeneratedPortraits()
         {
             var head = new FamilyTreePersonNode(new PersonId("person.p.head"),
                 "当主", FamilyMemberRole.Head, 70, true, true, true, false, true,
@@ -256,9 +256,11 @@ namespace SengokuChronicle.Tests.EditMode
 
             foreach (string key in new[] { "master", "elder", "youth", "main" })
             {
-                Texture2D texture = Resources.Load<Texture2D>("ReferenceArt/portrait_" + key);
-                Assert.That(texture, Is.Not.Null,
-                    "the reference gallery supplies a portrait for " + key);
+                Sprite portrait = SengokuUiArt.Portrait(key);
+                Assert.That(portrait, Is.Not.Null,
+                    "the generated portrait atlas supplies " + key);
+                Assert.That(portrait.rect.width, Is.EqualTo(512f));
+                Assert.That(portrait.rect.height, Is.EqualTo(512f));
             }
         }
 
