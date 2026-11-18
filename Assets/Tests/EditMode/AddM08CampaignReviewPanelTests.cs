@@ -556,8 +556,8 @@ namespace SengokuChronicle.Tests.EditMode
         [Test]
         public void Updater_InsertsReviewRootBelowTitleAndTacticalOverlayKeepsLast()
         {
-            Transform dailyAction = Create(CanvasOverlayOrder.DailyActionRootName, canvas).transform;
-            Transform inspector = Create(CanvasOverlayOrder.InspectorRootName, canvas).transform;
+            Transform dailyAction = Create(CanvasLayerOrder.DailyActionRootName, canvas).transform;
+            Transform inspector = Create(CanvasLayerOrder.InspectorRootName, canvas).transform;
             BuildM6TitleAndTacticalLayers();
             Assert.That(AddM6TitleScreen.Update(scene),
                 Is.EqualTo(AddM6TitleScreen.UpdateResult.Success));
@@ -620,85 +620,85 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
-        public void CanvasOverlayOrder_OrdersScrambledRootsAndPreservesUnrankedSlots()
+        public void CanvasLayerOrder_OrdersScrambledRootsAndPreservesUnrankedSlots()
         {
-            RectTransform testCanvas = Create("CanvasOverlayOrderTestCanvas", null, typeof(Canvas))
+            RectTransform testCanvas = Create("CanvasLayerOrderTestCanvas", null, typeof(Canvas))
                 .GetComponent<RectTransform>();
             string[] initialOrder =
             {
-                CanvasOverlayOrder.TacticalOverlayName,
+                CanvasLayerOrder.TacticalOverlayName,
                 "UnrankedA",
-                CanvasOverlayOrder.CampaignReviewRootName,
+                CanvasLayerOrder.CampaignReviewRootName,
                 AddSC010SuccessionPanel.RootName,
-                CanvasOverlayOrder.TitleRootName,
+                CanvasLayerOrder.TitleRootName,
                 "UnrankedB",
-                CanvasOverlayOrder.DailyActionRootName,
-                CanvasOverlayOrder.EventChoiceRootName,
-                CanvasOverlayOrder.InspectorRootName,
+                CanvasLayerOrder.DailyActionRootName,
+                CanvasLayerOrder.EventChoiceRootName,
+                CanvasLayerOrder.InspectorRootName,
                 "UnrankedC"
             };
             foreach (string name in initialOrder)
                 Create(name, testCanvas);
 
             Transform[] nonRankedAtStart = testCanvas.Cast<Transform>()
-                .Where(child => !CanvasOverlayOrder.IsRanked(child)).ToArray();
+                .Where(child => !CanvasLayerOrder.IsRanked(child)).ToArray();
             int[] nonRankedSlots = Enumerable.Range(0, testCanvas.childCount)
-                .Where(index => !CanvasOverlayOrder.IsRanked(testCanvas.GetChild(index)))
+                .Where(index => !CanvasLayerOrder.IsRanked(testCanvas.GetChild(index)))
                 .ToArray();
 
-            CanvasOverlayOrder.OrderRankedBand(testCanvas);
+            CanvasLayerOrder.OrderRankedBand(testCanvas);
 
             Transform[] ranked = testCanvas.Cast<Transform>()
-                .Where(CanvasOverlayOrder.IsRanked).ToArray();
-            Assert.That(ranked.Select(child => CanvasOverlayOrder.RankOf(child.name)),
+                .Where(CanvasLayerOrder.IsRanked).ToArray();
+            Assert.That(ranked.Select(child => CanvasLayerOrder.RankOf(child.name)),
                 Is.EqualTo(new[] { 0, 1, 2, 3, 4, 5, 6 }));
-            Assert.That(CanvasOverlayOrder.RankOf(AddSC010SuccessionPanel.RootName), Is.EqualTo(3),
+            Assert.That(CanvasLayerOrder.RankOf(AddSC010SuccessionPanel.RootName), Is.EqualTo(3),
                 "a pending succession decision must render above the campaign review");
             for (int i = 0; i < nonRankedSlots.Length; i++)
                 Assert.That(testCanvas.GetChild(nonRankedSlots[i]), Is.SameAs(nonRankedAtStart[i]),
                     "normalizing the band must leave every unranked root in its slot");
-            Assert.That(CanvasOverlayOrder.ValidateBand(testCanvas, out string validError),
+            Assert.That(CanvasLayerOrder.ValidateBand(testCanvas, out string validError),
                 Is.True, validError);
 
             Transform[] normalized = testCanvas.Cast<Transform>().ToArray();
-            CanvasOverlayOrder.OrderRankedBand(testCanvas);
+            CanvasLayerOrder.OrderRankedBand(testCanvas);
             Assert.That(testCanvas.Cast<Transform>().ToArray(), Is.EqualTo(normalized),
                 "normalizing a valid band a second time is idempotent");
 
-            Transform daily = testCanvas.Find(CanvasOverlayOrder.DailyActionRootName);
-            Transform inspector = testCanvas.Find(CanvasOverlayOrder.InspectorRootName);
+            Transform daily = testCanvas.Find(CanvasLayerOrder.DailyActionRootName);
+            Transform inspector = testCanvas.Find(CanvasLayerOrder.InspectorRootName);
             daily.SetSiblingIndex(inspector.GetSiblingIndex());
-            Assert.That(CanvasOverlayOrder.ValidateBand(testCanvas, out string invalidError),
+            Assert.That(CanvasLayerOrder.ValidateBand(testCanvas, out string invalidError),
                 Is.False);
-            Assert.That(invalidError, Does.StartWith(CanvasOverlayOrder.RankOrderError));
+            Assert.That(invalidError, Does.StartWith(CanvasLayerOrder.RankOrderError));
             Assert.That(invalidError, Does.Contain(daily.name));
             Assert.That(invalidError, Does.Contain(inspector.name));
         }
 
         [Test]
-        public void CanvasOverlayOrder_PlaceAtRankMovesOnlyTheTarget()
+        public void CanvasLayerOrder_PlaceAtRankMovesOnlyTheTarget()
         {
             RectTransform testCanvas = Create("CanvasOverlayPlaceTestCanvas", null, typeof(Canvas))
                 .GetComponent<RectTransform>();
             Create("UnrankedBefore", testCanvas);
-            Create(CanvasOverlayOrder.DailyActionRootName, testCanvas);
-            Create(CanvasOverlayOrder.InspectorRootName, testCanvas);
-            Create(CanvasOverlayOrder.TitleRootName, testCanvas);
-            Create(CanvasOverlayOrder.EventChoiceRootName, testCanvas);
-            Create(CanvasOverlayOrder.TacticalOverlayName, testCanvas);
+            Create(CanvasLayerOrder.DailyActionRootName, testCanvas);
+            Create(CanvasLayerOrder.InspectorRootName, testCanvas);
+            Create(CanvasLayerOrder.TitleRootName, testCanvas);
+            Create(CanvasLayerOrder.EventChoiceRootName, testCanvas);
+            Create(CanvasLayerOrder.TacticalOverlayName, testCanvas);
             Create("UnrankedAfter", testCanvas);
-            Transform review = Create(CanvasOverlayOrder.CampaignReviewRootName, testCanvas).transform;
+            Transform review = Create(CanvasLayerOrder.CampaignReviewRootName, testCanvas).transform;
             Transform[] originalOthers = testCanvas.Cast<Transform>()
                 .Where(child => child != review).ToArray();
 
-            CanvasOverlayOrder.PlaceAtRank(testCanvas, review);
+            CanvasLayerOrder.PlaceAtRank(testCanvas, review);
 
             Assert.That(review.GetSiblingIndex(), Is.EqualTo(
-                testCanvas.Find(CanvasOverlayOrder.TitleRootName).GetSiblingIndex() - 1));
+                testCanvas.Find(CanvasLayerOrder.TitleRootName).GetSiblingIndex() - 1));
             Assert.That(testCanvas.Cast<Transform>().Where(child => child != review).ToArray(),
                 Is.EqualTo(originalOthers),
                 "placing one root must preserve the relative order of every other Canvas child");
-            Assert.That(CanvasOverlayOrder.ValidateBand(testCanvas, out string error), Is.True, error);
+            Assert.That(CanvasLayerOrder.ValidateBand(testCanvas, out string error), Is.True, error);
         }
 
         [Test]
@@ -773,8 +773,8 @@ namespace SengokuChronicle.Tests.EditMode
         [Test]
         public void Updater_RepairsReviewBelowTheDailyActionPageAndInspector()
         {
-            Transform dailyAction = Create(CanvasOverlayOrder.DailyActionRootName, canvas).transform;
-            Transform inspector = Create(CanvasOverlayOrder.InspectorRootName, canvas).transform;
+            Transform dailyAction = Create(CanvasLayerOrder.DailyActionRootName, canvas).transform;
+            Transform inspector = Create(CanvasLayerOrder.InspectorRootName, canvas).transform;
             Transform succession = Create(AddSC010SuccessionPanel.RootName, canvas).transform;
             BuildM6TitleAndTacticalLayers();
             Assert.That(AddM6TitleScreen.Update(scene),
@@ -787,13 +787,13 @@ namespace SengokuChronicle.Tests.EditMode
             Transform review = canvas.Find(AddM08CampaignReviewPanel.RootName);
             Assert.That(succession.GetSiblingIndex(), Is.GreaterThan(review.GetSiblingIndex()),
                 "pending succession controls must render above the full-screen campaign review");
-            Assert.That(CanvasOverlayOrder.ValidateBand(canvas, out string initialBandError),
+            Assert.That(CanvasLayerOrder.ValidateBand(canvas, out string initialBandError),
                 Is.True, initialBandError);
             review.SetSiblingIndex(dailyAction.GetSiblingIndex());
             Assert.That(AddM08CampaignReviewPanel.Validate(scene, out string belowDailyAction),
                 Is.False);
             Assert.That(belowDailyAction,
-                Does.Contain(CanvasOverlayOrder.CampaignReviewAboveDailyActionError));
+                Does.Contain(CanvasLayerOrder.CampaignReviewAboveDailyActionError));
             Assert.That(AddM08CampaignReviewPanel.Update(scene),
                 Is.EqualTo(AddM08CampaignReviewPanel.UpdateResult.Success));
             Assert.That(review.GetSiblingIndex(), Is.GreaterThan(dailyAction.GetSiblingIndex()));
@@ -802,13 +802,13 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(AddM08CampaignReviewPanel.Validate(scene, out string belowInspector),
                 Is.False);
             Assert.That(belowInspector,
-                Does.Contain(CanvasOverlayOrder.CampaignReviewAboveInspectorError));
+                Does.Contain(CanvasLayerOrder.CampaignReviewAboveInspectorError));
             Assert.That(AddM08CampaignReviewPanel.Update(scene),
                 Is.EqualTo(AddM08CampaignReviewPanel.UpdateResult.Success));
             Assert.That(review.GetSiblingIndex(), Is.GreaterThan(inspector.GetSiblingIndex()));
             Assert.That(succession.GetSiblingIndex(), Is.GreaterThan(review.GetSiblingIndex()),
                 "repairing the review must preserve succession priority");
-            Assert.That(CanvasOverlayOrder.ValidateBand(canvas, out string bandError), Is.True,
+            Assert.That(CanvasLayerOrder.ValidateBand(canvas, out string bandError), Is.True,
                 bandError);
         }
 
@@ -821,7 +821,7 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(AddM06TacticalMissionPanel.Update(scene),
                 Is.EqualTo(AddM06TacticalMissionPanel.UpdateResult.Success));
             Transform dailyAction = Create(AddM02DailyActionPanel.RootName, canvas).transform;
-            Transform inspector = Create(CanvasOverlayOrder.InspectorRootName, canvas).transform;
+            Transform inspector = Create(CanvasLayerOrder.InspectorRootName, canvas).transform;
             dailyAction.SetSiblingIndex(canvas.Find(AddM08CampaignReviewPanel.TitleRootName)
                 .GetSiblingIndex());
             inspector.SetSiblingIndex(canvas.Find(AddM08CampaignReviewPanel.TitleRootName)
@@ -834,7 +834,7 @@ namespace SengokuChronicle.Tests.EditMode
             string[] invalidOrder = Enumerable.Range(0, canvas.childCount)
                 .Select(i => canvas.GetChild(i).name).ToArray();
             Assert.That(AddM08CampaignReviewPanel.Validate(scene, out string defect), Is.False);
-            Assert.That(defect, Does.Contain(CanvasOverlayOrder.InspectorRootName));
+            Assert.That(defect, Does.Contain(CanvasLayerOrder.InspectorRootName));
 
             Assert.That(AddM08CampaignReviewPanel.Update(scene),
                 Is.EqualTo(AddM08CampaignReviewPanel.UpdateResult.Success));
@@ -847,7 +847,7 @@ namespace SengokuChronicle.Tests.EditMode
                 .Select(i => canvas.GetChild(i).name).ToArray();
             CollectionAssert.AreEqual(invalidOrder, undoneOrder);
             Assert.That(AddM08CampaignReviewPanel.Validate(scene, out string undone), Is.False);
-            Assert.That(undone, Does.Contain(CanvasOverlayOrder.InspectorRootName));
+            Assert.That(undone, Does.Contain(CanvasLayerOrder.InspectorRootName));
         }
 
         [Test]

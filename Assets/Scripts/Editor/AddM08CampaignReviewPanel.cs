@@ -25,12 +25,12 @@ namespace SengokuChronicle.Editor
     {
         public const string ScenePath = "Assets/Scenes/FoundationScene.unity";
         public const string RootName = CampaignReviewPanel.RootObjectName;
-        // Canvas siblings share one ranked overlay band (CanvasOverlayOrder): the campaign
+        // Canvas siblings share one ranked overlay band (CanvasLayerOrder): the campaign
         // review renders above the M02 page and the M03 inspector and beneath the full-screen
         // M6 title, EventChoiceRoot and the last M06 tactical modal.
-        public const string TitleRootName = CanvasOverlayOrder.TitleRootName;
-        public const string EventChoiceRootName = CanvasOverlayOrder.EventChoiceRootName;
-        public const string TacticalOverlayName = CanvasOverlayOrder.TacticalOverlayName;
+        public const string TitleRootName = CanvasLayerOrder.TitleRootName;
+        public const string EventChoiceRootName = CanvasLayerOrder.EventChoiceRootName;
+        public const string TacticalOverlayName = CanvasLayerOrder.TacticalOverlayName;
         public const string PageName = CampaignReviewPanel.PageObjectName;
         public const string CardName = CampaignReviewPanel.CardObjectName;
         public const string TitleTextName = "M08CampaignReviewTitleText";
@@ -168,7 +168,7 @@ namespace SengokuChronicle.Editor
 
                 GameObject root = BuildPanel(scene, canvas, session);
                 beforeValidation?.Invoke(root);
-                CanvasOverlayOrder.PlaceBandAboveUnranked(canvas);
+                CanvasLayerOrder.PlaceBandAboveUnranked(canvas);
                 Undo.FlushUndoRecordObjects();
                 failure = UpdateResult.ValidationFailed;
                 if (!Validate(scene, out string error))
@@ -572,10 +572,10 @@ namespace SengokuChronicle.Editor
         /// the sibling immediately below EventChoiceRoot and allows nothing else above it, and
         /// AddM06TacticalMissionPanel.Validate requires the tactical overlay to stay last.
         /// The root is created at the end of the Canvas, so this places it in its rank slot
-        /// from <see cref="CanvasOverlayOrder"/> without shifting the roots around it.
+        /// from <see cref="CanvasLayerOrder"/> without shifting the roots around it.
         /// </summary>
         private static void PlaceBelowTitleOverlay(Transform canvas, Transform root) =>
-            CanvasOverlayOrder.PlaceAtRank(canvas, root);
+            CanvasLayerOrder.PlaceAtRank(canvas, root);
 
         /// <summary>
         /// A complete generated page saved by an older revision can carry nothing but the
@@ -586,9 +586,9 @@ namespace SengokuChronicle.Editor
         /// </summary>
         private static bool RepairableOrderError(string error) =>
             error == TacticalLastError || error == TacticalOrderError || error == TitleOrderError ||
-            error == CanvasOverlayOrder.CampaignReviewAboveDailyActionError ||
-            error == CanvasOverlayOrder.CampaignReviewAboveInspectorError ||
-            (error != null && error.StartsWith(CanvasOverlayOrder.RankOrderError,
+            error == CanvasLayerOrder.CampaignReviewAboveDailyActionError ||
+            error == CanvasLayerOrder.CampaignReviewAboveInspectorError ||
+            (error != null && error.StartsWith(CanvasLayerOrder.RankOrderError,
                 StringComparison.Ordinal));
 
         /// <summary>
@@ -621,7 +621,7 @@ namespace SengokuChronicle.Editor
                 Transform tactical = canvas.Find(TacticalOverlayName);
                 if (tactical != null && tactical.GetSiblingIndex() != canvas.childCount - 1)
                     tactical.SetAsLastSibling();
-                CanvasOverlayOrder.RepairBand(canvas);
+                CanvasLayerOrder.RepairBand(canvas);
                 Undo.FlushUndoRecordObjects();
                 beforeValidation?.Invoke(roots[0].gameObject);
                 if (!Validate(scene, out string error))
@@ -704,17 +704,17 @@ namespace SengokuChronicle.Editor
                     return Invalid(out error, EventOrderError);
             }
 
-            Transform dailyAction = canvas.Find(CanvasOverlayOrder.DailyActionRootName);
+            Transform dailyAction = canvas.Find(CanvasLayerOrder.DailyActionRootName);
             if (dailyAction != null && index <= dailyAction.GetSiblingIndex())
-                return Invalid(out error, CanvasOverlayOrder.CampaignReviewAboveDailyActionError);
+                return Invalid(out error, CanvasLayerOrder.CampaignReviewAboveDailyActionError);
 
-            Transform inspector = canvas.Find(CanvasOverlayOrder.InspectorRootName);
+            Transform inspector = canvas.Find(CanvasLayerOrder.InspectorRootName);
             if (inspector != null && index <= inspector.GetSiblingIndex())
-                return Invalid(out error, CanvasOverlayOrder.CampaignReviewAboveInspectorError);
+                return Invalid(out error, CanvasLayerOrder.CampaignReviewAboveInspectorError);
 
             // The review's own slot can be right while another pair in the band is inverted;
             // the shared check keeps the whole band on one contract, not just this root.
-            return CanvasOverlayOrder.ValidateBand(canvas, out error);
+            return CanvasLayerOrder.ValidateBand(canvas, out error);
         }
 
         private static Vector2 CardSize(Vector2 design) => new Vector2(

@@ -175,7 +175,7 @@ namespace SengokuChronicle.Editor
             else
                 report.AppendLine("PASS " + AddM09DebugMode.DescribeForReport(scene));
             if (canvas != null &&
-                !CanvasOverlayOrder.ValidateBand(canvas.transform, out string overlayOrderError))
+                !CanvasLayerOrder.ValidateBand(canvas.transform, out string overlayOrderError))
                 AddError(report, ref errors, overlayOrderError);
             else if (canvas != null)
                 report.AppendLine("PASS Canvas overlay depth order: M02 page, M03 inspector, campaign " +

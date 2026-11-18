@@ -2113,7 +2113,7 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(review.GetSiblingIndex(), Is.LessThan(title.GetSiblingIndex()));
             Assert.That(title.GetSiblingIndex(), Is.EqualTo(eventRoot.GetSiblingIndex() - 1));
             Assert.That(tactical.GetSiblingIndex(), Is.EqualTo(canvas.childCount - 1));
-            Assert.That(CanvasOverlayOrder.ValidateBand(canvas, out string bandError), Is.True,
+            Assert.That(CanvasLayerOrder.ValidateBand(canvas, out string bandError), Is.True,
                 bandError);
             Assert.That(AddM02DailyActionPanel.Validate(_scene, out string m02Error), Is.True,
                 m02Error);

@@ -59,7 +59,7 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(CanvasLayerOrder.LayerOf("EventChoiceRoot"),
                 Is.EqualTo(CanvasLayerOrder.CanvasLayer.EventChoiceOverlay));
 
-            // 层序定义本身：HUD < 页面 < 弹窗 < 标题 < 事件选择。
+            // 层序定义本身：HUD < 页面 < 弹窗 < 标题 < 事件选择 < 战术覆盖层。
             Assert.That(CanvasLayerOrder.CanvasLayer.MapHud,
                 Is.LessThan(CanvasLayerOrder.CanvasLayer.Page));
             Assert.That(CanvasLayerOrder.CanvasLayer.Page,
@@ -68,9 +68,30 @@ namespace SengokuChronicle.Tests.EditMode
                 Is.LessThan(CanvasLayerOrder.CanvasLayer.TitleOverlay));
             Assert.That(CanvasLayerOrder.CanvasLayer.TitleOverlay,
                 Is.LessThan(CanvasLayerOrder.CanvasLayer.EventChoiceOverlay));
+            Assert.That(CanvasLayerOrder.CanvasLayer.EventChoiceOverlay,
+                Is.LessThan(CanvasLayerOrder.CanvasLayer.TacticalOverlay));
+
+            // m08 的细分次序：三张整页彼此也有先后，且都在弹窗之下。
+            Assert.That(CanvasLayerOrder.LayerOf("M02DailyActionRoot"),
+                Is.EqualTo(CanvasLayerOrder.CanvasLayer.Page));
+            Assert.That(CanvasLayerOrder.LayerOf("M03NpcAiInspectorRoot"),
+                Is.EqualTo(CanvasLayerOrder.CanvasLayer.Page));
+            Assert.That(CanvasLayerOrder.LayerOf("M08CampaignReviewRoot"),
+                Is.EqualTo(CanvasLayerOrder.CanvasLayer.Page));
+            Assert.That(CanvasLayerOrder.LayerOf("M6TacticalMissionOverlay"),
+                Is.EqualTo(CanvasLayerOrder.CanvasLayer.TacticalOverlay));
+            Assert.That(CanvasLayerOrder.RankOf("M02DailyActionRoot"), Is.EqualTo(0));
+            Assert.That(CanvasLayerOrder.RankOf("M03NpcAiInspectorRoot"), Is.EqualTo(1));
+            Assert.That(CanvasLayerOrder.RankOf("M08CampaignReviewRoot"), Is.EqualTo(2));
+            Assert.That(CanvasLayerOrder.RankOf("SuccessionRoot"), Is.EqualTo(3));
+            Assert.That(CanvasLayerOrder.RankOf("M6TitleRoot"), Is.EqualTo(4));
+            Assert.That(CanvasLayerOrder.RankOf("EventChoiceRoot"), Is.EqualTo(5));
+            Assert.That(CanvasLayerOrder.RankOf("M6TacticalMissionOverlay"), Is.EqualTo(6));
+            Assert.That(CanvasLayerOrder.RankOf("FamilyRosterRoot"), Is.EqualTo(-1),
+                "只有覆盖层带的七项参与带内座次");
 
             // 表里没有的名字不参与座次约束。
-            Assert.That(CanvasLayerOrder.LayerOf("M6TacticalMissionOverlay"), Is.Null);
+            Assert.That(CanvasLayerOrder.LayerOf("UnclassifiedOverlayRoot"), Is.Null);
             Assert.That(CanvasLayerOrder.LayerOf(string.Empty), Is.Null);
             Assert.That(CanvasLayerOrder.LayerOf(null), Is.Null);
         }
@@ -114,7 +135,7 @@ namespace SengokuChronicle.Tests.EditMode
                 Is.EqualTo(pagesOnly.Count));
 
             // 未分类的兄弟既不构成上界也不构成下界。
-            Assert.That(CanvasLayerOrder.InsertIndex(new[] { "M6TacticalMissionOverlay" },
+            Assert.That(CanvasLayerOrder.InsertIndex(new[] { "UnclassifiedOverlayRoot" },
                 CanvasLayerOrder.CanvasLayer.Page), Is.EqualTo(1));
 
             Assert.That(CanvasLayerOrder.InsertIndex(new string[0], CanvasLayerOrder.CanvasLayer.Page),

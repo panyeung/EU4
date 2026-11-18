@@ -120,10 +120,10 @@ namespace SengokuChronicle.Editor
         private const string FormationRootName = "SC022FamilyFormationRoot";
         private const string DoctrineRootName = "FamilyDoctrineRoot";
         private const string DoctrineOpenButtonName = "FamilyDoctrineOpenButton";
-        private const string TitleRootName = CanvasOverlayOrder.TitleRootName;
-        private const string EventRootName = CanvasOverlayOrder.EventChoiceRootName;
-        private const string TacticalOverlayName = CanvasOverlayOrder.TacticalOverlayName;
-        private const string InspectorRootName = CanvasOverlayOrder.InspectorRootName;
+        private const string TitleRootName = CanvasLayerOrder.TitleRootName;
+        private const string EventRootName = CanvasLayerOrder.EventChoiceRootName;
+        private const string TacticalOverlayName = CanvasLayerOrder.TacticalOverlayName;
+        private const string InspectorRootName = CanvasLayerOrder.InspectorRootName;
         private const string UndoName = "Add M02 Daily Action Panel";
 
         // Original generated UI art (docs/ART_ASSET_WORKFLOW.md). The atlases are
@@ -1823,7 +1823,7 @@ namespace SengokuChronicle.Editor
         private static void PlaceAboveGameHud(Transform canvas, Transform target)
         {
             // The page is a full-screen view: every unranked game HUD root renders beneath the
-            // ranked overlay band, and the band itself follows CanvasOverlayOrder. The order
+            // ranked overlay band, and the band itself follows CanvasLayerOrder. The order
             // therefore depends on the scene only, so running this updater after the M08 one
             // keeps M08CampaignReviewRoot above the page instead of burying the review.
             var children = new List<Transform>();
@@ -1833,11 +1833,11 @@ namespace SengokuChronicle.Editor
             int next = 0;
             foreach (Transform child in children)
             {
-                if (child == target || CanvasOverlayOrder.IsRanked(child))
+                if (child == target || CanvasLayerOrder.IsRanked(child))
                     continue;
                 child.SetSiblingIndex(next++);
             }
-            CanvasOverlayOrder.OrderRankedBand(canvas);
+            CanvasLayerOrder.OrderRankedBand(canvas);
         }
 
         private static bool IsReplaceableGeneratedRoot(Scene scene, Transform root)
