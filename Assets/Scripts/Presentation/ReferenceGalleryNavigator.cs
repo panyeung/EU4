@@ -319,6 +319,8 @@ namespace SengokuChronicle.Presentation
                     GameObject root = pageRoots[i].Root;
                     if (root != null)
                     {
+                        if (IsModalOverlay(root))
+                            continue;
                         bool visible = (pageRoots[i].VisibleOn & mask) != 0;
                         if (root == characterPanelRoot && dailyAction != null)
                             visible = false;
@@ -437,6 +439,7 @@ namespace SengokuChronicle.Presentation
                 {
                     GameObject root = pageRoots[i].Root;
                     if (root != null && root != characterPanelRoot &&
+                        !IsModalOverlay(root) &&
                         (pageRoots[i].VisibleOn & mask) != 0 &&
                         !root.activeSelf)
                     {
@@ -629,6 +632,19 @@ namespace SengokuChronicle.Presentation
         private const string TitleOverlayRootName = "M6TitleRoot";
         private const string EventOverlayRootName = "EventChoiceRoot";
         private const string DoctrineRootName = "FamilyDoctrineRoot";
+        private const string DebugOverlayRootName = "M09DebugModeRoot";
+
+        /// <summary>
+        /// Modal overlays own their own visibility: the event panel shows itself whenever the
+        /// session has a pending event, and the development debug window is driven by the
+        /// title entry and its session. Page navigation must never hide them, even when an
+        /// older scene registered them as page roots, because a hidden event modal strands a
+        /// pending decision (and a hidden debug window strands its session).
+        /// </summary>
+        private static bool IsModalOverlay(GameObject root) =>
+            root != null &&
+            (root.GetComponent<EventChoicePanel>() != null ||
+             string.Equals(root.name, DebugOverlayRootName, StringComparison.Ordinal));
 
         /// <summary>Roots that own their lifecycle and always render above page content.</summary>
         private static bool IsShelfCeiling(string name) =>
@@ -1591,25 +1607,14 @@ namespace SengokuChronicle.Presentation
                 ?.GetComponent<Image>();
             if (mapIllustration == null)
             {
+                // The generated full-region map is the only illustration source. When it
+                // is absent the page keeps its dark map surface instead of drawing an
+                // owner-supplied reference crop.
                 Sprite generatedMap = SengokuUiArt.WorldMapIllustration;
                 if (generatedMap != null)
                 {
                     mapIllustration = CreateMapIllustration(mapPanelRoot.transform,
                         generatedMap);
-                }
-                else
-                {
-                    // Null-safe fallback: the owner's reference-map crop stays on
-                    // the map page until the generated sprite is imported.
-                    Texture2D mapTexture =
-                        Resources.Load<Texture2D>("ReferenceArt/map_illustration");
-                    if (mapTexture != null)
-                    {
-                        mapIllustration = CreateMapIllustration(mapPanelRoot.transform,
-                            Sprite.Create(mapTexture,
-                                new Rect(0f, 0f, mapTexture.width, mapTexture.height),
-                                new Vector2(0.5f, 0.5f), 100f));
-                    }
                 }
             }
             if (mapIllustration != null)

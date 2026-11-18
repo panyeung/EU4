@@ -103,6 +103,29 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(SengokuUiArt.EventIllustration.rect.width, Is.GreaterThan(0f));
         }
 
+        [Test]
+        public void OriginalUiArt_MatchesTheRecordedNativePixelDimensions()
+        {
+            AssertDimensions("Assets/Resources/Generated/clan_portraits_atlas.png", 1024, 1536);
+            AssertDimensions("Assets/Resources/Generated/ui_icons_atlas.png", 1312, 1199);
+            AssertDimensions("Assets/Resources/Generated/parchment_tile.png", 1254, 1254);
+            AssertDimensions("Assets/Resources/Generated/indigo_pattern_tile.png", 1254, 1254);
+            AssertDimensions("Assets/Resources/Generated/world_map_illustration.png", 1672, 941);
+            AssertDimensions("Assets/Resources/Generated/event_rainy_visitor.png", 1672, 941);
+            AssertDimensions("Assets/Resources/Generated/town_kiyosu.png", 1672, 941);
+            AssertDimensions("Assets/Resources/Generated/town_atsuta.png", 1672, 941);
+            AssertDimensions("Assets/Resources/Generated/town_nagoya.png", 1672, 941);
+            AssertDimensions("Assets/Art/UI/start_screen_background.png", 1672, 941);
+        }
+
+        private static void AssertDimensions(string path, int expectedWidth, int expectedHeight)
+        {
+            Texture2D texture = UnityEditor.AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+            Assert.That(texture, Is.Not.Null, "missing original image " + path);
+            Assert.That(texture.width, Is.EqualTo(expectedWidth), path + " width");
+            Assert.That(texture.height, Is.EqualTo(expectedHeight), path + " height");
+        }
+
         // ------------------------------------------------------------ surface helpers
 
         [Test]

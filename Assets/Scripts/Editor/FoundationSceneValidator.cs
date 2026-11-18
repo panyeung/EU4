@@ -93,7 +93,7 @@ namespace SengokuChronicle.Editor
             if (!UpdateTownOverview.Validate(scene, out string townOverviewError))
                 AddError(report, ref errors, townOverviewError);
             else
-                report.AppendLine("PASS town overview hierarchy, city-specific art controls, and controller binding.");
+                report.AppendLine("PASS town overview hierarchy, local activity buttons, town entries, and clear artwork.");
             if (!AddM4bMissionBoard.Validate(scene, out string m4bError))
                 AddError(report, ref errors, m4bError);
             else
@@ -170,6 +170,10 @@ namespace SengokuChronicle.Editor
                 AddError(report, ref errors, m08Error);
             else
                 report.AppendLine("PASS M08 campaign review overlay hierarchy, sourced-history body, bindings, and layout.");
+            if (!AddM09DebugMode.Validate(scene, out string m09Error))
+                AddError(report, ref errors, m09Error);
+            else
+                report.AppendLine("PASS " + AddM09DebugMode.DescribeForReport(scene));
 
             if (controller != null)
             {
@@ -241,7 +245,8 @@ namespace SengokuChronicle.Editor
                     "scenarioSelectionRoot", "newGameButton", "continueButton", "fixedScenarioButton",
                     "scenarioBackButton", "standardSampleButton", "crisisDemoButton",
                     "educationDemoButton", "researchDemoButton", "familyFormationDemoButton",
-                    "seclusionDemoButton", "familyDoctrineDemoButton", "statusText");
+                    "seclusionDemoButton", "familyDoctrineDemoButton", "statusText",
+                    "debugModeButton", "debugModeRoot");
             }
 
             if (demoPanel != null)

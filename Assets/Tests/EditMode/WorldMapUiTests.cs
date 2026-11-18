@@ -342,7 +342,7 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
-        public void TownOverview_BindsCurrentCityIdentityAndArtwork()
+        public void TownOverview_BindsCurrentCityAndLocalCommissionProgress()
         {
             var artObject = new GameObject("TownArt", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
             artObject.transform.SetParent(_townRoot.transform, false);
@@ -350,23 +350,49 @@ namespace SengokuChronicle.Tests.EditMode
             Text feature = CreateText("TownFeature"); feature.transform.SetParent(_townRoot.transform, false);
             Text residents = CreateText("Residents"); residents.transform.SetParent(_townRoot.transform, false);
             Text rumors = CreateText("Rumors"); rumors.transform.SetParent(_townRoot.transform, false);
+            var activityRoot = new GameObject("TownActivityButtons", typeof(RectTransform));
+            activityRoot.transform.SetParent(_townRoot.transform, false);
+            Button activityTemplate = CreateButton("ActivityButtonTemplate");
+            activityTemplate.transform.SetParent(activityRoot.transform, false);
+            CreateText("Label").transform.SetParent(activityTemplate.transform, false);
+            activityTemplate.gameObject.SetActive(false);
             Button roster = CreateButton("Roster"); roster.transform.SetParent(_townRoot.transform, false);
             Button mission = CreateButton("Mission"); mission.transform.SetParent(_townRoot.transform, false);
             var panel = _townRoot.AddComponent<TownOverviewPanel>();
             panel.BindReferences(artObject.GetComponent<Image>(), name, feature, residents, rumors,
-                roster, mission, _return);
+                roster, mission, _return, activityRoot.GetComponent<RectTransform>(), activityTemplate);
             _controller.BindTownOverviewPanel(panel);
 
             _controller.OpenTownMenu();
             Assert.That(name.text, Is.EqualTo("清洲"));
             Assert.That(feature.text, Does.Contain("城郭"));
+            Assert.That(rumors.text, Is.EqualTo("当地委托"));
+            CollectionAssert.AreEqual(new[]
+            {
+                "补给短缺：领取", "密信：领取", "护送委托：领取", "潜入密令：开始"
+            }, ActivityLabels(panel));
+            Assert.That(rumors.text, Does.Not.Contain("传闻"));
             Assert.That(artObject.GetComponent<Image>().sprite, Is.SameAs(SengokuUiArt.TownIllustration(LocationId.Kiyosu)));
+
+            _controller.ReturnToMap();
+            _controller.SelectDestination(LocationId.Atsuta);
+            _controller.ConfirmTravel();
+            Assert.That(rumors.text, Does.Contain("当前暂无可办理的本地委托"));
+            CollectionAssert.IsEmpty(ActivityLabels(panel));
+
+            _controller.ReturnToMap();
+            _controller.SelectDestination(LocationId.Kiyosu);
+            _controller.ConfirmTravel();
+
+            _session.TryAcceptSupplyShortageMission();
+            _session.TryAcceptSealedLetterMission();
 
             _controller.ReturnToMap();
             _controller.SelectDestination(LocationId.Atsuta);
             _controller.ConfirmTravel();
             Assert.That(name.text, Is.EqualTo("热田"));
             Assert.That(feature.text, Does.Contain("神宫"));
+            CollectionAssert.AreEqual(new[] { "补给短缺：调查" }, ActivityLabels(panel));
             Assert.That(artObject.GetComponent<Image>().sprite, Is.SameAs(SengokuUiArt.TownIllustration(LocationId.Atsuta)));
 
             _controller.ReturnToMap();
@@ -379,7 +405,33 @@ namespace SengokuChronicle.Tests.EditMode
             _controller.ConfirmTravel();
             Assert.That(name.text, Is.EqualTo("那古野"));
             Assert.That(feature.text, Does.Contain("市集"));
+            CollectionAssert.AreEqual(new[] { "密信：交付", "市集账目：领取" }, ActivityLabels(panel));
             Assert.That(artObject.GetComponent<Image>().sprite, Is.SameAs(SengokuUiArt.TownIllustration(LocationId.Nagoya)));
+
+            _session.TryAcceptMarketTallyMission();
+            _controller.ReturnToMap();
+            _controller.SelectDestination(LocationId.Kiyosu);
+            _controller.ConfirmTravel();
+            CollectionAssert.AreEqual(new[]
+            {
+                "市集账目：调查", "护送委托：领取", "潜入密令：开始"
+            }, ActivityLabels(panel));
+        }
+
+        private static string[] ActivityLabels(TownOverviewPanel panel)
+        {
+            Transform root = panel.transform.Find("TownActivityButtons");
+            if (root == null) return new string[0];
+
+            var labels = new System.Collections.Generic.List<string>();
+            foreach (Button button in root.GetComponentsInChildren<Button>(true))
+            {
+                if (button.gameObject.name == "ActivityButtonTemplate" || !button.gameObject.activeInHierarchy)
+                    continue;
+                Text label = button.GetComponentInChildren<Text>(true);
+                if (label != null) labels.Add(label.text);
+            }
+            return labels.ToArray();
         }
 
         [Test]

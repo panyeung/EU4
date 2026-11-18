@@ -36,6 +36,31 @@ namespace SengokuChronicle.Tests.EditMode
             return session;
         }
 
+        [Test]
+        public void View_ReadsTheScenarioTagWithoutBuildingSaveData()
+        {
+            int captures = 0;
+            GameSession sc024 = NewSession();
+            sc024.CaptureSaveObserved = () => captures++;
+            sc024.InitFamilyDoctrineDemoScenario();
+
+            FamilyDoctrineView view = FamilyDoctrineView.Build(sc024);
+
+            Assert.That(view.IsScenarioActive, Is.True);
+            Assert.That(captures, Is.Zero,
+                "a read-only projection must not call CaptureSave.");
+
+            GameSession ordinary = NewSession();
+            ordinary.CaptureSaveObserved = () => captures++;
+            ordinary.InitNewGame();
+
+            FamilyDoctrineView normalView = FamilyDoctrineView.Build(ordinary);
+
+            Assert.That(normalView.IsScenarioActive, Is.False);
+            Assert.That(captures, Is.Zero,
+                "an ordinary SC-013 game must not build save data to prove the route.");
+        }
+
         private static EventCatalogData LoadCatalog() =>
             JsonUtility.FromJson<EventCatalogData>(
                 File.ReadAllText("Assets/Resources/Events/event-catalog-v1.json"));

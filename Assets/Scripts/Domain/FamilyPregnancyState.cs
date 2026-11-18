@@ -224,5 +224,27 @@ namespace SengokuChronicle.Domain
             }
             return TryRemove(record.GestatingPersonId, out error);
         }
+
+#pragma warning disable UAC0009 // the approved Debug Mode plan requires the Editor/development build boundary
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        /// <summary>
+        /// Replaces the whole collection with an already-validated snapshot. This exists
+        /// only so a rejected debug transaction can restore the exact pre-command set.
+        /// </summary>
+        internal void RestoreRecords(IReadOnlyList<FamilyPregnancyRecord> records)
+        {
+            _records.Clear();
+            if (records == null)
+                return;
+            for (int i = 0; i < records.Count; i++)
+            {
+                FamilyPregnancyRecord record = records[i];
+                if (!record.IsValid || _records.ContainsKey(record.GestatingPersonId.Value))
+                    continue;
+                _records.Add(record.GestatingPersonId.Value, record);
+            }
+        }
+#endif
+#pragma warning restore UAC0009
     }
 }

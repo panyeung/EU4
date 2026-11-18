@@ -881,9 +881,8 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(profilePanel.rect.height, Is.EqualTo(actionPanel.rect.height).Within(1f));
             Assert.That(inspectorRail.rect.height, Is.EqualTo(actionPanel.rect.height).Within(1f));
 
-            // Parchment content, indigo chrome, and reference-derived portrait art.
-            Sprite paper = UnityEditor.AssetDatabase.LoadAssetAtPath<Sprite>(
-                "Assets/Art/UI/paper_grain.png");
+            // Parchment content, indigo chrome, and original generated portrait art.
+            Sprite paper = SengokuUiArt.Parchment;
             Assert.That((Color32)profilePanel.GetComponent<Image>().color,
                 Is.EqualTo((Color32)SengokuUiTheme.ParchmentLight),
                 "the profile card keeps a clean parchment base");
@@ -891,9 +890,9 @@ namespace SengokuChronicle.Tests.EditMode
                 Is.EqualTo((Color32)SengokuUiTheme.ParchmentLight),
                 "the action card keeps a clean parchment base");
             Assert.That(Find("M02ProfilePaperGrain").GetComponent<Image>().sprite,
-                Is.EqualTo(paper), "the profile card overlays the supplied paper grain");
+                Is.SameAs(paper), "the profile card overlays the generated parchment tile");
             Assert.That(Find("M02ActionPaperGrain").GetComponent<Image>().sprite,
-                Is.EqualTo(paper), "the action card overlays the supplied paper grain");
+                Is.SameAs(paper), "the action card overlays the generated parchment tile");
             Assert.That((Color32)backdrop.GetComponent<Image>().color,
                 Is.EqualTo((Color32)SengokuUiTheme.IndigoDeep));
             Assert.That(((RectTransform)navRail).GetComponent<Image>().color.a,
@@ -904,8 +903,18 @@ namespace SengokuChronicle.Tests.EditMode
                 Is.EqualTo((Color32)SengokuUiTheme.IndigoPanel),
                 "the inspector rail stays a dark developer surface, not parchment");
             var portrait = Find(AddM02DailyActionPanel.ProfilePortraitName).GetComponent<Image>();
-            Assert.That(portrait.sprite, Is.Not.Null,
-                "the selected character uses the supplied reference portrait");
+            Assert.That(portrait.sprite, Is.SameAs(SengokuUiArt.Portrait("main")),
+                "the selected character uses the original generated portrait");
+            Assert.That(portrait.preserveAspect, Is.True,
+                "the generated portrait keeps its native aspect ratio");
+            Assert.That(Find("M02ProfileSeal").GetComponent<Image>().sprite,
+                Is.SameAs(SengokuUiArt.Icon(SengokuUiArt.IconCrest)),
+                "the identity seal uses the generated crest icon");
+            var travelImage = Find(AddM02DailyActionPanel.TravelSceneName).GetComponent<Image>();
+            Assert.That(travelImage.sprite, Is.SameAs(SengokuUiArt.WorldMapIllustration),
+                "the travel preview uses original generated map art");
+            Assert.That(travelImage.preserveAspect, Is.True,
+                "the travel preview keeps the generated image aspect ratio");
 
             // The shared rail exposes the five reference pages as real controls.
             string[] pageButtons =

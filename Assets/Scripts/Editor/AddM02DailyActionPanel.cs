@@ -126,17 +126,10 @@ namespace SengokuChronicle.Editor
         private const string InspectorRootName = "M03NpcAiInspectorRoot";
         private const string UndoName = "Add M02 Daily Action Panel";
 
-        private const string PaperPath = "Assets/Art/UI/paper_grain.png";
-        private const string PortraitPath = "Assets/Art/UI/ReferenceArt/portrait_main.png";
-        private const string TravelScenePath = "Assets/Art/UI/ReferenceArt/travel_scene.png";
-        private const string SealPath = "Assets/Art/UI/ReferenceArt/seal.png";
-
         // Original generated UI art (docs/ART_ASSET_WORKFLOW.md). The atlases are
         // sliced in the importer metadata; sub-sprites are addressed by name.
         private const string IconsAtlasPath = "Assets/Resources/Generated/ui_icons_atlas.png";
-        private const string ParchmentAtlasPath = "Assets/Resources/Generated/parchment_tile.png";
         private const string IndigoAtlasPath = "Assets/Resources/Generated/indigo_pattern_tile.png";
-        private const string ParchmentSpriteName = "parchment_tile_0";
         private const string IndigoSpriteName = "indigo_pattern_tile_0";
 
         /// <summary>Loads one named sub-sprite of a generated atlas (null-safe).</summary>
@@ -527,35 +520,53 @@ namespace SengokuChronicle.Editor
                 return Invalid(out error,
                     "The roster rail must fit inside the nav column.");
 
-            Sprite paper = AssetDatabase.LoadAssetAtPath<Sprite>(PaperPath);
-            Sprite portraitSprite = AssetDatabase.LoadAssetAtPath<Sprite>(PortraitPath);
-            Sprite travelSprite = AssetDatabase.LoadAssetAtPath<Sprite>(TravelScenePath);
-            Sprite parchment = LoadGeneratedSprite(ParchmentAtlasPath, ParchmentSpriteName);
+            Sprite parchment = SengokuUiArt.Parchment;
+            Sprite portraitSprite = SengokuUiArt.Portrait("main");
+            Sprite crestSprite = SengokuUiArt.Icon(SengokuUiArt.IconCrest);
+            Sprite travelSprite = SengokuUiArt.WorldMapIllustration;
             Sprite indigo = LoadGeneratedSprite(IndigoAtlasPath, IndigoSpriteName);
-            if (paper == null || portraitSprite == null || travelSprite == null)
+            if (parchment == null || portraitSprite == null || crestSprite == null ||
+                travelSprite == null)
                 return Invalid(out error,
-                    "The M02 reference-derived paper, portrait or travel art is missing.");
-            if (parchment == null || indigo == null)
+                    "The original generated parchment, portrait, crest or map art is missing.");
+            if (indigo == null)
                 return Invalid(out error,
-                    "The generated parchment or indigo UI tile is missing.");
+                    "The generated indigo UI tile is missing.");
+            Transform profileSeal = Require(scene, "M02ProfileSeal");
+            Transform titleSeal = Require(scene, "M02TitleSeal");
             if (backdrop.GetComponent<Image>() == null ||
                 backdrop.GetComponent<Image>().sprite != null ||
                 profilePanel.GetComponent<Image>() == null ||
                 profilePanel.GetComponent<Image>().sprite != parchment ||
                 profilePaperGrain == null || profilePaperGrain.parent != profilePanel ||
                 profilePaperGrain.GetComponent<Image>() == null ||
-                profilePaperGrain.GetComponent<Image>().sprite != paper ||
+                profilePaperGrain.GetComponent<Image>().sprite != parchment ||
+                profilePaperGrain.GetComponent<Image>().raycastTarget ||
                 actionPanel.GetComponent<Image>() == null ||
                 actionPanel.GetComponent<Image>().sprite != parchment ||
                 actionPaperGrain == null || actionPaperGrain.parent != actionPanel ||
                 actionPaperGrain.GetComponent<Image>() == null ||
-                actionPaperGrain.GetComponent<Image>().sprite != paper ||
+                actionPaperGrain.GetComponent<Image>().sprite != parchment ||
+                actionPaperGrain.GetComponent<Image>().raycastTarget ||
                 portrait.GetComponent<Image>() == null ||
                 portrait.GetComponent<Image>().sprite != portraitSprite ||
+                !portrait.GetComponent<Image>().preserveAspect ||
+                portrait.GetComponent<Image>().raycastTarget ||
+                profileSeal == null || profileSeal.GetComponent<Image>() == null ||
+                profileSeal.GetComponent<Image>().sprite != crestSprite ||
+                !profileSeal.GetComponent<Image>().preserveAspect ||
+                profileSeal.GetComponent<Image>().raycastTarget ||
+                titleSeal == null || titleSeal.GetComponent<Image>() == null ||
+                titleSeal.GetComponent<Image>().sprite != crestSprite ||
+                !titleSeal.GetComponent<Image>().preserveAspect ||
+                titleSeal.GetComponent<Image>().raycastTarget ||
                 travelScene.GetComponent<Image>() == null ||
-                travelScene.GetComponent<Image>().sprite != travelSprite)
+                travelScene.GetComponent<Image>().sprite != travelSprite ||
+                !travelScene.GetComponent<Image>().preserveAspect ||
+                travelScene.GetComponent<Image>().raycastTarget)
                 return Invalid(out error,
-                    "The M02 parchment or portrait surfaces are not bound to the reference art.");
+                    "The M02 parchment, portrait, crest or travel art is not bound to the " +
+                    "original generated assets.");
             if (topBar.GetComponent<Image>() == null || navRail.GetComponent<Image>() == null ||
                 inspectorRail.GetComponent<Image>() == null ||
                 !topBar.GetComponent<Image>().raycastTarget ||
@@ -783,21 +794,21 @@ namespace SengokuChronicle.Editor
             UpdateResult failure = UpdateResult.Failed;
             try
             {
-                Sprite paper = AssetDatabase.LoadAssetAtPath<Sprite>(PaperPath);
-                Sprite portraitSprite = AssetDatabase.LoadAssetAtPath<Sprite>(PortraitPath);
-                Sprite travelSprite = AssetDatabase.LoadAssetAtPath<Sprite>(TravelScenePath);
-                Sprite sealSprite = AssetDatabase.LoadAssetAtPath<Sprite>(SealPath);
-                Sprite parchment = LoadGeneratedSprite(ParchmentAtlasPath, ParchmentSpriteName);
+                Sprite parchment = SengokuUiArt.Parchment;
+                Sprite portraitSprite = SengokuUiArt.Portrait("main");
+                Sprite sealSprite = SengokuUiArt.Icon(SengokuUiArt.IconCrest);
+                Sprite travelSprite = SengokuUiArt.WorldMapIllustration;
                 Sprite indigo = LoadGeneratedSprite(IndigoAtlasPath, IndigoSpriteName);
                 Sprite[] pageIcons = new Sprite[ReferenceGalleryNavigator.PageCount];
                 for (int i = 0; i < pageIcons.Length; i++)
                     pageIcons[i] = LoadGeneratedIcon(
                         ReferenceGalleryNavigator.PageIconIndices[i]);
-                if (paper == null || portraitSprite == null || travelSprite == null ||
-                    sealSprite == null)
+                if (parchment == null || portraitSprite == null || sealSprite == null ||
+                    travelSprite == null)
                     throw new InvalidOperationException(
-                        "Missing M02 reference-derived art. Refresh the project first.");
-                if (parchment == null || indigo == null ||
+                        "Missing original generated M02 art under Assets/Resources/Generated. " +
+                        "Refresh the project first.");
+                if (indigo == null ||
                     pageIcons.Any(icon => icon == null))
                     throw new InvalidOperationException(
                         "Missing generated UI art under Assets/Resources/Generated. " +
@@ -957,7 +968,8 @@ namespace SengokuChronicle.Editor
                 profilePanel.raycastTarget = true;
                 PlaceTopLeft(profilePanel.transform, new Vector2(ContentLeft, ContentTop),
                     new Vector2(ProfileWidth, ContentHeight));
-                AddPaperOverlay(scene, profilePanel.rectTransform, paper, "M02ProfilePaperGrain");
+                AddPaperOverlay(scene, profilePanel.rectTransform, parchment,
+                    "M02ProfilePaperGrain");
                 AddBorder(scene, profilePanel.rectTransform, "M02ProfileBorder",
                     SengokuUiTheme.PaperLine, 0f, 1f);
                 CreateProfile(scene, profilePanel.rectTransform, font, portraitSprite, sealSprite);
@@ -969,7 +981,8 @@ namespace SengokuChronicle.Editor
                 actionPanel.raycastTarget = true;
                 PlaceTopLeft(actionPanel.transform, new Vector2(ActionLeft, ContentTop),
                     new Vector2(ActionWidth, ContentHeight));
-                AddPaperOverlay(scene, actionPanel.rectTransform, paper, "M02ActionPaperGrain");
+                AddPaperOverlay(scene, actionPanel.rectTransform, parchment,
+                    "M02ActionPaperGrain");
                 AddBorder(scene, actionPanel.rectTransform, "M02ActionBorder",
                     SengokuUiTheme.PaperLine, 0f, 1f);
                 CreateActionPage(scene, panelRect, actionPanel.rectTransform, font);
@@ -1117,6 +1130,7 @@ namespace SengokuChronicle.Editor
         {
             Image seal = CreateImage(scene, topBar, "M02TitleSeal", Color.white);
             seal.sprite = sealSprite;
+            seal.preserveAspect = true;
             seal.raycastTarget = false;
             PlaceTopLeft(seal.transform, new Vector2(196f, 12f), new Vector2(28f, 28f));
 
@@ -1195,6 +1209,7 @@ namespace SengokuChronicle.Editor
             Image portrait = CreateImage(scene, frame.transform, ProfilePortraitName, Color.white);
             portrait.sprite = portraitSprite;
             portrait.type = Image.Type.Simple;
+            portrait.preserveAspect = true;
             portrait.raycastTarget = false;
             Stretch(portrait.rectTransform, 2f, 2f, 2f, 2f);
 
@@ -1205,6 +1220,7 @@ namespace SengokuChronicle.Editor
 
             Image seal = CreateImage(scene, bodyRect, "M02ProfileSeal", Color.white);
             seal.sprite = sealSprite;
+            seal.preserveAspect = true;
             seal.raycastTarget = false;
             PlaceTopLeft(seal.transform, new Vector2(402f, 50f), new Vector2(28f, 28f));
 
@@ -1429,8 +1445,9 @@ namespace SengokuChronicle.Editor
             travelHeader.color = SengokuUiTheme.Ink;
             travelHeader.fontStyle = FontStyle.Bold;
             Image travelScene = CreateImage(scene, parent, TravelSceneName, Color.white);
-            travelScene.sprite = AssetDatabase.LoadAssetAtPath<Sprite>(TravelScenePath);
+            travelScene.sprite = SengokuUiArt.WorldMapIllustration;
             travelScene.type = Image.Type.Simple;
+            travelScene.preserveAspect = true;
             travelScene.raycastTarget = false;
             PlaceTopLeft(travelScene.transform, new Vector2(288f, 362f), new Vector2(98f, 72f));
             AddBorder(scene, travelScene.rectTransform, "M02TravelSceneBorder",
@@ -2030,7 +2047,7 @@ namespace SengokuChronicle.Editor
         {
             Image overlay = CreateImage(scene, parent, name, new Color(1f, 1f, 1f, 0.11f));
             overlay.sprite = paper;
-            overlay.type = Image.Type.Simple;
+            overlay.type = Image.Type.Tiled;
             overlay.raycastTarget = false;
             Stretch(overlay.rectTransform, 0f, 0f, 0f, 0f);
             overlay.transform.SetAsFirstSibling();

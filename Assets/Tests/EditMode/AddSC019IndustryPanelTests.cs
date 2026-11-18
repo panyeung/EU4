@@ -86,6 +86,27 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
+        public void AddSC019IndustryPanel_UsesGeneratedParchmentAndCrestArt()
+        {
+            Assert.That(AddSC019IndustryPanel.Update(_scene),
+                Is.EqualTo(AddSC019IndustryPanel.UpdateResult.Success));
+
+            Image surface = Find(AddSC019IndustryPanel.PanelName).GetComponent<Image>();
+            Assert.That(surface.sprite, Is.SameAs(SengokuUiArt.Parchment),
+                "the industry surface uses the original generated parchment tile");
+            Assert.That(surface.type, Is.EqualTo(Image.Type.Tiled));
+            Assert.That((Color32)surface.color, Is.EqualTo((Color32)SengokuUiTheme.Parchment),
+                "the surface keeps the shared parchment palette");
+
+            Image crest = Find("IndustryHeaderCrest").GetComponent<Image>();
+            Assert.That(crest.sprite, Is.SameAs(SengokuUiArt.Icon(SengokuUiArt.IconCrest)),
+                "the expanded industry header uses the generated clan crest");
+            Assert.That(crest.preserveAspect, Is.True);
+            Assert.That(crest.raycastTarget, Is.False,
+                "decorative header art must not block the panel controls");
+        }
+
+        [Test]
         public void AddSC019IndustryPanel_ValidateRejectsMissingCandidateLayout()
         {
             Assert.That(AddSC019IndustryPanel.Update(_scene),

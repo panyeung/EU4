@@ -136,6 +136,55 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
+        public void DebugKinshipTransaction_LeavesACleanStructuralSnapshot()
+        {
+            SengokuChronicle.Application.GameSession session =
+                SengokuChronicle.Application.GameSession.NewGame();
+            try
+            {
+                SengokuChronicle.Application.DebugSession debug = session.BeginDebugSession();
+                SengokuChronicle.Application.DebugCommandResult left = debug.CreatePerson(
+                    new SengokuChronicle.Application.DebugPersonDraft
+                    {
+                        DisplayName = "验证甲",
+                        Gender = PersonGender.Male,
+                        BirthYear = 1540,
+                        Alive = true,
+                        JoinFamily = true,
+                        Role = FamilyMemberRole.CollateralKin
+                    }, out PersonId leftId);
+                Assert.That(left.Succeeded, Is.True, left.Message);
+                SengokuChronicle.Application.DebugCommandResult right = debug.CreatePerson(
+                    new SengokuChronicle.Application.DebugPersonDraft
+                    {
+                        DisplayName = "验证乙",
+                        Gender = PersonGender.Female,
+                        BirthYear = 1542,
+                        Alive = true,
+                        JoinFamily = true,
+                        Role = FamilyMemberRole.Spouse
+                    }, out PersonId rightId);
+                Assert.That(right.Succeeded, Is.True, right.Message);
+                Assert.That(debug.AddKinship(leftId, rightId, KinshipType.Spouse).Succeeded,
+                    Is.True);
+
+                SuccessionWorld world = session.Succession.World;
+                IReadOnlyList<FamilyRelationshipDiagnostic> diagnostics =
+                    FamilyRelationshipValidator.Validate(world.Persons,
+                        new List<FamilyState> { world.Family }, world.Kinship,
+                        new InterpersonalState());
+
+                Assert.That(diagnostics, Is.Empty,
+                    "a committed debug kinship must leave one head, known endpoints and no duplicates.");
+                Assert.That(world.Kinship.Count, Is.EqualTo(9));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(session.gameObject);
+            }
+        }
+
+        [Test]
         public void Diagnostics_CollectionIsReadOnlyAndSelfDescribing()
         {
             IReadOnlyList<FamilyRelationshipDiagnostic> diagnostics =

@@ -667,5 +667,44 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(loaded.Error, Is.EqualTo(SaveErrorCode.NotFound));
             Assert.That(_session.WorldClock.CurrentDate, Is.EqualTo(date));
         }
+
+        [Test]
+        public void DebugSession_BlocksEverySaveBoundaryAndKeepsTheSlotBytes()
+        {
+            string directory = Path.Combine(
+                Path.GetTempPath(), "SengokuChronicleTests", Guid.NewGuid().ToString("N"));
+            var store = new SaveSlotStore(directory);
+            try
+            {
+                _session.InitStandardDemo();
+                Assert.That(store.Save(_session.CaptureSave()).Succeeded, Is.True);
+                byte[] before = File.ReadAllBytes(store.FilePath);
+                SaveData capture = _session.CaptureSave();
+                GameDate date = _session.WorldClock.CurrentDate;
+
+                DebugSession debug = _session.BeginDebugSession();
+                Assert.That(debug.IsActive, Is.True);
+
+                Assert.That(_session.SaveTo(store).Succeeded, Is.False);
+                Assert.That(_session.LoadFrom(store).Succeeded, Is.False);
+                Assert.That(_session.TryApplySave(capture).Succeeded, Is.False);
+                Assert.That(File.ReadAllBytes(store.FilePath), Is.EqualTo(before));
+                Assert.That(File.Exists(store.BackupFilePath), Is.False);
+                Assert.That(_session.WorldClock.CurrentDate, Is.EqualTo(WorldClock.NewGameDate),
+                    "the debug session keeps its own date and never applies save data.");
+                _ = date;
+
+                _session.EndDebugSession();
+                Assert.That(_session.SaveTo(store).Succeeded, Is.True,
+                    "the save boundary reopens after the debug session ends.");
+                Assert.That(File.Exists(store.BackupFilePath), Is.True,
+                    "the ordinary save path restores its normal backup behaviour.");
+            }
+            finally
+            {
+                if (Directory.Exists(directory))
+                    Directory.Delete(directory, true);
+            }
+        }
     }
 }

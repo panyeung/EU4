@@ -121,7 +121,7 @@ namespace SengokuChronicle.Application
                 return missing;
             }
 
-            bool active = string.Equals(session.CaptureSave()?.activeEventScenarioId,
+            bool active = string.Equals(session.ActiveEventScenarioId,
                 SC024FamilyDoctrineScenario.ScenarioId, StringComparison.Ordinal);
             return Build(session.Succession, session.CurrentFamilyCreed,
                 session.CurrentHeadAmbition, active, session.LastFamilyDoctrineMessage);

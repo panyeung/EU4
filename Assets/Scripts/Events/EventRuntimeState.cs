@@ -1,3 +1,8 @@
+// Unity 6.6 deprecates the DEVELOPMENT_BUILD directive (UAC0009). The approved
+// Debug Mode plan requires a compile-time boundary that exists only in the Editor
+// and development builds, so the directive stays and its deprecation notice is
+// silenced for this file only.
+#pragma warning disable UAC0009
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -106,6 +111,60 @@ namespace SengokuChronicle.Events
         internal bool HasOccurredOnce(string eventId) => _onceEventIds.Contains(eventId);
         internal bool HasCommittedResult(string resultId) => _committedResultIds.Contains(resultId);
 
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        /// <summary>
+        /// Debug-mode only: validates one injection without queueing it. The event must not
+        /// be pending, cooling down, marked once-only, or present in history; any of those,
+        /// or a non-management phase, is rejected without changing the queue.
+        /// </summary>
+        public bool CanInjectDebugEvent(string eventId, out string error)
+        {
+            error = string.Empty;
+            if (string.IsNullOrWhiteSpace(eventId))
+            {
+                error = "事件 ID 不能为空。";
+                return false;
+            }
+            if (Phase != StableGamePhase.Management || HasPendingEvents)
+            {
+                error = "已有待处理事件，必须先完成当前事件。";
+                return false;
+            }
+            if (_onceEventIds.Contains(eventId))
+            {
+                error = "该一次性事件已经发生，不能重复注入。";
+                return false;
+            }
+            if (_cooldowns.ContainsKey(eventId))
+            {
+                error = "该事件仍在冷却期内，不能注入。";
+                return false;
+            }
+            for (int i = 0; i < _history.Count; i++)
+            {
+                if (string.Equals(_history[i].eventId, eventId, StringComparison.Ordinal))
+                {
+                    error = "该事件已完成过一次，不能重复注入。";
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// Debug-mode only: queues one already-catalog-validated event so an isolated debug
+        /// session can exercise the real option and effect pipeline.
+        /// </summary>
+        public bool TryInjectDebugEvent(string eventId, out string error)
+        {
+            if (!CanInjectDebugEvent(eventId, out error))
+                return false;
+            Enqueue(eventId);
+            error = string.Empty;
+            return true;
+        }
+#endif
+
         internal void Enqueue(string eventId)
         {
             _pendingEventIds.Add(eventId);
@@ -173,3 +232,4 @@ namespace SengokuChronicle.Events
         }
     }
 }
+#pragma warning restore UAC0009
