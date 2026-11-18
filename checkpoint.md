@@ -325,7 +325,7 @@
 
 | 日期 | ID | 内容 | 状态 | 证据 |
 |---|---|---|---|---|
-| 2026-11-17 | M00 | 主工作树 M00 证据链全项通过：Validator `PASS; Errors: 0`、EditMode 2141/2141、Play Mode 到 SC-013 营地 HUD（1560-04-01 / 清洲）期间新增 error 0、隔离槽存读档 04-02→04-01 一致 | 进行中 | `Logs/verify/gate-20261118/report.md`、`save-isolated.md`；真实存档 `1e61ed9c…` 与备份 `f1c0630e…` 前后哈希未变；隔离槽 `ISO-PlayTest-20261118` v17/rules 8；SAVE-3/SAVE-4 未验；用户最终验收未完成 |
+| 2026-11-17 | M00 | 主工作树 M00 证据链全项通过：Validator `PASS; Errors: 0`、EditMode 2141/2141、Play Mode 到 SC-013 营地 HUD（1560-04-01 / 清洲）期间新增 error 0、隔离槽存读档 SAVE-1～SAVE-4 全过 | 进行中 | `Logs/verify/gate-20261118/` 下 `report.md`、`save-isolated.md`、`save-gate.md`；真实存档 `1e61ed9c…` 与备份 `f1c0630e…` 前后哈希未变；SAVE-3 改在 SC-010 标准样例验（SC-013 退休被家议链门控、无候选选择界面）；用户最终验收未完成 |
 | 2026-11-17 | M04 | 场景语义 diff 复核：3541 对象、`m_Name` 1908、`m_SizeDelta` 834、`m_AnchoredPosition` 多重集前后全等；真实差异仅 36 处 `LayoutElement.m_MinSize` 归一为 10 与 3 处 `-0` 旋转归一 | 待验证 | 16257 增 / 16252 删几乎全是 Unity 重序列化；该工作树的 EditMode 与 Play Mode 证据另计 |
 | 2026-11-16 | M00 | 主工作树只读回归全量 EditMode 2140/2140，Validator PASS/0 errors | 进行中 | `Logs/verify/gate-20261116/report.md`；Console 6 errors / 52 warnings / 24 logs，非零错误验收 |
 | 2026-11-16 | M00 | `main` 在 `d57ea7c`，四个任务工作树保留，无合并、无删除 | 历史 | `ui-m05-management` 在 `2f8b7b2`，多一个已推送提交 |
@@ -402,7 +402,7 @@
 - `main` 在 `a3828bd`，根目录混合未提交 WIP 保留（34 修改 / 32 未跟踪）。
 - 四个任务工作树。`ui-m04-family` 在 `ebeb0bb`，`ui-m05-management` 在 `2f8b7b2`（已推送），`ui-m06-m07-missions` 在 `d57ea7c`，`ui-m08-campaign` 在 `a25c969`。
 - `.orchestrate/shadow-clan/status.md` 记录三个单元，状态为 dispatched 2、needs-verify 1，验证台账为空。
-- M00 主工作树全量 2141/2141、Validator PASS/0，Play Mode 已到 SC-013 营地 HUD 期间 0 新 error；隔离槽存读档 `SAVE-1`/`SAVE-2` 已 PASS（`Logs/verify/gate-20261118/save-isolated.md`），`SAVE-3`/`SAVE-4` 未验，用户最终验收未完成。
+- M00 主工作树全量 2141/2141、Validator PASS/0，Play Mode 已到 SC-013 营地 HUD 期间 0 新 error；隔离槽存读档 `SAVE-1`～`SAVE-4` 全 PASS，用户最终验收未完成。
 - M04 全量 2002/2002，Validator 仍报 2 个旧生成器数据错误，保存后未跑全量回归，Play Mode 与目视未验证。
 - M05 聚焦 42/42、全量 2008/2008、Validator PASS，SC-013 月结 Console 0/0/0，独立复审未完成。
 - M06/M07 全量 1997/1997，当前源码集无新的 EditMode、Validator 或 Play Mode 结果。
@@ -418,7 +418,7 @@
 
 按依赖顺序，前一项不闭合不做下一项。
 
-1. M00 收口（证据已齐）。`SAVE-1`/`SAVE-2` 已在隔离槽 `ISO-PlayTest-20261118` 跑通；仍需补 `SAVE-3` 待处理继承决定跨存读档存活与 `SAVE-4` 空槽位干净拒绝，隔离方式：`SaveSlotStore(<独立目录>)` 经 `SaveLoadPanel.SetStore` 与 `GameSession.SaveTo/LoadFrom` 注入，不碰 `SengokuChronicle/save-slot-1.json`；然后交用户最终验收。
+1. M00 收口（证据已齐，仅余用户最终验收）。隔离槽 SAVE-1～SAVE-4 全过：SAVE-3 待处理继承决定跨存读档存活（phase、候选人与家主读回一致）；SAVE-4 空槽位读档返回「尚未找到存档。」且日期/phase/候选人/家主四项全等。隔离方式是 `SaveSlotStore(<独立目录>)` 经 `SaveLoadPanel.SetStore` 注入，真实存档哈希未变。用户按 `Logs/verify/gate-20261118/` 下三份报告验收即可。
 2. M04 工作树收口。场景语义 diff 已复核为纯重序列化；仍需跑该工作树的全量 EditMode、Validator 与 1280×720 Play Mode 目视，关掉独立复审的待回项。
 3. 合并 M04 到 main（合并前须用户确认），再按 M05 → M06/M07 → M08 顺序重复同一收口流程。每个工作树合并后跑一次全量回归。
 4. M05 完成独立复审与验证任务，复核跨工作树集成后的家族内务布局。
