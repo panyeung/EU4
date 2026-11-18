@@ -1553,7 +1553,6 @@ namespace SengokuChronicle.Presentation
             // 本页面的根节点可能就是面板本身，而根节点在下面被拉伸到页面。
             // 原始面板矩形在该拉伸之前测量，卡片是显式的 760x560 布局矩形，
             // 因此两者都不会悄悄变成父画布。
-            // canvas.
             Vector2 authored = panel != null
                 ? AuthoredIndustryPanelSize(panel)
                 : new Vector2(HouseholdIndustryFallbackWidth, HouseholdIndustryFallbackHeight);

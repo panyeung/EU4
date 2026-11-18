@@ -739,7 +739,6 @@ namespace SengokuChronicle.Presentation
         /// <summary>
         /// 放下回顾的焦点，但不交给别的覆盖层背后的控件。
         /// 记住的选中对象会保留，等那个覆盖层关闭后回顾再收回焦点。
-        /// closes.
         /// </summary>
         private void ClearReviewFocus()
         {

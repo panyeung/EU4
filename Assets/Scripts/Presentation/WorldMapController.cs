@@ -136,7 +136,7 @@ namespace SengokuChronicle.Presentation
         /// <summary>城镉菜单根对象（初始隐藏）。</summary>
         public GameObject GetTownMenuRoot() => townMenuRoot;
 
-        /// <summary>城镉菜单的设施槽；内容由 <see cref="RefreshFacilitySlots"/> 决定。</summary>
+        /// <summary>城镇菜单的设施槽；内容由 <see cref="RefreshFacilitySlots"/> 决定。</summary>
         public Text[] GetFacilityTexts() => facilityTexts;
 
         private static readonly TownLocalActions.Entry[] NoLocalEntries = new TownLocalActions.Entry[0];
