@@ -124,6 +124,8 @@ namespace SengokuChronicle.Editor
         private const string EventRootName = CanvasLayerOrder.EventChoiceRootName;
         private const string TacticalOverlayName = CanvasLayerOrder.TacticalOverlayName;
         private const string InspectorRootName = CanvasLayerOrder.InspectorRootName;
+        // The opaque page must never cover the M08 campaign review overlay.
+        private const string ReviewRootName = CanvasLayerOrder.CampaignReviewRootName;
         private const string UndoName = "Add M02 Daily Action Panel";
 
         // Original generated UI art (docs/ART_ASSET_WORKFLOW.md). The atlases are
@@ -749,14 +751,20 @@ namespace SengokuChronicle.Editor
 
             if (!ContainedInRenderBand(canvas, root))
                 return Invalid(out error,
-                    "M02DailyActionRoot must render above the map HUD and below the title/event overlays.");
+                    "M02DailyActionRoot must render above the map HUD and below the M08 review " +
+                    "page and title/event overlays.");
 
             // The read-only developer inspector is a separate surface and must open over
-            // the page, never beneath its backdrop.
+            // the page, never beneath its backdrop, and the review must open over it.
             Transform inspectorRoot = canvas.Find(InspectorRootName);
             if (inspectorRoot != null && inspectorRoot.GetSiblingIndex() < root.GetSiblingIndex())
                 return Invalid(out error,
                     "M03NpcAiInspectorRoot must render above the M02 page.");
+            Transform reviewRoot = canvas.Find(ReviewRootName);
+            if (inspectorRoot != null && reviewRoot != null &&
+                reviewRoot.GetSiblingIndex() <= inspectorRoot.GetSiblingIndex())
+                return Invalid(out error,
+                    "M08CampaignReviewRoot must render above the M03NpcAiInspectorRoot.");
             return true;
         }
 
@@ -1804,7 +1812,7 @@ namespace SengokuChronicle.Editor
                 MapRootName, IndustryRootName, EducationRootName, ResearchRootName,
                 FormationRootName
             };
-            string[] below = { TitleRootName, EventRootName, TacticalOverlayName };
+            string[] below = { TitleRootName, EventRootName, TacticalOverlayName, ReviewRootName };
             foreach (string name in above)
             {
                 Transform other = canvas.Find(name);

@@ -101,16 +101,16 @@ namespace SengokuChronicle.Editor
 
         /// <summary>共享错误：两个带内根节点保存成了错误的深度次序。</summary>
         public const string RankOrderError =
-            "Canvas overlay roots must follow the shared depth order: " + DailyActionRootName +
-            ", " + InspectorRootName + ", " + CampaignReviewRootName + ", " +
-            SuccessionRootName + ", " + TitleRootName + ", " + EventChoiceRootName + ", " +
-            TacticalOverlayName + ".";
+            "Canvas 覆盖层根节点必须遵循共享深度次序：" + DailyActionRootName +
+            "、" + InspectorRootName + "、" + CampaignReviewRootName + "、" +
+            SuccessionRootName + "、" + TitleRootName + "、" + EventChoiceRootName + "、" +
+            TacticalOverlayName + "。";
 
         /// <summary>共享错误：战役回顾与 M02 页面、M03 只读查看器的相对次序。</summary>
         public const string CampaignReviewAboveDailyActionError =
-            "Campaign review root must render above the M02 daily action page.";
+            "战役回顾面板必须渲染在 M02 日常行动页（" + DailyActionRootName + "）之上。";
         public const string CampaignReviewAboveInspectorError =
-            "Campaign review root must render above the M03 read-only inspector.";
+            "战役回顾面板必须渲染在 M03 只读查看器（" + InspectorRootName + "）之上。";
 
         /// <summary>
         /// 查层序。表里没有的名字（例如运行时才出现的覆盖层）返回 null，代表不参与座次约束。
@@ -206,17 +206,17 @@ namespace SengokuChronicle.Editor
             return false;
         }
 
-        /// <summary>层的说明片段，只用于拼断言消息；与既有 Validator 英文消息保持一致。</summary>
+        /// <summary>层的说明片段，只用于拼断言消息；与既有 Validator 中文消息保持一致。</summary>
         public static string Describe(CanvasLayer layer)
         {
             switch (layer)
             {
-                case CanvasLayer.MapHud: return "map/town HUD layer";
-                case CanvasLayer.Page: return "opaque page layer";
-                case CanvasLayer.Modal: return "decision modal layer";
-                case CanvasLayer.TitleOverlay: return "title overlay layer";
-                case CanvasLayer.EventChoiceOverlay: return "event-choice overlay layer";
-                case CanvasLayer.TacticalOverlay: return "tactical overlay layer";
+                case CanvasLayer.MapHud: return "地图/城镇 HUD 层";
+                case CanvasLayer.Page: return "不透明页面层";
+                case CanvasLayer.Modal: return "决策弹窗层";
+                case CanvasLayer.TitleOverlay: return "标题覆盖层";
+                case CanvasLayer.EventChoiceOverlay: return "事件选择覆盖层";
+                case CanvasLayer.TacticalOverlay: return "战术覆盖层";
                 default: throw new ArgumentOutOfRangeException(nameof(layer), layer, null);
             }
         }
@@ -446,8 +446,8 @@ namespace SengokuChronicle.Editor
                     continue;
                 if (rank < previous)
                 {
-                    error = RankOrderError + " " + child.name + " renders above " +
-                            previousName + ".";
+                    error = RankOrderError + " " + child.name + " 渲染在 " +
+                            previousName + " 之上。";
                     return false;
                 }
                 previous = rank;

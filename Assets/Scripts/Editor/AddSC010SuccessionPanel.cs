@@ -439,27 +439,27 @@ namespace SengokuChronicle.Editor
         private static string OrderError(string offender, CanvasLayerOrder.CanvasLayer offenderLayer,
             bool mustRenderAbove)
         {
-            string detail = $" (offender: {offender}, {CanvasLayerOrder.Describe(offenderLayer)})";
+            string detail = $"（违规兄弟：{offender}，{CanvasLayerOrder.Describe(offenderLayer)}）";
             if (mustRenderAbove)
             {
                 switch (offenderLayer)
                 {
                     case CanvasLayerOrder.CanvasLayer.MapHud:
-                        return "SuccessionRoot must render above the map/town HUD so its buttons receive raycasts." + detail;
+                        return "SuccessionRoot 必须渲染在地图/城镇 HUD 之上，否则按钮收不到射线。" + detail;
                     case CanvasLayerOrder.CanvasLayer.Page:
-                        return "SuccessionRoot must render above the opaque family page so its decision modal is not covered." + detail;
+                        return "SuccessionRoot 必须渲染在不透明家族页之上，否则决策弹窗被遮住。" + detail;
                     default:
-                        return $"SuccessionRoot must render above the {CanvasLayerOrder.Describe(offenderLayer)}." + detail;
+                        return $"SuccessionRoot 必须渲染在{CanvasLayerOrder.Describe(offenderLayer)}之上。" + detail;
                 }
             }
             switch (offenderLayer)
             {
                 case CanvasLayerOrder.CanvasLayer.TitleOverlay:
-                    return "SuccessionRoot must render below the title overlay." + detail;
+                    return "SuccessionRoot 必须渲染在标题覆盖层之下。" + detail;
                 case CanvasLayerOrder.CanvasLayer.EventChoiceOverlay:
-                    return "SuccessionRoot must render below the event-choice overlay." + detail;
+                    return "SuccessionRoot 必须渲染在事件选择覆盖层之下。" + detail;
                 default:
-                    return $"SuccessionRoot must render below the {CanvasLayerOrder.Describe(offenderLayer)}." + detail;
+                    return $"SuccessionRoot 必须渲染在{CanvasLayerOrder.Describe(offenderLayer)}之下。" + detail;
             }
         }
 

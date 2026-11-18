@@ -631,19 +631,19 @@ namespace SengokuChronicle.Editor
         private static string OrderError(string offender, CanvasLayerOrder.CanvasLayer offenderLayer,
             bool mustRenderAbove)
         {
-            string detail = $" (offender: {offender}, {CanvasLayerOrder.Describe(offenderLayer)})";
+            string detail = $"（违规兄弟：{offender}，{CanvasLayerOrder.Describe(offenderLayer)}）";
             if (mustRenderAbove)
                 return offenderLayer == CanvasLayerOrder.CanvasLayer.MapHud
-                    ? "FamilyRosterRoot must render above the map/town HUD so its buttons receive raycasts." + detail
-                    : $"FamilyRosterRoot must render above the {CanvasLayerOrder.Describe(offenderLayer)}." + detail;
+                    ? "FamilyRosterRoot 必须渲染在地图/城镇 HUD 之上，否则按钮收不到射线。" + detail
+                    : $"FamilyRosterRoot 必须渲染在{CanvasLayerOrder.Describe(offenderLayer)}之上。" + detail;
             switch (offenderLayer)
             {
                 case CanvasLayerOrder.CanvasLayer.TitleOverlay:
-                    return "FamilyRosterRoot must render below the title overlay." + detail;
+                    return "FamilyRosterRoot 必须渲染在标题覆盖层之下。" + detail;
                 case CanvasLayerOrder.CanvasLayer.EventChoiceOverlay:
-                    return "FamilyRosterRoot must render below the event-choice overlay." + detail;
+                    return "FamilyRosterRoot 必须渲染在事件选择覆盖层之下。" + detail;
                 default:
-                    return $"FamilyRosterRoot must render below the {CanvasLayerOrder.Describe(offenderLayer)}." + detail;
+                    return $"FamilyRosterRoot 必须渲染在{CanvasLayerOrder.Describe(offenderLayer)}之下。" + detail;
             }
         }
 

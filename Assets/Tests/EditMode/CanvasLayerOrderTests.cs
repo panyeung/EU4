@@ -103,13 +103,13 @@ namespace SengokuChronicle.Tests.EditMode
 
             int succession = final.IndexOf("SuccessionRoot");
             Assert.That(succession, Is.GreaterThan(final.IndexOf("FamilyRosterRoot")),
-                "SuccessionRoot must render above the opaque family page so its decision modal is not covered.");
+                "SuccessionRoot 必须渲染在不透明家族页之上，否则决策弹窗被遮住。");
             Assert.That(succession, Is.GreaterThan(final.IndexOf("M2WorldMapRoot")),
-                "SuccessionRoot must render above the map/town HUD so its buttons receive raycasts.");
+                "SuccessionRoot 必须渲染在地图/城镇 HUD 之上，否则按钮收不到射线。");
             Assert.That(succession, Is.LessThan(final.IndexOf("M6TitleRoot")),
-                "SuccessionRoot must render below the title overlay.");
+                "SuccessionRoot 必须渲染在标题覆盖层之下。");
             Assert.That(succession, Is.LessThan(final.IndexOf("EventChoiceRoot")),
-                "SuccessionRoot must render below the event-choice overlay.");
+                "SuccessionRoot 必须渲染在事件选择覆盖层之下。");
         }
 
         [Test]
@@ -119,10 +119,10 @@ namespace SengokuChronicle.Tests.EditMode
 
             int roster = final.IndexOf("FamilyRosterRoot");
             Assert.That(roster, Is.GreaterThan(final.IndexOf("M2WorldMapRoot")),
-                "FamilyRosterRoot must render above the map/town HUD so its buttons receive raycasts.");
+                "FamilyRosterRoot 必须渲染在地图/城镇 HUD 之上，否则按钮收不到射线。");
             Assert.That(roster, Is.GreaterThan(final.IndexOf("WorldClockPanel")));
             Assert.That(roster, Is.LessThan(final.IndexOf("SuccessionRoot")),
-                "FamilyRosterRoot must stay below the succession modal.");
+                "FamilyRosterRoot 必须保持在继承弹窗之下。");
             Assert.That(roster, Is.LessThan(final.IndexOf("M6TitleRoot")));
             Assert.That(roster, Is.LessThan(final.IndexOf("EventChoiceRoot")));
         }
@@ -175,7 +175,7 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(pageOffender, Is.EqualTo("SuccessionRoot"));
             Assert.That(pageOffenderLayer, Is.EqualTo(CanvasLayerOrder.CanvasLayer.Modal));
             Assert.That(pageMustRenderAbove, Is.False,
-                "The page covers the modal, so the page is the one that has to move down.");
+                "页面盖住了弹窗，因此需要把页面向下移动。");
         }
 
         [Test]
@@ -209,7 +209,7 @@ namespace SengokuChronicle.Tests.EditMode
             Transform succession = _canvas.transform.Find("SuccessionRoot");
             Assert.That(CanvasLayerOrder.TryFindViolation(Names(_canvas.transform), succession.GetSiblingIndex(),
                 CanvasLayerOrder.CanvasLayer.Modal, out _, out _, out _), Is.True,
-                "The broken order must be reported before it is repaired.");
+                "错误座次必须在修复前被报告出来。");
 
             string[] others = Names(_canvas.transform).Where(name => name != "SuccessionRoot").ToArray();
             succession.SetSiblingIndex(CanvasLayerOrder.InsertIndex(others, CanvasLayerOrder.CanvasLayer.Modal));

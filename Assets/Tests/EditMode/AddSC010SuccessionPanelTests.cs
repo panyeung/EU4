@@ -435,16 +435,16 @@ namespace SengokuChronicle.Tests.EditMode
             Transform map = Find("M2WorldMapRoot");
 
             Assert.That(root.GetSiblingIndex(), Is.GreaterThan(map.GetSiblingIndex()),
-                "SuccessionRoot must render above the map/town HUD.");
+                "SuccessionRoot 必须渲染在地图/城镇 HUD 之上。");
             Assert.That(root.GetSiblingIndex(), Is.GreaterThan(familyRoster.GetSiblingIndex()),
-                "the succession/crisis decision must render above the opaque family page.");
+                "继承/危机决策必须渲染在不透明家族页之上。");
             Assert.That(root.GetSiblingIndex(), Is.LessThan(title.GetSiblingIndex()),
-                "SuccessionRoot must remain below the full-screen title overlay.");
+                "SuccessionRoot 必须保持在全屏标题覆盖层之下。");
             Assert.That(AddSC010SuccessionPanel.Validate(_scene, out string error), Is.True, error);
 
             root.SetAsFirstSibling();
             Assert.That(AddSC010SuccessionPanel.Validate(_scene, out string overlapError), Is.False);
-            Assert.That(overlapError, Does.Contain("above the map"));
+            Assert.That(overlapError, Does.Contain("必须渲染在地图/城镇 HUD 之上"));
         }
 
         [Test]
