@@ -213,6 +213,9 @@
 
 | 日期 | 决策 | 一行理由 | 影响 |
 |---|---|---|---|
+| 2026-11-18 | 主工作树未提交项按「与 `m00-closeout` 内容等价」处理，不再重复入库 | 69 项与 `e57dd06` 逐字节相同，差异只有行尾 LF/CRLF，另开提交只会造噪声 | 不新增镜像提交；后续收口以 `panyeung/m00-closeout` 为内容基准 |
+| 2026-11-18 | Editor 卡死按 PID 精确恢复，不整体杀 Unity | 同机同时跑着工作树的 Editor 实例，整体杀会连带丢掉它们的会话 | 只结束 PID 88424；重启后 96584 / 端口 7800，场景备份留 `Logs/recovery-20261118/` |
+| 2026-11-18 | Editor 重启后场景恢复改为显式 `open_scene` | `Library/LastSceneManagerSetup.txt` 是 `sceneSetups: []`，不会再自动恢复上一次场景 | 每次重启先 `unity command open_scene Assets/Scenes/FoundationScene.unity`，再谈验证 |
 | 2026-11-14 | M08C 历史时间线日期与范围 | 五节点 1579/1581/1600/1614/1615，节点落 1 月 1 日，预警提前一年 | 事件目录与中文文本、`EventRuntimeState`；无 schema 迁移；只进 SC-010 |
 | 2026-11-14 | M08B 默认产物路径改写到策略目录 | 旧根 `Logs/verify/m08b/` 是已接受的 v5 基线，重跑会覆盖证据 | runner 与 `ResolveArtifactRoot`；显式传旧根抛 `ArgumentException` |
 | 2026-11-14 | M08B `farm-managed-v1` 仅作模拟对比 | 基线是产业岗位空缺而非配置错误，用确定性策略量化任职影响 | 产物 schema v6 与 `policy` 列，产物分目录 |
@@ -325,8 +328,12 @@
 
 | 日期 | ID | 内容 | 状态 | 证据 |
 |---|---|---|---|---|
+| 2026-11-18 | M00 | 主工作树未提交项与 `panyeung/m00-closeout` `e57dd06` 内容等价：35 个已跟踪修改文件 `git diff --ignore-cr-at-eol` 为 0 行，34 个未跟踪文件与同名 blob 剥 CR 后逐字节相同，仅 5 项是本地新增（合计 69 项等价） | 进行中 | `git status --porcelain -uall` 74 项（35 修改 / 39 未跟踪）；本地新增为 `Assets/Logs/verify/_scratch/t3193-00-now.png`、`Assets/Scenes/TestResults_20261108_072929.xml` 与其 `.meta`、`scripts/verify/SaveGatePlayProbe.cs`、`scripts/verify/SaveLoadPendingChecks.cs`；分支现头 `5141474` |
+| 2026-11-18 | M00 | Editor 卡死恢复：PID 88424 在一次测试超时后由 `RestoreSceneSetupTask` 抛 `IndexOutOfRangeException` 卡死主线程（pipeline 全超时、UIA 不可用），按 PID 结束该进程并重启为 PID 96584 / 端口 7800 | 进行中 | `unity pipeline list` 现报 `My project` 96584 / 7800 / 可达 true；场景备份 `Logs/recovery-20261118/scene-0.backup` 与 `__Backupscenes/0.backup` 各 835,768 字节，MD5 同为 `5ca370eb0407f1d1f1ac2131063ffd1e` |
+| 2026-11-18 | M00 | 场景恢复不再自动：`Library/LastSceneManagerSetup.txt` 内容为 `sceneSetups: []`，重启后须显式 `open_scene Assets/Scenes/FoundationScene.unity` | 进行中 | 核对时 `list_open_scenes` 报 FoundationScene 已加载、`isDirty=false`、`rootCount=4`；同刻 `editor_status` 报 `playMode=playing` |
+| 2026-11-18 | M00 | 撤回「城镇活动只有可编译骨架」：该结论已过期，行为与断言已落地 | 进行中 | 5 个 Town 测试文件共 31 个 `[Test]`（Entry 7 / Routing 6 / LocalActions 5 / OverviewResident 1 / UpdateTownOverview 12）；最新全量 `TestResults.xml` 2026-11-18T04:41:54Z–04:43:11Z，`testcasecount=2141`、`passed=2141`、`failed=0` |
 | 2026-11-17 | M00 | 主工作树 M00 证据链全项通过：Validator `PASS; Errors: 0`、EditMode 2141/2141、Play Mode 到 SC-013 营地 HUD（1560-04-01 / 清洲）期间新增 error 0、隔离槽存读档 SAVE-1～SAVE-4 全过 | 进行中 | `Logs/verify/gate-20261118/` 下 `report.md`、`save-isolated.md`、`save-gate.md`；真实存档 `1e61ed9c…` 与备份 `f1c0630e…` 前后哈希未变；SAVE-3 改在 SC-010 标准样例验（SC-013 退休被家议链门控、无候选选择界面）；用户最终验收未完成 |
-| 2026-11-17 | M04 | 收口全绿：场景层序缺陷已修（新增共享 `CanvasLayerOrder`，SuccessionRoot 6→17 压住家族名册页），Validator `PASS; Errors: 0`、全量 EditMode 2023/2023、1280×720 Play Mode 到 SC-013 期间 0 新 error | 进行中 | 分支 `94e82bf` 已推 `origin`；`ui-m04-family/Logs/verify/m04-closure-20261118/report.md`、`m04-fix-20261118/report.md`；仍差 29 个未提交文件未入分支 |
+| 2026-11-17 | M04 | 收口全绿：场景层序缺陷已修（新增共享 `CanvasLayerOrder`，SuccessionRoot 6→17 压住家族名册页），Validator `PASS; Errors: 0`、全量 EditMode 2023/2023、1280×720 Play Mode 到 SC-013 期间 0 新 error | 进行中 | 分支 `94e82bf` 已推 `origin`；`ui-m04-family/Logs/verify/m04-closure-20261118/report.md`、`m04-fix-20261118/report.md`；仍差 28 个未提交文件未入分支（2026-11-18 复核 `git status --porcelain -uall`） |
 | 2026-11-17 | M04 | 场景语义 diff 复核：3541 对象、`m_Name` 1908、`m_SizeDelta` 834、`m_AnchoredPosition` 多重集前后全等；真实差异仅 36 处 `LayoutElement.m_MinSize` 归一为 10 与 3 处 `-0` 旋转归一 | 待验证 | 16257 增 / 16252 删几乎全是 Unity 重序列化；该工作树的 EditMode 与 Play Mode 证据另计 |
 | 2026-11-16 | M00 | 主工作树只读回归全量 EditMode 2140/2140，Validator PASS/0 errors | 进行中 | `Logs/verify/gate-20261116/report.md`；Console 6 errors / 52 warnings / 24 logs，非零错误验收 |
 | 2026-11-16 | M00 | `main` 在 `d57ea7c`，四个任务工作树保留，无合并、无删除 | 历史 | `ui-m05-management` 在 `2f8b7b2`，多一个已推送提交 |
@@ -400,11 +407,13 @@
 
 ## 5. 当前状态
 
-- `main` 在 `a3828bd`，根目录混合未提交 WIP 保留（34 修改 / 32 未跟踪）。
-- 四个任务工作树。`ui-m04-family` 在 `ebeb0bb`，`ui-m05-management` 在 `2f8b7b2`（已推送），`ui-m06-m07-missions` 在 `d57ea7c`，`ui-m08-campaign` 在 `a25c969`。
-- `.orchestrate/shadow-clan/status.md` 记录三个单元，状态为 dispatched 2、needs-verify 1，验证台账为空。
-- M00 主工作树全量 2141/2141、Validator PASS/0，Play Mode 已到 SC-013 营地 HUD 期间 0 新 error；隔离槽存读档 `SAVE-1`～`SAVE-4` 全 PASS，用户最终验收未完成。
-- M04 收口全绿：Validator `PASS; Errors: 0`、全量 EditMode 2023/2023、1280×720 Play Mode 通过；分支 `94e82bf` 已推送，剩 29 个未提交文件与 rebase。
+- `main` 在 `ca96f4f`（与 `origin/main` 同点），根目录混合未提交 WIP 保留（35 修改 / 39 未跟踪，`git status --porcelain -uall`）。其中 69 项与 `panyeung/m00-closeout` `e57dd06` 内容等价，仅 5 项为本轮本地新增。
+- 五个任务工作树。`m00-closeout` 在 `5141474`（已推送，工作区干净），`ui-m04-family` 在 `94e82bf`（28 项未提交），`ui-m05-management` 在 `b1d1062`（4 项），`ui-m06-m07-missions` 在 `d57ea7c`（16 项），`ui-m08-campaign` 在 `a25c969`（4 项）。
+- 本机三个 Editor 各占一个工程目录：`My project` PID 96584 / 端口 7800，`ui-m05-management` 145824 / 7802，`ui-m06-m07-missions` 152104 / 7801。派活前按 PID 与 `-projectPath` 对号，只操作本工程那一个。
+- 主工程 Editor 不再自动恢复场景：`Library/LastSceneManagerSetup.txt` 为 `sceneSetups: []`，重启后必须显式 `open_scene`。崩溃与恢复留档在 `Logs/recovery-20261118/`。
+- `.orchestrate/shadow-clan/` 只剩 `decisions.tsv`、`frontier.json`（`{}`）、`gates.md`（0 字节）与 inbox 目录，原 `status.md` 已不存在，验证台账仍为空。
+- M00 主工作树全量 2141/2141、Validator PASS/0，Play Mode 已到 SC-013 营地 HUD 期间 0 新 error；隔离槽存读档 `SAVE-1`～`SAVE-4` 全 PASS，用户最终验收未完成。工作树内容与 `panyeung/m00-closeout` `e57dd06` 等价，只是没在 `main` 上留提交。
+- M04 收口全绿：Validator `PASS; Errors: 0`、全量 EditMode 2023/2023、1280×720 Play Mode 通过；分支 `94e82bf` 已推送，剩 28 个未提交文件与 rebase。
 - M05 聚焦 42/42、全量 2008/2008、Validator PASS，SC-013 月结 Console 0/0/0，独立复审未完成。
 - M06/M07 全量 1997/1997，当前源码集无新的 EditMode、Validator 或 Play Mode 结果。
 - M08 聚焦 1/1，只读复审 PASS，仍缺真实输入模块、遮罩点击与全量 Play Mode 路径证据。
@@ -417,10 +426,10 @@
 
 ## 6. 下一步
 
-按依赖顺序，前一项不闭合不做下一项。
+按依赖顺序，前一项不闭合不做下一项。开始任何 Unity 工作前，先 `unity pipeline list` 确认本工程只有 PID 96584 / 端口 7800 那一个实例，并显式 `unity command open_scene Assets/Scenes/FoundationScene.unity`（重启后不会自动恢复场景）。
 
 1. M00 收口（证据已齐，仅余用户最终验收）。隔离槽 SAVE-1～SAVE-4 全过：SAVE-3 待处理继承决定跨存读档存活（phase、候选人与家主读回一致）；SAVE-4 空槽位读档返回「尚未找到存档。」且日期/phase/候选人/家主四项全等。隔离方式是 `SaveSlotStore(<独立目录>)` 经 `SaveLoadPanel.SetStore` 注入，真实存档哈希未变。用户按 `Logs/verify/gate-20261118/` 下三份报告验收即可。
-2. M04 收口已完成（`94e82bf` 已推）。剩两件：把该工作树 29 个未提交文件按切片纳入提交，然后 rebase 到 `main`。
+2. M04 收口已完成（`94e82bf` 已推）。剩两件：把该工作树 28 个未提交文件按切片纳入提交，然后 rebase 到 `main`。
 3. 合并 M04 到 main（合并前须用户确认），再按 M05 → M06/M07 → M08 顺序重复同一收口流程。每个工作树合并后跑一次全量回归。
 4. M05 完成独立复审与验证任务，复核跨工作树集成后的家族内务布局。
 5. M06/M07 跑新源码集的 EditMode、Validator、Play Mode，执行委派结局存档读回断言。
@@ -428,9 +437,9 @@
 7. M08 补全量 EditMode、Validator、Play Mode 与 §14.2 长期模拟验收，再谈 M08 整体验收。
 8. M08A 补默认 seed 出生、完整配偶/孕期/RNG 往返与 v17 孕期 UI 存读档。
 9. M09 修窗口拖动输入路径，用真实硬件复验，验证普通发行构建无入口。
-10. 城镇活动条目。红灯为 18 项中 7 passed、11 断言失败，当前只有可编译骨架，行为实现未开始。
+10. 城镇活动条目。原「18 项中 7 passed、11 断言失败、只有可编译骨架」的结论已撤回（2026-11-18）：5 个 Town 测试文件 31 项断言随全量 EditMode 2141/2141 全绿。剩余只有一条：城镇活动的 Play Mode 点击路径尚未单独取证，与第 9 条的输入路径缺口一并处理。
 11. 未合入分支。SC-021 场景集成在 `panyeung/sc021-scene-integration`，SC-023 在 `origin/panyeung/sc023-seclusion`，都未合并未打 tag。
-12. 遗留清理。`Assets/Logs/verify/_scratch/` 两张截图与 `.meta` 待人工删除，`%LOCALAPPDATA%\Low\DefaultCompany\My project\M08C-PlayTest-20261114` 测试槽待清，`Assets/Logs.meta` 与旧 EditMode XML 待决定纳管或删除。
+12. 遗留清理。`Assets/Logs/verify/_scratch/` 下 5 张截图与其 `.meta` 待人工删除（`milestone-town`、`town-page`、`town-page2`、`t3193-00-now`、`t3193-01-now2`）；`%USERPROFILE%\AppData\LocalLow\DefaultCompany\My project\` 下 `M08C-PlayTest-20261114` 与 6 个 `ISO-*` 隔离槽目录待清；`Assets/Scenes/TestResults_20261108_072929.xml` 与其 `.meta` 待决定纳管或删除。
 
 ---
 
@@ -441,7 +450,7 @@
 - 历史工件不能代表当前状态。M08C 的 1971/1971、M06/M07 的 1991/1991、M07 的 1710 项 XML 均已被覆盖或早于后续修改。
 - 场景语义 diff 过宽。M04 保存后除预期注册外还含尺寸归一化与 sibling 顺序变化。
 - 场景未接入 HEAD。`git show HEAD:Assets/Scenes/FoundationScene.unity` 中无 `SC024` 相关对象，接入只在未提交工作区。
-- 测试工具收尾异常。`Logs/Editor.log` 仍记 `RestoreSceneManagerSetup` 的 `IndexOutOfRangeException` 与 `IPostBuildCleanup` 页脚。
+- 测试工具收尾异常。PID 88424 的崩溃现场已被重启覆盖，现 `Logs/Editor.log` 与 `%LOCALAPPDATA%\Unity\Editor\Editor.log` 中 `IndexOutOfRange` 命中 0 次；崩溃经过只留在本节与 `Logs/recovery-20261118/` 的场景备份里，没有原始调用栈。`IPostBuildCleanup` 页脚仍会出现，属既有噪声。
 - M08B 生存结论不成立。50/100 年存活样本为零，风险接受不等于生存通过。
 - 输入路径未证实。窗口拖动返回 `synthetic_input`/`unverified`，坐标点击返回 `actionUnsupported`，实体键盘未单独验证。
 - Pipeline 请求多次超时。30 秒客户端上限与 `run_tests` 600 秒超时都曾中断验证流程。
