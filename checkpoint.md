@@ -1,6 +1,6 @@
 # 《影之一族》checkpoint 与设计规划
 
-更新时间 2026-11-17。基线 `main` `a3828bd`（根目录另有混合未提交 WIP）。
+更新时间 2026-11-17。当前工作分支 `panyeung/m00-closeout`（自 `main@86518cf` 分出），基线提交 `0b9b1a8`。
 本文是设计规划、全部 checkpoint、当前状态与下一步的唯一入口。UI 与美术资产见 [ui设计规划.md](ui设计规划.md)。代理协作规则见 [AGENTS.md](AGENTS.md)。
 
 规则：新 checkpoint 只往第 4 节表格加一行，长过程记录留在 `Logs/`，不要往本文追加叙述段。
@@ -325,6 +325,7 @@
 
 | 日期 | ID | 内容 | 状态 | 证据 |
 |---|---|---|---|---|
+| 2026-11-17 | M00 | S0 固化基线：新建分支 `panyeung/m00-closeout`，把 M09 调试模式、城镇活动条目、2026-11-10 起的 UI 与领域 WIP、两份调研产出一次性纳管，共 66 个文件（32107 增 / 20101 删，其中 `FoundationScene.unity` 为 Unity 重序列化） | 进行中 | 提交 `0b9b1a8`；`.gitignore` 增 `/graphify-out/` 与 `/nul`；`git status` 只剩 `Assets/Scenes/TestResults_20261108_072929.xml` 与其 `.meta`；该提交的全量 EditMode 复验待跑（Editor 被用户 Play Mode 占用） |
 | 2026-11-17 | M00 | 主工作树 M00 证据链全项通过：Validator `PASS; Errors: 0`、EditMode 2141/2141、Play Mode 到 SC-013 营地 HUD（1560-04-01 / 清洲）期间新增 error 0、隔离槽存读档 04-02→04-01 一致 | 进行中 | `Logs/verify/gate-20261118/report.md`、`save-isolated.md`；真实存档 `1e61ed9c…` 与备份 `f1c0630e…` 前后哈希未变；隔离槽 `ISO-PlayTest-20261118` v17/rules 8；SAVE-3/SAVE-4 未验；用户最终验收未完成 |
 | 2026-11-17 | M04 | 场景语义 diff 复核：3541 对象、`m_Name` 1908、`m_SizeDelta` 834、`m_AnchoredPosition` 多重集前后全等；真实差异仅 36 处 `LayoutElement.m_MinSize` 归一为 10 与 3 处 `-0` 旋转归一 | 待验证 | 16257 增 / 16252 删几乎全是 Unity 重序列化；该工作树的 EditMode 与 Play Mode 证据另计 |
 | 2026-11-16 | M00 | 主工作树只读回归全量 EditMode 2140/2140，Validator PASS/0 errors | 进行中 | `Logs/verify/gate-20261116/report.md`；Console 6 errors / 52 warnings / 24 logs，非零错误验收 |
