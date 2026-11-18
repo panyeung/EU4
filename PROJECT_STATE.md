@@ -10,7 +10,7 @@
 - 仓库：`https://github.com/panyeung/EU4.git`。
 - `main` 与 `origin/main` 同步。游戏代码基线为 `2bca9d1`。之后的主线提交只更新文档。本次文档分支从 `main@23ef2cc` 建立。
 - Unity 版本：`6000.6.6f1`，URP 2D，Windows。
-- 主工作树：`C:\Users\panye\My project`，基线工作区干净。本文件在 `feature/project-state-docs` 独立工作树编写，以免干扰 v1 演示签核。
+- 主工作树：`C:\Users\panye\My project`，基线工作区干净。本文件最初在 `feature/project-state-docs` 独立工作树编写，以免干扰 v1 演示签核。
 - 当前没有可连接的本工程 Unity Editor。`unity command editor_status` 返回未找到实例。不得据此启动 batchmode。
 
 ## 当前阶段
