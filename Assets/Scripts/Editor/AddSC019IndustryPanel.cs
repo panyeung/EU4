@@ -26,6 +26,10 @@ namespace SengokuChronicle.Editor
         public const string BlockReasonName = "IndustryBlockReasonText";
         public const string MessageName = "IndustryMessageText";
         public const string ReportName = "IndustryReportText";
+        public const string ReportViewportName = "IndustryReportViewport";
+        public const string ReportContentName = "IndustryReportContent";
+        public const string ReportScrollName = "IndustryReportScrollRect";
+        public const string ReportScrollbarName = "IndustryReportScrollbar";
         public const string CloseButtonName = "IndustryCloseButton";
         public const string FarmRowName = "IndustryRowFarm";
         public const string FarmNameTextName = "FarmRowNameText";
@@ -111,6 +115,13 @@ namespace SengokuChronicle.Editor
         private const float ReportY = -266f;
         private const float ReportHeight = 68f;
         private const int ReportFontSize = 14;
+        // The report carries the settlement, the market month and the shortage status, so
+        // it wraps horizontally and scrolls vertically inside its authored viewport instead
+        // of clipping long carried detail or painting over the close button.
+        private const HorizontalWrapMode ReportWrap = HorizontalWrapMode.Wrap;
+        private const VerticalWrapMode ReportOverflow = VerticalWrapMode.Truncate;
+        private const float ReportScrollbarWidth = 8f;
+        private const float ReportScrollbarGap = 4f;
         private const int PreviewFontSize = 13;
         private const float CloseY = -327f;
         private const float CloseWidth = 170f;
@@ -192,6 +203,10 @@ namespace SengokuChronicle.Editor
             Transform blockReason = Require(scene, BlockReasonName);
             Transform message = Require(scene, MessageName);
             Transform report = Require(scene, ReportName);
+            Transform reportViewport = Require(scene, ReportViewportName);
+            Transform reportContent = Require(scene, ReportContentName);
+            Transform reportScroll = Require(scene, ReportScrollName);
+            Transform reportScrollbar = Require(scene, ReportScrollbarName);
             Transform close = Require(scene, CloseButtonName);
             Transform farm = Require(scene, FarmRowName);
             Transform trading = Require(scene, TradingRowName);
@@ -199,7 +214,9 @@ namespace SengokuChronicle.Editor
             Transform confirm = Require(scene, ConfirmButtonName);
             Transform cancel = Require(scene, CancelButtonName);
             if (open == null || panel == null || title == null || resources == null ||
-                blockReason == null || message == null || report == null || close == null ||
+                blockReason == null || message == null || report == null ||
+                reportViewport == null || reportContent == null || reportScroll == null ||
+                reportScrollbar == null || close == null ||
                 farm == null || trading == null || preview == null || confirm == null ||
                 cancel == null)
                 return Invalid(out error, "Industry hierarchy is incomplete or ambiguous.");
@@ -225,12 +242,15 @@ namespace SengokuChronicle.Editor
             if (panel.parent != root || panel.gameObject.activeSelf)
                 return Invalid(out error, "IndustryPanel must be a hidden direct child of the root.");
             if (title.parent != panel || resources.parent != panel || blockReason.parent != panel ||
-                message.parent != panel || report.parent != panel || close.parent != panel ||
+                message.parent != panel || close.parent != panel ||
+                reportScroll.parent != panel || reportViewport.parent != reportScroll ||
+                reportScrollbar.parent != panel || reportContent.parent != reportViewport ||
+                report.parent != reportContent ||
                 farm.parent != panel || trading.parent != panel || preview.parent != panel ||
                 confirm.parent != panel || cancel.parent != panel)
                 return Invalid(out error,
                     "Industry title, resources, block reason, message, rows, preview, actions, " +
-                    "report and close button must be panel children.");
+                    "report scroll area and close button must sit in their authored parents.");
 
             if (!ValidateRow(scene, farm, FarmNameTextName, FarmStatusTextName, FarmDetailTextName,
                     FarmAssigneeTextName, FarmUnassignButtonName, FarmCandidateContainerName,
@@ -305,6 +325,63 @@ namespace SengokuChronicle.Editor
                 return Invalid(out error,
                     "The industry message line must use the authored height and hold its " +
                     "multi-line status text; re-run the generator.");
+            if (reportText.fontSize != ReportFontSize)
+                return Invalid(out error,
+                    "The industry report line must use the authored font size; re-run the generator.");
+            if (reportText.verticalOverflow != ReportOverflow)
+                return Invalid(out error,
+                    "The industry report must clip inside its own region so it cannot paint " +
+                    "over the close control; re-run the generator.");
+            if (reportText.horizontalOverflow != ReportWrap)
+                return Invalid(out error,
+                    "The industry report must wrap horizontally inside its scroll viewport; " +
+                    "re-run the generator.");
+            ScrollRect reportScrollRect = reportScroll.GetComponent<ScrollRect>();
+            Scrollbar reportBar = reportScrollbar.GetComponent<Scrollbar>();
+            Image reportViewportImage = reportViewport.GetComponent<Image>();
+            if (reportScrollRect == null || reportBar == null ||
+                reportViewport.GetComponent<RectMask2D>() == null ||
+                reportViewportImage == null || !reportViewportImage.raycastTarget ||
+                reportBar.targetGraphic == null || !reportBar.targetGraphic.raycastTarget ||
+                !reportScrollRect.vertical || reportScrollRect.horizontal ||
+                reportScrollRect.viewport != reportViewport as RectTransform ||
+                reportScrollRect.content != reportContent as RectTransform ||
+                reportScrollRect.verticalScrollbar != reportBar ||
+                reportBar.handleRect == null ||
+                reportBar.direction != Scrollbar.Direction.BottomToTop ||
+                !reportScrollbar.gameObject.activeSelf)
+                return Invalid(out error,
+                    "The industry report scroll area must wire a vertical scroll rect, " +
+                    "a raycastable masked viewport, its content and a visible scrollbar; " +
+                    "re-run the generator.");
+            RectTransform reportViewportRect = reportViewport as RectTransform;
+            RectTransform reportContentRect = reportContent as RectTransform;
+            RectTransform reportScrollRectTransform = reportScroll as RectTransform;
+            if (reportViewportRect == null || reportContentRect == null ||
+                reportScrollRectTransform == null ||
+                Mathf.Abs(reportViewportRect.rect.width - ContentWidth) > 0.5f ||
+                Mathf.Abs(reportViewportRect.rect.height - ReportHeight) > 0.5f ||
+                Mathf.Abs(reportScrollRectTransform.anchoredPosition.y - ReportY) > 0.5f ||
+                Mathf.Abs(reportViewportRect.offsetMin.x) > 0.5f ||
+                Mathf.Abs(reportViewportRect.offsetMin.y) > 0.5f ||
+                Mathf.Abs(reportViewportRect.offsetMax.x) > 0.5f ||
+                Mathf.Abs(reportViewportRect.offsetMax.y) > 0.5f)
+                return Invalid(out error,
+                    "The industry report must keep its authored 700x68 viewport; re-run the generator.");
+            if (reportContentRect.rect.height + 0.5f < ReportHeight ||
+                reportContentRect.rect.height + 0.5f < reportText.preferredHeight)
+                return Invalid(out error,
+                    "The industry report content must contain the whole report text so it can " +
+                    "be reached by scrolling; re-run the generator.");
+            if (previewLabel.fontSize != PreviewFontSize)
+                return Invalid(out error,
+                    "The industry preview line must use the authored font size; re-run the generator.");
+            Text confirmLabel = confirm.GetComponentInChildren<Text>(true);
+            Text cancelLabel = cancel.GetComponentInChildren<Text>(true);
+            if (confirmLabel == null || cancelLabel == null ||
+                confirmLabel.fontSize != ActionFontSize || cancelLabel.fontSize != ActionFontSize)
+                return Invalid(out error,
+                    "The industry action buttons must use the authored font size; re-run the generator.");
             if (!titleText.text.Contains("产业"))
                 return Invalid(out error, "The industry panel title must contain 产业.");
 
@@ -348,7 +425,8 @@ namespace SengokuChronicle.Editor
                 !Contained((RectTransform)resources, panelRect) ||
                 !Contained((RectTransform)blockReason, panelRect) ||
                 !Contained((RectTransform)message, panelRect) ||
-                !Contained((RectTransform)report, panelRect) ||
+                !Contained((RectTransform)reportViewport, panelRect) ||
+                !Contained((RectTransform)reportScrollbar, panelRect) ||
                 !Contained((RectTransform)preview, panelRect) ||
                 !Contained((RectTransform)confirm, panelRect) ||
                 !Contained((RectTransform)cancel, panelRect) ||
@@ -362,9 +440,10 @@ namespace SengokuChronicle.Editor
                 Overlaps((RectTransform)preview, (RectTransform)confirm, panelRect) ||
                 Overlaps((RectTransform)preview, (RectTransform)cancel, panelRect) ||
                 Overlaps((RectTransform)confirm, (RectTransform)cancel, panelRect) ||
-                Overlaps((RectTransform)confirm, (RectTransform)report, panelRect) ||
-                Overlaps((RectTransform)cancel, (RectTransform)report, panelRect) ||
-                Overlaps((RectTransform)report, closeRect, panelRect))
+                Overlaps((RectTransform)confirm, (RectTransform)reportViewport, panelRect) ||
+                Overlaps((RectTransform)cancel, (RectTransform)reportViewport, panelRect) ||
+                Overlaps((RectTransform)reportViewport, closeRect, panelRect) ||
+                Overlaps((RectTransform)reportScrollbar, closeRect, panelRect))
                 return Invalid(out error, "Industry controls overlap or lie outside their bounds.");
 
             Transform chronicleOpen = Require(scene, ChronicleOpenButtonName);
@@ -603,6 +682,8 @@ namespace SengokuChronicle.Editor
 
                 Text report = CreateText(scene, panelRect, ReportName, font, "本月尚未结算。",
                     0f, ReportY, ContentWidth, ReportHeight, ReportFontSize, TextAnchor.UpperLeft);
+                EnsureReportScrollArea(scene, panelRect, report.transform);
+                ApplyReportSettings(report);
 
                 Button close = CreateButton(scene, panelRect, CloseButtonName, font, "关闭",
                     CloseWidth, CloseHeight, 16);
@@ -725,7 +806,7 @@ namespace SengokuChronicle.Editor
                 SetRect(title, new Vector2(0f, TitleY), new Vector2(ContentWidth, TitleHeight));
                 SetRect(resources, new Vector2(0f, ResourcesY), new Vector2(ContentWidth, ResourcesHeight));
                 SetRect(block, new Vector2(0f, BlockReasonY), new Vector2(ContentWidth, LineHeight));
-                SetRect(report, new Vector2(0f, ReportY), new Vector2(ContentWidth, ReportHeight));
+                EnsureReportScrollArea(scene, panel, report);
                 SetRect(close, new Vector2(0f, CloseY), new Vector2(CloseWidth, CloseHeight));
                 SetRect(farm, new Vector2(0f, FarmRowY), new Vector2(RowWidth, RowHeight));
                 SetRect(trading, new Vector2(0f, TradingRowY), new Vector2(RowWidth, RowHeight));
@@ -766,7 +847,7 @@ namespace SengokuChronicle.Editor
                     messageText.raycastTarget = false;
                     EditorUtility.SetDirty(messageText);
                 }
-                message.gameObject.SetActive(false);
+                SetActiveRecorded(message);
                 NormalizePanelTypography(scene);
 
                 EnsureClockFeedback(scene, font);
@@ -852,7 +933,8 @@ namespace SengokuChronicle.Editor
 
         /// <summary>
         /// Re-applies the authored font sizes a repaired scene may still carry from an older
-        /// layout, so the preview and the month report wrap inside their taller boxes.
+        /// layout, so the preview, the action buttons and the month report wrap inside their
+        /// boxes, and keeps the report clipped to its own region.
         /// </summary>
         private static void NormalizePanelTypography(Scene scene)
         {
@@ -860,6 +942,185 @@ namespace SengokuChronicle.Editor
             SetFontSize(Require(scene, PreviewTextName), PreviewFontSize);
             SetFontSize(Require(scene, CancelButtonName), ActionFontSize);
             SetFontSize(Require(scene, ConfirmButtonName), ActionFontSize);
+            Transform report = Require(scene, ReportName);
+            ApplyReportSettings(report != null ? report.GetComponent<Text>() : null);
+        }
+
+        /// <summary>
+        /// The report viewport carries the month settlement, the market month and any carried
+        /// rollback/failure detail. The label wraps horizontally and clips vertically inside a
+        /// content rect that grows to the label's preferred height, so a long report stays
+        /// reachable through the report scrollbar instead of painting past the close button.
+        /// </summary>
+        private static void ApplyReportSettings(Text label)
+        {
+            if (label == null)
+                return;
+            if (label.horizontalOverflow == ReportWrap &&
+                label.verticalOverflow == ReportOverflow)
+                return;
+            Undo.RecordObject(label, UndoName);
+            label.horizontalOverflow = ReportWrap;
+            label.verticalOverflow = ReportOverflow;
+            EditorUtility.SetDirty(label);
+        }
+
+        /// <summary>
+        /// Creates or repairs the report scroll hierarchy for an existing report label: a
+        /// scroll rect, a masked viewport that keeps the authored 700x68 region, the content
+        /// rect that holds the whole report, and a visible vertical scrollbar.
+        /// </summary>
+        private static void EnsureReportScrollArea(Scene scene, Transform panel, Transform report)
+        {
+            Transform scrollObject = Require(scene, ReportScrollName);
+            if (scrollObject == null)
+                scrollObject = Create(scene, panel, ReportScrollName, typeof(ScrollRect)).transform;
+            else
+                EnsureParent(scrollObject, panel);
+            if (scrollObject.GetComponent<ScrollRect>() == null)
+                Undo.AddComponent<ScrollRect>(scrollObject.gameObject);
+            SetRect(scrollObject, new Vector2(0f, ReportY), new Vector2(ContentWidth, ReportHeight));
+
+            Transform viewport = Require(scene, ReportViewportName);
+            if (viewport == null)
+                viewport = Create(scene, scrollObject, ReportViewportName,
+                    typeof(RectMask2D), typeof(Image)).transform;
+            EnsureParent(viewport, scrollObject);
+            if (viewport.GetComponent<RectMask2D>() == null)
+                Undo.AddComponent<RectMask2D>(viewport.gameObject);
+            if (viewport.GetComponent<Image>() == null)
+                Undo.AddComponent<Image>(viewport.gameObject);
+            Image viewportImage = viewport.GetComponent<Image>();
+            Undo.RecordObject(viewportImage, UndoName);
+            viewportImage.color = new Color(1f, 1f, 1f, 0f);
+            // The viewport is the pointer surface inside the ScrollRect. Its transparent
+            // Image must be a raycast target so wheel and drag events bubble up the
+            // viewport -> ScrollRect chain instead of falling through to the panel image.
+            viewportImage.raycastTarget = true;
+            EditorUtility.SetDirty(viewportImage);
+            RectTransform viewportRect = viewport as RectTransform;
+            Undo.RecordObject(viewportRect, UndoName);
+            viewportRect.anchorMin = Vector2.zero;
+            viewportRect.anchorMax = Vector2.one;
+            viewportRect.offsetMin = Vector2.zero;
+            viewportRect.offsetMax = Vector2.zero;
+
+            Transform content = Require(scene, ReportContentName);
+            if (content == null)
+                content = Create(scene, viewport, ReportContentName).transform;
+            EnsureParent(content, viewport);
+            RectTransform contentRect = content as RectTransform;
+            Undo.RecordObject(contentRect, UndoName);
+            contentRect.anchorMin = new Vector2(0f, 1f);
+            contentRect.anchorMax = new Vector2(1f, 1f);
+            contentRect.pivot = new Vector2(0.5f, 1f);
+            contentRect.anchoredPosition = Vector2.zero;
+            contentRect.sizeDelta = new Vector2(0f, Mathf.Max(contentRect.sizeDelta.y, ReportHeight));
+
+            EnsureParent(report, content);
+            RectTransform reportRect = report as RectTransform;
+            Undo.RecordObject(reportRect, UndoName);
+            reportRect.anchorMin = Vector2.zero;
+            reportRect.anchorMax = Vector2.one;
+            reportRect.offsetMin = Vector2.zero;
+            reportRect.offsetMax = Vector2.zero;
+
+            Transform bar = Require(scene, ReportScrollbarName);
+            if (bar == null)
+                bar = Create(scene, panel, ReportScrollbarName, typeof(Image)).transform;
+            EnsureParent(bar, panel);
+            ConfigureReportScrollbar(scene, bar);
+            if (!bar.gameObject.activeSelf)
+            {
+                Undo.RecordObject(bar.gameObject, UndoName);
+                bar.gameObject.SetActive(true);
+            }
+
+            ScrollRect scroll = scrollObject.GetComponent<ScrollRect>();
+            Undo.RecordObject(scroll, UndoName);
+            scroll.content = contentRect;
+            scroll.viewport = viewport as RectTransform;
+            scroll.horizontal = false;
+            scroll.vertical = true;
+            scroll.movementType = ScrollRect.MovementType.Clamped;
+            scroll.horizontalScrollbar = null;
+            scroll.verticalScrollbar = bar.GetComponent<Scrollbar>();
+            scroll.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.Permanent;
+            scroll.verticalScrollbarSpacing = 0f;
+            scroll.scrollSensitivity = 20f;
+            EditorUtility.SetDirty(scroll);
+
+            Text reportLabel = report.GetComponent<Text>();
+            ApplyReportSettings(reportLabel);
+            FitReportContent(reportLabel, (RectTransform)viewport, contentRect);
+        }
+
+        /// <summary>Positions and wires the visible vertical scrollbar beside the viewport.</summary>
+        private static void ConfigureReportScrollbar(Scene scene, Transform bar)
+        {
+            SetRect(bar, new Vector2(ContentWidth * 0.5f + ReportScrollbarGap +
+                                     ReportScrollbarWidth * 0.5f, ReportY),
+                new Vector2(ReportScrollbarWidth, ReportHeight));
+            Image track = bar.GetComponent<Image>();
+            if (track == null)
+                track = Undo.AddComponent<Image>(bar.gameObject);
+            Undo.RecordObject(track, UndoName);
+            track.color = new Color(0.12f, 0.15f, 0.2f, 0.9f);
+            track.raycastTarget = true;
+            EditorUtility.SetDirty(track);
+
+            Scrollbar scrollbar = bar.GetComponent<Scrollbar>();
+            if (scrollbar == null)
+                scrollbar = Undo.AddComponent<Scrollbar>(bar.gameObject);
+            Transform handle = bar.Find("Handle");
+            if (handle == null)
+                handle = Create(scene, bar, "Handle", typeof(Image)).transform;
+            RectTransform handleRect = handle as RectTransform;
+            Undo.RecordObject(handleRect, UndoName);
+            handleRect.anchorMin = Vector2.zero;
+            handleRect.anchorMax = Vector2.one;
+            handleRect.offsetMin = Vector2.zero;
+            handleRect.offsetMax = Vector2.zero;
+            Image handleImage = handle.GetComponent<Image>();
+            Undo.RecordObject(handleImage, UndoName);
+            handleImage.color = new Color(0.75f, 0.8f, 0.85f, 0.95f);
+            handleImage.raycastTarget = true;
+            EditorUtility.SetDirty(handleImage);
+
+            Undo.RecordObject(scrollbar, UndoName);
+            scrollbar.handleRect = handleRect;
+            scrollbar.targetGraphic = track;
+            scrollbar.direction = Scrollbar.Direction.BottomToTop;
+            scrollbar.value = 1f;
+            EditorUtility.SetDirty(scrollbar);
+        }
+
+        /// <summary>Grows the report content to the label's full height inside the viewport.</summary>
+        private static void FitReportContent(Text report, RectTransform viewport, RectTransform content)
+        {
+            if (content == null || viewport == null)
+                return;
+            float height = Mathf.Max(viewport.rect.height,
+                report != null ? report.preferredHeight : 0f);
+            Undo.RecordObject(content, UndoName);
+            content.sizeDelta = new Vector2(content.sizeDelta.x, height);
+            EditorUtility.SetDirty(content);
+        }
+
+        private static void EnsureParent(Transform child, Transform parent)
+        {
+            if (child == null || parent == null || child.parent == parent)
+                return;
+            Undo.SetTransformParent(child, parent, UndoName);
+        }
+
+        /// <summary>Hides a control through the same Undo transaction as its repair.</summary>
+        private static void SetActiveRecorded(Transform target)
+        {
+            if (target == null || !target.gameObject.activeSelf)
+                return;
+            Undo.RecordObject(target.gameObject, UndoName);
+            target.gameObject.SetActive(false);
         }
 
         /// <summary>
@@ -901,9 +1162,13 @@ namespace SengokuChronicle.Editor
 
             SetRect(existing, position, size);
             Text existingLabel = existing.GetComponentInChildren<Text>(true);
-            if (existingLabel != null)
+            if (existingLabel != null && existingLabel.text != label)
+            {
+                Undo.RecordObject(existingLabel, UndoName);
                 existingLabel.text = label;
-            existing.gameObject.SetActive(false);
+                EditorUtility.SetDirty(existingLabel);
+            }
+            SetActiveRecorded(existing);
         }
 
         private static void SetRect(Transform target, Vector2 position, Vector2 size)
@@ -948,7 +1213,7 @@ namespace SengokuChronicle.Editor
 
             text.color = new Color(1f, 0.85f, 0.45f, 1f);
             text.raycastTarget = false;
-            text.gameObject.SetActive(false);
+            SetActiveRecorded(text.transform);
 
             Undo.RecordObject(clock, UndoName);
             clock.BindFeedback(text);

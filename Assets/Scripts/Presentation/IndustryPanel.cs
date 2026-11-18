@@ -51,8 +51,24 @@ namespace SengokuChronicle.Presentation
         /// </summary>
         public const int StatusBandSafeLines = 3;
 
-        /// <summary>Concise status used when the full message is too long for the band.</summary>
-        public const string ReportPointerStatus = "本月产业结算已完成，详见月报。";
+        /// <summary>
+        /// Concise status used when the full message is too long for the band. It points at
+        /// the report without claiming an outcome, so a rollback or a rejected action is
+        /// never restated as a completed settlement.
+        /// </summary>
+        public const string ReportPointerStatus = "本页状态文字较长，完整内容见下方报告，可上下滚动查看。";
+
+        /// <summary>
+        /// Separator between a carried status message and the report facts it precedes.
+        /// The report region is the only other text surface this panel owns.
+        /// </summary>
+        private const string ReportCarrySeparator = " ｜ ";
+
+        // Authored report band in the 760x700 panel. The household gallery presents a
+        // 760x560 card, so the live band lifts and shortens to stay inside that card.
+        private const float ReportBandHeight = 68f;
+        private const float ReportBandCenterY = -266f;
+        private const float ReportBandBottomMargin = 4f;
 
         private readonly List<GameObject> _farmCandidates = new List<GameObject>();
         private readonly List<GameObject> _tradingCandidates = new List<GameObject>();
@@ -63,12 +79,18 @@ namespace SengokuChronicle.Presentation
         private UnityAction _cancelListener;
         private string _pendingIndustryId = string.Empty;
         private PersonId _pendingPersonId;
+        private string _lastReportLine = string.Empty;
+        private float _fittedPanelHeight = float.NaN;
         private readonly List<PersonId> _eligiblePeople = new List<PersonId>();
 
+        /// <summary>
+        /// Required bindings. The message band is not listed: a scene authored before it
+        /// existed still works, and the block-reason label carries the same notices the
+        /// band would show. No other optional control can disable the panel.
+        /// </summary>
         public bool IsBound =>
             gameSession != null && panelRoot != null && openButton != null && closeButton != null &&
             titleText != null && resourceText != null && blockReasonText != null && reportText != null &&
-            messageText != null &&
             rowFarm != null && rowTradingHouse != null && farmStatusText != null &&
             farmAssigneeText != null && farmUnassignButton != null && farmCandidateContainer != null &&
             tradingStatusText != null && tradingAssigneeText != null &&
@@ -233,8 +255,13 @@ namespace SengokuChronicle.Presentation
             Refresh();
         }
 
+        /// <summary>
+        /// Hides the page and drops any unconfirmed choice, so reopening never restores a
+        /// selection the player could no longer see when they left.
+        /// </summary>
         public void Close()
         {
+            ClearPending();
             if (panelRoot != null)
                 panelRoot.SetActive(false);
         }
@@ -258,12 +285,20 @@ namespace SengokuChronicle.Presentation
             blockReasonText.text = view.BlockReason;
             blockReasonText.gameObject.SetActive(showBlock);
 
-            // Built first: the status line falls back to a report pointer only when the
-            // month report already carries the full text.
+            // The band is measured before the rows so a message that cannot fit becomes a
+            // report pointer, and the full text is then handed to the report region.
             string reportLine = BuildReportLine(view);
-            string statusLine = SelectStatusLine(view.LastMessage, reportLine);
-            messageText.text = statusLine;
-            messageText.gameObject.SetActive(statusLine.Length > 0);
+            string statusLine = SelectStatusLine(view.LastMessage);
+            // Whatever the band cannot show stays readable in the report region instead of
+            // vanishing behind the band's authored truncation.
+            if (CarriesFullMessage(view.LastMessage) &&
+                !ContainsReportText(reportLine, view.LastMessage))
+                reportLine = CarryIntoReport(reportLine, view.LastMessage);
+            if (messageText != null)
+            {
+                messageText.text = statusLine;
+                messageText.gameObject.SetActive(statusLine.Length > 0);
+            }
 
             // A selection the domain can no longer accept is dropped before the rows are
             // rebuilt, so no candidate keeps a marker or a preview for an invalid choice.
@@ -277,35 +312,143 @@ namespace SengokuChronicle.Presentation
                 tradingCandidateContainer);
             RebuildCandidateLayout();
 
+            // The report label wraps horizontally, and the scrolled content grows to the
+            // complete carried text so a rollback or long settlement stays reachable instead
+            // of being clipped inside the authored viewport.
+            reportText.horizontalOverflow = HorizontalWrapMode.Wrap;
+            reportText.verticalOverflow = VerticalWrapMode.Truncate;
             reportText.text = reportLine;
+            FitReportRegion();
             RefreshPendingPreview(view);
         }
 
         /// <summary>
-        /// Picks the status text. The band is bounded: when the full message needs more lines
-        /// than it can show, the band repeats only what the monthly report already carries in
-        /// full. A message the report does not carry stays as-is and is clipped by the band's
-        /// authored truncation, so it can never paint over the rows.
+        /// Picks the status text. The band is bounded, so a message that needs more lines
+        /// than it can show is replaced by a report pointer and handed to the report
+        /// region, which is the surface that keeps it.
         /// </summary>
-        private string SelectStatusLine(string message, string reportLine)
+        private string SelectStatusLine(string message)
         {
             StatusPointerActive = false;
             StatusLineCount = 0;
-            StatusBandLineBudget = ComputeStatusBandLineBudget();
-            if (string.IsNullOrWhiteSpace(message))
+            StatusBandLineBudget = messageText != null ? ComputeStatusBandLineBudget() : 0;
+            if (messageText == null || string.IsNullOrWhiteSpace(message))
                 return string.Empty;
 
             StatusLineCount = CountStatusLines(message);
             if (StatusLineCount <= 0 || StatusBandLineBudget <= 0 ||
                 StatusLineCount <= StatusBandLineBudget)
                 return message;
-            if (reportLine.IndexOf(message, System.StringComparison.Ordinal) >= 0)
-            {
-                StatusPointerActive = true;
-                return ReportPointerStatus;
-            }
-            return message;
+            StatusPointerActive = true;
+            return ReportPointerStatus;
         }
+
+        /// <summary>
+        /// True when the band is not showing the message in full: it has no label, it shows
+        /// the report pointer, or it could not be measured against its authored band.
+        /// </summary>
+        private bool CarriesFullMessage(string message) =>
+            !string.IsNullOrWhiteSpace(message) &&
+            (messageText == null || StatusPointerActive || StatusLineCount <= 0 ||
+             StatusBandLineBudget <= 0);
+
+        /// <summary>
+        /// Grows the scrolled report content to the label's full wrapped height while the
+        /// authored viewport keeps its own size. A scene without the scroll hierarchy keeps
+        /// the previous clipping behavior instead of failing.
+        /// </summary>
+        private void FitReportRegion()
+        {
+            RectTransform reportRect = reportText.rectTransform;
+            RectTransform content = reportRect.parent as RectTransform;
+            RectTransform viewport = content != null ? content.parent as RectTransform : null;
+            if (content == null || viewport == null ||
+                viewport.GetComponent<RectMask2D>() == null)
+                return;
+
+            // The viewport is nested under its ScrollRect, so the scroll object is an
+            // ancestor and receives wheel and drag events that bubble from the viewport.
+            ScrollRect scroll = viewport.GetComponentInParent<ScrollRect>(true);
+            FitReportBandToPanel(scroll, viewport);
+
+            content.sizeDelta = new Vector2(content.sizeDelta.x,
+                Mathf.Max(viewport.rect.height, reportText.preferredHeight));
+
+            if (scroll != null && reportText.text != _lastReportLine)
+            {
+                _lastReportLine = reportText.text;
+                scroll.verticalNormalizedPosition = 1f;
+            }
+        }
+
+        /// <summary>
+        /// Keeps the authored 700x68 report band inside the live panel. The household page
+        /// applies a shorter card than the panel authors, so the band is lifted and shortened
+        /// to stay between the action row and the card's lower edge.
+        /// </summary>
+        private void FitReportBandToPanel(ScrollRect scroll, RectTransform viewport)
+        {
+            RectTransform panel = panelRoot != null ? panelRoot.transform as RectTransform : null;
+            if (scroll == null || panel == null)
+                return;
+
+            _fittedPanelHeight = panel.rect.height;
+            float halfHeight = _fittedPanelHeight * 0.5f;
+            if (halfHeight >= 350f)
+            {
+                SetReportBand(scroll, viewport, ReportBandCenterY, ReportBandHeight);
+                return;
+            }
+
+            RectTransform action = confirmButton != null
+                ? confirmButton.transform as RectTransform
+                : null;
+            float topLimit = action != null
+                ? action.anchoredPosition.y - action.rect.height * 0.5f - 2f
+                : halfHeight - 2f;
+            float bottomLimit = -halfHeight + ReportBandBottomMargin;
+            float height = Mathf.Min(ReportBandHeight, topLimit - bottomLimit);
+            float center = (topLimit + bottomLimit) * 0.5f;
+            SetReportBand(scroll, viewport, center, Mathf.Max(0f, height));
+        }
+
+        private static void SetReportBand(ScrollRect scroll, RectTransform viewport,
+            float centerY, float height)
+        {
+            RectTransform scrollRect = scroll.transform as RectTransform;
+            if (scrollRect != null &&
+                (Mathf.Abs(scrollRect.anchoredPosition.y - centerY) > 0.01f ||
+                 Mathf.Abs(scrollRect.rect.height - height) > 0.01f))
+            {
+                scrollRect.anchoredPosition = new Vector2(scrollRect.anchoredPosition.x, centerY);
+                scrollRect.sizeDelta = new Vector2(scrollRect.sizeDelta.x, height);
+            }
+
+            RectTransform bar = scroll.verticalScrollbar != null
+                ? scroll.verticalScrollbar.transform as RectTransform
+                : null;
+            if (bar != null &&
+                (Mathf.Abs(bar.anchoredPosition.y - centerY) > 0.01f ||
+                 Mathf.Abs(bar.rect.height - height) > 0.01f))
+            {
+                bar.anchoredPosition = new Vector2(bar.anchoredPosition.x, centerY);
+                bar.sizeDelta = new Vector2(bar.sizeDelta.x, height);
+            }
+
+            viewport.sizeDelta = Vector2.zero;
+        }
+
+        private static bool ContainsReportText(string reportLine, string message) =>
+            !string.IsNullOrEmpty(reportLine) &&
+            reportLine.IndexOf(message, System.StringComparison.Ordinal) >= 0;
+
+        /// <summary>
+        /// The carried message leads the report so the feedback the player just triggered
+        /// keeps the visible lines; the month facts follow in the same scrolled region, which
+        /// keeps the whole report inside its authored viewport.
+        /// </summary>
+        private static string CarryIntoReport(string reportLine, string message) =>
+            string.IsNullOrEmpty(reportLine) ? message : message + ReportCarrySeparator + reportLine;
 
         /// <summary>Rendered lines available in the band, measured with its own font and height.</summary>
         private int ComputeStatusBandLineBudget()
@@ -727,6 +870,23 @@ namespace SengokuChronicle.Presentation
                 Refresh();
         }
 
+        /// <summary>
+        /// The household page resizes this panel to its 560-high card after the first refresh,
+        /// so a report band fitted for the authored 700-high page would hang outside the card.
+        /// LateUpdate runs after that layout change and before the frame is drawn, which is the
+        /// first point where the live height is known and the band can still be re-fitted for
+        /// the card the player actually sees.
+        /// </summary>
+        private void LateUpdate()
+        {
+            if (!IsOpen || reportText == null)
+                return;
+            RectTransform panel = panelRoot.transform as RectTransform;
+            if (panel == null || Mathf.Abs(panel.rect.height - _fittedPanelHeight) <= 0.01f)
+                return;
+            FitReportRegion();
+        }
+
         private void OnEnable()
         {
             Subscribe();
@@ -736,6 +896,7 @@ namespace SengokuChronicle.Presentation
         private void OnDisable()
         {
             Unsubscribe();
+            ClearPending();
             ClearCandidates();
             if (panelRoot != null)
                 panelRoot.SetActive(false);

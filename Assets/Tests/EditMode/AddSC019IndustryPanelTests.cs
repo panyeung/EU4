@@ -5,6 +5,7 @@ using SengokuChronicle.Editor;
 using SengokuChronicle.Presentation;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
@@ -183,6 +184,70 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
+        public void AddSC019IndustryPanel_ValidateRequiresReportTextToClipInsideItsRegion()
+        {
+            Assert.That(AddSC019IndustryPanel.Update(_scene),
+                Is.EqualTo(AddSC019IndustryPanel.UpdateResult.Success));
+            Text report = Find(AddSC019IndustryPanel.ReportName).GetComponent<Text>();
+            Assert.That(AddSC019IndustryPanel.Validate(_scene, out string valid), Is.True, valid);
+
+            report.verticalOverflow = VerticalWrapMode.Overflow;
+            Assert.That(AddSC019IndustryPanel.Validate(_scene, out string unbounded), Is.False,
+                "the report must not paint over the close control");
+            Assert.That(unbounded, Does.Contain("report"));
+
+            Assert.That(AddSC019IndustryPanel.Update(_scene),
+                Is.EqualTo(AddSC019IndustryPanel.UpdateResult.Success));
+            Assert.That(report.verticalOverflow, Is.EqualTo(VerticalWrapMode.Truncate));
+            Assert.That(AddSC019IndustryPanel.Validate(_scene, out string repaired), Is.True,
+                repaired);
+        }
+
+        [Test]
+        public void AddSC019IndustryPanel_CreatesScrollableReportAndRepairsBothOverflowAxes()
+        {
+            Assert.That(AddSC019IndustryPanel.Update(_scene),
+                Is.EqualTo(AddSC019IndustryPanel.UpdateResult.Success));
+
+            Transform panel = Find(AddSC019IndustryPanel.PanelName);
+            Transform viewport = Find("IndustryReportViewport");
+            Transform content = Find("IndustryReportContent");
+            ScrollRect scroll = Find("IndustryReportScrollRect").GetComponent<ScrollRect>();
+            Text report = Find(AddSC019IndustryPanel.ReportName).GetComponent<Text>();
+
+            Assert.That(scroll.transform.parent, Is.EqualTo(panel));
+            Assert.That(viewport.parent, Is.EqualTo(scroll.transform),
+                "the raycast target must be above the ScrollRect in the pointer hierarchy");
+            Assert.That(content.parent, Is.EqualTo(viewport));
+            Assert.That(report.transform.parent, Is.EqualTo(content));
+            Assert.That(viewport.GetComponent<RectMask2D>(), Is.Not.Null);
+            Assert.That(viewport.GetComponent<Image>().raycastTarget, Is.True,
+                "wheel and drag events must start from the viewport raycast surface");
+            panel.gameObject.SetActive(true);
+            Assert.That(ExecuteEvents.GetEventHandler<IScrollHandler>(viewport.gameObject),
+                Is.EqualTo(scroll.gameObject), "wheel input must resolve to the active ScrollRect");
+            Assert.That(ExecuteEvents.GetEventHandler<IDragHandler>(viewport.gameObject),
+                Is.EqualTo(scroll.gameObject), "drag input must resolve to the active ScrollRect");
+            panel.gameObject.SetActive(false);
+            Assert.That(scroll.viewport, Is.EqualTo(viewport as RectTransform));
+            Assert.That(scroll.content, Is.EqualTo(content as RectTransform));
+            Assert.That(scroll.vertical, Is.True);
+            Assert.That(scroll.verticalScrollbar, Is.Not.Null);
+            Assert.That(AddSC019IndustryPanel.Validate(_scene, out string valid), Is.True, valid);
+
+            report.horizontalOverflow = HorizontalWrapMode.Overflow;
+            Assert.That(AddSC019IndustryPanel.Validate(_scene, out string unbounded), Is.False,
+                "report text must wrap horizontally so the report stays inside its viewport");
+            Assert.That(unbounded, Does.Contain("report"));
+
+            Assert.That(AddSC019IndustryPanel.Update(_scene),
+                Is.EqualTo(AddSC019IndustryPanel.UpdateResult.Success));
+            Assert.That(report.horizontalOverflow, Is.EqualTo(HorizontalWrapMode.Wrap));
+            Assert.That(AddSC019IndustryPanel.Validate(_scene, out string repaired), Is.True,
+                repaired);
+        }
+
+        [Test]
         public void AddSC019IndustryPanel_RefusesExistingPartialControl()
         {
             Create(AddSC019IndustryPanel.RootName, _canvas);
@@ -201,6 +266,78 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(result, Is.EqualTo(AddSC019IndustryPanel.UpdateResult.ValidationFailed));
             Assert.That(Find(AddSC019IndustryPanel.RootName), Is.Null);
             Assert.That(Find(AddSC019IndustryPanel.PanelName), Is.Null);
+        }
+
+        [Test]
+        public void AddSC019IndustryPanel_RepairRollbackRestoresActionLabelAndActiveState()
+        {
+            Assert.That(AddSC019IndustryPanel.Update(_scene),
+                Is.EqualTo(AddSC019IndustryPanel.UpdateResult.Success));
+            Text confirmLabel = Find(AddSC019IndustryPanel.ConfirmButtonName)
+                .GetComponentInChildren<Text>(true);
+            GameObject confirm = Find(AddSC019IndustryPanel.ConfirmButtonName).gameObject;
+            GameObject cancel = Find(AddSC019IndustryPanel.CancelButtonName).gameObject;
+            confirmLabel.text = "保留原确认文案";
+            confirm.SetActive(true);
+            cancel.SetActive(true);
+            Find(AddSC019IndustryPanel.MessageName).GetComponent<Text>().verticalOverflow =
+                VerticalWrapMode.Overflow;
+            Find(AddSC019IndustryPanel.ReportName).GetComponent<Text>().verticalOverflow =
+                VerticalWrapMode.Overflow;
+
+            AddSC019IndustryPanel.UpdateResult result = AddSC019IndustryPanel.Update(_scene,
+                root => root.name = "IndustryRootBroken");
+
+            Assert.That(result, Is.EqualTo(AddSC019IndustryPanel.UpdateResult.ValidationFailed));
+            Assert.That(confirmLabel.text, Is.EqualTo("保留原确认文案"));
+            Assert.That(confirm.activeSelf, Is.True);
+            Assert.That(cancel.activeSelf, Is.True);
+            Assert.That(Find(AddSC019IndustryPanel.MessageName).GetComponent<Text>().verticalOverflow,
+                Is.EqualTo(VerticalWrapMode.Overflow));
+            Assert.That(Find(AddSC019IndustryPanel.ReportName).GetComponent<Text>().verticalOverflow,
+                Is.EqualTo(VerticalWrapMode.Overflow));
+        }
+
+        [Test]
+        public void AddSC019IndustryPanel_ValidateAndRepairStatusFontAndAlignment()
+        {
+            Assert.That(AddSC019IndustryPanel.Update(_scene),
+                Is.EqualTo(AddSC019IndustryPanel.UpdateResult.Success));
+            Text message = Find(AddSC019IndustryPanel.MessageName).GetComponent<Text>();
+
+            message.fontSize = 10;
+            Assert.That(AddSC019IndustryPanel.Validate(_scene, out string fontError), Is.False);
+            Assert.That(fontError, Does.Contain("font size"));
+            Assert.That(AddSC019IndustryPanel.Update(_scene),
+                Is.EqualTo(AddSC019IndustryPanel.UpdateResult.Success));
+            Assert.That(message.fontSize, Is.EqualTo(14));
+
+            message.alignment = TextAnchor.MiddleCenter;
+            Assert.That(AddSC019IndustryPanel.Validate(_scene, out string alignmentError), Is.False);
+            Assert.That(alignmentError, Does.Contain("alignment"));
+            Assert.That(AddSC019IndustryPanel.Update(_scene),
+                Is.EqualTo(AddSC019IndustryPanel.UpdateResult.Success));
+            Assert.That(message.alignment, Is.EqualTo(TextAnchor.MiddleLeft));
+        }
+
+        [TestCase(AddSC019IndustryPanel.ReportName, 14)]
+        [TestCase(AddSC019IndustryPanel.PreviewTextName, 13)]
+        [TestCase(AddSC019IndustryPanel.ConfirmButtonName, 15)]
+        [TestCase(AddSC019IndustryPanel.CancelButtonName, 15)]
+        public void AddSC019IndustryPanel_ValidateAndRepairAuthoredTextSize(string objectName,
+            int expectedSize)
+        {
+            Assert.That(AddSC019IndustryPanel.Update(_scene),
+                Is.EqualTo(AddSC019IndustryPanel.UpdateResult.Success));
+            Text label = Find(objectName).GetComponentInChildren<Text>(true);
+            label.fontSize = expectedSize - 3;
+
+            Assert.That(AddSC019IndustryPanel.Validate(_scene, out string error), Is.False,
+                objectName + " typography must be part of the generator contract");
+            Assert.That(error, Does.Contain("font size"));
+            Assert.That(AddSC019IndustryPanel.Update(_scene),
+                Is.EqualTo(AddSC019IndustryPanel.UpdateResult.Success));
+            Assert.That(label.fontSize, Is.EqualTo(expectedSize));
         }
 
         [Test]

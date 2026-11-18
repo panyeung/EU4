@@ -1,4 +1,5 @@
 using System.Linq;
+using System.Reflection;
 using NUnit.Framework;
 using UnityEditor;
 using SengokuChronicle.Application;
@@ -80,6 +81,49 @@ namespace SengokuChronicle.Tests.EditMode
                 "a zero consecutive shortage is a real state and stays visible");
             Assert.That(panel.MessageVisible, Is.False);
             Assert.That(panel.FarmCandidateCount, Is.EqualTo(6));
+        }
+
+        [Test]
+        public void IndustryPanel_ShowsEachIndustriesMonthlyRuleDetail()
+        {
+            IndustryPanel panel = Panel();
+            panel.Open();
+
+            // The detail label is authored from the read-only catalog rule, so the exact text
+            // (upkeep, separator and output order) is what the player reads. A blank or
+            // loosely-matching line would hide a wrong rule behind a passing test.
+            Assert.That(panel.FarmDetail,
+                Is.EqualTo("每月规则：维护 1 物资（自留存）｜产出 +2 资金、+4 物资、+4 粮食"));
+            Assert.That(panel.TradingDetail,
+                Is.EqualTo("每月规则：维护 6 资金、2 物资｜产出 +9 资金、+1 情报"));
+            Assert.That(panel.FarmDetailVisible, Is.True);
+            Assert.That(panel.TradingDetailVisible, Is.True);
+        }
+
+        [Test]
+        public void IndustryPanel_RefitsReportBandAfterHouseholdPageResizesPanel()
+        {
+            IndustryPanel panel = Panel();
+            panel.Open();
+
+            RectTransform panelRect = (RectTransform)Find(AddSC019IndustryPanel.PanelName);
+            RectTransform reportRect = (RectTransform)Find(AddSC019IndustryPanel.ReportScrollName);
+            Assert.That(reportRect.rect.height, Is.EqualTo(68f).Within(0.1f));
+
+            // ReferenceGalleryNavigator applies the household card size after the panel's
+            // first refresh. The next frame must re-fit the report before it is drawn.
+            panelRect.sizeDelta = new Vector2(panelRect.sizeDelta.x, 560f);
+            var lateUpdate = typeof(IndustryPanel).GetMethod("LateUpdate",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(lateUpdate, Is.Not.Null,
+                "the panel must observe its post-open household layout change");
+            lateUpdate.Invoke(panel, null);
+
+            float reportBottom = reportRect.anchoredPosition.y - reportRect.rect.height * 0.5f;
+            Assert.That(reportBottom, Is.GreaterThanOrEqualTo(-panelRect.rect.height * 0.5f + 3.9f),
+                "the report band must remain above the household card's bottom margin");
+            Assert.That(reportRect.rect.height, Is.LessThan(68f),
+                "the report band must use the shorter household card layout on first open");
         }
 
         [Test]
@@ -237,6 +281,25 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
+        public void IndustryPanel_EligibleCandidateTotalDropsAfterAnAppointment()
+        {
+            IndustryPanel panel = Panel();
+            panel.Open();
+            Assert.That(panel.EligibleCandidateTotal, Is.EqualTo(6),
+                "every eligible family member is counted once across both posts");
+
+            panel.ClickFarmCandidate(0);
+            panel.ClickConfirm();
+            panel.Refresh();
+
+            Assert.That(panel.EligibleCandidateTotal, Is.EqualTo(5),
+                "the appointed person no longer has the work units for either post");
+            Assert.That(panel.FarmCandidateCount, Is.EqualTo(5));
+            Assert.That(panel.TradingCandidateCount, Is.EqualTo(5),
+                "both rows list the same five remaining people");
+        }
+
+        [Test]
         public void IndustryPanel_LegacySceneExplainsThatAssignmentControlsAreMissing()
         {
             IndustryPanel panel = Panel();
@@ -262,6 +325,33 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(panel.HasPendingAssignment, Is.False);
             Assert.That(panel.MessageVisible, Is.True);
             Assert.That(panel.MessageLine, Does.Contain(IndustryPanel.ConfirmUnboundNotice));
+        }
+
+        [Test]
+        public void IndustryPanel_UsesBlockReasonWhenLegacyMessageTextIsUnbound()
+        {
+            IndustryPanel panel = Panel();
+            var serialized = new SerializedObject(panel);
+            serialized.FindProperty("messageText").objectReferenceValue = null;
+            serialized.FindProperty("previewText").objectReferenceValue = null;
+            serialized.FindProperty("confirmButton").objectReferenceValue = null;
+            serialized.FindProperty("cancelButton").objectReferenceValue = null;
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+
+            panel.Open();
+            Assert.That(panel.IsBound, Is.True,
+                "the message label is optional when the block-reason label can carry its fallback");
+            Assert.That(panel.IsOpen, Is.True);
+            Button candidate = _scene.GetRootGameObjects()
+                .SelectMany(root => root.GetComponentsInChildren<Button>(true))
+                .First(button => button.name.StartsWith(
+                    "IndustryCandidate_" + IndustryCatalog.FarmId + "_"));
+            candidate.onClick.Invoke();
+
+            Assert.That(panel.IsOpen, Is.True,
+                "an absent optional message label must not disable the rest of the panel");
+            Assert.That(panel.BlockReasonVisible, Is.True);
+            Assert.That(panel.BlockReasonLine, Does.Contain(IndustryPanel.ConfirmUnboundNotice));
         }
 
         [Test]
@@ -292,6 +382,91 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(_session.Industry.Slot(IndustryCatalog.FarmId).AssigneeId,
                 Is.EqualTo(before.AssigneeId));
             Assert.That(_session.Industry.Resources, Is.EqualTo(resourcesBefore));
+        }
+
+        [Test]
+        public void IndustryPanel_PendingIndustryIdTracksSelectionAndClearsOnCancel()
+        {
+            IndustryPanel panel = Panel();
+            panel.Open();
+
+            panel.ClickFarmCandidate(0);
+            panel.Refresh();
+            PersonId candidate = panel.PendingPersonId;
+            Assert.That(candidate.IsEmpty, Is.False,
+                "the fixture needs a real candidate before it can select one explicitly");
+
+            panel.ClickCancel();
+            panel.Refresh();
+            Assert.That(panel.PendingIndustryId, Is.EqualTo(string.Empty),
+                "cancelling the preview clears the industry as well as the person");
+
+            panel.SelectPending(IndustryCatalog.FarmId, candidate);
+            Assert.That(panel.PendingIndustryId, Is.EqualTo("industry.farm"));
+            Assert.That(panel.PendingIndustryId, Is.EqualTo(IndustryCatalog.FarmId),
+                "the pending industry is the selected post, not the selected person");
+
+            panel.SelectPending(IndustryCatalog.TradingHouseId, candidate);
+            Assert.That(panel.PendingIndustryId, Is.EqualTo("industry.trading-house"),
+                "re-selecting another post replaces the pending industry");
+
+            panel.ClickCancel();
+            panel.Refresh();
+            Assert.That(panel.PendingIndustryId, Is.EqualTo(string.Empty));
+        }
+
+        [Test]
+        public void IndustryPanel_CancelWithoutPendingAssignmentLeavesStateUnchanged()
+        {
+            IndustryPanel panel = Panel();
+            panel.Open();
+            IndustryResources before = _session.Industry.Resources;
+
+            panel.ClickCancel();
+
+            Assert.That(panel.HasPendingAssignment, Is.False);
+            Assert.That(panel.CancelVisible, Is.False);
+            Assert.That(_session.Industry.Resources, Is.EqualTo(before));
+            Assert.That(_session.Industry.Slot(IndustryCatalog.FarmId).AssigneeId.IsEmpty, Is.True);
+        }
+
+        [Test]
+        public void IndustryPanel_CloseCancelsUnconfirmedAssignmentPreview()
+        {
+            IndustryPanel panel = Panel();
+            panel.Open();
+            IndustrySlotView before = _session.Industry.Slot(IndustryCatalog.FarmId);
+            panel.ClickFarmCandidate(0);
+            Assert.That(panel.HasPendingAssignment, Is.True);
+
+            panel.Close();
+            panel.Open();
+
+            Assert.That(panel.HasPendingAssignment, Is.False,
+                "reopening must not preserve a hidden, unconfirmed assignment");
+            Assert.That(panel.ConfirmVisible, Is.False);
+            Assert.That(_session.Industry.Slot(IndustryCatalog.FarmId).AssigneeId,
+                Is.EqualTo(before.AssigneeId));
+        }
+
+        [Test]
+        public void IndustryPanel_DropsPreviewWhenTheCandidateBecomesUnavailable()
+        {
+            IndustryPanel panel = Panel();
+            panel.Open();
+            panel.ClickFarmCandidate(0);
+            PersonId selected = panel.PendingPersonId;
+            Assert.That(selected.IsEmpty, Is.False);
+
+            IndustryAssignmentResult assignedElsewhere = _session.TryAssignIndustry(
+                IndustryCatalog.TradingHouseId, selected);
+            Assert.That(assignedElsewhere.Succeeded, Is.True, assignedElsewhere.Message);
+            panel.Refresh();
+
+            Assert.That(panel.HasPendingAssignment, Is.False,
+                "a candidate already assigned elsewhere must not remain confirmable");
+            Assert.That(panel.ConfirmVisible, Is.False);
+            Assert.That(_session.Industry.Slot(IndustryCatalog.FarmId).AssigneeId.IsEmpty, Is.True);
         }
 
         [Test]
@@ -488,6 +663,73 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(panel.MessageLine, Is.EqualTo(IndustryPanel.ReportPointerStatus));
             Assert.That(panel.ReportLine, Does.Contain(fullSummary),
                 "the detailed monthly report retains the complete settlement text");
+        }
+
+        [Test]
+        public void IndustryPanel_LongActionMessageIsPreservedInReportWhenStatusBandCannotFitIt()
+        {
+            const string fragment = "执行人仍在委托任务中，须等结算后再任命产业职务。";
+            string longMessage = string.Concat(Enumerable.Repeat(fragment, 8));
+            FieldInfo lastMessage = typeof(GameSession).GetField(
+                "<LastIndustryMessage>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(lastMessage, Is.Not.Null);
+            lastMessage.SetValue(_session, longMessage);
+
+            IndustryPanel panel = Panel();
+            panel.Open();
+
+            Assert.That(panel.StatusPointerActive, Is.True);
+            Assert.That(panel.MessageLine, Is.EqualTo(IndustryPanel.ReportPointerStatus));
+            Assert.That(panel.ReportLine, Does.Contain(longMessage),
+                "a long non-settlement action message must remain fully readable outside the clipped band");
+            Assert.That(Find("IndustryReportContent").GetComponent<RectTransform>().rect.height,
+                Is.GreaterThan(Find("IndustryReportViewport").GetComponent<RectTransform>().rect.height),
+                "long action detail must remain reachable by scrolling");
+        }
+
+        [Test]
+        public void IndustryPanel_LongRollbackMessagePointerDoesNotClaimSettlementCompleted()
+        {
+            const string rollbackPrefix = "月结异常，已回滚到本月初始状态：";
+            const string fragment = "结算流水写入失败，状态已恢复；";
+            string rollbackMessage = rollbackPrefix + string.Concat(Enumerable.Repeat(fragment, 24));
+            FieldInfo lastMessage = typeof(GameSession).GetField(
+                "<LastIndustryMessage>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(lastMessage, Is.Not.Null);
+            lastMessage.SetValue(_session, rollbackMessage);
+
+            IndustryPanel panel = Panel();
+            panel.Open();
+
+            Assert.That(panel.StatusLineCount, Is.GreaterThan(panel.StatusBandLineBudget),
+                "the fixture must overflow the authored status band, not sit at its capacity");
+            Assert.That(panel.StatusPointerActive, Is.True);
+            Assert.That(panel.MessageLine, Does.Not.Contain("已完成"),
+                "a long rollback message must not be replaced by a success claim");
+            Assert.That(panel.MessageLine, Is.EqualTo(IndustryPanel.ReportPointerStatus));
+            Assert.That(panel.ReportLine, Does.Contain(rollbackMessage),
+                "the report must retain the rollback reason in full");
+
+            ScrollRect scroll = Find("IndustryReportScrollRect").GetComponent<ScrollRect>();
+            RectTransform viewport = Find("IndustryReportViewport") as RectTransform;
+            RectTransform content = Find("IndustryReportContent") as RectTransform;
+            Text report = Find(AddSC019IndustryPanel.ReportName).GetComponent<Text>();
+            Assert.That(scroll, Is.Not.Null);
+            Assert.That(scroll.vertical, Is.True);
+            Assert.That(scroll.content, Is.EqualTo(content));
+            Assert.That(scroll.viewport, Is.EqualTo(viewport));
+            Assert.That(content.rect.height, Is.GreaterThan(viewport.rect.height),
+                "long rollback detail must extend beyond the viewport and remain reachable by scrolling");
+            Assert.That(content.rect.height + 0.5f, Is.GreaterThanOrEqualTo(report.preferredHeight),
+                "the scroll content must contain the complete report text");
+            Canvas.ForceUpdateCanvases();
+            float maxScroll = content.rect.height - viewport.rect.height;
+            float initialOffset = content.anchoredPosition.y;
+            Assert.That(maxScroll, Is.GreaterThan(0f));
+            scroll.verticalNormalizedPosition = 0f;
+            Assert.That(content.anchoredPosition.y, Is.EqualTo(maxScroll).Within(1f),
+                "moving to the bottom must expose the end of the full report content");
+            Assert.That(content.anchoredPosition.y, Is.GreaterThan(initialOffset));
         }
 
         [Test]
