@@ -25,9 +25,8 @@ namespace SengokuChronicle.Editor
     {
         public const string ScenePath = "Assets/Scenes/FoundationScene.unity";
         public const string RootName = CampaignReviewPanel.RootObjectName;
-        // Canvas siblings share one ranked overlay band (CanvasLayerOrder): the campaign
-        // review renders above the M02 page and the M03 inspector and beneath the full-screen
-        // M6 title, EventChoiceRoot and the last M06 tactical modal.
+        // Canvas 兄弟节点共用一条覆盖层带（CanvasLayerOrder）：战役回顾渲染在 M02 页面与
+        // M03 查看器之上，并在全屏标题、EventChoiceRoot 与最后一个 M06 战术弹窗之下。
         public const string TitleRootName = CanvasLayerOrder.TitleRootName;
         public const string EventChoiceRootName = CanvasLayerOrder.EventChoiceRootName;
         public const string TacticalOverlayName = CanvasLayerOrder.TacticalOverlayName;
@@ -566,13 +565,12 @@ namespace SengokuChronicle.Editor
         }
 
         /// <summary>
-        /// Unity renders later Canvas siblings above earlier ones, so the review overlay must
-        /// sit above the M02 page and the M03 inspector, below a pending succession decision,
-        /// and under the M6 title overlay. AddM6TitleScreen.Validate requires the title to be
-        /// the sibling immediately below EventChoiceRoot and allows nothing else above it, and
-        /// AddM06TacticalMissionPanel.Validate requires the tactical overlay to stay last.
-        /// The root is created at the end of the Canvas, so this places it in its rank slot
-        /// from <see cref="CanvasLayerOrder"/> without shifting the roots around it.
+        /// Unity 让 Canvas 中靠后的兄弟节点渲染在靠前的之上，因此战役回顾覆盖层必须位于
+        /// M02 页面与 M03 查看器之上、待处理的继承决定之下，并在 M6 标题覆盖层之下。
+        /// <see cref="AddM6TitleScreen"/>.Validate 要求标题紧邻 EventChoiceRoot 之下且其上不得有
+        /// 其它节点，<see cref="AddM06TacticalMissionPanel"/>.Validate 要求战术覆盖层保持最后。
+        /// 根节点建在 Canvas 末尾，这里把它放进 <see cref="CanvasLayerOrder"/> 的座次槽位，
+        /// 不移动周围的根节点。
         /// </summary>
         private static void PlaceBelowTitleOverlay(Transform canvas, Transform root) =>
             CanvasLayerOrder.PlaceAtRank(canvas, root);

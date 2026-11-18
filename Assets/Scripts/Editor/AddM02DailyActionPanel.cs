@@ -124,7 +124,7 @@ namespace SengokuChronicle.Editor
         private const string EventRootName = CanvasLayerOrder.EventChoiceRootName;
         private const string TacticalOverlayName = CanvasLayerOrder.TacticalOverlayName;
         private const string InspectorRootName = CanvasLayerOrder.InspectorRootName;
-        // The opaque page must never cover the M08 campaign review overlay.
+        // 不透明页面绝不能盖住 M08 战役回顾覆盖层。
         private const string ReviewRootName = CanvasLayerOrder.CampaignReviewRootName;
         private const string UndoName = "Add M02 Daily Action Panel";
 
@@ -749,22 +749,22 @@ namespace SengokuChronicle.Editor
                 Overlaps(durationLabelRect, durationInputRect, actionRect))
                 return Invalid(out error, "M02 overlap inside the action panel.");
 
+            // M02 日常行动页必须渲染在地图 HUD 之上、M08 战役回顾页与标题/事件覆盖层之下。
             if (!ContainedInRenderBand(canvas, root))
                 return Invalid(out error,
-                    "M02DailyActionRoot must render above the map HUD and below the M08 review " +
-                    "page and title/event overlays.");
+                    "M02 日常行动页必须渲染在地图 HUD 之上、M08 战役回顾页与标题/事件覆盖层之下。");
 
-            // The read-only developer inspector is a separate surface and must open over
-            // the page, never beneath its backdrop, and the review must open over it.
+            // 只读的开发者查看器是独立界面：必须开在页面之上而不是页面底衬之下，
+            // 战役回顾页又必须开在查看器之上。
             Transform inspectorRoot = canvas.Find(InspectorRootName);
             if (inspectorRoot != null && inspectorRoot.GetSiblingIndex() < root.GetSiblingIndex())
                 return Invalid(out error,
-                    "M03NpcAiInspectorRoot must render above the M02 page.");
+                    "M03 只读查看器必须渲染在 M02 日常行动页之上。");
             Transform reviewRoot = canvas.Find(ReviewRootName);
             if (inspectorRoot != null && reviewRoot != null &&
                 reviewRoot.GetSiblingIndex() <= inspectorRoot.GetSiblingIndex())
                 return Invalid(out error,
-                    "M08CampaignReviewRoot must render above the M03NpcAiInspectorRoot.");
+                    "M08 战役回顾页必须渲染在 M03 只读查看器之上。");
             return true;
         }
 
@@ -1830,10 +1830,10 @@ namespace SengokuChronicle.Editor
 
         private static void PlaceAboveGameHud(Transform canvas, Transform target)
         {
-            // The page is a full-screen view: every unranked game HUD root renders beneath the
-            // ranked overlay band, and the band itself follows CanvasLayerOrder. The order
-            // therefore depends on the scene only, so running this updater after the M08 one
-            // keeps M08CampaignReviewRoot above the page instead of burying the review.
+            // 页面是全屏视图：所有未编入覆盖层带的游戏 HUD 根节点都渲染在该带之下，
+            // 而带内的相对次序只由 CanvasLayerOrder 决定。因此次序只取决于场景，
+            // 在 M08 生成器之后再跑本更新器仍会让 M08CampaignReviewRoot 位于页面之上，
+            // 不会把回顾面板压到下面。
             var children = new List<Transform>();
             for (int i = 0; i < canvas.childCount; i++)
                 children.Add(canvas.GetChild(i));

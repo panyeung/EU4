@@ -296,10 +296,10 @@ namespace SengokuChronicle.Tests.EditMode
             GameObject review = Create(CampaignReviewPanel.RootObjectName, canvas);
             review.transform.SetAsFirstSibling();
             Assert.That(review.transform.GetSiblingIndex(), Is.LessThan(dailyAction.GetSiblingIndex()),
-                "The fixture must put the M08 overlay below the opaque M02 page.");
+                "本用例必须把 M08 覆盖层放在不透明 M02 页面之下。");
 
             Assert.That(AddM02DailyActionPanel.Validate(_scene, out string error), Is.False);
-            Assert.That(error, Does.Contain("below the M08 review page"));
+            Assert.That(error, Does.Contain("必须渲染在地图 HUD 之上、M08 战役回顾页"));
         }
 
         [Test]
