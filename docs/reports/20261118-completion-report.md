@@ -56,7 +56,7 @@
 | 2 | MAJOR | M00 用户最终验收未完成 | 验收权在用户。审计 B5 |
 | 3 | MAJOR | M05 独立复审未通过 | 唯一一次独立复审判 FAIL（t_e2ddb378）：C2 有 3 处公开成员零断言；C5 不成立，裁切/滚动实现与三条回滚测试只在未提交工作区，已推送的 2f8b7b2 里 `ScrollRect` 命中 0。审计 B4 |
 | 4 | MAJOR | F1 城镇设施槽的实现不在 `main`，也不在任何任务分支 | 实现随工作树变化丢失，只有快照 `f69295b` 里有。恢复与重测另开卡（见第 5 节第 1 条） |
-| 5 | MAJOR | `main` 工作树的在途副本被外部重置清掉 | `git reflog` 显示 2026-11-17 21:17:53 有一次 `reset: moving to HEAD`。本卡开工时索引里仍有 M04 的在途新增文件（`FamilyKinshipPath.cs`、`HouseholdIndustryFit.cs`、`CanvasLayerOrder.cs` 等），21:22 已不在工作树。这些文件在 `panyeung/ui-m04-family` 上已提交，可从该分支取回，不是永久损失 |
+| 5 | MAJOR | `main` 工作树的在途副本被外部重置清掉 | `git reflog` 显示 2026-11-17 21:17:53 有一次 `reset: moving to HEAD`。同期集成卡 `t_ec27c2df` 在通知里记「已退回 5cd8521」（`Logs/notifications/outbox.txt` 07:18:50Z），时间与 reflog 吻合，但两条记录的因果未逐条核实。本卡开工时索引里仍有 M04 的在途新增文件（`FamilyKinshipPath.cs`、`HouseholdIndustryFit.cs`、`CanvasLayerOrder.cs` 等），21:22 已不在工作树。这些文件在 `panyeung/ui-m04-family` 上已提交，可从该分支取回，不是永久损失 |
 | 6 | MINOR | SAVE-3 只有会话层等价覆盖 | Play Mode 级未单独跑（Editor 卡死与单写者限制） |
 | 7 | MINOR | M09 窗口拖动只在合成输入下验过 | 需真实硬件与可交互桌面。审计 B6/P8 |
 | 8 | MINOR | 构建含 `uncompiled code changes` 警告 | 构建基于脏工作树，产物与 `main` HEAD 不完全对应 |
@@ -76,11 +76,12 @@
 
 ## 5. 建议的下一步顺序
 
-1. 恢复 F1 并重测（缺口 4）。从 `f69295b` 取回 `Assets/Scripts/Presentation/WorldMapController.cs`（blob `01a0b97`）与 `Assets/Tests/EditMode/WorldMapUiTests.cs`（blob `6d288c0`）。`TownActivityRoutingTests.cs` 的第二条 F1 用例（快照 blob `50afc9e`）需人工挑拣，因为 `main` 上这个文件已含 M05 的其他内容。恢复后跑全量 EditMode，确认两条 F1 用例都通过。
-2. 先处理第 5 条的并发事故再谈合并：确认主工作树只有一个写者，按需从 `panyeung/ui-m04-family` 取回在途文件。
-3. M05 复审收口（缺口 3）：先把裁切/滚动实现与三条回滚测试提交，再重派 `tester` 复审。
-4. 按 M04 → M05 → M06/M07 → M08 顺序合并进 `main`，每次合并后重跑 Validator 与全量 EditMode（缺口 1）。
-5. 在干净的 `main` 上重做一次发行构建，消掉缺口 8；随后用户最终验收（缺口 2），再打里程碑 tag。
+1. 先修 Editor。本卡末段 `unity command editor_status` 无输出返回；另卡记录 PID 96584/7803 的 pipeline 队列被失败的 `run_tests` 占死并停在 Play Mode 的对话框上，另有 PID 53876 需关闭（`Logs/notifications/outbox.txt` 07:27:03Z，卡 `t_e30a06f3`）。Editor 不恢复，下面任何重测都跑不了。
+2. 恢复 F1 并重测（缺口 4）。从 `f69295b` 取回 `Assets/Scripts/Presentation/WorldMapController.cs`（blob `01a0b97`）与 `Assets/Tests/EditMode/WorldMapUiTests.cs`（blob `6d288c0`）。`TownActivityRoutingTests.cs` 的第二条 F1 用例（快照 blob `50afc9e`）需人工挑拣，因为 `main` 上这个文件已含 M05 的其他内容。恢复后跑全量 EditMode，确认两条 F1 用例都通过。已开卡 `t_20c3719b`（`coden`）。
+3. 先处理第 5 条的并发事故再谈合并：确认主工作树只有一个写者，按需从 `panyeung/ui-m04-family` 取回在途文件。
+4. M05 复审收口（缺口 3）：先把裁切/滚动实现与三条回滚测试提交，再重派 `tester` 复审。
+5. 按 M04 → M05 → M06/M07 → M08 顺序合并进 `main`，每次合并后重跑 Validator 与全量 EditMode（缺口 1）。做这件事的卡 `t_ec27c2df` 上一轮因 Editor 死锁退回，需先解掉第 1 条。
+6. 在干净的 `main` 上重做一次发行构建，消掉缺口 8；随后用户最终验收（缺口 2），再打里程碑 tag。
 
 ## 6. 本次任务的边界
 
