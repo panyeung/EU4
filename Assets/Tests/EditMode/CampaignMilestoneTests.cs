@@ -877,7 +877,7 @@ namespace SengokuChronicle.Tests.EditMode
 
                 rig.Panel = host.AddComponent<CampaignReviewPanel>();
                 rig.Panel.BindReferences(session, root, title, context, body, label, status,
-                    button);
+                    button, null, null, null);
                 return rig;
             }
 

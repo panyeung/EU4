@@ -525,8 +525,14 @@ namespace SengokuChronicle.Tests.EditMode
                 Is.GreaterThan(doctrine.transform.GetSiblingIndex()),
                 "an open modal must render above the Family shelf");
             Assert.That(successionRoot.GetSiblingIndex(),
-                Is.LessThan(canvas.Find("M03NpcAiInspectorRoot").GetSiblingIndex()),
-                "lifting the modal must keep it below the lifecycle overlays");
+                Is.GreaterThan(canvas.Find("M03NpcAiInspectorRoot").GetSiblingIndex()),
+                "a pending succession decision ranks above the read-only inspector");
+            Assert.That(successionRoot.GetSiblingIndex(),
+                Is.LessThan(canvas.Find("M6TitleRoot").GetSiblingIndex()),
+                "a pending succession decision must stay below the full-screen title");
+            Assert.That(successionRoot.GetSiblingIndex(),
+                Is.LessThan(canvas.Find("EventChoiceRoot").GetSiblingIndex()),
+                "a pending succession decision must stay below the event-choice overlay");
             Assert.That(TopmostGraphic(canvas, point, true), Is.SameAs(confirmImage),
                 "the modal control, not the shelf launcher, receives the pointer");
         }
@@ -2019,6 +2025,67 @@ namespace SengokuChronicle.Tests.EditMode
             {
                 UnityEngine.Object.DestroyImmediate(clockObject);
             }
+        }
+
+        [Test]
+        public void Generator_SharedOverlayBandSurvivesM08ThenM03AndM02Rebuild()
+        {
+            Transform canvas = Find("Canvas");
+            Transform map = Find("M2WorldMapRoot");
+            Transform eventRoot = Find(AddM6TitleScreen.EventChoiceRootName);
+            map.SetParent(canvas, false);
+            eventRoot.SetParent(canvas, false);
+            Transform title = Create(AddM6TitleScreen.RootName, canvas).transform;
+            Transform tactical = Create(AddM06TacticalMissionPanel.OverlayName, canvas).transform;
+
+            map.SetAsFirstSibling();
+            title.SetSiblingIndex(eventRoot.GetSiblingIndex());
+            tactical.SetAsLastSibling();
+
+            Assert.That(AddM08CampaignReviewPanel.Update(_scene),
+                Is.EqualTo(AddM08CampaignReviewPanel.UpdateResult.Success));
+            Assert.That(AddM03NpcAiInspector.Update(_scene),
+                Is.EqualTo(AddM03NpcAiInspector.UpdateResult.Success));
+
+            Transform review = Find(AddM08CampaignReviewPanel.RootName);
+            Transform inspector = Find(AddM03NpcAiInspector.RootName);
+            Transform dailyAction = Find(AddM02DailyActionPanel.RootName);
+            dailyAction.Find(AddM02DailyActionPanel.OpenButtonName)
+                .GetComponent<Button>().targetGraphic = null;
+            Assert.That(AddM02DailyActionPanel.Update(_scene),
+                Is.EqualTo(AddM02DailyActionPanel.UpdateResult.Success));
+
+            review = Find(AddM08CampaignReviewPanel.RootName);
+            inspector = Find(AddM03NpcAiInspector.RootName);
+            dailyAction = Find(AddM02DailyActionPanel.RootName);
+            Assert.That(dailyAction.Find(AddM02DailyActionPanel.OpenButtonName)
+                    .GetComponent<Button>().targetGraphic, Is.Not.Null,
+                "the updater must rebuild its invalidated page before reordering the overlay band");
+            Assert.That(dailyAction.GetSiblingIndex(), Is.LessThan(inspector.GetSiblingIndex()));
+            Assert.That(inspector.GetSiblingIndex(), Is.LessThan(review.GetSiblingIndex()));
+            Assert.That(review.GetSiblingIndex(), Is.LessThan(title.GetSiblingIndex()));
+            Assert.That(title.GetSiblingIndex(), Is.EqualTo(eventRoot.GetSiblingIndex() - 1));
+            Assert.That(tactical.GetSiblingIndex(), Is.EqualTo(canvas.childCount - 1));
+            Assert.That(CanvasOverlayOrder.ValidateBand(canvas, out string bandError), Is.True,
+                bandError);
+            Assert.That(AddM02DailyActionPanel.Validate(_scene, out string m02Error), Is.True,
+                m02Error);
+            Assert.That(AddM03NpcAiInspector.Validate(_scene, out string m03Error), Is.True,
+                m03Error);
+            Assert.That(AddM08CampaignReviewPanel.Validate(_scene, out string m08Error), Is.True,
+                m08Error);
+
+            review.SetAsFirstSibling();
+            Assert.That(AddM08CampaignReviewPanel.Validate(_scene, out _), Is.False,
+                "the setup represents a stale M08 order that enters the repair path");
+            Assert.That(AddM08CampaignReviewPanel.Update(_scene),
+                Is.EqualTo(AddM08CampaignReviewPanel.UpdateResult.Success));
+            Assert.That(AddM02DailyActionPanel.Validate(_scene, out m02Error), Is.True,
+                "M08 repair must preserve the M02 page's overlay placement");
+            Assert.That(AddM03NpcAiInspector.Validate(_scene, out m03Error), Is.True,
+                "M08 repair must preserve the M03 inspector's overlay placement");
+            Assert.That(AddM08CampaignReviewPanel.Validate(_scene, out m08Error), Is.True,
+                m08Error);
         }
 
         private GameObject Create(string name, Transform parent, params Type[] components) =>

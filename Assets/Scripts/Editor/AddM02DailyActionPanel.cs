@@ -120,10 +120,10 @@ namespace SengokuChronicle.Editor
         private const string FormationRootName = "SC022FamilyFormationRoot";
         private const string DoctrineRootName = "FamilyDoctrineRoot";
         private const string DoctrineOpenButtonName = "FamilyDoctrineOpenButton";
-        private const string TitleRootName = "M6TitleRoot";
-        private const string EventRootName = "EventChoiceRoot";
-        private const string TacticalOverlayName = AddM6TitleScreen.TacticalOverlayName;
-        private const string InspectorRootName = "M03NpcAiInspectorRoot";
+        private const string TitleRootName = CanvasOverlayOrder.TitleRootName;
+        private const string EventRootName = CanvasOverlayOrder.EventChoiceRootName;
+        private const string TacticalOverlayName = CanvasOverlayOrder.TacticalOverlayName;
+        private const string InspectorRootName = CanvasOverlayOrder.InspectorRootName;
         private const string UndoName = "Add M02 Daily Action Panel";
 
         // Original generated UI art (docs/ART_ASSET_WORKFLOW.md). The atlases are
@@ -1822,9 +1822,10 @@ namespace SengokuChronicle.Editor
 
         private static void PlaceAboveGameHud(Transform canvas, Transform target)
         {
-            // The page is a full-screen view: every game HUD root must render beneath it,
-            // while the title/event overlays, the M06 tactical sheet, and the read-only M03
-            // inspector stay above.
+            // The page is a full-screen view: every unranked game HUD root renders beneath the
+            // ranked overlay band, and the band itself follows CanvasOverlayOrder. The order
+            // therefore depends on the scene only, so running this updater after the M08 one
+            // keeps M08CampaignReviewRoot above the page instead of burying the review.
             var children = new List<Transform>();
             for (int i = 0; i < canvas.childCount; i++)
                 children.Add(canvas.GetChild(i));
@@ -1832,25 +1833,11 @@ namespace SengokuChronicle.Editor
             int next = 0;
             foreach (Transform child in children)
             {
-                if (child == target || child.name == RootName ||
-                    child.name == InspectorRootName || child.name == TitleRootName ||
-                    child.name == EventRootName || child.name == TacticalOverlayName)
+                if (child == target || CanvasOverlayOrder.IsRanked(child))
                     continue;
                 child.SetSiblingIndex(next++);
             }
-            target.SetSiblingIndex(next++);
-            Transform inspector = canvas.Find(InspectorRootName);
-            if (inspector != null)
-                inspector.SetSiblingIndex(next++);
-            Transform title = canvas.Find(TitleRootName);
-            if (title != null)
-                title.SetSiblingIndex(next++);
-            Transform eventRoot = canvas.Find(EventRootName);
-            if (eventRoot != null)
-                eventRoot.SetSiblingIndex(next++);
-            Transform tacticalOverlay = canvas.Find(TacticalOverlayName);
-            if (tacticalOverlay != null)
-                tacticalOverlay.SetSiblingIndex(next++);
+            CanvasOverlayOrder.OrderRankedBand(canvas);
         }
 
         private static bool IsReplaceableGeneratedRoot(Scene scene, Transform root)
