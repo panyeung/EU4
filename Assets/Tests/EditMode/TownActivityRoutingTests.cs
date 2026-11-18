@@ -155,6 +155,27 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(JsonUtility.ToJson(_session.CaptureSave()), Is.EqualTo(saveBefore));
         }
 
+        [Test]
+        public void TownMenu_FacilitySlotsStayEmptyWhenTheTownPageRenders()
+        {
+            var slots = new[]
+            {
+                NewObject("FacilitySlot1_TownActivityRouting_Test").AddComponent<UnityEngine.UI.Text>(),
+                NewObject("FacilitySlot2_TownActivityRouting_Test").AddComponent<UnityEngine.UI.Text>(),
+                NewObject("FacilitySlot3_TownActivityRouting_Test").AddComponent<UnityEngine.UI.Text>(),
+            };
+            _controller.BindReferences(_session, null, null, null, null, null, null, null,
+                null, null, null, _controller.GetTownMenuRoot(), null, slots);
+            _controller.OpenTownMenu();
+
+            foreach (UnityEngine.UI.Text slot in slots)
+            {
+                Assert.That(slot.text, Is.Empty,
+                    "总览页存在时设施槽不得再写占位，也不得重复列总览页已承担的条目。");
+                Assert.That(slot.enabled, Is.False);
+            }
+        }
+
         private GameObject NewObject(string name, params System.Type[] components)
         {
             var value = new GameObject(name, components);

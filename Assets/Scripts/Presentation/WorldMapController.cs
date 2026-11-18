@@ -9,7 +9,7 @@ namespace SengokuChronicle.Presentation
 {
     /// <summary>
     /// 世界地图控制器（M2-02）：目的地选择、旅行预览、确认/取消、
-    /// 到达后的城镉菜单与「未开放」设施占位。
+    /// 到达后的城镉菜单与设施槽（内容来自真实当地委托）。
     /// 所有状态读写通过 GameSession；预览绝不修改日期/位置。
     /// 公开 BindReferences / 状态属性与访问器，供 Editor 生成器与 EditMode 测试注入。
     /// </summary>
@@ -136,8 +136,10 @@ namespace SengokuChronicle.Presentation
         /// <summary>城镉菜单根对象（初始隐藏）。</summary>
         public GameObject GetTownMenuRoot() => townMenuRoot;
 
-        /// <summary>设施占位文本数组（均为「未开放」）。</summary>
+        /// <summary>城镉菜单的设施槽；内容由 <see cref="RefreshFacilitySlots"/> 决定。</summary>
         public Text[] GetFacilityTexts() => facilityTexts;
+
+        private static readonly TownLocalActions.Entry[] NoLocalEntries = new TownLocalActions.Entry[0];
 
         private LocationId? _selectedDestination;
         private TravelPreview? _preview;
@@ -578,7 +580,11 @@ namespace SengokuChronicle.Presentation
                 returnToMapButton.interactable = _inTownMenu;
         }
 
-        /// <summary>到达后打开城镉菜单；设施占位标记为「未开放」并禁用。</summary>
+        /// <summary>
+        /// 到达后打开城镉菜单。<br/>
+        /// 设施槽按 <see cref="RefreshFacilitySlots"/> 刷新：有城镇总览页时留空，因为设施内容由
+        /// 总览页承担；没有总览页的旧场景按序列出真实的当地委托。
+        /// </summary>
         public void OpenTownMenu()
         {
             _inTownMenu = true;
@@ -624,17 +630,33 @@ namespace SengokuChronicle.Presentation
             if (townOverviewPanel != null)
                 townOverviewPanel.Refresh();
 
+            RefreshFacilitySlots();
+        }
+
+        /// <summary>
+        /// 城镇菜单设施槽的真实内容。<br/>
+        /// 城镇总览页（<see cref="TownOverviewPanel"/>）是本工程实际的设施界面：插画、地点重点、
+        /// 当地人物、当地委托卡与名册／全部委托入口都在那里，所以有总览页时设施槽留空，不再写
+        /// 没有功能支撑的「未开放」假入口。没有总览页的旧场景（M2 生成的菜单）按序列出真实的
+        /// 当地委托，空缺槽清空并禁用，使菜单只列当前真能办理的内容。
+        /// </summary>
+        private void RefreshFacilitySlots()
+        {
             if (facilityTexts == null)
                 return;
-            string[] labels = { "设施一", "设施二", "设施三" };
+
+            IReadOnlyList<TownLocalActions.Entry> entries = NoLocalEntries;
+            if (townOverviewPanel == null && gameSession != null)
+                entries = TownLocalActions.GetAvailable(gameSession);
+
             for (int i = 0; i < facilityTexts.Length; i++)
             {
-                Text t = facilityTexts[i];
-                if (t == null)
+                Text slot = facilityTexts[i];
+                if (slot == null)
                     continue;
-                string label = i < labels.Length ? labels[i] : $"设施{i + 1}";
-                t.text = $"{label}：未开放";
-                t.enabled = false; // 未开放：显式禁用
+                string label = i < entries.Count ? entries[i].Label : string.Empty;
+                slot.text = label;
+                slot.enabled = label.Length > 0;
             }
         }
 

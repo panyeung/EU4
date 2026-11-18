@@ -281,17 +281,32 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
-        public void TownMenu_FacilitiesLabeledNotOpenAndDisabled()
+        public void TownMenu_FacilitySlotsListRealTownEntries()
         {
             _controller.SelectDestination(LocationId.Nagoya);
             _controller.ConfirmTravel();
 
             Assert.That(_controller.InTownMenu, Is.True);
             Assert.That(_controller.GetFacilityTexts().Length, Is.EqualTo(3));
-            foreach (Text t in _controller.GetFacilityTexts())
+
+            // 没有城镇总览页的旧场景里，设施槽必须列真实的当地委托，不再是「未开放」占位。
+            var entries = TownLocalActions.GetAvailable(_session);
+            Assert.That(entries.Count, Is.GreaterThan(0), "那古野应至少有一条可办理的当地委托。");
+            Text[] slots = _controller.GetFacilityTexts();
+            for (int i = 0; i < slots.Length; i++)
             {
-                Assert.That(t.text, Does.Contain("未开放"));
-                Assert.That(t.enabled, Is.False, "facility entries must be disabled (not open)");
+                Assert.That(slots[i].text, Does.Not.Contain("未开放"));
+                Assert.That(slots[i].text, Does.Not.Contain("设施"), "设施槽不得再写编号占位名。");
+                if (i < entries.Count)
+                {
+                    Assert.That(slots[i].text, Is.EqualTo(entries[i].Label));
+                    Assert.That(slots[i].enabled, Is.True);
+                }
+                else
+                {
+                    Assert.That(slots[i].text, Is.Empty);
+                    Assert.That(slots[i].enabled, Is.False);
+                }
             }
         }
 
