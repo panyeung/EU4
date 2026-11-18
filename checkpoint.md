@@ -1,7 +1,7 @@
 # 《影之一族》checkpoint 与设计规划
 
-更新时间 2026-11-17。当前工作分支 `panyeung/m00-closeout`（自 `main@86518cf` 分出），基线提交 `0b9b1a8`。
-本文是设计规划、全部 checkpoint、当前状态与下一步的唯一入口。UI 与美术资产见 [ui设计规划.md](ui设计规划.md)。代理协作规则见 [AGENTS.md](AGENTS.md)。
+更新时间 2026-11-18。游戏代码基线为 `2bca9d1`；之后 `main` 只追加文档变更。
+本文记录设计规划、checkpoint、里程碑证据与下一步。当前 ref、Editor 和任务卡快照见 [PROJECT_STATE.md](PROJECT_STATE.md)。UI 与美术资产见 [ui设计规划.md](ui设计规划.md)。代理协作规则见 [AGENTS.md](AGENTS.md)。
 
 规则：新 checkpoint 只往第 4 节表格加一行，长过程记录留在 `Logs/`，不要往本文追加叙述段。
 

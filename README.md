@@ -89,12 +89,15 @@ SC-021 场景集成（`5885315`）与 SC-023 演示接入（`115ffa7`）已进�
 
 ## 文档
 
-- `checkpoint.md` — 设计规划、里程碑、决策记录、当前状态与下一步。
-- `docs/实现规格-v1.0.md` — v1 的通过标准与任务清单，接手先读这份。
-- `docs/reports/20261118-completion-report.md` — 完成情况与逐条证据。
-- `ui设计规划.md` — UI 规则与美术资产登记。
-- `docs/console-基线归因表.md` — Console 里每一条 error 的归因。
-- `AGENTS.md` — 代理协作规则，不属于设计文档。
+- `PROJECT_STATE.md`：当前工作状态、验证证据边界与未完成项。
+- `DECISIONS.md`：当前玩法决定、替代方案与撤销方法。
+- `checkpoint.md`：设计规划、里程碑、决策记录、当前状态与下一步。
+- `docs/实现规格-v1.0.md`：v1 的通过标准与任务清单，接手先读这份。
+- `docs/reports/v1-demo-package-20261118.md`：v1 Windows 演示包的运行步骤、试玩路线、缺口与回滚点。
+- `docs/reports/20261118-completion-report.md`：完成情况与逐条证据。
+- `ui设计规划.md`：UI 规则与美术资产登记。
+- `docs/console-基线归因表.md`：Console 里每一条 error 的归因。
+- `AGENTS.md`：代理协作规则，不属于设计文档。
 
 ## 协作注意
 
