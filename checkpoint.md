@@ -325,6 +325,7 @@
 
 | 日期 | ID | 内容 | 状态 | 证据 |
 |---|---|---|---|---|
+| 2026-11-17 | M05 | 独立复审**未通过**：`tester` 只读复核 `panyeung/ui-m05-management@2f8b7b2` 后判定「已推送提交不包含 checkpoint 声称的实现」——`ScrollRect` / `CarryIntoReport` / `LateUpdate` / `FitReportRegion` 与三条裁切回滚回归测试全部只存在于该工作树**未提交**区；工作区实测为 45/45、2010→2012/2012，`2f8b7b2` 对应的是旧的 42/42、2008/2008 | 待验证 | 任务卡 `t_e2ddb378` 评论（C1 结构合规通过、C2 有疑点、C3 存档兼容通过、C4 既有行为不变通过、C5 证据不自洽、C6 合并风险）；另有 `docs/PLAYTEST_GUIDES.md` 在 main 已删除、工作树仍修改的 modify/delete 冲突 |
 | 2026-11-17 | M00 | S0 固化基线：新建分支 `panyeung/m00-closeout`，把 M09 调试模式、城镇活动条目、2026-11-10 起的 UI 与领域 WIP、两份调研产出一次性纳管，共 66 个文件（32107 增 / 20101 删，其中 `FoundationScene.unity` 为 Unity 重序列化） | 进行中 | 提交 `0b9b1a8`；`.gitignore` 增 `/graphify-out/` 与 `/nul`；`git status` 只剩 `Assets/Scenes/TestResults_20261108_072929.xml` 与其 `.meta`；该提交的全量 EditMode 复验待跑（Editor 被用户 Play Mode 占用） |
 | 2026-11-17 | M00 | 主工作树 M00 证据链全项通过：Validator `PASS; Errors: 0`、EditMode 2141/2141、Play Mode 到 SC-013 营地 HUD（1560-04-01 / 清洲）期间新增 error 0、隔离槽存读档 04-02→04-01 一致 | 进行中 | `Logs/verify/gate-20261118/report.md`、`save-isolated.md`；真实存档 `1e61ed9c…` 与备份 `f1c0630e…` 前后哈希未变；隔离槽 `ISO-PlayTest-20261118` v17/rules 8；SAVE-3/SAVE-4 未验；用户最终验收未完成 |
 | 2026-11-17 | M04 | 场景语义 diff 复核：3541 对象、`m_Name` 1908、`m_SizeDelta` 834、`m_AnchoredPosition` 多重集前后全等；真实差异仅 36 处 `LayoutElement.m_MinSize` 归一为 10 与 3 处 `-0` 旋转归一 | 待验证 | 16257 增 / 16252 删几乎全是 Unity 重序列化；该工作树的 EditMode 与 Play Mode 证据另计 |
