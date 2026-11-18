@@ -2,7 +2,7 @@
 
 Unity 6（URP 2D）的战国忍者家族模拟游戏。核心是一座城、一个家族、一个可以结束月份推进的循环。
 
-**当前状态：代码与集成都已收口，只剩用户最终验收（PARTIAL）。** `main` 的代码提交是 `2bca9d1`（收口卡其后只追加文档提交），五个 UI 分支全部并入，全量 EditMode `2214/2214`、场景 Validator `PASS; Errors: 0`、独立复审 PASS、成品 Player 冒烟通过。仍然没闭合的是**用户本人的最终验收**（M00），另有 M08 战役回顾面板运行时打开与 M09 真机窗口拖动两条运行时未验证项。逐条见下方「已知缺口」，完整证据见 [docs/reports/20261118-completion-report.md](docs/reports/20261118-completion-report.md)。
+**当前状态：尚未完成（PARTIAL）。** v1 Windows 演示包已构建并通过 Player 冒烟，仍待用户验收；这不代表整个项目完成。除 M00 最终验收外，M08 战役回顾面板运行时打开与 M09 真机窗口拖动仍未闭合。SC-021 场景集成与 SC-023 演示入口已进入当前 `main`，不再列为未合入。`main` 的代码基线是 `2bca9d1`（后续提交只追加文档），五个 UI 分支的集成已完成，全量 EditMode `2214/2214`、场景 Validator `PASS; Errors: 0`、独立复审 PASS。逐条见下方「已知缺口」，完整证据见 [docs/reports/20261118-completion-report.md](docs/reports/20261118-completion-report.md)。
 
 ## 环境要求
 
@@ -61,7 +61,7 @@ scripts/copy-testresults.sh Logs/verify/<证据目录>     # 跑完立刻复制�
 
 | 原缺口 | 实际结论 | 依据 |
 |---|---|---|
-| 四个任务工作树未合并进 `main` | **已合并**。`panyeung/m00-closeout`、`ui-m04-family`、`ui-m05-management`、`ui-m06-m07-missions`、`ui-m08-campaign` 逐个 `git merge-base --is-ancestor` 为真；`main`、`origin/main`、`integration/v1-20261118` 三点同为 `2bca9d1`，只留一个工作树 | 收口卡 `t_080705e2` 亲自跑 `git log`／`merge-base`／`worktree list` |
+| 四个任务工作树未合并进 `main` | **已合并**。`panyeung/m00-closeout`、`ui-m04-family`、`ui-m05-management`、`ui-m06-m07-missions`、`ui-m08-campaign` 逐个 `git merge-base --is-ancestor` 为真；收口时 `main`、`origin/main`、`integration/v1-20261118` 曾同为 `2bca9d1`。当前 `main` 与 `origin/main` 同步，后续仅追加文档提交；只留一个工作树 | 收口卡 `t_080705e2` 亲自跑 `git log`／`merge-base`／`worktree list` |
 | M05 独立复审未通过 | **复审 PASS**。C1–C6 全过：三组公开成员有真实行为断言，`ScrollRect` 裁切与三条回滚用例已在树中，`skipped=0` | `t_122d4d5b` 复审结论 |
 | F1 城镇设施槽不在 `main` | **已恢复**。`WorldMapController.cs` 有 `RefreshFacilitySlots`（4 处命中），两条用例 `TownMenu_FacilitySlotsListRealTownEntries`、`TownMenu_FacilitySlotsStayEmptyWhenTheTownPageRenders` 在 2214 全量里均为 Passed | 收口卡 `git grep` 与 `TestResults.xml` 逐条读回 |
 
@@ -81,8 +81,9 @@ scripts/copy-testresults.sh Logs/verify/<证据目录>     # 跑完立刻复制�
 | MINOR | 无音频、无切图、无动画 | 按决策 D5 不进 v1 |
 | MINOR | `Assets/Scenes/` 内有 stray `TestResults_*.xml` | 清理需批准 |
 | MINOR | 无 CI/打包流水线 | 唯一构建路径是已开 Editor，v1 只验一次发行构建 |
-| MINOR | SC-021 场景集成与 SC-023 仍未合入 | 分别在 `panyeung/sc021-scene-integration` 与 `origin/panyeung/sc023-seclusion` |
 | 说明 | 构建只留一条警告「No RuntimePipelineConfig asset found」 | Pipeline 包自带提示，`Pipeline will be disabled in Player builds`，不影响游戏本体 |
+
+SC-021 场景集成（`5885315`）与 SC-023 演示接入（`115ffa7`）已进入 `main`；`FoundationScene` 包含 `SC021ResearchRoot` 与 `SC023SeclusionDemoButton`，对应 updater 也在树中。这只说明集成已落地，不代表项目或用户验收已完成。
 
 明确不做、不算缺口的两条：SC-014/015/016 三条跨代链按规格非目标不写新运行时（事件目录与剧本门禁已具备）；长期模拟存活样本为 0 是决策 D3 已拍板的 v1 口径，不是生存通过。
 

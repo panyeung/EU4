@@ -415,9 +415,10 @@
 
 ## 5. 当前状态
 
-- `main`、`origin/main`、`integration/v1-20261118` 三点同一提交 `2bca9d1`（「语言合规：修正剩余 6 处「城镉菜单」错字为「城镇菜单」」）。`git log main..integration/v1-20261118` 输出为空。本节由收口卡 `t_080705e2` 用命令逐条读回，不是转述汇报。收口卡随后只在 `main` 上追加文档提交，代码树仍是 `2bca9d1`，未合并、未打 tag。
+- `main` 与 `origin/main` 当前同步；代码基线是 `2bca9d1`（「语言合规：修正剩余 6 处「城镉菜单」错字为「城镇菜单」」）。`integration/v1-20261118` 仍在该代码提交。收口卡 `t_080705e2` 当时核实三点同点；之后 `main` 只追加文档提交，未改产品代码、未打 tag。
 - 只有一个 Git 工作树，就是工程根目录 `C:\Users\panye\My project`；`git status --porcelain` 为空；`git worktree list` 只有一行。
 - 五个任务分支都已并入 `main`：`panyeung/m00-closeout`、`ui-m04-family`、`ui-m05-management`、`ui-m06-m07-missions`、`ui-m08-campaign` 逐个 `git merge-base --is-ancestor` 为真。相对合并起点 `d081c46` 共 51 个文件、+10077/−1821。
+- SC-021 场景集成与 SC-023 演示接入已在 `main`：合并提交 `5885315`、集成提交 `115ffa7`；场景有 `SC021ResearchRoot` 与 `SC023SeclusionDemoButton`，对应 updater 已入树。
 - 全量 EditMode `2214/2214` passed、`failed=0`、`skipped=0`（2026-11-18 13:22:34Z–13:24:40Z，源提交 `c291dd3`），证据 `Logs/verify/20261118-integration-full/TestResults.xml`。F1 两条用例 `TownMenu_FacilitySlotsListRealTownEntries` 与 `TownMenu_FacilitySlotsStayEmptyWhenTheTownPageRenders` 在该 XML 内均为 Passed。
 - 场景 Validator `RESULT: PASS; Errors: 0`。证据 `Logs/verify/20261118-integration/scene-validator-c291dd3.txt` 末行，与 `Logs/SceneValidationReport.txt` 末行一致。
 - `c291dd3..2bca9d1` 两个提交只改注释与错字（4 个文件、−2/+7），未动逻辑、断言与场景。这是「测试证据基于 `c291dd3` 仍能代表 `2bca9d1`」的依据，由 `git diff -U0` 逐行读回。
@@ -440,8 +441,7 @@
 3. M09 窗口拖动：手上没有真实硬件下的窗口拖动证据，需在可交互桌面上复验。
 4. `Assets/Tests/PlayMode` 目前为空，运行时验证全靠手工配方。要么补自动化，要么把「手工配方即口径」写进规格。
 5. MINOR 清理（`Assets/Scenes/` 的 stray `TestResults_*.xml`、`Assets/Logs/verify/_scratch/` 截图、隔离槽目录）需要批准。
-6. 未合入分支。SC-021 场景集成在 `panyeung/sc021-scene-integration`，SC-023 在 `origin/panyeung/sc023-seclusion`，都未合并未打 tag。
-7. 画布层序已统一为 `CanvasLayerOrder`，后续任何新面板都必须按这套共享序插入并让 `CanvasLayerOrderTests` 覆盖，不要再引入第二套顺序表。
+6. 画布层序已统一为 `CanvasLayerOrder`，后续任何新面板都必须按这套共享序插入并让 `CanvasLayerOrderTests` 覆盖，不要再引入第二套顺序表。
 
 ---
 

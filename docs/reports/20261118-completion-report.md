@@ -1,6 +1,6 @@
 # 《影之一族》完成情况报告 — 2026-11-18（收口版）
 
-**状态：未完成（PARTIAL），缺的只有用户验收。** 代码、集成分支、回归与演示构建都已收口；`main` 的代码提交是 `2bca9d1`（本收口卡其后只追加文档提交），唯一硬门是 M00 用户最终验收，另有两处运行时行为仍无证据（M08 战役回顾面板的打开、M09 真机窗口拖动）。
+**状态：未完成（PARTIAL）。** `2bca9d1` 的 v1 Windows 演示包已构建并通过本卡范围内的 Player 冒烟，v1 最终验收仍待用户完成；这不是整项目完成的唯一条件。项目还需闭合 M08 战役回顾面板运行时打开与 M09 真机窗口拖动。`main` 的代码基线是 `2bca9d1`；后续提交只追加文档。SC-021 场景集成与 SC-023 演示接入现已在 `main`，不再列为未合入。
 
 本版由收口卡 `t_080705e2` 写。上一版（`t_53b146b3`）的三条 MAJOR 已全部处置，处置结果见第 2 节。凡标「本卡亲跑」的是我这次实际执行的命令与读回值；标「上游卡汇报」的只是转述，未由我重跑。
 
@@ -13,13 +13,13 @@
 - **能存读档往返**：Editor Play Mode（上游卡汇报，隔离槽）1560-05-01 存档 → 推进一天 → 读档回 1560-05-01；SAVE-3 待决继承改选后读回「時姫」；SAVE-4 空槽返回「尚未找到存档。」且状态不变。真实存档槽 `sha256 1e61ed9c…` 与 mtime 全程未变。
 - **全量 EditMode 全绿**：`2214/2214` passed、`failed=0`、`skipped=0`（2026-11-18 13:22:34Z–13:24:40Z，源 `c291dd3`）。本卡亲读 XML。
 - **场景校验通过**：Validator `RESULT: PASS; Errors: 0`（源 `c291dd3`）。本卡亲读 `scene-validator-c291dd3.txt` 与 `Logs/SceneValidationReport.txt` 两处末行。
-- **集成分支已落地**：`main`、`origin/main`、`integration/v1-20261118` 三点同为 `2bca9d1`；五个任务分支全部是其祖先；只剩一个工作树，工作区干净。
+- **集成分支已落地**：当前 `main` 与 `origin/main` 同步，最新代码基线仍为 `2bca9d1`；`integration/v1-20261118` 留在 `2bca9d1`。五个任务分支的本地 ref 均已并入，且只剩一个工作树。
 
 ## 2. 三条 MAJOR 的处置结果
 
 | 上版缺口 | 处置 | 证据 |
 |---|---|---|
-| 四个任务工作树未合并进 `main` | **已闭合**。`panyeung/m00-closeout`、`ui-m04-family`、`ui-m05-management`、`ui-m06-m07-missions`、`ui-m08-campaign` 逐个 `git merge-base --is-ancestor <ref> main` 为真；`git log main..integration/v1-20261118` 为空；`git diff --stat d081c46...main` 为 51 个文件、+10077/−1821；`git worktree list` 只有工程根目录 | 本卡亲跑 |
+| 四个任务工作树未合并进 `main` | **已闭合**。收口卡当时核实 `panyeung/m00-closeout`、`ui-m04-family`、`ui-m05-management`、`ui-m06-m07-missions`、`ui-m08-campaign` 均已并入；主工作树当时与集成分支同点。之后 `main` 只追加文档提交；当前 `main` 与 `origin/main` 同步，代码基线仍为 `2bca9d1`。当前只有一个工作树 | 收口卡亲跑，后续文档 ref 另行核对 |
 | M05 独立复审未通过 | **已闭合**。独立复审 `t_122d4d5b` 判 PASS，C1–C6 全过：三组公开成员有真实行为断言；`IndustryPanel` 裁切/滚动与三条回滚用例已在树中；未删除测试文件、无恒真断言；`skipped=0` | 复审卡结论（上游，未由我重跑） |
 | F1 城镇设施槽不在 `main` | **已闭合**。`Assets/Scripts/Presentation/WorldMapController.cs` 内 `RefreshFacilitySlots` 4 处命中；两条用例 `TownMenu_FacilitySlotsListRealTownEntries`、`TownMenu_FacilitySlotsStayEmptyWhenTheTownPageRenders` 在 2214 全量 XML 中均为 Passed | 本卡亲跑 `git grep` 与 XML 逐条读回 |
 
@@ -30,7 +30,7 @@
 **我（收口卡）亲自跑的**
 
 - 三个 ref 同点、单一工作树、`git status --porcelain` 为空。
-- `git log main..integration/v1-20261118` 为空；`git diff --stat d081c46...main` 为 51 文件 +10077/−1821。
+- 收口卡当时 `git log main..integration/v1-20261118` 为空；`git diff --stat d081c46...main` 为 51 文件 +10077/−1821。此后 `main` 追加了文档提交。
 - 五个分支对 `main` 的 `merge-base --is-ancestor` 全为真。
 - `TestResults.xml` 首行：`testcasecount=2214 passed=2214 failed=0 skipped=0 result=Passed`。
 - F1 两条用例在该 XML 里 `result="Passed"`；源码里两条用例确实存在（`WorldMapUiTests.cs:284`、`TownActivityRoutingTests.cs:159`）。
@@ -76,13 +76,12 @@
 | MINOR | 无音频、无切图、无动画 | 决策 D5 不进 v1 |
 | MINOR | `Assets/Scenes/` 内有 stray `TestResults_*.xml` | 清理需批准 |
 | MINOR | 无 CI / 打包流水线 | 唯一构建路径是已开 Editor |
-| MINOR | SC-021 场景集成、SC-023 未合入 | 在各自分支上，未打 tag |
 
-已闭合、可从缺口表移除的：`uncompiled code changes` 警告（r2 构建基于干净 `2bca9d1`）、SAVE-3 只到会话层（Play Mode 已单独跑通）。
+已闭合、可从缺口表移除的：`uncompiled code changes` 警告（r2 构建基于干净 `2bca9d1`）、SAVE-3 只到会话层（Play Mode 已单独跑通）、SC-021 场景集成与 SC-023 演示接入。主树含合并提交 `5885315`、集成提交 `115ffa7`，场景包含 `SC021ResearchRoot` 与 `SC023SeclusionDemoButton`；此处仅记录集成状态，不据此声称新增运行时验收通过。
 
 ## 5. 下一步
 
-1. **用户最终验收**：跑 `Builds/Demo-v1-2bca9d1-r2/Demo-v1-2bca9d1-r2.exe`，按第 1 节的路线走一遍。这是唯一挡住「完成」的门。
+1. **v1 演示验收**：跑 `Builds/Demo-v1-2bca9d1-r2/Demo-v1-2bca9d1-r2.exe`，按第 1 节的路线走一遍。通过后才能标记 v1 阶段已验收；整项目仍需完成本节后续列出的工作。
 2. 验收通过后，由用户点头再打里程碑 tag；本卡没有合并、没有打 tag、没有 force-push。
 3. 补 M08 战役回顾面板的长周期演示路线。
 4. 在可交互桌面上复验 M09 窗口拖动。
