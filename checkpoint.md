@@ -427,14 +427,14 @@
 - 画布层序已统一：`Assets` 内 `CanvasOverlayOrder` 零命中，`CanvasLayerOrder` 是唯一页面序来源。
 - 独立复审 `t_122d4d5b` 判 **PASS**，C1–C6 全过。
 - 仍未闭合：用户最终验收（M00）；M08 战役回顾面板的运行时打开；M09 真机窗口拖动；`Assets/Tests/PlayMode` 为空，运行时验证仍靠手工配方；其余 MINOR 见 §6。
-- 本机当前没有可连接的 Unity Editor（`unity command editor_status` 报未找到实例），任何复测前先 `unity open`。
+- 本次状态核对时，本机唯一 Unity Editor 为 PID `93704`，项目路径为 `C:\Users\panye\My project`，Unity `6000.6.6f1`，Pipeline 端口 `7800` 可达；`editor_status` 为 `ready`、`compiling=false`、`playMode=stopped`。后续 Unity 工作开始前重新核对进程、`-projectPath` 与 Pipeline；已有实例时复用，不启动第二实例。
 - 证据边界。M01 与 M08C 子切片的验收都不代表 M00 或 M02–M08 整体验收。
 
 ---
 
 ## 6. 下一步
 
-按依赖顺序，前一项不闭合不做下一项。开始任何 Unity 工作前先 `unity open` 拉起本工程 Editor，`unity pipeline list` 按 `-projectPath` 与 PID 对号后再动手。
+按依赖顺序，前一项不闭合不做下一项。开始 Unity 工作前先核对 Editor 进程的 `-projectPath` 和 `unity pipeline list`；本工程已有 Editor 时复用，只有确认无实例时才启动。
 
 1. **用户最终验收（唯一硬门）**：跑 `Builds/Demo-v1-2bca9d1-r2/Demo-v1-2bca9d1-r2.exe`，走标题→开始新游戏→SC-013→营地 HUD→结束月份→地图→清洲城镇页→当地委托。验收通过后由用户点头，才谈里程碑 tag。
 2. M08 战役回顾面板的运行时打开：面板只在真实 55 年阶段回顾或 100 年结局待处理时显示，需要一条长周期演示路线给证据。不以调试跳日期取证。

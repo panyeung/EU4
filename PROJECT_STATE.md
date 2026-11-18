@@ -8,14 +8,14 @@
 ## 当前基线
 
 - 仓库：`https://github.com/panyeung/EU4.git`。
-- `main` 与 `origin/main` 同步。游戏代码基线为 `2bca9d1`。之后的主线提交只更新文档。本次文档分支从 `main@23ef2cc` 建立。
+- `main` 与 `origin/main` 同步。游戏代码基线为 `2bca9d1`。之后的主线提交只更新文档。本文件最初在 `feature/project-state-docs` 独立工作树编写；该文档分支已合入 `main`，不代表当前分支状态。
 - Unity 版本：`6000.6.6f1`，URP 2D，Windows。
 - 主工作树：`C:\Users\panye\My project`，基线工作区干净。本文件最初在 `feature/project-state-docs` 独立工作树编写，以免干扰 v1 演示签核。
-- 当前没有可连接的本工程 Unity Editor。`unity command editor_status` 返回未找到实例。不得据此启动 batchmode。
+- 当前本工程唯一 Unity Editor 为 PID `93704`，Unity `6000.6.6f1`，Pipeline 端口 `7800` 可达；`editor_status` 返回 `ready`、`compiling=false`、`playMode=stopped`。每次 Unity 操作前重查进程及 `-projectPath`，不得启动第二实例。
 
 ## 当前阶段
 
-**v1 Windows 演示待技术签核与用户验收。** 演示包可运行，但整项目尚未完成。采集本状态时，`tester` 仍在复审 `t_39a5b047`，尚未给出 ACCEPT 或 RETURN。签核通过后，我会交付演示包和一到两分钟试玩步骤。然后等待用户反馈，再开始下一阶段。
+**v1 Windows 演示待最终技术签核与用户验收。** 演示包可运行，但整项目尚未完成。`tester` 于 2026-11-18 13:12Z 对 `t_39a5b047` 给出 RETURN，要求先修正文档里的过期当前状态再复审；本轮修订由 `t_1df7a5a1` 执行。签核通过后交付演示包和一到两分钟试玩步骤；用户验收仍未完成。
 
 演示包：
 
@@ -40,8 +40,8 @@ Git 忽略 `Logs/` 与 `Builds/`。这些日志和 exe 目前只在本机工作�
 
 ## 未完成工作
 
-1. 完成 `t_39a5b047` 的独立技术签核，随后交付 v1 演示并等待用户验收。
-2. M08 验证未闭合。`t_0a1e8ce8` 当前为 blocked，EditMode、场景 Validator、Play Mode 和 M08B 长期模拟都缺本轮证据。卡片记录的旧 Editor PID 已不存在，目前也没有可连接的 Editor。进入该阶段时，先重查 Editor，再由 `coden` 启动唯一实例。模拟产物写入 `Logs/verify/m08b/<policyId>/`。报告只说明当前基线、策略 ID 和种子数，不写生存率结论。
+1. 完成 `t_1df7a5a1` 的 RETURN 修订及其后的独立复审，确认 `t_39a5b047` 技术签核通过后，交付 v1 演示并等待用户验收。
+2. `t_0a1e8ce8` 当前在 review，待 tester 复审。本轮已产出编译、EditMode `2214/2214`、场景 Validator `PASS; Errors: 0`、Play Mode 路线及 D3 两策略各 1000 种子归档，证据见 `Logs/verify/20261118-m08-full-verification.md`。这些证据不代表整个 M08 已闭合；战役回顾面板在真实 55 年回顾或 100 年结局时打开仍未验证。报告对模拟只陈述当前基线、策略 ID 与种子数，不据此宣称生存通过。
 3. M08 战役回顾面板尚无真实 55 年回顾或 100 年结局运行时打开证据。不可用调试跳日期替代。
 4. M09 窗口拖动尚无真实硬件输入证据。已有合成输入结果不算通过。
 5. `Assets/Tests/PlayMode` 为空。运行时路径仍按手工配方留证。
