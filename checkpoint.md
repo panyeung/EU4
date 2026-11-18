@@ -5,7 +5,7 @@
 
 规则：新 checkpoint 只往第 4 节表格加一行，长过程记录留在 `Logs/`，不要往本文追加叙述段。
 
-文档地图。旧文档已删除，需要原文时从 git 提交 `d57ea7c` 取回（`git show d57ea7c:GDD_v4.0.md`）。`AGENTS.md` 里仍有几处写着 `GDD_v4.0.md`、`ASSETS.md`、`docs/ART_ASSET_WORKFLOW.md`、`DECISIONS.md`，那些内容现在都在本文与 [ui设计规划.md](ui设计规划.md) 里。该文件属受保护的代理指令文件，改写需要用户批准一次。
+文档地图。旧文档已删除，需要原文时从 git 提交 `d57ea7c` 取回（`git show d57ea7c:GDD_v4.0.md`）。`AGENTS.md` 已指向本文与 [ui设计规划.md](ui设计规划.md)。
 
 ---
 

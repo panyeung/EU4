@@ -13,7 +13,7 @@
 \- Platform: Windows
 
 \- Project Path: C:\\Users\\panye\\My project
-\- Game Direction: 《影之一族》按 GDD_v4.0.md 执行；旧 Sengoku Chronicle M1–M7 文档仅作历史档案。
+\- Game Direction: 《影之一族》按 checkpoint.md 的设计规划与里程碑执行；UI 与美术资产按 ui设计规划.md；旧 Sengoku Chronicle M1–M7 文档仅作历史档案。
 
 
 
@@ -254,9 +254,9 @@ The current lead prompt governs process. Keep the GDD authoritative for game des
 
 After each applicable verification gate passes, automatically commit only the verified files for that task and push the commit to `origin` on the current branch. Keep unrelated local changes out of the commit. The user has granted Mochi standing authorization to run and accept Unity Play Mode tests, including using Computer Use and screenshots when useful; push permitted verified work on its feature branch, but wait for the Play Mode gate and the user's explicit final milestone acceptance before creating the final milestone checkpoint, merging to `main`, or tagging.
 
-Stay in this repository. Use no paid services, subscriptions, assets, or APIs. Do not change OpenCode providers, API keys, or plans. Do not copy material from Taiko Risshiden or another commercial game. Use original, CC0, or permissively licensed content and list every source and license in `ASSETS.md`. Record new Unity packages and their reason in `DECISIONS.md`. Preserve `.meta` files and GUIDs; leave `Library` and `Temp` untouched.
+Stay in this repository. Use no paid services, subscriptions, assets, or APIs. Do not change OpenCode providers, API keys, or plans. Do not copy material from Taiko Risshiden or another commercial game. Use original, CC0, or permissively licensed content and list every source and license in `ui设计规划.md` 第 10 节. Record new Unity packages and their reason in `checkpoint.md` 决策记录. Preserve `.meta` files and GUIDs; leave `Library` and `Temp` untouched.
 
-Before Unity work, check the running Editor process and its `-projectPath`. Keep one Unity Editor per project folder; never run batchmode against a folder held by the user's Editor. Use that Editor's Test Runner and `Editor.log` for compilation and tests. The standard Windows log is `%LOCALAPPDATA%\Unity\Editor\Editor.log`; also check `<project>\Logs\Editor.log`. Record compilation, EditMode tests, Console counts, and Play Mode evidence separately. Do not infer runtime behavior from compilation. The audited host has no .NET SDK, so `dotnet` is not the Unity build path. The project does expose the Unity Pipeline bridge (`com.unity.pipeline` plus the `unity` CLI, Editor server on 7800-7849): use `unity command editor_status`, `console`, `console_status`, `recompile`, `run_script`, `open_scene`, `editor_play`/`editor_stop`, `editor_focus`, and `capture_game_view` against the already-open Editor instead of GUI automation. See the `verify` and `succession-invariants` project skills in `.opencode/skills/` and the 2026-11-10 entry in `DECISIONS.md` for the working commands and their limits.
+Before Unity work, check the running Editor process and its `-projectPath`. Keep one Unity Editor per project folder; never run batchmode against a folder held by the user's Editor. Use that Editor's Test Runner and `Editor.log` for compilation and tests. The standard Windows log is `%LOCALAPPDATA%\Unity\Editor\Editor.log`; also check `<project>\Logs\Editor.log`. Record compilation, EditMode tests, Console counts, and Play Mode evidence separately. Do not infer runtime behavior from compilation. The audited host has no .NET SDK, so `dotnet` is not the Unity build path. The project does expose the Unity Pipeline bridge (`com.unity.pipeline` plus the `unity` CLI, Editor server on 7800-7849): use `unity command editor_status`, `console`, `console_status`, `recompile`, `run_script`, `open_scene`, `editor_play`/`editor_stop`, `editor_focus`, and `capture_game_view` against the already-open Editor instead of GUI automation. See the `verify` and `succession-invariants` project skills in `.opencode/skills/` and the 2026-11-10 Unity Pipeline entry in `checkpoint.md` 决策记录 for the working commands and their limits.
 
 Only the lead or one designated integration worker edits scenes, prefabs, or `ProjectSettings`. Parallel workers in separate worktrees may edit C# logic, text data, tests, docs, and research. Keep gameplay rules in plain C# where practical, use asmdefs, and preserve `PlayerMovement2D` behavior. Editor scene generators use one Undo group, validate before saving, roll back with Undo on exceptions, and never reload a scene for rollback. Place generated UI beneath one fixed root.
 
@@ -288,6 +288,10 @@ For each substantial feature, Mochi creates one dependent final sign-off task li
 
 
 
+## Task completion notification
+
+Every finished task ends with a notification to `openManusBot` on the UnityDH channel, and the message must name the kanban task (card id and title) when the work came from a card. Run `scripts/notify-openmanus.sh "<title>" "<body>" "<card id>"`. The script always appends the notice to `Logs/notifications/outbox.txt`, then sends through `hermes send --to "$OPENMANUS_TARGET"` when that variable is set. `hermes send --list` shows whether any platform is configured. When no target exists, say so plainly in the reply instead of claiming the notice went out, and run `scripts/notify-openmanus.sh --drain` once a target is set.
+
 ## Art asset workflow
 
-Follow [docs/ART_ASSET_WORKFLOW.md](docs/ART_ASSET_WORKFLOW.md): Mochi generates original reference-matched art, records it in ASSETS.md, and OpenCode2 implements and integrates it. Mochi may take implementation over if OpenCode2 is unavailable or cannot complete it.
+Follow [ui设计规划.md](ui设计规划.md) 第 10 节: Mochi generates original reference-matched art, records it in ui设计规划.md, and OpenCode2 implements and integrates it. Mochi may take implementation over if OpenCode2 is unavailable or cannot complete it.
