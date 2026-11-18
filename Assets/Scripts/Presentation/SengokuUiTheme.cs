@@ -36,35 +36,47 @@ namespace SengokuChronicle.Presentation
         public static readonly Color SelectedRow = new Color32(0x3A, 0x2B, 0x25, 0xFF);
 
         private static Font _serif;
-        private static bool _serifResolved;
 
         /// <summary>
         /// Runtime serif/CJK face. Prefers a traditional Kai/Song family available on the
-        /// Windows host, then falls back to the built-in legacy font. Never returns null.
+        /// Windows host, then falls back to the built-in legacy font. The fallback can still
+        /// return null when the host has neither a usable OS family nor the built-in face
+        /// (for example a stripped player); callers must treat null as "keep the authored
+        /// font" instead of assuming a face is always available.
+        /// <para>
+        /// A face created from an OS family is an unsaved runtime object: Play Mode's scene
+        /// load destroys it, and this project disables the domain reload, so the static keeps
+        /// pointing at the dead handle. A cached handle that no longer compares equal to null
+        /// is therefore resolved again instead of being handed to <c>Text.font</c>, where a
+        /// destroyed font draws nothing at all.
+        /// </para>
         /// </summary>
         public static Font Serif
         {
             get
             {
-                if (_serifResolved)
-                    return _serif;
-                _serifResolved = true;
-                try
-                {
-                    _serif = Font.CreateDynamicFontFromOSFont(new[]
-                    {
-                        "KaiTi", "STKaiti", "FangSong", "SimSun", "Noto Serif CJK SC",
-                        "Microsoft YaHei"
-                    }, 32);
-                }
-                catch (System.Exception)
-                {
-                    _serif = null;
-                }
                 if (_serif == null)
-                    _serif = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+                    _serif = ResolveSerif();
                 return _serif;
             }
+        }
+
+        private static Font ResolveSerif()
+        {
+            try
+            {
+                Font font = Font.CreateDynamicFontFromOSFont(new[]
+                {
+                    "KaiTi", "STKaiti", "FangSong", "SimSun", "Noto Serif CJK SC",
+                    "Microsoft YaHei"
+                }, 32);
+                if (font != null)
+                    return font;
+            }
+            catch (System.Exception)
+            {
+            }
+            return Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
         }
 
         /// <summary>Applies the serif face to every Text under the supplied root.</summary>

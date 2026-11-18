@@ -199,6 +199,33 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
+        public void DebugInjection_QueuesOneKnownEventAndRefusesARepeatAfterACommit()
+        {
+            EventDefinitionData reusable = CreateEvent("event.injectable", 10);
+            reusable.cooldownMonths = 0;
+            reusable.onceScope = "Never";
+            EventEngine engine = CreateEngine(reusable);
+            var state = new EventRuntimeState();
+            Assert.That(state.TryInjectDebugEvent("  ", out _), Is.False);
+            Assert.That(state.TryInjectDebugEvent("event.injectable", out string error), Is.True,
+                error);
+            Assert.That(state.PendingEventId, Is.EqualTo("event.injectable"));
+            Assert.That(state.TryInjectDebugEvent("event.injectable", out string pendingError),
+                Is.False, "a second pending event must be refused.");
+            Assert.That(pendingError, Does.Contain("待处理事件"));
+
+            EventChoiceResult choice = engine.TryChooseEventOption("event.injectable",
+                "option.event.injectable", "debug.result.1", new GameDate(1560, 5, 1),
+                new CharacterRelationships(), state);
+
+            Assert.That(choice.Succeeded, Is.True, choice.Message);
+            Assert.That(state.HasPendingEvents, Is.False);
+            Assert.That(state.TryInjectDebugEvent("event.injectable", out string historyError),
+                Is.False, "an event with history must not be injected again.");
+            Assert.That(historyError, Does.Contain("已完成"));
+        }
+
+        [Test]
         public void PendingEventBlocksAnotherMonth()
         {
             GameSession session = GameSession.NewGame();

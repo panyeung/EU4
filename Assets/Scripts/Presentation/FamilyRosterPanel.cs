@@ -108,18 +108,10 @@ namespace SengokuChronicle.Presentation
                 return null;
             if (PortraitCache.TryGetValue(key, out Sprite cached))
                 return cached;
-            // The generated clan atlas is the primary portrait source; the older
-            // owner-supplied single crops stay as a fallback so the roster renders
-            // even before the atlas import is refreshed.
+            // The generated clan atlas is the only portrait source. A missing atlas
+            // returns null so the roster keeps its flat colour instead of falling back
+            // to an owner-supplied reference crop.
             Sprite sprite = SengokuUiArt.Portrait(key);
-            if (sprite == null)
-            {
-                Texture2D texture = Resources.Load<Texture2D>("ReferenceArt/portrait_" + key);
-                sprite = texture != null
-                    ? Sprite.Create(texture, new Rect(0f, 0f, texture.width, texture.height),
-                        new Vector2(0.5f, 0.5f), 100f)
-                    : null;
-            }
             PortraitCache[key] = sprite;
             return sprite;
         }

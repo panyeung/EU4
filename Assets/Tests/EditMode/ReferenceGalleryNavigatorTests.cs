@@ -565,6 +565,144 @@ namespace SengokuChronicle.Tests.EditMode
             return found;
         }
 
+
+        [Test]
+        public void ShowPage_NeverHidesTheEventModalOrTheDebugWindow()
+        {
+            GameObject nav = Create("Navigation", typeof(RectTransform), typeof(CanvasRenderer),
+                typeof(Image));
+            GameObject header = Create("Header");
+            Button launcher = CreateButton("Launcher");
+            Button[] buttons = new Button[ReferenceGalleryNavigator.PageCount];
+            for (int i = 0; i < buttons.Length; i++)
+                buttons[i] = CreateButton("Button" + i);
+
+            GameObject eventRoot = Create("EventChoiceRoot");
+            eventRoot.AddComponent<EventChoicePanel>();
+            GameObject debugRoot = Create("M09DebugModeRoot");
+            GameObject familyRoot = Create("FamilyRoot");
+            GameObject mapRoot = Create("MapRoot", typeof(RectTransform),
+                typeof(CanvasRenderer), typeof(Image));
+            GameObject[] panels =
+            {
+                Create("HouseholdPanel"), Create("CharacterPanel"),
+                Create("FamilyPanel"), mapRoot, Create("EventPanel")
+            };
+            var roots = new[]
+            {
+                new ReferenceGalleryPageRoot(eventRoot,
+                    ReferenceGalleryPageMask.Household | ReferenceGalleryPageMask.Events),
+                new ReferenceGalleryPageRoot(debugRoot, ReferenceGalleryPageMask.None),
+                new ReferenceGalleryPageRoot(familyRoot, ReferenceGalleryPageMask.Family),
+                new ReferenceGalleryPageRoot(mapRoot, ReferenceGalleryPageMask.Map)
+            };
+            ReferenceGalleryNavigator navigator = Create("Navigator", typeof(RectTransform))
+                .AddComponent<ReferenceGalleryNavigator>();
+            GameObject backdrop = Create("M02PageBackdrop", typeof(RectTransform),
+                typeof(CanvasRenderer), typeof(Image));
+            backdrop.transform.SetParent(navigator.transform);
+            navigator.BindReferences(roots, buttons, panels[1], panels[2], panels[0],
+                panels[3], launcher, nav, header);
+
+            eventRoot.SetActive(true);
+            debugRoot.SetActive(true);
+            navigator.ShowPage(ReferenceGalleryPage.Map);
+
+            Assert.That(eventRoot.activeSelf, Is.True,
+                "the event modal must survive a move to the map page.");
+            Assert.That(debugRoot.activeSelf, Is.True,
+                "the debug window must survive page navigation while its session is open.");
+            Assert.That(familyRoot.activeSelf, Is.False,
+                "ordinary page roots still toggle with the page.");
+
+            navigator.ShowPage(ReferenceGalleryPage.Character);
+            Assert.That(eventRoot.activeSelf, Is.True);
+            Assert.That(debugRoot.activeSelf, Is.True);
+
+            // Closing the modal stays the panel's decision: navigation never reopens it.
+            eventRoot.SetActive(false);
+            navigator.ShowPage(ReferenceGalleryPage.Household);
+            Assert.That(eventRoot.activeSelf, Is.False,
+                "page navigation must not force a modal the panel closed back open.");
+        }
+
+        [Test]
+        public void ShowPage_Map_KeepsAPendingEventReachableThroughItsPanel()
+        {
+            GameSession session = GameSession.NewGame();
+            try
+            {
+                GameObject panelRoot = Create("EventChoiceRoot");
+                EventChoicePanel panel = panelRoot.AddComponent<EventChoicePanel>();
+                GameObject modal = Create("EventChoiceModal", typeof(RectTransform),
+                    typeof(Image));
+                modal.transform.SetParent(panelRoot.transform, false);
+                Text title = Create("ModalTitle", typeof(RectTransform), typeof(Text))
+                    .GetComponent<Text>();
+                title.transform.SetParent(modal.transform, false);
+                Text body = Create("ModalBody", typeof(RectTransform), typeof(Text))
+                    .GetComponent<Text>();
+                body.transform.SetParent(modal.transform, false);
+                GameObject content = Create("Options", typeof(RectTransform));
+                content.transform.SetParent(modal.transform, false);
+                Button prefab = CreateButton("OptionTemplate");
+                prefab.transform.SetParent(modal.transform, false);
+                prefab.gameObject.SetActive(false);
+                Text feedback = Create("Feedback", typeof(RectTransform), typeof(Text))
+                    .GetComponent<Text>();
+                feedback.transform.SetParent(panelRoot.transform, false);
+                panel.BindReferences(session, session.EventCatalog, session.EventText,
+                    modal, title, body, content.transform, prefab, feedback);
+
+                GameObject nav = Create("Navigation", typeof(RectTransform),
+                    typeof(CanvasRenderer), typeof(Image));
+                GameObject header = Create("Header");
+                Button launcher = CreateButton("Launcher");
+                Button[] buttons = new Button[ReferenceGalleryNavigator.PageCount];
+                for (int i = 0; i < buttons.Length; i++)
+                    buttons[i] = CreateButton("Button" + i);
+                GameObject mapRoot = Create("MapRoot", typeof(RectTransform),
+                    typeof(CanvasRenderer), typeof(Image));
+                GameObject[] panels =
+                {
+                    Create("HouseholdPanel"), Create("CharacterPanel"),
+                    Create("FamilyPanel"), mapRoot, Create("EventPanel")
+                };
+                ReferenceGalleryNavigator navigator =
+                    Create("Navigator", typeof(RectTransform))
+                        .AddComponent<ReferenceGalleryNavigator>();
+                GameObject backdrop = Create("M02PageBackdrop", typeof(RectTransform),
+                    typeof(CanvasRenderer), typeof(Image));
+                backdrop.transform.SetParent(navigator.transform);
+                navigator.BindReferences(new[]
+                {
+                    new ReferenceGalleryPageRoot(panelRoot,
+                        ReferenceGalleryPageMask.Household | ReferenceGalleryPageMask.Events),
+                    new ReferenceGalleryPageRoot(mapRoot, ReferenceGalleryPageMask.Map)
+                }, buttons, panels[1], panels[2], panels[0], panels[3], launcher, nav, header);
+                navigator.BindGameSession(session);
+
+                Assert.That(session.TryAdvanceToNextMonth(), Is.True, session.LastEventMessage);
+                Assert.That(session.PendingEventId, Is.Not.Empty);
+                Assert.That(panel.HasPendingEvent, Is.True);
+                Assert.That(modal.activeSelf, Is.True,
+                    "the panel shows itself as soon as the event is queued.");
+
+                navigator.ShowPage(ReferenceGalleryPage.Map);
+
+                Assert.That(session.PendingEventId, Is.Not.Empty);
+                Assert.That(panelRoot.activeSelf, Is.True,
+                    "the registered event root must stay enabled across the page change.");
+                Assert.That(modal.activeSelf, Is.True,
+                    "a page change must not hide the pending event modal.");
+                Assert.That(panel.IsBound, Is.True);
+            }
+            finally
+            {
+                Object.DestroyImmediate(session.gameObject);
+            }
+        }
+
         [Test]
         public void ShowPage_Household_PresentsRosterIndustryMonthEventAndPendingDecisions()
         {

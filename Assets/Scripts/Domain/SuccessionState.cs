@@ -250,7 +250,119 @@ namespace SengokuChronicle.Domain
 
         public bool TryAddKinship(KinshipLink link, out string error) =>
             _kinship.TryAdd(link, out error);
+
+#pragma warning disable UAC0009 // the approved Debug Mode plan requires the Editor/development build boundary
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        /// <summary>
+        /// Replaces one registered person with a person that keeps the same permanent ID.
+        /// This is the debug transaction's gender/name seam and is compiled only for the
+        /// Editor and development builds. Only the display fact changes: life, membership,
+        /// kinship and pregnancies are untouched, and the new gender must be a defined
+        /// value. A missing person, an empty ID or an undefined gender is rejected without
+        /// changing anything.
+        /// </summary>
+        public bool TryReplacePerson(PersonState replacement, out string error)
+        {
+            if (replacement == null)
+            {
+                error = "Replacement person must not be null.";
+                return false;
+            }
+            if (replacement.Id.IsEmpty)
+            {
+                error = "Replacement person must keep a non-empty permanent ID.";
+                return false;
+            }
+            if (!_persons.ContainsKey(replacement.Id))
+            {
+                error = "Person is not registered: " + replacement.Id;
+                return false;
+            }
+            if (!Enum.IsDefined(typeof(PersonGender), replacement.Gender))
+            {
+                error = "Person gender is undefined: " + (int)replacement.Gender;
+                return false;
+            }
+            _persons[replacement.Id] = replacement;
+            error = string.Empty;
+            return true;
+        }
+#endif
+#pragma warning restore UAC0009
+
+#pragma warning disable UAC0009 // the approved Debug Mode plan requires the Editor/development build boundary
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        /// <summary>
+        /// Captures every fact this world owns so a debug transaction can restore the
+        /// exact pre-command state after a rejected or failed commit. The snapshot keeps
+        /// person references, so a caller that mutated a person in place must not rely on
+        /// it to undo that mutation.
+        /// </summary>
+        internal SuccessionWorldSnapshot CaptureSnapshot()
+        {
+            var persons = new List<PersonState>(_persons.Count);
+            var lives = new List<KeyValuePair<PersonId, SuccessionPersonLife>>(_life.Count);
+            foreach (KeyValuePair<PersonId, PersonState> entry in _persons)
+                persons.Add(entry.Value);
+            foreach (KeyValuePair<PersonId, SuccessionPersonLife> entry in _life)
+                lives.Add(entry);
+            // The world's own views are live wrappers over mutable collections, so a
+            // snapshot must copy every list before a rollback clears them.
+            var members = new List<FamilyMembership>(_family.Members);
+            var links = new List<KinshipLink>(_kinship.Links);
+            var pregnancies = new List<FamilyPregnancyRecord>(_pregnancies.Records);
+            return new SuccessionWorldSnapshot(persons, lives, members, links, pregnancies);
+        }
+
+        /// <summary>Restores a snapshot captured by <see cref="CaptureSnapshot"/> on this world.</summary>
+        internal bool TryRestoreSnapshot(SuccessionWorldSnapshot snapshot)
+        {
+            if (snapshot == null)
+                return false;
+            _persons.Clear();
+            for (int i = 0; i < snapshot.Persons.Count; i++)
+                _persons[snapshot.Persons[i].Id] = snapshot.Persons[i];
+            _life.Clear();
+            for (int i = 0; i < snapshot.Lives.Count; i++)
+                _life[snapshot.Lives[i].Key] = snapshot.Lives[i].Value;
+            _family.RestoreMembers(snapshot.Members);
+            _kinship.RestoreLinks(snapshot.Links);
+            _pregnancies.RestoreRecords(snapshot.Pregnancies);
+            return true;
+        }
+#endif
+#pragma warning restore UAC0009
     }
+
+
+#pragma warning disable UAC0009 // the approved Debug Mode plan requires the Editor/development build boundary
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+    /// <summary>
+    /// Detached capture of the four fact collections a <see cref="SuccessionWorld"/> owns.
+    /// It is transaction support for the isolated debug session and is not persisted.
+    /// </summary>
+    internal sealed class SuccessionWorldSnapshot
+    {
+        internal SuccessionWorldSnapshot(IReadOnlyList<PersonState> persons,
+            IReadOnlyList<KeyValuePair<PersonId, SuccessionPersonLife>> lives,
+            IReadOnlyList<FamilyMembership> members, IReadOnlyList<KinshipLink> links,
+            IReadOnlyList<FamilyPregnancyRecord> pregnancies)
+        {
+            Persons = persons;
+            Lives = lives;
+            Members = members;
+            Links = links;
+            Pregnancies = pregnancies;
+        }
+
+        internal IReadOnlyList<PersonState> Persons { get; }
+        internal IReadOnlyList<KeyValuePair<PersonId, SuccessionPersonLife>> Lives { get; }
+        internal IReadOnlyList<FamilyMembership> Members { get; }
+        internal IReadOnlyList<KinshipLink> Links { get; }
+        internal IReadOnlyList<FamilyPregnancyRecord> Pregnancies { get; }
+    }
+#endif
+#pragma warning restore UAC0009
 
     /// <summary>
     /// Mutable succession decision state for one family. The service is the only

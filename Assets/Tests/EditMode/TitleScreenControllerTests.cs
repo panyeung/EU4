@@ -31,6 +31,9 @@ namespace SengokuChronicle.Tests.EditMode
         private Button _familyFormationButton;
         private Button _seclusionButton;
         private Button _familyDoctrineButton;
+        private Button _debugEntryButton;
+        private GameObject _debugPanelParent;
+        private DebugModePanel _debugPanel;
         private Text _statusText;
         private string _directory;
         private SaveSlotStore _store;
@@ -62,6 +65,7 @@ namespace SengokuChronicle.Tests.EditMode
             _familyFormationButton = MakeButton("FamilyFormationButton");
             _seclusionButton = MakeButton("SeclusionButton");
             _familyDoctrineButton = MakeButton("FamilyDoctrineButton");
+            _debugEntryButton = MakeButton("DebugModeEntryButton");
             _statusText = new GameObject("Status", typeof(RectTransform)).AddComponent<Text>();
 
             _controller.Bind(_session, _store, null, _titleRoot, _newGameButton, _continueButton, _statusText);
@@ -73,6 +77,10 @@ namespace SengokuChronicle.Tests.EditMode
             _controller.BindFamilyFormationScenarioButton(_familyFormationButton);
             _controller.BindSeclusionScenarioButton(_seclusionButton);
             _controller.BindFamilyDoctrineScenarioButton(_familyDoctrineButton);
+            _debugPanelParent = new GameObject("DebugPanelParent", typeof(RectTransform));
+            _debugPanel = DebugModePanel.CreateWindowUnder(_debugPanelParent.transform, _session);
+            _controller.BindDebugModeEntry(_debugEntryButton);
+            _controller.BindDebugModePanel(_debugPanel);
             _controller.ShowTitle();
         }
 
@@ -94,6 +102,11 @@ namespace SengokuChronicle.Tests.EditMode
             Destroy(_familyFormationButton);
             Destroy(_seclusionButton);
             Destroy(_familyDoctrineButton);
+            Destroy(_debugEntryButton);
+            if (_debugPanel != null)
+                Object.DestroyImmediate(_debugPanel.gameObject);
+            if (_debugPanelParent != null)
+                Object.DestroyImmediate(_debugPanelParent);
             if (_statusText != null)
                 Object.DestroyImmediate(_statusText.gameObject);
             if (_session != null)
@@ -127,6 +140,331 @@ namespace SengokuChronicle.Tests.EditMode
             };
         }
 
+
+        [Test]
+        public void DebugPanelReset_ReturnsThePlayerToTheStartPage()
+        {
+            _debugEntryButton.onClick.Invoke();
+            Assert.That(_controller.IsTitleVisible, Is.False);
+            Assert.That(_debugPanel.IsOpen, Is.True);
+
+            _debugPanel.ResetDebugSession();
+
+            Assert.That(_debugPanel.IsOpen, Is.False);
+            Assert.That(_controller.IsTitleVisible, Is.True,
+                "reset must restore the start page the entry hid.");
+            Assert.That(_controller.IsMainMenuVisible, Is.True);
+            Assert.That(_session.IsDebugSessionActive, Is.False);
+            Assert.That(_controller.Status, Does.Contain("已重置调试会话"));
+            Assert.That(_controller.SlotLoadCount, Is.Zero,
+                "returning to the start page must not read the slot.");
+        }
+
+        [Test]
+        public void DebugPanelExit_ReturnsThePlayerToTheStartPage()
+        {
+            _debugEntryButton.onClick.Invoke();
+            Assert.That(_controller.IsTitleVisible, Is.False);
+
+            _debugPanel.ExitDebugSession();
+
+            Assert.That(_debugPanel.IsOpen, Is.False);
+            Assert.That(_controller.IsTitleVisible, Is.True,
+                "exit must restore the start page the entry hid.");
+            Assert.That(_controller.IsMainMenuVisible, Is.True);
+            Assert.That(_session.IsDebugSessionActive, Is.False);
+            Assert.That(_controller.Status, Does.Contain("已退出 Debug 模式"));
+            Assert.That(_controller.SlotLoadCount, Is.Zero);
+            Assert.That(_debugEntryButton.gameObject.activeInHierarchy, Is.True,
+                "the entry is visible again on the restored title page.");
+        }
+
+        [Test]
+        public void DebugEntry_ReopensAfterAReset()
+        {
+            _debugEntryButton.onClick.Invoke();
+            _debugPanel.ResetDebugSession();
+            Assert.That(_debugPanel.IsOpen, Is.False);
+            Assert.That(_controller.IsTitleVisible, Is.True);
+
+            _debugEntryButton.onClick.Invoke();
+
+            Assert.That(_debugPanel.IsOpen, Is.True,
+                "the entry must stay armed after a reset returns to the start page.");
+            Assert.That(_session.IsDebugSessionActive, Is.True);
+            Assert.That(_controller.IsTitleVisible, Is.False);
+        }
+
+
+        [Test]
+        public void SerializedPanelField_IsSubscribedByTheLifecycle()
+        {
+            // A scene may assign the window in the Inspector only. Nothing calls the bind
+            // method then, so the lifecycle must still subscribe to its reset/exit event.
+            var host = new GameObject("SerializedPanelHost", typeof(RectTransform));
+            DebugModePanel serializedPanel = DebugModePanel.CreateWindowUnder(host.transform,
+                _session);
+            try
+            {
+                typeof(TitleScreenController)
+                    .GetField("debugModePanel",
+                        System.Reflection.BindingFlags.Instance |
+                        System.Reflection.BindingFlags.NonPublic)
+                    .SetValue(_controller, serializedPanel);
+
+                InvokeLifecycle(_controller, "OnEnable");
+                Assert.That(_controller.DebugModePanelBound, Is.True);
+
+                Assert.That(_controller.StartDebugSession(), Is.True);
+                Assert.That(serializedPanel.IsOpen, Is.True);
+                Assert.That(_controller.IsTitleVisible, Is.False);
+
+                serializedPanel.ResetDebugSession();
+
+                Assert.That(serializedPanel.IsOpen, Is.False);
+                Assert.That(_controller.IsTitleVisible, Is.True,
+                    "the serialized window's reset must restore the start page.");
+                Assert.That(_session.IsDebugSessionActive, Is.False);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(serializedPanel.gameObject);
+                UnityEngine.Object.DestroyImmediate(host);
+            }
+        }
+
+
+        [Test]
+        public void EntryUnderTitleRoot_StaysOnTheTitlePageAndReopensTheSameDebugSession()
+        {
+            // The saved entry is a child of the title root. It must stay there while the
+            // title page is visible, move out only while the title is hidden, and return
+            // when the start page comes back.
+            _debugEntryButton.transform.SetParent(_titleRoot.transform, false);
+            _controller.BindDebugModeEntry(_debugEntryButton);
+
+            Assert.That(_debugEntryButton.transform.parent, Is.SameAs(_titleRoot.transform),
+                "the entry belongs to the title page while the title is visible.");
+            Assert.That(_debugEntryButton.transform.GetSiblingIndex(),
+                Is.EqualTo(_titleRoot.transform.childCount - 1));
+            Assert.That(_debugEntryButton.gameObject.activeInHierarchy, Is.True);
+
+            _debugEntryButton.onClick.Invoke();
+            DebugSession firstSession = _session.CurrentDebugSession;
+            Assert.That(_controller.IsTitleVisible, Is.False);
+            Assert.That(_debugPanel.IsOpen, Is.True);
+            Assert.That(_session.IsDebugSessionActive, Is.True);
+            Assert.That(_debugEntryButton.transform.parent, Is.Not.SameAs(_titleRoot.transform),
+                "once the title is hidden the entry must leave the title overlay.");
+
+            _debugPanel.Close();
+
+            Assert.That(_debugPanel.IsOpen, Is.False);
+            Assert.That(_session.IsDebugSessionActive, Is.True,
+                "closing only hides the panel; the in-memory session stays alive.");
+            Assert.That(_debugEntryButton.gameObject.activeInHierarchy, Is.True,
+                "the entry must stay reachable while the debug session is active.");
+
+            _debugEntryButton.onClick.Invoke();
+
+            Assert.That(_debugPanel.IsOpen, Is.True);
+            Assert.That(_session.CurrentDebugSession, Is.SameAs(firstSession),
+                "reopening after close keeps the same in-memory debug session.");
+            Assert.That(_controller.IsTitleVisible, Is.False);
+
+            _debugPanel.ResetDebugSession();
+
+            Assert.That(_debugPanel.IsOpen, Is.False);
+            Assert.That(_controller.IsTitleVisible, Is.True,
+                "reset returns to the start page.");
+            Assert.That(_session.IsDebugSessionActive, Is.False);
+            Assert.That(_debugEntryButton.transform.parent, Is.SameAs(_titleRoot.transform),
+                "the entry returns under the title root.");
+            Assert.That(_debugEntryButton.transform.GetSiblingIndex(),
+                Is.EqualTo(_titleRoot.transform.childCount - 1));
+            Assert.That(_debugEntryButton.gameObject.activeInHierarchy, Is.True,
+                "the entry is visible on the restored title page.");
+
+            _debugEntryButton.onClick.Invoke();
+            Assert.That(_session.IsDebugSessionActive, Is.True,
+                "the entry still opens a fresh session after a reset.");
+            Assert.That(_debugPanel.IsOpen, Is.True);
+
+            _debugPanel.ExitDebugSession();
+
+            Assert.That(_debugPanel.IsOpen, Is.False);
+            Assert.That(_controller.IsTitleVisible, Is.True,
+                "exit returns to the start page.");
+            Assert.That(_session.IsDebugSessionActive, Is.False);
+            Assert.That(_debugEntryButton.transform.parent, Is.SameAs(_titleRoot.transform));
+        }
+
+        [Test]
+        public void DebugEntry_InGame_StaysBelowTheEventAndTacticalOverlays()
+        {
+            var canvasObject = new GameObject("DebugOverlayCanvas", typeof(RectTransform),
+                typeof(Canvas));
+            var eventRoot = new GameObject("EventChoiceRoot", typeof(RectTransform));
+            var tactical = new GameObject("M6TacticalMissionOverlay", typeof(RectTransform));
+            try
+            {
+                canvasObject.transform.SetParent(null, false);
+                _titleRoot.transform.SetParent(canvasObject.transform, false);
+                eventRoot.transform.SetParent(canvasObject.transform, false);
+                tactical.transform.SetParent(canvasObject.transform, false);
+                _controller.ShowTitle();
+
+                Assert.That(_debugEntryButton.transform.parent, Is.SameAs(_titleRoot.transform),
+                    "on the title page the entry stays under the title root.");
+
+                _debugEntryButton.onClick.Invoke();
+
+                Assert.That(_controller.IsTitleVisible, Is.False);
+                Assert.That(_debugEntryButton.transform.parent,
+                    Is.SameAs(canvasObject.transform),
+                    "over the game the entry moves to the root Canvas.");
+                Assert.That(_debugEntryButton.transform.GetSiblingIndex(),
+                    Is.LessThan(eventRoot.transform.GetSiblingIndex()),
+                    "the entry must render below the forced-event overlay.");
+                Assert.That(_debugEntryButton.transform.GetSiblingIndex(),
+                    Is.LessThan(tactical.transform.GetSiblingIndex()),
+                    "the entry must render below the tactical overlay.");
+                Assert.That(_debugEntryButton.gameObject.activeInHierarchy, Is.False,
+                    "the entry stays hidden while the window covers the screen.");
+
+                _debugPanel.Close();
+
+                Assert.That(_debugEntryButton.gameObject.activeInHierarchy, Is.True);
+                Assert.That(_debugEntryButton.transform.parent,
+                    Is.SameAs(canvasObject.transform));
+                Assert.That(_debugEntryButton.transform.GetSiblingIndex(),
+                    Is.LessThan(eventRoot.transform.GetSiblingIndex()));
+
+                _debugPanel.ExitDebugSession();
+
+                Assert.That(_controller.IsTitleVisible, Is.True);
+                Assert.That(_debugEntryButton.transform.parent,
+                    Is.SameAs(_titleRoot.transform),
+                    "returning to the start page restores the saved parent.");
+                Assert.That(_debugEntryButton.gameObject.activeInHierarchy, Is.True);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(tactical);
+                UnityEngine.Object.DestroyImmediate(eventRoot);
+                UnityEngine.Object.DestroyImmediate(canvasObject);
+            }
+        }
+
+
+        [Test]
+        public void DebugEntry_IsHiddenWhileTheWindowIsOpenAndReturnsAfterClose()
+        {
+            Assert.That(_debugEntryButton.gameObject.activeInHierarchy, Is.True,
+                "the entry is offered on the title page.");
+
+            _debugEntryButton.onClick.Invoke();
+
+            Assert.That(_debugPanel.IsOpen, Is.True);
+            Assert.That(_debugEntryButton.gameObject.activeInHierarchy, Is.False,
+                "the entry must not cover the open window.");
+
+            _debugPanel.Close();
+
+            Assert.That(_debugPanel.IsOpen, Is.False);
+            Assert.That(_session.IsDebugSessionActive, Is.True,
+                "closing keeps the live debug session.");
+            Assert.That(_debugEntryButton.gameObject.activeInHierarchy, Is.True,
+                "the entry returns once the window is closed so the session can be reopened.");
+
+            _debugPanel.ResetDebugSession();
+
+            Assert.That(_controller.IsTitleVisible, Is.True);
+            Assert.That(_session.IsDebugSessionActive, Is.False);
+            Assert.That(_debugEntryButton.gameObject.activeInHierarchy, Is.True,
+                "the entry stays visible on the restored title page.");
+        }
+
+        [Test]
+        public void DebugEntry_IsHiddenDuringOrdinaryGameplay()
+        {
+            Assert.That(_debugEntryButton.gameObject.activeInHierarchy, Is.True,
+                "the entry is offered on the title page.");
+
+            _controller.StartNewGame();
+
+            Assert.That(_controller.IsTitleVisible, Is.False);
+            Assert.That(_debugEntryButton.gameObject.activeInHierarchy, Is.False,
+                "the development entry must not float over an ordinary game.");
+        }
+
+        [Test]
+        public void StartupPath_DoesNotReadThePlayerSlot()
+        {
+            // Construction and ShowTitle are the startup path the scene uses; neither may
+            // read the slot, so the Debug entry can start before any save check.
+            Assert.That(_controller.SlotLoadCount, Is.Zero);
+
+            _controller.ShowTitle();
+
+            Assert.That(_controller.SlotLoadCount, Is.Zero);
+            Assert.That(_controller.IsMainMenuVisible, Is.True);
+        }
+
+        [Test]
+        public void DebugModeEntry_StartsAnIsolatedSessionAndOpensTheWindow()
+        {
+            Assert.That(_controller.SlotLoadCount, Is.Zero);
+            Assert.That(_controller.DebugModeEntryBound, Is.True);
+            Assert.That(_controller.DebugModePanelBound, Is.True);
+            Assert.That(_debugPanel.IsOpen, Is.False);
+
+            _debugEntryButton.onClick.Invoke();
+
+            Assert.That(_controller.SlotLoadCount, Is.Zero,
+                "the Debug entry must not read the player slot.");
+            Assert.That(_session.IsDebugSessionActive, Is.True);
+            Assert.That(_debugPanel.IsOpen, Is.True,
+                "the entry must open the window that owns the session.");
+            Assert.That(_debugPanel.Session.IsActive, Is.True);
+            Assert.That(_session.Succession.World.Family.Id,
+                Is.EqualTo(SuccessionSample.StandardFamilyId));
+            Assert.That(_controller.IsTitleVisible, Is.False);
+            Assert.That(_controller.Status, Does.Contain("Debug"));
+            Assert.That(_controller.Status, Does.Contain("不会读写玩家存档"));
+        }
+
+        [Test]
+        public void DebugModeEntry_WithoutAWindow_DoesNotStartASession()
+        {
+            _controller.BindDebugModePanel(null);
+
+            Assert.That(_controller.StartDebugSession(), Is.False);
+
+            Assert.That(_session.IsDebugSessionActive, Is.False,
+                "the entry must never enter a session with no window.");
+            Assert.That(_controller.IsTitleVisible, Is.True);
+            Assert.That(_controller.Status, Does.Contain("未接入"));
+            Assert.That(_controller.SlotLoadCount, Is.Zero);
+        }
+
+        [Test]
+        public void NormalStartAfterDebugMode_LeavesTheDebugSessionAndClosesTheWindow()
+        {
+            _debugEntryButton.onClick.Invoke();
+            Assert.That(_session.IsDebugSessionActive, Is.True);
+            Assert.That(_debugPanel.IsOpen, Is.True);
+
+            _controller.StartNewGame();
+
+            Assert.That(_session.IsDebugSessionActive, Is.False);
+            Assert.That(_session.Succession.World.Family.Id,
+                Is.EqualTo(new FamilyId("family.akechi.sc013")));
+            Assert.That(_debugPanel.IsOpen, Is.False,
+                "a normal start ends the session and must not leave the debug window over it.");
+            Assert.That(_controller.SlotLoadCount, Is.Zero);
+        }
+
         [Test]
         public void MissingSlot_DisablesContinueAndPromptsNewGame()
         {
@@ -134,6 +472,8 @@ namespace SengokuChronicle.Tests.EditMode
 
             Assert.That(_continueButton.interactable, Is.False);
             Assert.That(_controller.Status, Does.Contain("尚未找到存档"));
+            Assert.That(_controller.SlotLoadCount, Is.EqualTo(1),
+                "one explicit refresh is the only slot read.");
             Assert.That(_statusText.text, Is.EqualTo(_controller.Status));
             Assert.That(_controller.IsTitleVisible, Is.True);
             Assert.That(_controller.IsMainMenuVisible, Is.True);

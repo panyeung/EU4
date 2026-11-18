@@ -21,6 +21,8 @@ namespace SengokuChronicle.Editor
         public const string RootName = "IndustryRoot";
         public const string OpenButtonName = "IndustryOpenButton";
         public const string PanelName = "IndustryPanel";
+        /// <summary>Decorative generated clan crest inside the industry header (non-interactive).</summary>
+        public const string HeaderCrestName = "IndustryHeaderCrest";
         public const string TitleName = "IndustryTitleText";
         public const string ResourceName = "IndustryResourceText";
         public const string BlockReasonName = "IndustryBlockReasonText";
@@ -67,6 +69,13 @@ namespace SengokuChronicle.Editor
         private const float RowHeight = 140f;
         private const float FarmRowY = 60f;
         private const float TradingRowY = -82f;
+
+        // The header crest sits left of the title line, inside the 760x560 modal. The
+        // title keeps its left-aligned text and moves just far enough right to clear it.
+        private static readonly Vector2 HeaderCrestPosition = new Vector2(-342f, 259f);
+        private static readonly Vector2 HeaderCrestSize = new Vector2(32f, 32f);
+        private static readonly Vector2 TitlePosition = new Vector2(14f, 245f);
+        private static readonly Vector2 TitleSize = new Vector2(672f, 38f);
 
         public enum UpdateResult
         {
@@ -126,6 +135,7 @@ namespace SengokuChronicle.Editor
             Transform open = Require(scene, OpenButtonName);
             Transform panel = Require(scene, PanelName);
             Transform title = Require(scene, TitleName);
+            Transform crest = Require(scene, HeaderCrestName);
             Transform resources = Require(scene, ResourceName);
             Transform blockReason = Require(scene, BlockReasonName);
             Transform message = Require(scene, MessageName);
@@ -133,9 +143,9 @@ namespace SengokuChronicle.Editor
             Transform close = Require(scene, CloseButtonName);
             Transform farm = Require(scene, FarmRowName);
             Transform trading = Require(scene, TradingRowName);
-            if (open == null || panel == null || title == null || resources == null ||
-                blockReason == null || message == null || report == null || close == null ||
-                farm == null || trading == null)
+            if (open == null || panel == null || title == null || crest == null ||
+                resources == null || blockReason == null || message == null || report == null ||
+                close == null || farm == null || trading == null)
                 return Invalid(out error, "Industry hierarchy is incomplete or ambiguous.");
 
             if (root.parent != canvases[0] || panels[0].transform != root || !root.gameObject.activeSelf)
@@ -212,6 +222,27 @@ namespace SengokuChronicle.Editor
                 !HasRaycastTarget(openButton) || !HasRaycastTarget(closeButton) ||
                 panel.GetComponent<Image>() == null || !panel.GetComponent<Image>().raycastTarget)
                 return Invalid(out error, "Industry text, buttons, background or raycast components are invalid.");
+
+            Sprite parchment = SengokuUiArt.Parchment;
+            Sprite crestSprite = SengokuUiArt.Icon(SengokuUiArt.IconCrest);
+            Image surfaceImage = panel.GetComponent<Image>();
+            Image crestImage = crest.GetComponent<Image>();
+            if (parchment == null || crestSprite == null)
+                return Invalid(out error,
+                    "The original generated parchment tile or clan crest is missing.");
+            if (surfaceImage == null || surfaceImage.sprite != parchment ||
+                surfaceImage.type != Image.Type.Tiled ||
+                !SamePalette(surfaceImage.color, SengokuUiTheme.Parchment))
+                return Invalid(out error,
+                    "The industry surface must use the generated parchment tile, tiled, on " +
+                    "the shared parchment palette.");
+            if (crestImage == null || crestImage.sprite != crestSprite ||
+                !crestImage.preserveAspect || crestImage.raycastTarget)
+                return Invalid(out error,
+                    "The industry header crest must be the generated clan icon, aspect " +
+                    "preserved and non-interactive.");
+            if (crest.parent != panel)
+                return Invalid(out error, "The industry header crest must be a panel child.");
             if (message.gameObject.activeSelf)
                 return Invalid(out error, "The industry message line must start hidden.");
             if (!titleText.text.Contains("产业"))
@@ -242,6 +273,7 @@ namespace SengokuChronicle.Editor
 
             RectTransform rootRect = root as RectTransform;
             RectTransform panelRect = panel as RectTransform;
+            RectTransform crestRect = crest as RectTransform;
             RectTransform openRect = open as RectTransform;
             RectTransform closeRect = close as RectTransform;
             if (rootRect == null || panelRect == null || openRect == null || closeRect == null ||
@@ -249,6 +281,7 @@ namespace SengokuChronicle.Editor
                 !Contained(closeRect, panelRect) || !Contained((RectTransform)farm, panelRect) ||
                 !Contained((RectTransform)trading, panelRect) ||
                 !Contained((RectTransform)title, panelRect) ||
+                crestRect == null || !Contained(crestRect, panelRect) ||
                 !Contained((RectTransform)resources, panelRect) ||
                 !Contained((RectTransform)blockReason, panelRect) ||
                 !Contained((RectTransform)message, panelRect) ||
@@ -262,6 +295,9 @@ namespace SengokuChronicle.Editor
                 Overlaps((RectTransform)trading, (RectTransform)report, panelRect) ||
                 Overlaps((RectTransform)report, closeRect, panelRect))
                 return Invalid(out error, "Industry controls overlap or lie outside their bounds.");
+            if (Overlaps(crestRect, (RectTransform)title, panelRect))
+                return Invalid(out error,
+                    "The industry header crest must not overlap the title line.");
 
             Transform chronicleOpen = Require(scene, ChronicleOpenButtonName);
             Transform rosterOpen = Require(scene, RosterOpenButtonName);
@@ -451,20 +487,18 @@ namespace SengokuChronicle.Editor
                 panelRect.anchorMin = panelRect.anchorMax = panelRect.pivot = new Vector2(0.5f, 0.5f);
                 panelRect.anchoredPosition = Vector2.zero;
                 panelRect.sizeDelta = new Vector2(760f, 560f);
-                panelObject.GetComponent<Image>().color = new Color(0.08f, 0.1f, 0.13f, 0.98f);
                 panelObject.SetActive(false);
 
                 Text title = CreateText(scene, panelRect, TitleName, font, "产业与人事",
-                    0f, 245f, 700f, 38f, 22, TextAnchor.MiddleLeft);
+                    TitlePosition.x, TitlePosition.y, TitleSize.x, TitleSize.y, 22,
+                    TextAnchor.MiddleLeft);
                 Text resources = CreateText(scene, panelRect, ResourceName, font, "资金 30　物资 12　情报 0",
                     0f, 205f, 700f, 30f, 17, TextAnchor.MiddleLeft);
                 Text block = CreateText(scene, panelRect, BlockReasonName, font, string.Empty,
                     0f, 172f, 700f, 24f, 15, TextAnchor.MiddleLeft);
-                block.color = new Color(1f, 0.82f, 0.4f, 1f);
                 block.gameObject.SetActive(false);
                 Text message = CreateText(scene, panelRect, MessageName, font, string.Empty,
                     0f, 146f, 700f, 24f, 14, TextAnchor.MiddleLeft);
-                message.color = new Color(0.65f, 0.86f, 1f, 1f);
                 message.gameObject.SetActive(false);
 
                 GameObject farmRow = CreateRow(scene, panelRect, FarmRowName, FarmRowY);
@@ -528,6 +562,7 @@ namespace SengokuChronicle.Editor
                     tradingUnassign.GetComponent<Button>(), tradingContainer, template);
                 EditorUtility.SetDirty(panel);
 
+                ApplyArt(scene, rootRect, panelRect);
                 beforeValidation?.Invoke(rootObject);
                 failure = UpdateResult.ValidationFailed;
                 if (!Validate(scene, out string error))
@@ -609,7 +644,7 @@ namespace SengokuChronicle.Editor
 
                 SetTopLeftRect(open, OpenButtonPosition, new Vector2(200f, 44f));
                 SetRect(panel, Vector2.zero, new Vector2(760f, 560f));
-                SetRect(title, new Vector2(0f, 245f), new Vector2(700f, 38f));
+                SetRect(title, TitlePosition, TitleSize);
                 SetRect(resources, new Vector2(0f, 205f), new Vector2(700f, 30f));
                 SetRect(block, new Vector2(0f, 172f), new Vector2(700f, 24f));
                 SetRect(report, new Vector2(0f, -190f), new Vector2(700f, 32f));
@@ -681,6 +716,7 @@ namespace SengokuChronicle.Editor
                     tradingUnassign.GetComponent<Button>(), tradingContainer, template.gameObject);
                 EditorUtility.SetDirty(component);
 
+                ApplyArt(scene, root, panel);
                 beforeValidation?.Invoke(root.gameObject);
                 failure = UpdateResult.ValidationFailed;
                 if (!Validate(scene, out string error))
@@ -769,6 +805,99 @@ namespace SengokuChronicle.Editor
                 serialized.ApplyModifiedPropertiesWithoutUndo();
             }
             EditorUtility.SetDirty(clock);
+        }
+
+        /// <summary>
+        /// Applies the approved M05 industry styling to the existing controls: the original
+        /// generated parchment tile on the modal surface, the shared parchment/indigo palette
+        /// on rows and text, and the generated clan crest in the header. Apart from adding the
+        /// crest and placing the title line that clears it, no control moves and none is
+        /// recreated, so assignments, controls and the 760x560 modal geometry are unchanged.
+        /// </summary>
+        private static void ApplyArt(Scene scene, Transform root, Transform panel)
+        {
+            Image surface = panel.GetComponent<Image>();
+            Sprite parchment = SengokuUiArt.Parchment;
+            if (surface != null && parchment != null)
+            {
+                Undo.RecordObject(surface, UndoName);
+                surface.sprite = parchment;
+                surface.type = Image.Type.Tiled;
+                surface.color = SengokuUiTheme.Parchment;
+                EditorUtility.SetDirty(surface);
+            }
+
+            Transform crest = EnsureHeaderCrest(scene, panel);
+            Image crestImage = crest != null ? crest.GetComponent<Image>() : null;
+            if (crestImage != null)
+            {
+                Undo.RecordObject(crestImage, UndoName);
+                crestImage.sprite = SengokuUiArt.Icon(SengokuUiArt.IconCrest);
+                crestImage.type = Image.Type.Simple;
+                crestImage.color = Color.white;
+                crestImage.preserveAspect = true;
+                crestImage.raycastTarget = false;
+                EditorUtility.SetDirty(crestImage);
+            }
+
+            foreach (Image image in root.GetComponentsInChildren<Image>(true))
+            {
+                if (image == surface || image == crestImage)
+                    continue;
+                Color color;
+                if (image.gameObject.name == FarmRowName ||
+                    image.gameObject.name == TradingRowName)
+                    color = SengokuUiTheme.ParchmentDeep;
+                else if (image.GetComponent<Button>() != null)
+                    color = SengokuUiTheme.IndigoPanel;
+                else
+                    continue;
+                Undo.RecordObject(image, UndoName);
+                image.color = color;
+                EditorUtility.SetDirty(image);
+            }
+
+            foreach (Text text in root.GetComponentsInChildren<Text>(true))
+            {
+                Undo.RecordObject(text, UndoName);
+                text.color = TextColorFor(text);
+                EditorUtility.SetDirty(text);
+            }
+        }
+
+        /// <summary>Creates the decorative clan crest inside the industry header.</summary>
+        private static Transform EnsureHeaderCrest(Scene scene, Transform panel)
+        {
+            Transform crest = panel.Find(HeaderCrestName);
+            if (crest == null)
+            {
+                crest = Create(scene, panel, HeaderCrestName, typeof(Image)).transform;
+                crest.SetAsFirstSibling();
+            }
+            SetRect(crest, HeaderCrestPosition, HeaderCrestSize);
+            return crest;
+        }
+
+        /// <summary>
+        /// Palette for one styled label. Body copy is ink on parchment, button captions take
+        /// the light parchment on indigo, and the two status lines keep a distinct meaning
+        /// colour instead of relying on weight alone.
+        /// </summary>
+        private static Color TextColorFor(Text text)
+        {
+            string name = text.name;
+            if (name == BlockReasonName)
+                return SengokuUiTheme.VermilionDark;
+            if (name == MessageName)
+                return SengokuUiTheme.Jade;
+            if (name == ResourceName || name == ReportName ||
+                name == FarmStatusTextName || name == TradingStatusTextName ||
+                name == FarmAssigneeTextName || name == TradingAssigneeTextName)
+                return SengokuUiTheme.InkSoft;
+            if (text.transform.parent != null &&
+                text.transform.parent.GetComponent<Button>() != null)
+                return SengokuUiTheme.ParchmentLight;
+            return SengokuUiTheme.Ink;
         }
 
         private static GameObject CreateRow(Scene scene, Transform panel, string name, float y)
@@ -944,6 +1073,10 @@ namespace SengokuChronicle.Editor
 
         private static bool HasRaycastTarget(Button button) =>
             button != null && button.targetGraphic != null && button.targetGraphic.raycastTarget;
+
+        /// <summary>True when a surface uses exactly the shared palette colour.</summary>
+        private static bool SamePalette(Color actual, Color expected) =>
+            ((Color32)actual).Equals((Color32)expected);
 
         private static bool Bound(UnityEngine.Object target, string field, UnityEngine.Object expected)
         {

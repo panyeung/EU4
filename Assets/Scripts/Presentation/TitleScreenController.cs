@@ -1,3 +1,8 @@
+// Unity 6.6 deprecates the DEVELOPMENT_BUILD directive (UAC0009). The approved
+// Debug Mode plan requires a compile-time boundary that exists only in the Editor
+// and development builds, so the directive stays and its deprecation notice is
+// silenced for this file only.
+#pragma warning disable UAC0009
 using UnityEngine;
 using UnityEngine.UI;
 using SengokuChronicle.Application;
@@ -77,6 +82,38 @@ namespace SengokuChronicle.Presentation
 
         private SaveSlotStore _store;
         private string _status = string.Empty;
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        private const string EventOverlayName = "EventChoiceRoot";
+        private const string TacticalOverlayName = "M6TacticalMissionOverlay";
+
+        [Header("Developer Debug Mode entry")]
+        [SerializeField]
+        private Button debugModeButton;
+
+        /// <summary>
+        /// The scene-authored root the guarded runtime code turns into the debug window.
+        /// No <see cref="DebugModePanel"/> is ever serialized, because its type does not
+        /// exist in a release player and a stored component would resolve as a missing
+        /// script there.
+        /// </summary>
+        [SerializeField]
+        private GameObject debugModeRoot;
+
+        private DebugModePanel debugModePanel;
+
+        /// <summary>True when the development-only Debug Mode entry is wired.</summary>
+        public bool DebugModeEntryBound => debugModeButton != null;
+
+        /// <summary>True when the development window root the entry opens is wired.</summary>
+        public bool DebugModePanelBound => debugModePanel != null || debugModeRoot != null;
+#endif
+
+        /// <summary>
+        /// Number of times this component has read the player slot. The ordinary startup
+        /// path must leave it at zero, and the Debug Mode entry must never increase it.
+        /// </summary>
+        public int SlotLoadCount { get; private set; }
 
         /// <summary>Result of the most recent start/continue action.</summary>
         public bool LastOperationSucceeded { get; private set; }
@@ -225,14 +262,24 @@ namespace SengokuChronicle.Presentation
                 _store = SaveSlotStore.CreateDefault();
 
             BindButtons(true);
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            // A scene may assign the window in the Inspector; bind it here as well so the
+            // reset/exit event is always observed even when no code calls the bind method.
+            BindDebugModePanel(debugModePanel);
+#endif
             ShowTitle();
-            RefreshTitleState();
+            // The startup path never inspects the save slot: only an explicit continue
+            // attempt reads it, so a Debug Mode entry can start without touching it.
+            SetStatus("选择开始方式。继续游戏会读取存档，开始新游戏不会。");
             SengokuUiTheme.ApplyFont(titleRoot != null ? titleRoot.transform : transform);
         }
 
         private void OnEnable()
         {
             BindButtons(true);
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            BindDebugModePanel(debugModePanel);
+#endif
         }
 
         private void OnDisable()
@@ -318,6 +365,15 @@ namespace SengokuChronicle.Presentation
                 if (add)
                     familyDoctrineDemoButton.onClick.AddListener(OnFamilyDoctrineDemoButton);
             }
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            if (debugModeButton != null)
+            {
+                debugModeButton.onClick.RemoveListener(OnDebugModeButton);
+                if (add)
+                    debugModeButton.onClick.AddListener(OnDebugModeButton);
+            }
+#endif
         }
 
         private void OnNewGameButton()
@@ -391,6 +447,9 @@ namespace SengokuChronicle.Presentation
             if (titleRoot != null)
                 titleRoot.SetActive(true);
             ShowMainMenu();
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            RefreshDebugEntry();
+#endif
         }
 
         /// <summary>显示主菜单页并隐藏剧本选择页；不启动或改动任何剧本/存档状态。</summary>
@@ -421,6 +480,9 @@ namespace SengokuChronicle.Presentation
         {
             if (titleRoot != null)
                 titleRoot.SetActive(false);
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            RefreshDebugEntry();
+#endif
         }
 
         /// <summary>
@@ -436,6 +498,7 @@ namespace SengokuChronicle.Presentation
                 message = "存档槽未初始化。";
             else
             {
+                SlotLoadCount++;
                 SaveLoadResult loaded = _store.Load();
                 if (loaded.Error == SaveErrorCode.NotFound)
                     message = "尚未找到存档，可开始新游戏。";
@@ -593,6 +656,196 @@ namespace SengokuChronicle.Presentation
             return true;
         }
 
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        /// <summary>Binds the development-only Debug Mode entry; release builds have no such API.</summary>
+        public void BindDebugModeEntry(Button button)
+        {
+            if (debugModeButton != null)
+                debugModeButton.onClick.RemoveListener(OnDebugModeButton);
+            debugModeButton = button;
+            BindButtons(isActiveAndEnabled);
+            RefreshDebugEntry();
+        }
+
+        /// <summary>
+        /// Places and shows the development entry for the current screen. On the title page
+        /// it belongs under the title root; while a debug session is live and the title is
+        /// hidden it moves to the root Canvas immediately below the forced-event and tactical
+        /// overlays so it can never cover modal UI. It stays hidden while the window is open
+        /// and never appears during ordinary gameplay.
+        /// </summary>
+        private void RefreshDebugEntry()
+        {
+            if (debugModeButton == null)
+                return;
+            bool titleVisible = titleRoot == null || IsTitleVisible;
+            bool panelOpen = debugModePanel != null && debugModePanel.IsOpen;
+            bool sessionActive = gameSession != null && gameSession.IsDebugSessionActive;
+
+            PlaceDebugEntry(titleVisible, sessionActive);
+
+            bool visible = titleVisible || (sessionActive && !panelOpen);
+            if (debugModeButton.gameObject.activeSelf != visible)
+                debugModeButton.gameObject.SetActive(visible);
+        }
+
+        private void PlaceDebugEntry(bool titleVisible, bool sessionActive)
+        {
+            Transform title = titleRoot != null ? titleRoot.transform : null;
+            if (title != null && (titleVisible || !sessionActive))
+            {
+                if (debugModeButton.transform.parent != title)
+                    debugModeButton.transform.SetParent(title, false);
+                debugModeButton.transform.SetAsLastSibling();
+                return;
+            }
+
+            Canvas canvas = title != null ? title.GetComponentInParent<Canvas>(true) : null;
+            Transform host = canvas != null ? canvas.rootCanvas.transform : null;
+            if (host == null && debugModePanel != null)
+                host = debugModePanel.transform.parent;
+            if (host == null)
+                return;
+            if (debugModeButton.transform.parent != host)
+                debugModeButton.transform.SetParent(host, false);
+
+            Transform eventRoot = host.Find(EventOverlayName);
+            if (eventRoot != null)
+            {
+                PlaceBefore(host, eventRoot);
+                return;
+            }
+            Transform tactical = host.Find(TacticalOverlayName);
+            if (tactical != null)
+            {
+                PlaceBefore(host, tactical);
+                return;
+            }
+            if (title != null && title.parent == host)
+            {
+                int titleIndex = title.GetSiblingIndex();
+                if (debugModeButton.transform.GetSiblingIndex() != titleIndex + 1)
+                    debugModeButton.transform.SetSiblingIndex(titleIndex + 1);
+            }
+        }
+
+        /// <summary>
+        /// Puts the entry in the slot immediately before one modal marker. Idempotent: a
+        /// second call with the entry already in place leaves the sibling order alone.
+        /// </summary>
+        private void PlaceBefore(Transform host, Transform marker)
+        {
+            int markerIndex = marker.GetSiblingIndex();
+            if (debugModeButton.transform.parent == host &&
+                debugModeButton.transform.GetSiblingIndex() == markerIndex - 1)
+                return;
+            debugModeButton.transform.SetSiblingIndex(markerIndex);
+        }
+
+        /// <summary>
+        /// Binds the development window the Debug entry must open and listens for its reset
+        /// and exit, so leaving the debug session always restores the start page. The
+        /// subscription is reset on every call, which also covers a window that only the
+        /// Inspector assigned: the serialized field never passes through a "changed" branch.
+        /// </summary>
+        public void BindDebugModePanel(DebugModePanel panel)
+        {
+            if (debugModePanel != null)
+            {
+                debugModePanel.DebugSessionEnded -= OnDebugSessionEnded;
+                debugModePanel.WindowVisibilityChanged -= OnDebugWindowVisibilityChanged;
+            }
+            debugModePanel = panel;
+            if (debugModePanel != null)
+            {
+                debugModePanel.DebugSessionEnded += OnDebugSessionEnded;
+                debugModePanel.WindowVisibilityChanged += OnDebugWindowVisibilityChanged;
+            }
+            // Re-place the entry now that the window exists: it must sit under the title
+            // root on the title page and below the modal overlays over the game.
+            RefreshDebugEntry();
+        }
+
+        private void OnDebugWindowVisibilityChanged()
+        {
+            RefreshDebugEntry();
+        }
+
+        /// <summary>
+        /// Creates the dev window component on the scene root the first time it is needed.
+        /// Attaching it at runtime keeps the serialized FoundationScene free of a type that
+        /// a release player does not compile, so no missing-script component is ever saved
+        /// or shown.
+        /// </summary>
+        private DebugModePanel EnsureDebugPanel()
+        {
+            if (debugModePanel != null)
+                return debugModePanel;
+            if (debugModeRoot == null)
+                return null;
+            debugModePanel = debugModeRoot.GetComponent<DebugModePanel>();
+            if (debugModePanel == null)
+                debugModePanel = debugModeRoot.AddComponent<DebugModePanel>();
+            debugModePanel.BindSceneRoot(gameSession, debugModeRoot, debugModeButton);
+            BindDebugModePanel(debugModePanel);
+            return debugModePanel;
+        }
+
+        private void OnDebugSessionEnded(string message)
+        {
+            ShowTitle();
+            SetStatus(string.IsNullOrEmpty(message)
+                ? "已离开 Debug 模式：临时会话已丢弃。"
+                : message);
+        }
+
+        private void OnDestroy()
+        {
+            if (debugModePanel != null)
+            {
+                debugModePanel.DebugSessionEnded -= OnDebugSessionEnded;
+                debugModePanel.WindowVisibilityChanged -= OnDebugWindowVisibilityChanged;
+            }
+        }
+
+        private void OnDebugModeButton()
+        {
+            StartDebugSession();
+        }
+
+        /// <summary>
+        /// Opens the isolated Debug Mode through its window. The window owns session start,
+        /// so the title entry can never enter a session without a visible panel, and it
+        /// never reads the player slot or writes a save.
+        /// </summary>
+        public bool StartDebugSession()
+        {
+            if (gameSession == null)
+            {
+                LastOperationSucceeded = false;
+                SetStatus("缺少 GameSession，无法进入 Debug 模式。");
+                return false;
+            }
+
+            DebugModePanel panel = EnsureDebugPanel();
+            if (panel == null)
+            {
+                LastOperationSucceeded = false;
+                SetStatus("Debug 测试窗口未接入，未进入调试会话。");
+                return false;
+            }
+
+            if (worldMapController != null)
+                worldMapController.ReturnToMap();
+            HideTitle();
+            panel.Open();
+            RefreshDebugEntry();
+            LastOperationSucceeded = true;
+            SetStatus("已进入 Debug 模式：会话只驻留内存，不会读写玩家存档。");
+            return true;
+        }
+#endif
+
         /// <summary>Starts the separate fixed SC-024 family-creed and ambition demonstration.</summary>
         public bool StartFamilyDoctrineDemo()
         {
@@ -632,6 +885,7 @@ namespace SengokuChronicle.Presentation
                 return false;
             }
 
+            SlotLoadCount++;
             SaveOperationResult result = gameSession.LoadFrom(_store);
             if (!result.Succeeded)
             {
@@ -673,3 +927,4 @@ namespace SengokuChronicle.Presentation
         }
     }
 }
+#pragma warning restore UAC0009

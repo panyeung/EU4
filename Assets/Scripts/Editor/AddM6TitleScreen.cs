@@ -52,9 +52,15 @@ namespace SengokuChronicle.Editor
         public const string FamilyDoctrineDemoButtonName = "SC024FamilyDoctrineDemoButton";
 
         public const string BackgroundAssetPath = "Assets/Art/UI/start_screen_background.png";
+
+        /// <summary>
+        /// The owner's reference seal crop. It is kept only so the legacy migration tests can
+        /// name a real, different sprite; production art comes from the generated crest in
+        /// <see cref="SengokuUiArt.Icon"/> and the button paper from
+        /// <see cref="SengokuUiArt.Parchment"/>.
+        /// </summary>
         public const string SealAssetPath = "Assets/Art/UI/ReferenceArt/seal.png";
 
-        private const string PaperAssetPath = "Assets/Art/UI/paper_grain.png";
         private const string IndigoPatternAssetPath = "Assets/Resources/Generated/indigo_pattern_tile.png";
         private const string IndigoPatternSpriteName = "indigo_pattern_tile_0";
 
@@ -138,7 +144,15 @@ namespace SengokuChronicle.Editor
         public static UpdateResult Update(Scene scene, Action<GameObject> beforeValidation) =>
             Execute(scene, false, beforeValidation);
 
-        public static bool Validate(Scene scene, out string error)
+        public static bool Validate(Scene scene, out string error) =>
+            Validate(scene, out error, requireOriginalArt: true);
+
+        /// <summary>
+        /// Structural validation. <paramref name="requireOriginalArt"/> is false only while
+        /// the updater checks whether a modern, fully bound title differs from the approved
+        /// artwork alone, so the art can be refreshed without rebuilding its hierarchy.
+        /// </summary>
+        private static bool Validate(Scene scene, out string error, bool requireOriginalArt)
         {
             error = null;
             if (!scene.IsValid() || !scene.isLoaded)
@@ -205,8 +219,36 @@ namespace SengokuChronicle.Editor
             }
             if (root.gameObject.activeSelf)
                 return Invalid(out error, "M6 title root must be saved inactive; Play Mode shows it.");
-            if (root.childCount != 2)
-                return Invalid(out error, "M6 title root must contain exactly the main-menu and selector pages.");
+            // The development Debug Mode owns one optional, inactive entry under this root.
+            // It must stay the last child so the two page roots keep their fixed order and
+            // the Canvas modal order is unaffected.
+            Transform debugEntry = null;
+            for (int i = 0; i < root.childCount; i++)
+            {
+                Transform child = root.GetChild(i);
+                if (!string.Equals(child.name, AddM09DebugMode.EntryName, StringComparison.Ordinal))
+                    continue;
+                if (debugEntry != null)
+                    return Invalid(out error,
+                        "M6 title root must not contain more than one " +
+                        AddM09DebugMode.EntryName + ".");
+                debugEntry = child;
+            }
+            int expectedChildren = debugEntry == null ? 2 : 3;
+            if (root.childCount != expectedChildren)
+                return Invalid(out error, "M6 title root must contain exactly the main-menu and " +
+                                          "selector pages, plus at most one optional inactive " +
+                                          AddM09DebugMode.EntryName + " child.");
+            if (!string.Equals(root.GetChild(0).name, MainMenuRootName, StringComparison.Ordinal) ||
+                !string.Equals(root.GetChild(1).name, ScenarioSelectRootName, StringComparison.Ordinal))
+                return Invalid(out error, "M6 title root pages must be ordered " +
+                                          MainMenuRootName + " then " + ScenarioSelectRootName + ".");
+            // Exactly two page roots plus the optional entry, with the pages pinned to
+            // indices 0 and 1, already place the entry last; only its saved state is left.
+            if (debugEntry != null && debugEntry.gameObject.activeSelf)
+                return Invalid(out error, AddM09DebugMode.EntryName +
+                                          " must be saved inactive; only guarded runtime " +
+                                          "code shows it.");
 
             RectTransform rootRect = root as RectTransform;
             if (rootRect == null || rootRect.anchorMin != Vector2.zero || rootRect.anchorMax != Vector2.one ||
@@ -254,13 +296,16 @@ namespace SengokuChronicle.Editor
             if (label.GetComponent<Text>() == null || label.GetComponent<Text>().font == null ||
                 subtitle.GetComponent<Text>() == null || subtitle.GetComponent<Text>().font == null)
                 return Invalid(out error, "M6 title label or subtitle is invalid.");
-            if (!ValidSeal(seal))
+            if (!ValidSeal(seal, requireOriginalArt))
                 return Invalid(out error, "M6 title seal image is invalid.");
             if (!ValidButton(newGame) || !ValidButton(continueButton))
                 return Invalid(out error, "M6 main-menu buttons are unbound or have invalid labels.");
             Text statusText = status.GetComponent<Text>();
             if (statusText == null || statusText.font == null)
                 return Invalid(out error, "M6 title status text is invalid.");
+            if (requireOriginalArt && !ButtonsUseOriginalPaper(main, selector))
+                return Invalid(out error,
+                    "M6 title buttons must use the original generated parchment tile.");
 
             Transform heading = selector.Find(ScenarioHeadingName);
             Transform mainlineSection = selector.Find(MainlineSectionName);
@@ -404,6 +449,12 @@ namespace SengokuChronicle.Editor
                 return UpdateResult.MissingOrDuplicateObjects;
 
             if (Validate(scene, out _)) return UpdateResult.Success;
+
+            // A modern two-page title whose hierarchy and bindings are already correct but
+            // whose seal/button art still points at the owner's reference crops is refreshed
+            // in place instead of being rebuilt.
+            if (Validate(scene, out _, requireOriginalArt: false))
+                return RepairArt(scene, save, beforeValidation);
 
             LegacyLayout legacy = RecognizeLegacy(scene, canvas, map, session, mapController, out string legacyError);
             if (legacy != null)
@@ -609,6 +660,68 @@ namespace SengokuChronicle.Editor
                 Panel = panel,
                 Summary = summary.GetComponent<Text>()
             };
+        }
+
+        /// <summary>
+        /// Refreshes only the artwork of an otherwise valid two-page title: the generated
+        /// crest replaces the owner's seal crop and the generated parchment tile replaces the
+        /// owner's paper grain behind every action button. Hierarchy, sibling order, labels,
+        /// colours, layout and controller bindings stay exactly as they are.
+        /// </summary>
+        private static UpdateResult RepairArt(Scene scene, bool save,
+            Action<GameObject> beforeValidation)
+        {
+            Undo.IncrementCurrentGroup();
+            int group = Undo.GetCurrentGroup();
+            Undo.SetCurrentGroupName(UndoName);
+            UpdateResult failure = UpdateResult.Failed;
+            try
+            {
+                Sprite crest = LoadSealSprite();
+                Sprite paper = LoadPaperSprite();
+                if (crest == null || paper == null)
+                    throw new InvalidOperationException(
+                        "Missing original generated title art. Refresh the project first.");
+
+                Transform root = Named(scene, RootName).Single();
+                Image seal = root.Find(MainMenuRootName).Find(SealName).GetComponent<Image>();
+                Undo.RecordObject(seal, UndoName);
+                seal.sprite = crest;
+                seal.preserveAspect = true;
+                seal.raycastTarget = false;
+                EditorUtility.SetDirty(seal);
+
+                foreach (Button button in root.GetComponentsInChildren<Button>(true))
+                {
+                    if (!(button.targetGraphic is Image image))
+                        continue;
+                    Undo.RecordObject(image, UndoName);
+                    image.sprite = paper;
+                    image.type = Image.Type.Tiled;
+                    EditorUtility.SetDirty(image);
+                }
+
+                beforeValidation?.Invoke(root.gameObject);
+                failure = UpdateResult.ValidationFailed;
+                if (!Validate(scene, out string error)) throw new InvalidOperationException(error);
+
+                Undo.FlushUndoRecordObjects();
+                EditorSceneManager.MarkSceneDirty(scene);
+                failure = UpdateResult.SaveFailed;
+                if (save && !EditorSceneManager.SaveScene(scene))
+                    throw new InvalidOperationException("Unity refused to save FoundationScene.");
+
+                Undo.CollapseUndoOperations(group);
+                return UpdateResult.Success;
+            }
+            catch (Exception exception)
+            {
+                Undo.FlushUndoRecordObjects();
+                Undo.RevertAllDownToGroup(group);
+                Debug.LogWarning($"M6 art refresh rolled back: {exception.Message} " +
+                                 "Scene may remain dirty; inspect it before saving.");
+                return failure;
+            }
         }
 
         private static UpdateResult Rebuild(Scene scene, bool save, Action<GameObject> beforeValidation,
@@ -875,11 +988,31 @@ namespace SengokuChronicle.Editor
             return area.Contains(center - half) && area.Contains(center + half);
         }
 
-        private static bool ValidSeal(Transform seal)
+        private static bool ValidSeal(Transform seal, bool requireOriginalArt)
         {
             Image image = seal.GetComponent<Image>();
-            return image != null && image.sprite != null && !image.raycastTarget && image.preserveAspect &&
-                seal.childCount == 0;
+            if (image == null || image.sprite == null || image.raycastTarget ||
+                !image.preserveAspect || seal.childCount != 0)
+                return false;
+            return !requireOriginalArt ||
+                   image.sprite == SengokuUiArt.Icon(SengokuUiArt.IconCrest);
+        }
+
+        /// <summary>Every title button must carry the original generated parchment tile.</summary>
+        private static bool ButtonsUseOriginalPaper(params Transform[] roots)
+        {
+            Sprite paper = SengokuUiArt.Parchment;
+            if (paper == null)
+                return false;
+            foreach (Transform root in roots)
+            {
+                if (root == null)
+                    return false;
+                foreach (Button button in root.GetComponentsInChildren<Button>(true))
+                    if (!(button.targetGraphic is Image image) || image.sprite != paper)
+                        return false;
+            }
+            return true;
         }
 
         private static bool ValidButton(Transform control)
@@ -901,21 +1034,9 @@ namespace SengokuChronicle.Editor
         private static Sprite LoadBackgroundSprite() =>
             AssetDatabase.LoadAssetAtPath<Sprite>(BackgroundAssetPath);
 
-        private static Sprite LoadSealSprite()
-        {
-            foreach (UnityEngine.Object asset in AssetDatabase.LoadAllAssetsAtPath(SealAssetPath))
-                if (asset is Sprite sprite)
-                    return sprite;
-            return null;
-        }
+        private static Sprite LoadSealSprite() => SengokuUiArt.Icon(SengokuUiArt.IconCrest);
 
-        private static Sprite LoadPaperSprite()
-        {
-            foreach (UnityEngine.Object asset in AssetDatabase.LoadAllAssetsAtPath(PaperAssetPath))
-                if (asset is Sprite sprite)
-                    return sprite;
-            return null;
-        }
+        private static Sprite LoadPaperSprite() => SengokuUiArt.Parchment;
 
         private static Sprite LoadIndigoPatternSprite()
         {
@@ -990,7 +1111,7 @@ namespace SengokuChronicle.Editor
             rect.sizeDelta = new Vector2(width, height);
             Image image = go.GetComponent<Image>();
             image.sprite = LoadPaperSprite();
-            image.type = Image.Type.Simple;
+            image.type = Image.Type.Tiled;
             image.color = background;
             image.raycastTarget = true;
             Button button = go.GetComponent<Button>();

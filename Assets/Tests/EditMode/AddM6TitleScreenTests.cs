@@ -160,6 +160,61 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
+        public void Updater_UsesOriginalGeneratedCrestForTheTitleSeal()
+        {
+            Assert.That(AddM6TitleScreen.Update(_scene),
+                Is.EqualTo(AddM6TitleScreen.UpdateResult.Success));
+
+            Transform seal = Find(AddM6TitleScreen.MainMenuRootName)
+                .Find(AddM6TitleScreen.SealName);
+            Image image = seal.GetComponent<Image>();
+            Assert.That(image.sprite, Is.SameAs(SengokuUiArt.Icon(SengokuUiArt.IconCrest)));
+            Assert.That(image.preserveAspect, Is.True);
+            Assert.That(image.raycastTarget, Is.False,
+                "the decorative title crest must not block the menu buttons");
+        }
+
+        [Test]
+        public void Updater_RepairArtRollbackRestoresExistingSealAndButtonArt()
+        {
+            Assert.That(AddM6TitleScreen.Update(_scene),
+                Is.EqualTo(AddM6TitleScreen.UpdateResult.Success));
+
+            Sprite previousArt = LoadAnySprite(AddM6TitleScreen.SealAssetPath);
+            Assert.That(previousArt, Is.Not.Null);
+            Transform root = Find(AddM6TitleScreen.RootName);
+            Image seal = Find(AddM6TitleScreen.MainMenuRootName)
+                .Find(AddM6TitleScreen.SealName).GetComponent<Image>();
+            Button[] buttons = root.GetComponentsInChildren<Button>(true);
+            Image[] backgrounds = buttons.Select(button => button.targetGraphic as Image)
+                .Where(image => image != null).ToArray();
+            Assert.That(backgrounds, Is.Not.Empty);
+
+            seal.sprite = previousArt;
+            seal.type = Image.Type.Simple;
+            foreach (Image background in backgrounds)
+            {
+                background.sprite = previousArt;
+                background.type = Image.Type.Simple;
+            }
+
+            TitleScreenController controller = _sessionObject.GetComponent<TitleScreenController>();
+            AddM6TitleScreen.UpdateResult result = AddM6TitleScreen.Update(_scene, _ =>
+                SetReference(controller, "titleRoot", null));
+
+            Assert.That(result, Is.EqualTo(AddM6TitleScreen.UpdateResult.ValidationFailed));
+            Assert.That(seal.sprite, Is.SameAs(previousArt));
+            Assert.That(seal.type, Is.EqualTo(Image.Type.Simple));
+            foreach (Image background in backgrounds)
+            {
+                Assert.That(background.sprite, Is.SameAs(previousArt));
+                Assert.That(background.type, Is.EqualTo(Image.Type.Simple));
+            }
+            Assert.That(Find(AddM6TitleScreen.RootName), Is.SameAs(root));
+            Assert.That(_scene.path, Is.Empty, "The test seam must never save its scene.");
+        }
+
+        [Test]
         public void Updater_MigrationRollbackRestoresRootTransformImageChildrenAndReferences()
         {
             GameObject eventRoot = Create(AddM6TitleScreen.EventChoiceRootName, _canvas);
@@ -343,6 +398,79 @@ namespace SengokuChronicle.Tests.EditMode
                 Is.EqualTo(AddSC013TitleScenarioButtons.UpdateResult.Success),
                 "The SC-013 title updater must accept the migrated hierarchy without recreating flat children.");
             Assert.That(ObjectCount(), Is.EqualTo(migratedCount));
+        }
+
+        [Test]
+        public void Validator_AcceptsTheOptionalInactiveDebugEntryAsLastChild()
+        {
+            Assert.That(AddM6TitleScreen.Update(_scene),
+                Is.EqualTo(AddM6TitleScreen.UpdateResult.Success));
+            Assert.That(AddM6TitleScreen.Validate(_scene, out string baseline), Is.True, baseline);
+
+            GameObject entry = CreateDebugEntry();
+            Assert.That(entry.activeSelf, Is.False);
+            Assert.That(entry.transform.GetSiblingIndex(),
+                Is.EqualTo(Find(AddM6TitleScreen.RootName).childCount - 1));
+
+            Assert.That(AddM6TitleScreen.Validate(_scene, out string error), Is.True, error);
+
+            Object.DestroyImmediate(entry);
+            Assert.That(AddM6TitleScreen.Validate(_scene, out _), Is.True);
+        }
+
+        [Test]
+        public void Validator_RejectsAnActiveDebugEntry()
+        {
+            Assert.That(AddM6TitleScreen.Update(_scene),
+                Is.EqualTo(AddM6TitleScreen.UpdateResult.Success));
+            GameObject entry = CreateDebugEntry();
+            entry.SetActive(true);
+
+            Assert.That(AddM6TitleScreen.Validate(_scene, out string error), Is.False);
+            Assert.That(error, Does.Contain("saved inactive"));
+            entry.SetActive(false);
+            Assert.That(AddM6TitleScreen.Validate(_scene, out _), Is.True);
+        }
+
+        [Test]
+        public void Validator_RejectsTheDebugEntryOutsideItsLastSlot()
+        {
+            Assert.That(AddM6TitleScreen.Update(_scene),
+                Is.EqualTo(AddM6TitleScreen.UpdateResult.Success));
+            GameObject entry = CreateDebugEntry();
+            entry.transform.SetSiblingIndex(1);
+
+            Assert.That(AddM6TitleScreen.Validate(_scene, out string error), Is.False,
+                "an entry between the page roots must be rejected.");
+            Assert.That(error, Does.Contain("must be ordered"));
+            entry.transform.SetAsLastSibling();
+            Assert.That(AddM6TitleScreen.Validate(_scene, out _), Is.True);
+        }
+
+        [Test]
+        public void Validator_RejectsAnUnknownExtraTitleRootChild()
+        {
+            Assert.That(AddM6TitleScreen.Update(_scene),
+                Is.EqualTo(AddM6TitleScreen.UpdateResult.Success));
+            GameObject extra = new GameObject("UnexpectedTitleChild", typeof(RectTransform));
+            SceneManager.MoveGameObjectToScene(extra, _scene);
+            extra.transform.SetParent(Find(AddM6TitleScreen.RootName), false);
+
+            Assert.That(AddM6TitleScreen.Validate(_scene, out string error), Is.False);
+            Assert.That(error, Does.Contain("main-menu and selector"));
+            Object.DestroyImmediate(extra);
+            Assert.That(AddM6TitleScreen.Validate(_scene, out _), Is.True);
+        }
+
+        private GameObject CreateDebugEntry()
+        {
+            var entry = new GameObject(AddM09DebugMode.EntryName, typeof(RectTransform),
+                typeof(UnityEngine.UI.Image), typeof(UnityEngine.UI.Button));
+            SceneManager.MoveGameObjectToScene(entry, _scene);
+            entry.transform.SetParent(Find(AddM6TitleScreen.RootName), false);
+            entry.transform.SetAsLastSibling();
+            entry.SetActive(false);
+            return entry;
         }
 
         [Test]

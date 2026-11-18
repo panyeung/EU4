@@ -215,6 +215,86 @@ namespace SengokuChronicle.Tests.EditMode
             }
         }
 
+        [Test]
+        public void NaturalConception_Seed46SaveLoadRestoresDivergedStreamsAndReplaysOneBirth()
+        {
+            _session.InitFamilyFormationDemoScenario(46UL);
+            Assert.That(_session.WorldClock.CurrentDate, Is.EqualTo(new GameDate(1560, 5, 1)));
+            Assert.That(_session.FamilyPregnancies, Is.Empty);
+            AdvanceAndResolve(_session);
+            Assert.That(_session.WorldClock.CurrentDate, Is.EqualTo(new GameDate(1560, 6, 1)));
+            Assert.That(_session.FamilyPregnancies, Has.Count.EqualTo(1));
+            FamilyPregnancyRecord pregnancy = _session.FamilyPregnancies[0];
+            Assert.That(pregnancy.GestatingPersonId, Is.EqualTo(SC022FamilyFormationScenario.SpouseId));
+            Assert.That(pregnancy.OtherParentId, Is.EqualTo(SC022FamilyFormationScenario.HeadId));
+            Assert.That(pregnancy.ConceptionDate, Is.EqualTo(new GameDate(1560, 6, 1)));
+            Assert.That(pregnancy.DueDate, Is.EqualTo(new GameDate(1561, 3, 1)));
+
+            SaveData saved = _session.CaptureSave();
+            string json = JsonUtility.ToJson(saved);
+            string savedRng = JsonUtility.ToJson(saved.randomState);
+            Assert.That(saved.randomState.initialSeedHex, Is.EqualTo("000000000000002E"),
+                "the natural-conception route must retain the seed used to reproduce it");
+            Assert.That(saved.randomState.streams, Has.Length.EqualTo(5),
+                "the v17 save must contain all five deterministic random streams");
+            AdvanceMonthsAndResolve(_session, 9);
+            Assert.That(_session.WorldClock.CurrentDate, Is.EqualTo(pregnancy.DueDate));
+            Assert.That(_session.FamilyPregnancies, Is.Empty);
+            Assert.That(JsonUtility.ToJson(_session.RandomState.CaptureState()),
+                Is.Not.EqualTo(savedRng), "the restore check requires divergent random state");
+
+            SaveOperationResult restored = _session.TryApplySave(JsonUtility.FromJson<SaveData>(json));
+            Assert.That(restored.Succeeded, Is.True, _session.LastEventMessage);
+            Assert.That(_session.WorldClock.CurrentDate, Is.EqualTo(pregnancy.ConceptionDate));
+            Assert.That(_session.FamilyPregnancies, Is.EqualTo(new[] { pregnancy }));
+            Assert.That(JsonUtility.ToJson(_session.RandomState.CaptureState()), Is.EqualTo(savedRng));
+
+            GameSession control = GameSession.NewGame();
+            try
+            {
+                Assert.That(control.TryApplySave(JsonUtility.FromJson<SaveData>(json)).Succeeded,
+                    Is.True, control.LastEventMessage);
+                for (int month = 0; month < 9; month++)
+                {
+                    AdvanceAndResolve(_session);
+                    AdvanceAndResolve(control);
+                    if (month < 8)
+                    {
+                        Assert.That(_session.FamilyPregnancies, Has.Count.EqualTo(1));
+                        Assert.That(_session.Succession.World.Persons.Any(person =>
+                            person.Id.Value.StartsWith("person.birth.", StringComparison.Ordinal)), Is.False);
+                    }
+                }
+
+                PersonState[] newborns = _session.Succession.World.Persons.Where(person =>
+                    person.Id.Value.StartsWith("person.birth.", StringComparison.Ordinal)).ToArray();
+                Assert.That(newborns, Has.Length.EqualTo(1));
+                PersonId newbornId = newborns[0].Id;
+                Assert.That(IsChildOf(pregnancy.GestatingPersonId, newbornId), Is.True);
+                Assert.That(IsChildOf(pregnancy.OtherParentId, newbornId), Is.True);
+                Assert.That(_session.Succession.World.Family.IsMember(newbornId), Is.True);
+                Assert.That(_session.Development.Contains(newbornId), Is.True);
+                Assert.That(_session.DailyActions.Count(row => row.PersonId == newbornId), Is.EqualTo(1));
+                Assert.That(_session.FamilyPregnancies, Is.Empty);
+                Assert.That(_session.ChronicleEntries.Count(entry =>
+                    entry.SourceId == FamilyChronicleEntry.BirthSourceId), Is.EqualTo(1));
+                SaveData actual = _session.CaptureSave();
+                SaveData expected = control.CaptureSave();
+                Assert.That(JsonUtility.ToJson(actual.succession), Is.EqualTo(JsonUtility.ToJson(expected.succession)));
+                Assert.That(JsonUtility.ToJson(actual.randomState), Is.EqualTo(JsonUtility.ToJson(expected.randomState)));
+                Assert.That(JsonUtility.ToJson(actual.chronicle), Is.EqualTo(JsonUtility.ToJson(expected.chronicle)));
+                AdvanceAndResolve(_session);
+                Assert.That(_session.Succession.World.Persons.Count(person =>
+                    person.Id.Value.StartsWith("person.birth.", StringComparison.Ordinal)), Is.EqualTo(1));
+                Assert.That(_session.ChronicleEntries.Count(entry =>
+                    entry.SourceId == FamilyChronicleEntry.BirthSourceId), Is.EqualTo(1));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(control.gameObject);
+            }
+        }
+
         private void StartFamilyFormation()
         {
             UnityEngine.Object.DestroyImmediate(_session.gameObject);

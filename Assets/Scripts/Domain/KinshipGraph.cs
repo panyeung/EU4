@@ -148,5 +148,33 @@ namespace SengokuChronicle.Domain
             }
             return found.AsReadOnly();
         }
+
+#pragma warning disable UAC0009 // the approved Debug Mode plan requires the Editor/development build boundary
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        /// <summary>
+        /// Replaces every recorded fact with an already-validated snapshot. This exists
+        /// only so a rejected debug transaction can restore the exact pre-command graph,
+        /// including its indexes; production code never rewrites committed facts.
+        /// </summary>
+        internal void RestoreLinks(IReadOnlyList<KinshipLink> links)
+        {
+            _links.Clear();
+            _exact.Clear();
+            _symmetricReverses.Clear();
+            if (links == null)
+                return;
+            for (int i = 0; i < links.Count; i++)
+            {
+                KinshipLink link = links[i];
+                if (_exact.Contains(link) || (link.IsSymmetric && _symmetricReverses.Contains(link)))
+                    continue;
+                _links.Add(link);
+                _exact.Add(link);
+                if (link.IsSymmetric)
+                    _symmetricReverses.Add(link.Reversed());
+            }
+        }
+#endif
+#pragma warning restore UAC0009
     }
 }
