@@ -427,7 +427,7 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(controller.GetFacilityTexts().Length, Is.EqualTo(3));
             Assert.That(controller.GetFacilityTexts().All(t => t != null), Is.True);
 
-            // 城镉菜单初始应隐藏
+            // 城镇菜单初始应隐藏
             Assert.That(controller.GetTownMenuRoot().activeSelf, Is.False);
 
             RectTransform canvasRect = _canvas.GetComponent<RectTransform>();

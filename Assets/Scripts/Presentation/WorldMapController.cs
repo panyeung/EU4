@@ -9,7 +9,7 @@ namespace SengokuChronicle.Presentation
 {
     /// <summary>
     /// 世界地图控制器（M2-02）：目的地选择、旅行预览、确认/取消、
-    /// 到达后的城镉菜单与设施槽（内容来自真实当地委托）。
+    /// 到达后的城镇菜单与设施槽（内容来自真实当地委托）。
     /// 所有状态读写通过 GameSession；预览绝不修改日期/位置。
     /// 公开 BindReferences / 状态属性与访问器，供 Editor 生成器与 EditMode 测试注入。
     /// </summary>
@@ -109,7 +109,7 @@ namespace SengokuChronicle.Presentation
 
         // ---- 公开状态（测试断言用）----
 
-        /// <summary>是否位于城镉菜单。</summary>
+        /// <summary>是否位于城镇菜单。</summary>
         public bool InTownMenu => _inTownMenu;
 
         /// <summary>当前选中的目的地；未选择为 null。</summary>
@@ -133,7 +133,7 @@ namespace SengokuChronicle.Presentation
         public bool IsTacticalMissionOpen =>
             tacticalMissionPanel != null && tacticalMissionPanel.IsOpen;
 
-        /// <summary>城镉菜单根对象（初始隐藏）。</summary>
+        /// <summary>城镇菜单根对象（初始隐藏）。</summary>
         public GameObject GetTownMenuRoot() => townMenuRoot;
 
         /// <summary>城镇菜单的设施槽；内容由 <see cref="RefreshFacilitySlots"/> 决定。</summary>
@@ -326,7 +326,7 @@ namespace SengokuChronicle.Presentation
             RefreshButtons();
         }
 
-        /// <summary>从城镉菜单返回地图。</summary>
+        /// <summary>从城镇菜单返回地图。</summary>
         public void ReturnToMap()
         {
             _inTownMenu = false;
@@ -581,7 +581,7 @@ namespace SengokuChronicle.Presentation
         }
 
         /// <summary>
-        /// 到达后打开城镉菜单。<br/>
+        /// 到达后打开城镇菜单。<br/>
         /// 设施槽按 <see cref="RefreshFacilitySlots"/> 刷新：有城镇总览页时留空，因为设施内容由
         /// 总览页承担；没有总览页的旧场景按序列出真实的当地委托。
         /// </summary>
