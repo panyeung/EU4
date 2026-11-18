@@ -26,7 +26,37 @@
 - 恢复方式只有一个：**由用户重启那个 Editor**。项目规则禁止按进程名杀 Editor，本轮没有杀，也没有重启。
 - 重启后若要独立复验 SAVE-3 / SAVE-4，按 `docs/实现规格-v1.0.md` 的 S1 步骤，用 `scripts/verify/SaveGateProbe.cs` 的两个注入点（`SaveLoadPanel.SetStore` + 场景内 `TitleScreenController.SetStore`）重定向到空目录，再走 `03` 号文件的同一组读回断言。
 
-## 本目录各文件
+## EditMode 结果文件（副本在 `Logs/`，不入库）
+
+`Logs/verify/20261117-1745/TestResults.xml`，1676358 B，sha256 `4ae90104d0e5a25ebc2bd885e6f944fee27c22bcb7626c116463b951e9382005`。头部字段：
+
+```
+test-run id="2" testcasecount="2141" result="Passed" total="2141" passed="2141"
+          failed="0" inconclusive="0" skipped="0" asserts="0"
+          start-time="2026-11-18 03:48:00Z" end-time="2026-11-18 03:52:28Z" duration="267.9262385"
+```
+
+同目录还有 `TestResults-c2-attempt1.xml`（1581536 B，18:31 那次复验尝试）与 `SceneValidationReport-1745.txt`（186403 B，判定 `RESULT: PASS; Errors: 0`）。三者都在 `Logs/` 下，被 `.gitignore:22` 的 `/[Ll]ogs/` 忽略，要在干净检出里读结果，就看本节字段或在自己的机器上复跑。
+
+## 场景新增 / 删除的完整名字清单
+
+`m_Name` 集合差是 16 项新增、1 项删除（按 `scene-semantic-diff.py` 的多重集口径，不是行数）：
+
+- 新增：`TownActivityButtons`、`LocalActions`、`ActivityButtonTemplate`、`M09DebugModeRoot`、`M09DebugModeEntry`、`IndustryHeaderCrest`、`Label` ×2、无名根/子节点 ×8。
+- 删除：`Rumors`（被 `UpdateTownOverview.cs` 的 `LegacyActivityName` 改名接管）。
+
+出处：`UpdateTownOverview.cs:23-26`、`AddM09DebugMode.cs:35-36`、`AddSC019IndustryPanel.cs:25`。场景里没有「有节点、updater 里找不到出处」的情况。
+
+## 关于那两条「家族编年史记录写入失败」error
+
+`01-gate-report.md` 的「风险与遗留」第 1 条把 Console 里这两条判成真实代码路径缺陷，这个判读是错的，不要照抄：
+
+- `Assets/Tests/EditMode/FamilyFormationSessionTests.cs:274-275` 与 `:319-320` 用 `LogAssert.Expect(LogType.Error, "家族编年史记录写入失败（家族婚姻 / 家族收养）：编年史预备记录序号无效。")` 显式断言这两行。
+- 注入点在 `Assets/Scripts/Application/GameSession.cs:1719` 与 `:1821` 的 `FamilyFormationAppendFaultInjection`，是负向路径的故障注入，用来验证「编年史准备失败 → 整体回滚」。
+
+结论：这两条是负向测试的预期输出，不是缺陷。`docs/实现规格-v1.0.md` 第 4 节的判读正确。
+
+## 目录各文件
 
 - `01-gate-report.md`：16:12 那次的门禁报告，含编译、Validator、EditMode、Play Mode、Console 分项表。
 - `02-save-isolated-SAVE-1-2.md`：隔离槽「保存 → 推进一天 → 读回」三值一致。
