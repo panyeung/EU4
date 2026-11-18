@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using NUnit.Framework;
 using SengokuChronicle.Application;
 using SengokuChronicle.Domain;
@@ -164,6 +165,132 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(_panel.LegendSummary, Does.Contain("配偶"));
             Assert.That(_panel.HeirSummary, Does.Contain("固定继承人：明智 正綱"));
             Assert.That(_panel.HeirSummary, Does.Contain("46岁"));
+        }
+
+        [Test]
+        public void FamilyRosterCardClick_SelectsPersonAndShowsReadOnlyDetail()
+        {
+            ((RectTransform)_panelObject.transform).sizeDelta = new Vector2(760f, 620f);
+            _panel.Open();
+
+            Assert.That(_panel.HasDetailColumn, Is.True);
+            Button[] cards = _nodeLayerObject.GetComponentsInChildren<Button>(true)
+                .Where(button => button.gameObject.name.StartsWith("FamilyRosterNode_"))
+                .ToArray();
+            Assert.That(cards.Length, Is.GreaterThan(1));
+            Button selected = cards[1];
+            PersonId expected = new PersonId(selected.gameObject.name.Substring(
+                "FamilyRosterNode_".Length));
+            string displayName = selected.GetComponentInChildren<Text>(true).text
+                .Split('\n')[0];
+            int chronicleCount = _session.ChronicleEntries.Count;
+
+            selected.onClick.Invoke();
+
+            Assert.That(_panel.SelectedPersonId, Is.EqualTo(expected));
+            Assert.That(_panel.DetailTextLine, Does.StartWith(displayName));
+            Assert.That(_session.ChronicleEntries.Count, Is.EqualTo(chronicleCount),
+                "selecting a card is read-only and records no family event");
+        }
+
+        [Test]
+        public void SelectedBadge_DoesNotCoverTheSelectedCardLabel()
+        {
+            _panel.Open();
+
+            Transform card = FindNode(_panel.SelectedPersonId);
+            Text label = card.GetComponentsInChildren<Text>(true)
+                .Single(text => text.gameObject.name != FamilyRosterPanel.SelectedMarkName);
+            Transform mark = card.Find(FamilyRosterPanel.SelectedMarkName);
+            Assert.That(mark, Is.Not.Null);
+
+            Canvas.ForceUpdateCanvases();
+            Bounds labelBounds = RectTransformUtility.CalculateRelativeRectTransformBounds(
+                card, label.rectTransform);
+            Bounds markBounds = RectTransformUtility.CalculateRelativeRectTransformBounds(card, mark);
+
+            Assert.That(labelBounds.Intersects(markBounds), Is.False,
+                "the textual selection marker must remain separate from the name/role lines");
+            Assert.That(label.preferredHeight, Is.LessThanOrEqualTo(label.rectTransform.rect.height + 0.5f),
+                "the full person label must fit inside its card instead of overflowing through the selected stamp");
+        }
+
+        [Test]
+        public void EveryCardLabelFitsItsRectIncludingTheDesignatedHeir()
+        {
+            _panel.Open();
+
+            RectTransform heirCard = FindNode(M2FixedScenario.MasatsunaId);
+            Assert.That(heirCard, Is.Not.Null);
+            Text heirLabel = heirCard.GetComponentsInChildren<Text>(true)
+                .Single(text => text.gameObject.name != FamilyRosterPanel.SelectedMarkName);
+            Assert.That(heirLabel.text, Does.Contain("指定继承人"),
+                "the roster still contains the long designated-heir label this test guards");
+
+            RectTransform[] cards = _nodeLayerObject.GetComponentsInChildren<RectTransform>(true)
+                .Where(rect => rect.name.StartsWith("FamilyRosterNode_"))
+                .ToArray();
+            Assert.That(cards.Length, Is.GreaterThan(1));
+
+            foreach (RectTransform card in cards)
+            {
+                _panel.SelectPerson(new PersonId(
+                    card.name.Substring("FamilyRosterNode_".Length)));
+                Canvas.ForceUpdateCanvases();
+                Text label = card.GetComponentsInChildren<Text>(true)
+                    .Single(text => text.gameObject.name != FamilyRosterPanel.SelectedMarkName);
+                Assert.That(label.preferredHeight,
+                    Is.LessThanOrEqualTo(label.rectTransform.rect.height + 0.5f),
+                    card.name + " label must fit inside its card rect instead of drawing " +
+                    "through the selected stamp");
+            }
+        }
+
+        [Test]
+        public void FamilyRosterDetailLayout_KeepsTwoCardsAndDetailInsideThePanel()
+        {
+            Assert.That(FamilyRosterDetailLayout.TryCalculate(760f,
+                out FamilyRosterSplit split), Is.True);
+
+            Assert.That(split.ScrollWidth, Is.EqualTo(478f).Within(0.01f));
+            Assert.That(split.DetailWidth, Is.EqualTo(208f).Within(0.01f));
+            float scrollRight = split.ScrollCenterX + split.ScrollWidth / 2f;
+            float detailLeft = split.DetailCenterX - split.DetailWidth / 2f;
+            Assert.That(detailLeft - scrollRight,
+                Is.EqualTo(FamilyRosterDetailLayout.Gap).Within(0.01f));
+            Assert.That(FamilyRosterDetailLayout.TryCalculate(740f,
+                out FamilyRosterSplit tighterSplit), Is.True);
+            Assert.That(tighterSplit.ScrollWidth, Is.EqualTo(476f).Within(0.01f));
+            Assert.That(tighterSplit.DetailWidth, Is.EqualTo(190f).Within(0.01f));
+            Assert.That(FamilyRosterDetailLayout.TryCalculate(438f, out _), Is.False,
+                "the graph keeps the full two-card width and both margins");
+            Assert.That(FamilyRosterDetailLayout.TryCalculate(400f, out _), Is.False,
+                "a narrow card hides the detail column rather than shrinking the graph below its minimum width");
+        }
+
+        [Test]
+        public void FamilyKinshipPath_UsesDeterministicShortestRecordedRouteAndStopsAtCycles()
+        {
+            var graph = new KinshipGraph();
+            var from = new PersonId("path.from");
+            var first = new PersonId("path.a");
+            var second = new PersonId("path.b");
+            var target = new PersonId("path.target");
+            var unrelated = new PersonId("path.unrelated");
+            Assert.That(graph.TryAdd(new KinshipLink(from, second, KinshipType.ParentChild), out _), Is.True);
+            Assert.That(graph.TryAdd(new KinshipLink(from, first, KinshipType.ParentChild), out _), Is.True);
+            Assert.That(graph.TryAdd(new KinshipLink(first, target, KinshipType.Adoption), out _), Is.True);
+            Assert.That(graph.TryAdd(new KinshipLink(second, target, KinshipType.Adoption), out _), Is.True);
+            Assert.That(graph.TryAdd(new KinshipLink(second, first, KinshipType.Sibling), out _), Is.True);
+
+            string path = FamilyKinshipPath.Describe(graph, from, target, id => id.Value);
+            Assert.That(path, Does.StartWith(from.Value));
+            Assert.That(path, Does.Contain(first.Value));
+            Assert.That(path, Does.Contain(FamilyKinshipPath.KindName(KinshipType.Adoption)));
+            Assert.That(FamilyKinshipPath.FindShortestPath(graph, from, target), Has.Count.EqualTo(2));
+            Assert.That(FamilyKinshipPath.FindShortestPath(graph, from, unrelated), Is.Empty);
+            Assert.That(FamilyKinshipPath.Describe(graph, from, from, id => id.Value),
+                Is.EqualTo(FamilyKinshipPath.SelfText));
         }
 
         [Test]
