@@ -449,6 +449,76 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
+        public void DebugModeEntry_InvokedWhileTheTitleIsHidden_DoesNotStartASession()
+        {
+            // 验证脚本直接调用 onClick，因此即使隐藏的标题层让入口不在屏幕上，
+            // 也仍能把它按下去。从这个状态进入 Debug 模式会把普通战役
+            // 变成玩家槽被拒的调试会话。
+            Assert.That(_controller.StartNewGame(), Is.True);
+            Assert.That(_controller.IsTitleVisible, Is.False);
+            Assert.That(_debugEntryButton.gameObject.activeInHierarchy, Is.False,
+                "普通战役进行中，入口不应出现在屏幕上。");
+
+            _debugEntryButton.onClick.Invoke();
+
+            Assert.That(_session.IsDebugSessionActive, Is.False,
+                "按动隐藏的入口不应创建调试会话。");
+            Assert.That(_debugPanel.IsOpen, Is.False);
+            Assert.That(_session.CurrentDebugSession, Is.Null);
+            Assert.That(_controller.IsTitleVisible, Is.False,
+                "被拒绝的入口不应改变当前界面。");
+            Assert.That(_controller.LastOperationSucceeded, Is.False);
+            Assert.That(_controller.Status, Does.Contain("标题页"));
+            Assert.That(_session.Succession.World.Family.Id,
+                Is.EqualTo(new FamilyId("family.akechi.sc013")),
+                "被拒绝的入口不应改动普通战役。");
+            Assert.That(_controller.SlotLoadCount, Is.Zero);
+        }
+
+        [Test]
+        public void NormalStart_PlayerSlotRoundTripsDateFamilyAndResources()
+        {
+            Assert.That(_controller.StartNewGame(), Is.True);
+            Assert.That(_session.IsDebugSessionActive, Is.False);
+            Assert.That(_debugPanel.IsOpen, Is.False, "调试窗口应保持关闭。");
+
+            GameDate savedDate = _session.WorldClock.CurrentDate;
+            int savedFunds = _session.Industry.Resources.Funds;
+            int savedSupplies = _session.Industry.Resources.Supplies;
+            PersonId savedHead = _session.Succession.HeadPersonId;
+
+            SaveOperationResult saved = _session.SaveTo(_store);
+            Assert.That(saved.Succeeded, Is.True, saved.Message);
+            Assert.That(_store.Exists(), Is.True);
+
+            Assert.That(_session.WorldClock.AdvanceOneDay(), Is.True);
+            Assert.That(_session.WorldClock.CurrentDate, Is.Not.EqualTo(savedDate));
+
+            SaveOperationResult loaded = _session.LoadFrom(_store);
+            Assert.That(loaded.Succeeded, Is.True, loaded.Message);
+            Assert.That(_session.WorldClock.CurrentDate, Is.EqualTo(savedDate));
+            Assert.That(_session.Industry.Resources.Funds, Is.EqualTo(savedFunds));
+            Assert.That(_session.Industry.Resources.Supplies, Is.EqualTo(savedSupplies));
+            Assert.That(_session.Succession.HeadPersonId, Is.EqualTo(savedHead));
+        }
+
+        [Test]
+        public void DebugModeEntry_PlayerSlotSaveIsStillRejectedAndWritesNothing()
+        {
+            _debugEntryButton.onClick.Invoke();
+            Assert.That(_session.IsDebugSessionActive, Is.True);
+
+            SaveOperationResult result = _session.SaveTo(_store);
+
+            Assert.That(result.Succeeded, Is.False);
+            Assert.That(result.Message, Is.EqualTo("调试会话不会写入玩家存档。"));
+            Assert.That(_store.Exists(), Is.False,
+                "调试会话不应创建玩家存档槽。");
+            Assert.That(File.Exists(_store.FilePath), Is.False,
+                "调试会话不应写入玩家存档文件。");
+        }
+
+        [Test]
         public void NormalStartAfterDebugMode_LeavesTheDebugSessionAndClosesTheWindow()
         {
             _debugEntryButton.onClick.Invoke();

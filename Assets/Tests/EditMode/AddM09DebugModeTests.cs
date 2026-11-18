@@ -184,7 +184,11 @@ namespace SengokuChronicle.Tests.EditMode
                 Is.EqualTo(AddM09DebugMode.UpdateResult.Success));
             Transform root = Single(AddM09DebugMode.RootName);
             Assert.That(root.GetComponent<DebugModePanel>(), Is.Null);
-            Assert.That(Controller().StartDebugSession(), Is.True);
+            // 预览场景不跑 MonoBehaviour 生命周期，需显式显示标题页；
+            // 真实运行中 Start() 会在入口可点之前完成这件事。
+            TitleScreenController controller = Controller();
+            controller.ShowTitle();
+            Assert.That(controller.StartDebugSession(), Is.True);
 
             DebugModePanel panel = root.GetComponent<DebugModePanel>();
             Assert.That(panel, Is.Not.Null,
