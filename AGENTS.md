@@ -85,6 +85,13 @@
 - 玩法规则尽量用纯 C#，用 asmdef，保持 `PlayerMovement2D` 行为不变。
 - Editor 场景生成器只用一个 Undo 组，保存前先验证，异常时用 Undo 回滚且不重载场景。生成的 UI 放在一个固定根节点下。
 
+## 并发与共享资源
+
+- 一张卡一个写者。同一棵工作树、同一个 Unity 实例，同一时刻只允许一个写者在跑。
+- 并行任务必须落在不同工作树；只有只读任务才可以和写者共用主工作树。
+- `TestResults.xml` 全机共用（`%LOCALLOW%\DefaultCompany\My project\`）。测试一律串行；每次跑完立刻 `scripts/copy-testresults.sh <证据目录>`，之后只引用副本。2026-11-17 并行覆盖过一次：主工程 2141 与 M04 工作树 2015 互相顶掉。
+- 派活前先查 `unity pipeline list` 与 `hermes kanban ls`，确认没有第二个写者；发现并行写者先停下来合流。
+
 ## Kanban 复审循环
 
 - `coden` 在原卡上实现，完成时调用 `kanban_request_review(reviewer="tester")`，附改动文件、测试与验证证据。
