@@ -123,6 +123,8 @@ namespace SengokuChronicle.Editor
         private const string TitleRootName = "M6TitleRoot";
         private const string EventRootName = "EventChoiceRoot";
         private const string TacticalOverlayName = AddM6TitleScreen.TacticalOverlayName;
+        // The opaque page must never cover the M08 campaign review overlay.
+        private const string ReviewRootName = CampaignReviewPanel.RootObjectName;
         private const string InspectorRootName = "M03NpcAiInspectorRoot";
         private const string UndoName = "Add M02 Daily Action Panel";
 
@@ -738,14 +740,20 @@ namespace SengokuChronicle.Editor
 
             if (!ContainedInRenderBand(canvas, root))
                 return Invalid(out error,
-                    "M02DailyActionRoot must render above the map HUD and below the title/event overlays.");
+                    "M02DailyActionRoot must render above the map HUD and below the M08 review " +
+                    "page and title/event overlays.");
 
             // The read-only developer inspector is a separate surface and must open over
-            // the page, never beneath its backdrop.
+            // the page, never beneath its backdrop, and the review must open over it.
             Transform inspectorRoot = canvas.Find(InspectorRootName);
             if (inspectorRoot != null && inspectorRoot.GetSiblingIndex() < root.GetSiblingIndex())
                 return Invalid(out error,
                     "M03NpcAiInspectorRoot must render above the M02 page.");
+            Transform reviewRoot = canvas.Find(ReviewRootName);
+            if (inspectorRoot != null && reviewRoot != null &&
+                reviewRoot.GetSiblingIndex() <= inspectorRoot.GetSiblingIndex())
+                return Invalid(out error,
+                    "M08CampaignReviewRoot must render above the M03NpcAiInspectorRoot.");
             return true;
         }
 
@@ -1787,7 +1795,7 @@ namespace SengokuChronicle.Editor
                 MapRootName, IndustryRootName, EducationRootName, ResearchRootName,
                 FormationRootName
             };
-            string[] below = { TitleRootName, EventRootName, TacticalOverlayName };
+            string[] below = { TitleRootName, EventRootName, TacticalOverlayName, ReviewRootName };
             foreach (string name in above)
             {
                 Transform other = canvas.Find(name);
@@ -1803,11 +1811,17 @@ namespace SengokuChronicle.Editor
             return true;
         }
 
+        /// <summary>
+        /// Canonical Canvas order, lowest first: the game HUD, the opaque M02 page, the M03
+        /// inspector, the M08 review, then the M6 title, EventChoiceRoot and the M06 tactical
+        /// modal. The generator writes that whole sequence, so a rebuild cannot bury the
+        /// inspector or the review under the page or above the title.
+        /// </summary>
         private static void PlaceAboveGameHud(Transform canvas, Transform target)
         {
             // The page is a full-screen view: every game HUD root must render beneath it,
-            // while the title/event overlays, the M06 tactical sheet, and the read-only M03
-            // inspector stay above.
+            // while the inspector, the M08 review page, the title/event overlays and the
+            // M06 tactical sheet stay above.
             var children = new List<Transform>();
             for (int i = 0; i < canvas.childCount; i++)
                 children.Add(canvas.GetChild(i));
@@ -1817,7 +1831,8 @@ namespace SengokuChronicle.Editor
             {
                 if (child == target || child.name == RootName ||
                     child.name == InspectorRootName || child.name == TitleRootName ||
-                    child.name == EventRootName || child.name == TacticalOverlayName)
+                    child.name == EventRootName || child.name == TacticalOverlayName ||
+                    child.name == ReviewRootName)
                     continue;
                 child.SetSiblingIndex(next++);
             }
@@ -1825,6 +1840,9 @@ namespace SengokuChronicle.Editor
             Transform inspector = canvas.Find(InspectorRootName);
             if (inspector != null)
                 inspector.SetSiblingIndex(next++);
+            Transform review = canvas.Find(ReviewRootName);
+            if (review != null)
+                review.SetSiblingIndex(next++);
             Transform title = canvas.Find(TitleRootName);
             if (title != null)
                 title.SetSiblingIndex(next++);

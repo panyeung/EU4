@@ -47,6 +47,10 @@ namespace SengokuChronicle.Tests.EditMode
             scaler.matchWidthOrHeight = 0.5f;
 
             Create("M2WorldMapRoot", canvas, typeof(WorldMapController));
+            GameObject familyRoot = Create("FamilyRosterRoot", canvas);
+            Create("FamilyRosterPanel", familyRoot.transform);
+            GameObject industryRoot = Create("IndustryRoot", canvas);
+            Create("IndustryPanel", industryRoot.transform);
             session = Create("GameSession", null, typeof(GameSession)).GetComponent<GameSession>();
             session.InitNewGame();
         }
@@ -348,6 +352,11 @@ namespace SengokuChronicle.Tests.EditMode
                 titleBefore);
             Assert.That(AddM06TacticalMissionPanel.Validate(scene, out string tacticalBefore),
                 Is.True, tacticalBefore);
+            Assert.That(AddM02DailyActionPanel.Update(scene),
+                Is.EqualTo(AddM02DailyActionPanel.UpdateResult.Success));
+            Transform inspector = Create(AddM08CampaignReviewPanel.InspectorRootName, canvas).transform;
+            inspector.SetSiblingIndex(canvas.Find(AddM08CampaignReviewPanel.TitleRootName)
+                .GetSiblingIndex());
 
             int eventIndex = canvas.Find(AddM08CampaignReviewPanel.EventChoiceRootName)
                 .GetSiblingIndex();
@@ -362,7 +371,14 @@ namespace SengokuChronicle.Tests.EditMode
             Transform title = canvas.Find(AddM08CampaignReviewPanel.TitleRootName);
             Transform eventRoot = canvas.Find(AddM08CampaignReviewPanel.EventChoiceRootName);
             Transform tactical = canvas.Find(AddM08CampaignReviewPanel.TacticalOverlayName);
+            Transform dailyAction = canvas.Find(AddM02DailyActionPanel.RootName);
             Assert.That(root, Is.Not.Null);
+            Assert.That(dailyAction, Is.Not.Null);
+            Assert.That(dailyAction.GetSiblingIndex(), Is.LessThan(root.GetSiblingIndex()),
+                "M08 campaign review must render above the opaque M02 page.");
+            Assert.That(dailyAction.GetSiblingIndex(), Is.LessThan(inspector.GetSiblingIndex()));
+            Assert.That(inspector.GetSiblingIndex(), Is.LessThan(root.GetSiblingIndex()),
+                "M08 campaign review must render above the M03 inspector.");
             Assert.That(root.GetSiblingIndex(), Is.LessThan(title.GetSiblingIndex()),
                 "M08CampaignReviewRoot must render below the full-screen M6 title overlay.");
             Assert.That(title.GetSiblingIndex(), Is.EqualTo(eventRoot.GetSiblingIndex() - 1),
@@ -377,14 +393,28 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(AddM06TacticalMissionPanel.Validate(scene, out string tacticalAfter),
                 Is.True, tacticalAfter);
 
-            // A root appended back above the title must be rejected, not silently accepted.
+            // A campaign overlay hidden under the opaque M02 page must be rejected.
             int generatedIndex = root.GetSiblingIndex();
+            root.SetSiblingIndex(dailyAction.GetSiblingIndex() - 1);
+            Assert.That(AddM08CampaignReviewPanel.Validate(scene, out string pageDefect), Is.False);
+            Assert.That(pageDefect, Does.Contain(AddM02DailyActionPanel.RootName));
+            root.SetSiblingIndex(generatedIndex);
+
+            // A root appended back above the title must be rejected, not silently accepted.
             root.SetSiblingIndex(title.GetSiblingIndex() + 1);
             Assert.That(AddM08CampaignReviewPanel.Validate(scene, out string defect), Is.False);
             Assert.That(defect, Does.Contain("M6 title overlay"));
             root.SetSiblingIndex(generatedIndex);
             Assert.That(AddM08CampaignReviewPanel.Validate(scene, out string restored), Is.True,
                 restored);
+
+            root.SetSiblingIndex(inspector.GetSiblingIndex());
+            Assert.That(AddM08CampaignReviewPanel.Validate(scene, out string inspectorDefect),
+                Is.False);
+            Assert.That(inspectorDefect, Does.Contain(AddM08CampaignReviewPanel.InspectorRootName));
+            root.SetSiblingIndex(generatedIndex);
+            Assert.That(AddM08CampaignReviewPanel.Validate(scene, out string inspectorRestored),
+                Is.True, inspectorRestored);
 
             Undo.PerformUndo();
             Assert.That(canvas.Find(AddM08CampaignReviewPanel.RootName), Is.Null);
@@ -448,6 +478,44 @@ namespace SengokuChronicle.Tests.EditMode
                 Is.EqualTo(AddM08CampaignReviewPanel.UpdateResult.ExistingCampaignPanel));
             Assert.That(root.GetSiblingIndex(), Is.EqualTo(canvas.childCount - 1),
                 "A non-order defect must not move the review root.");
+        }
+
+        [Test]
+        public void Updater_UndoRestoresAnInspectorOrderRepair()
+        {
+            BuildM6TitleAndTacticalLayers();
+            Assert.That(AddM6TitleScreen.Update(scene),
+                Is.EqualTo(AddM6TitleScreen.UpdateResult.Success));
+            Assert.That(AddM06TacticalMissionPanel.Update(scene),
+                Is.EqualTo(AddM06TacticalMissionPanel.UpdateResult.Success));
+            Transform dailyAction = Create(AddM02DailyActionPanel.RootName, canvas).transform;
+            Transform inspector = Create(AddM08CampaignReviewPanel.InspectorRootName, canvas).transform;
+            dailyAction.SetSiblingIndex(canvas.Find(AddM08CampaignReviewPanel.TitleRootName)
+                .GetSiblingIndex());
+            inspector.SetSiblingIndex(canvas.Find(AddM08CampaignReviewPanel.TitleRootName)
+                .GetSiblingIndex());
+            Assert.That(AddM08CampaignReviewPanel.Update(scene),
+                Is.EqualTo(AddM08CampaignReviewPanel.UpdateResult.Success));
+
+            Transform root = canvas.Find(AddM08CampaignReviewPanel.RootName);
+            root.SetSiblingIndex(inspector.GetSiblingIndex());
+            string[] invalidOrder = Enumerable.Range(0, canvas.childCount)
+                .Select(i => canvas.GetChild(i).name).ToArray();
+            Assert.That(AddM08CampaignReviewPanel.Validate(scene, out string defect), Is.False);
+            Assert.That(defect, Does.Contain(AddM08CampaignReviewPanel.InspectorRootName));
+
+            Assert.That(AddM08CampaignReviewPanel.Update(scene),
+                Is.EqualTo(AddM08CampaignReviewPanel.UpdateResult.Success));
+            Assert.That(AddM08CampaignReviewPanel.Validate(scene, out string repaired), Is.True,
+                repaired);
+            Assert.That(inspector.GetSiblingIndex(), Is.LessThan(root.GetSiblingIndex()));
+
+            Undo.PerformUndo();
+            string[] undoneOrder = Enumerable.Range(0, canvas.childCount)
+                .Select(i => canvas.GetChild(i).name).ToArray();
+            CollectionAssert.AreEqual(invalidOrder, undoneOrder);
+            Assert.That(AddM08CampaignReviewPanel.Validate(scene, out string undone), Is.False);
+            Assert.That(undone, Does.Contain(AddM08CampaignReviewPanel.InspectorRootName));
         }
 
         [Test]

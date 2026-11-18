@@ -260,6 +260,11 @@ namespace SengokuChronicle.Tests.EditMode
                 Is.EqualTo(AddM02DailyActionPanel.UpdateResult.Success));
             Assert.That(AddM02DailyActionPanel.Validate(_scene, out string error), Is.True, error);
 
+            Transform dailyAction = canvas.Find(AddM02DailyActionPanel.RootName);
+            Assert.That(dailyAction, Is.Not.Null);
+            Assert.That(dailyAction.GetSiblingIndex(), Is.LessThan(review.transform.GetSiblingIndex()),
+                "The opaque M02 page must remain beneath the M08 campaign review overlay.");
+
             ReferenceGalleryNavigator navigator = Find(AddM02DailyActionPanel.RootName)
                 .GetComponent<ReferenceGalleryNavigator>();
             string[] registered = RegisteredPageRootNames(navigator);
@@ -280,6 +285,21 @@ namespace SengokuChronicle.Tests.EditMode
                 Assert.That(doctrine.activeSelf, Is.False,
                     "the launcher-owned doctrine body must stay closed on " + page);
             }
+        }
+
+        [Test]
+        public void Validator_RejectsCampaignReviewBelowTheOpaquePage()
+        {
+            Transform canvas = Find("Canvas");
+            Transform dailyAction = Find(AddM02DailyActionPanel.RootName);
+            Create("M6TitleRoot", canvas);
+            GameObject review = Create(CampaignReviewPanel.RootObjectName, canvas);
+            review.transform.SetAsFirstSibling();
+            Assert.That(review.transform.GetSiblingIndex(), Is.LessThan(dailyAction.GetSiblingIndex()),
+                "The fixture must put the M08 overlay below the opaque M02 page.");
+
+            Assert.That(AddM02DailyActionPanel.Validate(_scene, out string error), Is.False);
+            Assert.That(error, Does.Contain("below the M08 review page"));
         }
 
         [Test]
@@ -419,6 +439,33 @@ namespace SengokuChronicle.Tests.EditMode
             Rect doctrineRect = RectIn((RectTransform)doctrine.transform, canvas);
             Assert.That(researchRect.Overlaps(formationRect, true), Is.False);
             Assert.That(formationRect.Overlaps(doctrineRect, true), Is.False);
+        }
+
+        [Test]
+        public void Generator_KeepsCampaignReviewAboveOpaquePageWhenM02IsCreatedLater()
+        {
+            Transform canvas = Find("Canvas");
+            Transform inspector = Find("M03NpcAiInspectorRoot");
+            inspector.SetParent(canvas, false);
+            Transform eventRoot = Find("EventChoiceRoot");
+            eventRoot.SetParent(canvas, false);
+            Transform title = Create("M6TitleRoot", canvas).transform;
+            Transform tactical = Create(TacticalMissionPanel.OverlayObjectName, canvas).transform;
+            GameObject review = Create(AddM08CampaignReviewPanel.RootName, canvas);
+            UnityEngine.Object.DestroyImmediate(Find(AddM02DailyActionPanel.RootName).gameObject);
+
+            Assert.That(AddM02DailyActionPanel.Update(_scene),
+                Is.EqualTo(AddM02DailyActionPanel.UpdateResult.Success));
+
+            Transform dailyAction = Find(AddM02DailyActionPanel.RootName);
+            Assert.That(dailyAction.GetSiblingIndex(), Is.LessThan(review.transform.GetSiblingIndex()),
+                "The M08 campaign review overlay must stay above the opaque M02 page after rebuild.");
+            Assert.That(dailyAction.GetSiblingIndex(), Is.LessThan(inspector.GetSiblingIndex()));
+            Assert.That(inspector.GetSiblingIndex(), Is.LessThan(review.transform.GetSiblingIndex()));
+            Assert.That(review.transform.GetSiblingIndex(), Is.LessThan(title.GetSiblingIndex()));
+            Assert.That(title.GetSiblingIndex(), Is.LessThan(eventRoot.GetSiblingIndex()));
+            Assert.That(eventRoot.GetSiblingIndex(), Is.LessThan(tactical.GetSiblingIndex()));
+            Assert.That(AddM02DailyActionPanel.Validate(_scene, out string error), Is.True, error);
         }
 
         [Test]

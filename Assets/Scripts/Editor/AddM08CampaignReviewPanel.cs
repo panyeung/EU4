@@ -30,6 +30,11 @@ namespace SengokuChronicle.Editor
         public const string TitleRootName = "M6TitleRoot";
         public const string EventChoiceRootName = "EventChoiceRoot";
         public const string TacticalOverlayName = TacticalMissionPanel.OverlayObjectName;
+        // The M02 character/daily-action page is a full-screen opaque surface. The review
+        // overlay must stay above it, or the page hides the whole review.
+        public const string DailyActionRootName = AddM02DailyActionPanel.RootName;
+        // The read-only M03 inspector renders above the page and below the review.
+        public const string InspectorRootName = "M03NpcAiInspectorRoot";
         public const string PageName = CampaignReviewPanel.PageObjectName;
         public const string CardName = CampaignReviewPanel.CardObjectName;
         public const string TitleTextName = "M08CampaignReviewTitleText";
@@ -54,6 +59,10 @@ namespace SengokuChronicle.Editor
             "Campaign review root must render below the M06 tactical overlay.";
         private const string TitleOrderError =
             "Campaign review root must render below the M6 title overlay.";
+        private const string DailyActionOrderError =
+            "Campaign review root must render above the opaque M02DailyActionRoot page.";
+        private const string InspectorOrderError =
+            "Campaign review root must render above the M03NpcAiInspectorRoot.";
         private const string EventOrderError =
             "M6 title root must stay immediately below EventChoiceRoot when it exists.";
         private const float ReferenceCardWidth = 1120f;
@@ -392,29 +401,44 @@ namespace SengokuChronicle.Editor
         /// title/event pair instead of leaving it above the title and the tactical modal.
         /// </summary>
         private static void PlaceBelowTitleOverlay(Transform canvas, Transform root) =>
-            root.SetSiblingIndex(ResolveOrderIndex(canvas));
+            root.SetSiblingIndex(ResolveOrderIndex(canvas, root));
 
         /// <summary>
-        /// Canvas index the review root renders at: below the M6 title overlay, or directly
-        /// below the M06 tactical overlay when no title exists. Creating the root last and
-        /// moving it here shifts the title and EventChoiceRoot above it one step up together.
+        /// Canvas index the review root renders at, expressed in the child list after the root
+        /// is removed, which is how Unity reads SetSiblingIndex: a sibling above the root
+        /// shifts down one step, so its target index must be shifted the same way. The target
+        /// is below the M6 title overlay and above the M02 page and M03 inspector, which is
+        /// the canonical order ... M02, M03, M08, M6TitleRoot, EventChoiceRoot, tactical.
         /// </summary>
-        private static int ResolveOrderIndex(Transform canvas)
+        private static int ResolveOrderIndex(Transform canvas, Transform root)
         {
+            int current = root != null ? root.GetSiblingIndex() : canvas.childCount;
             Transform title = canvas.Find(TitleRootName);
             Transform tactical = canvas.Find(TacticalOverlayName);
-            int index = title != null ? title.GetSiblingIndex()
-                : tactical != null ? tactical.GetSiblingIndex()
+            int index = title != null ? Shifted(title.GetSiblingIndex(), current)
+                : tactical != null ? Shifted(tactical.GetSiblingIndex(), current)
                 : canvas.childCount - 1;
+            // Unity renders later siblings above earlier ones, so the review must sit at a
+            // higher index than both the opaque M02 page and the M03 inspector.
+            Transform dailyAction = canvas.Find(DailyActionRootName);
+            if (dailyAction != null)
+                index = Mathf.Max(index, Shifted(dailyAction.GetSiblingIndex(), current) + 1);
+            Transform inspector = canvas.Find(InspectorRootName);
+            if (inspector != null)
+                index = Mathf.Max(index, Shifted(inspector.GetSiblingIndex(), current) + 1);
             return Mathf.Clamp(index, 0, canvas.childCount - 1);
         }
+
+        /// <summary>Post-removal index of a sibling that sat above the moved root.</summary>
+        private static int Shifted(int index, int current) => index - (current < index ? 1 : 0);
 
         /// <summary>
         /// Only a misplaced review root can be repaired. Title/EventChoiceRoot adjacency is
         /// reported separately because moving the review root cannot fix it.
         /// </summary>
         private static bool RepairableOrderError(string error) =>
-            error == TacticalLastError || error == TacticalOrderError || error == TitleOrderError;
+            error == TacticalLastError || error == TacticalOrderError || error == TitleOrderError ||
+            error == DailyActionOrderError || error == InspectorOrderError;
 
         /// <summary>
         /// A complete generated page saved by an older revision can carry nothing but the
@@ -432,7 +456,7 @@ namespace SengokuChronicle.Editor
 
             Transform root = roots[0];
             int originalIndex = root.GetSiblingIndex();
-            int targetIndex = ResolveOrderIndex(canvas);
+            int targetIndex = ResolveOrderIndex(canvas, root);
             if (targetIndex == originalIndex)
                 return UpdateResult.ExistingCampaignPanel;
 
@@ -473,13 +497,24 @@ namespace SengokuChronicle.Editor
         }
 
         /// <summary>
-        /// The generated ordering is validated with the reviewed overlay, so a later edit
-        /// cannot append the root back above the M6 title or the M06 tactical modal.
+        /// Unity renders later Canvas siblings above earlier ones, so the canonical order is
+        /// M02 page, M03 inspector, M08 review, M6 title, EventChoiceRoot, tactical overlay.
+        /// AddM6TitleScreen.Validate requires the title to be the sibling immediately below
+        /// EventChoiceRoot, and AddM06TacticalMissionPanel.Validate requires the tactical
+        /// overlay to stay last.
         /// </summary>
         private static bool Ordered(Transform canvas, Transform root, out string error)
         {
             error = null;
             int index = root.GetSiblingIndex();
+            Transform dailyAction = canvas.Find(DailyActionRootName);
+            if (dailyAction != null && index <= dailyAction.GetSiblingIndex())
+                return Invalid(out error, DailyActionOrderError);
+
+            Transform inspector = canvas.Find(InspectorRootName);
+            if (inspector != null && index <= inspector.GetSiblingIndex())
+                return Invalid(out error, InspectorOrderError);
+
             Transform tactical = canvas.Find(TacticalOverlayName);
             if (tactical != null)
             {
