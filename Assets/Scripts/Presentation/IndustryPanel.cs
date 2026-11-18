@@ -27,25 +27,70 @@ namespace SengokuChronicle.Presentation
         [SerializeField] private GameObject rowFarm;
         [SerializeField] private GameObject rowTradingHouse;
         [SerializeField] private Text farmStatusText;
+        [SerializeField] private Text farmDetailText;
         [SerializeField] private Text farmAssigneeText;
         [SerializeField] private Button farmUnassignButton;
         [SerializeField] private Transform farmCandidateContainer;
         [SerializeField] private Text tradingStatusText;
+        [SerializeField] private Text tradingDetailText;
         [SerializeField] private Text tradingAssigneeText;
         [SerializeField] private Button tradingUnassignButton;
         [SerializeField] private Transform tradingCandidateContainer;
         [SerializeField] private GameObject candidateTemplate;
+        [SerializeField] private Text previewText;
+        [SerializeField] private Button confirmButton;
+        [SerializeField] private Button cancelButton;
+
+        /// <summary>Reason shown when the scene has no confirmation controls.</summary>
+        public const string ConfirmUnboundNotice =
+            "任命确认控件未绑定，本页暂不能选择候选人；请重新生成产业面板。";
+
+        /// <summary>
+        /// Lines the authored status band can hold before the panel stops echoing the full
+        /// text. The generator derives its band height from this budget.
+        /// </summary>
+        public const int StatusBandSafeLines = 3;
+
+        /// <summary>
+        /// Concise status used when the full message is too long for the band. It points at
+        /// the report without claiming an outcome, so a rollback or a rejected action is
+        /// never restated as a completed settlement.
+        /// </summary>
+        public const string ReportPointerStatus = "本页状态文字较长，完整内容见下方报告，可上下滚动查看。";
+
+        /// <summary>
+        /// Separator between a carried status message and the report facts it precedes.
+        /// The report region is the only other text surface this panel owns.
+        /// </summary>
+        private const string ReportCarrySeparator = " ｜ ";
+
+        // Authored report band in the 760x700 panel. The household gallery presents a
+        // 760x560 card, so the live band lifts and shortens to stay inside that card.
+        private const float ReportBandHeight = 68f;
+        private const float ReportBandCenterY = -266f;
+        private const float ReportBandBottomMargin = 4f;
 
         private readonly List<GameObject> _farmCandidates = new List<GameObject>();
         private readonly List<GameObject> _tradingCandidates = new List<GameObject>();
         private bool _subscribed;
         private UnityAction _openListener;
         private UnityAction _closeListener;
+        private UnityAction _confirmListener;
+        private UnityAction _cancelListener;
+        private string _pendingIndustryId = string.Empty;
+        private PersonId _pendingPersonId;
+        private string _lastReportLine = string.Empty;
+        private float _fittedPanelHeight = float.NaN;
+        private readonly List<PersonId> _eligiblePeople = new List<PersonId>();
 
+        /// <summary>
+        /// Required bindings. The message band is not listed: a scene authored before it
+        /// existed still works, and the block-reason label carries the same notices the
+        /// band would show. No other optional control can disable the panel.
+        /// </summary>
         public bool IsBound =>
             gameSession != null && panelRoot != null && openButton != null && closeButton != null &&
             titleText != null && resourceText != null && blockReasonText != null && reportText != null &&
-            messageText != null &&
             rowFarm != null && rowTradingHouse != null && farmStatusText != null &&
             farmAssigneeText != null && farmUnassignButton != null && farmCandidateContainer != null &&
             tradingStatusText != null && tradingAssigneeText != null &&
@@ -57,6 +102,15 @@ namespace SengokuChronicle.Presentation
         public bool BlockReasonVisible => blockReasonText != null && blockReasonText.gameObject.activeSelf;
         public string MessageLine => messageText != null ? messageText.text : string.Empty;
         public bool MessageVisible => messageText != null && messageText.gameObject.activeSelf;
+
+        /// <summary>True when the band shows <see cref="ReportPointerStatus"/> instead of the full text.</summary>
+        public bool StatusPointerActive { get; private set; }
+
+        /// <summary>Lines the band can hold with the authored font and height.</summary>
+        public int StatusBandLineBudget { get; private set; }
+
+        /// <summary>Wrapped line count of the full message at the band width; 0 when unmeasured.</summary>
+        public int StatusLineCount { get; private set; }
         public string ReportLine => reportText != null ? reportText.text : string.Empty;
         public string FarmStatus => farmStatusText != null ? farmStatusText.text : string.Empty;
         public string FarmAssignee => farmAssigneeText != null ? farmAssigneeText.text : string.Empty;
@@ -65,6 +119,32 @@ namespace SengokuChronicle.Presentation
         public int CandidateCount => _farmCandidates.Count + _tradingCandidates.Count;
         public int FarmCandidateCount => _farmCandidates.Count;
         public int TradingCandidateCount => _tradingCandidates.Count;
+
+        public string FarmDetail => farmDetailText != null ? farmDetailText.text : string.Empty;
+        public bool FarmDetailVisible => farmDetailText != null && farmDetailText.gameObject.activeSelf;
+        public string TradingDetail => tradingDetailText != null ? tradingDetailText.text : string.Empty;
+        public bool TradingDetailVisible =>
+            tradingDetailText != null && tradingDetailText.gameObject.activeSelf;
+        public string PreviewLine => previewText != null ? previewText.text : string.Empty;
+        public bool PreviewVisible => previewText != null && previewText.gameObject.activeSelf;
+
+        /// <summary>Industry awaiting confirmation; empty when nothing is selected.</summary>
+        public string PendingIndustryId => _pendingIndustryId;
+
+        /// <summary>Person awaiting confirmation; empty when nothing is selected.</summary>
+        public PersonId PendingPersonId => _pendingPersonId;
+        public bool HasPendingAssignment => !string.IsNullOrEmpty(_pendingIndustryId);
+        public bool ConfirmVisible => confirmButton != null && confirmButton.gameObject.activeSelf;
+        public bool ConfirmInteractable => confirmButton != null && confirmButton.interactable;
+        public bool CancelVisible => cancelButton != null && cancelButton.gameObject.activeSelf;
+
+        /// <summary>
+        /// A scene authored before the confirm controls existed can project appointments but
+        /// cannot commit them. Selection is refused and explained instead of becoming a
+        /// one-click dead end.
+        /// </summary>
+        public bool CanConfirmSelection => confirmButton != null && cancelButton != null;
+        public int EligibleCandidateTotal => _eligiblePeople.Count;
 
         public string FarmCandidateLabel(int index) => CandidateLabel(_farmCandidates, index);
         public string TradingCandidateLabel(int index) => CandidateLabel(_tradingCandidates, index);
@@ -94,6 +174,8 @@ namespace SengokuChronicle.Presentation
         public void ClickTradingCandidate(int index) => ClickCandidate(_tradingCandidates, index);
         public void ClickFarmUnassign() => OnUnassignFarm();
         public void ClickTradingUnassign() => OnUnassignTrading();
+        public void ClickConfirm() => ConfirmPending();
+        public void ClickCancel() => CancelPending();
 
         private static string CandidateLabel(List<GameObject> candidates, int index)
         {
@@ -128,10 +210,13 @@ namespace SengokuChronicle.Presentation
             Text title, Text resources, Text blockReason, Text message, Text report, GameObject farmRow,
             Text farmStatus, Text farmAssignee, Button farmUnassign, Transform farmCandidates,
             GameObject tradingRow, Text tradingStatus, Text tradingAssignee, Button tradingUnassign,
-            Transform tradingCandidates, GameObject template, bool refresh = true)
+            Transform tradingCandidates, GameObject template, bool refresh = true,
+            Text farmDetail = null, Text tradingDetail = null, Text preview = null,
+            Button confirm = null, Button cancel = null)
         {
             Unsubscribe();
             ClearCandidates();
+            ClearPending();
             gameSession = session;
             panelRoot = panel;
             openButton = open;
@@ -143,15 +228,20 @@ namespace SengokuChronicle.Presentation
             reportText = report;
             rowFarm = farmRow;
             farmStatusText = farmStatus;
+            farmDetailText = farmDetail;
             farmAssigneeText = farmAssignee;
             farmUnassignButton = farmUnassign;
             farmCandidateContainer = farmCandidates;
             rowTradingHouse = tradingRow;
             tradingStatusText = tradingStatus;
+            tradingDetailText = tradingDetail;
             tradingAssigneeText = tradingAssignee;
             tradingUnassignButton = tradingUnassign;
             tradingCandidateContainer = tradingCandidates;
             candidateTemplate = template;
+            previewText = preview;
+            confirmButton = confirm;
+            cancelButton = cancel;
             Subscribe();
             if (refresh)
                 Refresh();
@@ -165,8 +255,13 @@ namespace SengokuChronicle.Presentation
             Refresh();
         }
 
+        /// <summary>
+        /// Hides the page and drops any unconfirmed choice, so reopening never restores a
+        /// selection the player could no longer see when they left.
+        /// </summary>
         public void Close()
         {
+            ClearPending();
             if (panelRoot != null)
                 panelRoot.SetActive(false);
         }
@@ -174,6 +269,7 @@ namespace SengokuChronicle.Presentation
         public void Refresh()
         {
             ClearCandidates();
+            _eligiblePeople.Clear();
             if (!IsBound)
             {
                 if (panelRoot != null)
@@ -189,17 +285,211 @@ namespace SengokuChronicle.Presentation
             blockReasonText.text = view.BlockReason;
             blockReasonText.gameObject.SetActive(showBlock);
 
-            bool showMessage = !string.IsNullOrWhiteSpace(view.LastMessage);
-            messageText.text = view.LastMessage;
-            messageText.gameObject.SetActive(showMessage);
+            // The band is measured before the rows so a message that cannot fit becomes a
+            // report pointer, and the full text is then handed to the report region.
+            string reportLine = BuildReportLine(view);
+            string statusLine = SelectStatusLine(view.LastMessage);
+            // Whatever the band cannot show stays readable in the report region instead of
+            // vanishing behind the band's authored truncation.
+            if (CarriesFullMessage(view.LastMessage) &&
+                !ContainsReportText(reportLine, view.LastMessage))
+                reportLine = CarryIntoReport(reportLine, view.LastMessage);
+            if (messageText != null)
+            {
+                messageText.text = statusLine;
+                messageText.gameObject.SetActive(statusLine.Length > 0);
+            }
 
-            RefreshRow(IndustryCatalog.FarmId, view, rowFarm, farmStatusText, farmAssigneeText,
-                farmUnassignButton, farmCandidateContainer);
+            // A selection the domain can no longer accept is dropped before the rows are
+            // rebuilt, so no candidate keeps a marker or a preview for an invalid choice.
+            if (HasPendingAssignment && !CanStillAssign(view, _pendingIndustryId, _pendingPersonId))
+                ClearPending();
+
+            RefreshRow(IndustryCatalog.FarmId, view, rowFarm, farmStatusText, farmDetailText,
+                farmAssigneeText, farmUnassignButton, farmCandidateContainer);
             RefreshRow(IndustryCatalog.TradingHouseId, view, rowTradingHouse, tradingStatusText,
-                tradingAssigneeText, tradingUnassignButton, tradingCandidateContainer);
+                tradingDetailText, tradingAssigneeText, tradingUnassignButton,
+                tradingCandidateContainer);
             RebuildCandidateLayout();
 
-            reportText.text = BuildReportLine(view);
+            // The report label wraps horizontally, and the scrolled content grows to the
+            // complete carried text so a rollback or long settlement stays reachable instead
+            // of being clipped inside the authored viewport.
+            reportText.horizontalOverflow = HorizontalWrapMode.Wrap;
+            reportText.verticalOverflow = VerticalWrapMode.Truncate;
+            reportText.text = reportLine;
+            FitReportRegion();
+            RefreshPendingPreview(view);
+        }
+
+        /// <summary>
+        /// Picks the status text. The band is bounded, so a message that needs more lines
+        /// than it can show is replaced by a report pointer and handed to the report
+        /// region, which is the surface that keeps it.
+        /// </summary>
+        private string SelectStatusLine(string message)
+        {
+            StatusPointerActive = false;
+            StatusLineCount = 0;
+            StatusBandLineBudget = messageText != null ? ComputeStatusBandLineBudget() : 0;
+            if (messageText == null || string.IsNullOrWhiteSpace(message))
+                return string.Empty;
+
+            StatusLineCount = CountStatusLines(message);
+            if (StatusLineCount <= 0 || StatusBandLineBudget <= 0 ||
+                StatusLineCount <= StatusBandLineBudget)
+                return message;
+            StatusPointerActive = true;
+            return ReportPointerStatus;
+        }
+
+        /// <summary>
+        /// True when the band is not showing the message in full: it has no label, it shows
+        /// the report pointer, or it could not be measured against its authored band.
+        /// </summary>
+        private bool CarriesFullMessage(string message) =>
+            !string.IsNullOrWhiteSpace(message) &&
+            (messageText == null || StatusPointerActive || StatusLineCount <= 0 ||
+             StatusBandLineBudget <= 0);
+
+        /// <summary>
+        /// Grows the scrolled report content to the label's full wrapped height while the
+        /// authored viewport keeps its own size. A scene without the scroll hierarchy keeps
+        /// the previous clipping behavior instead of failing.
+        /// </summary>
+        private void FitReportRegion()
+        {
+            RectTransform reportRect = reportText.rectTransform;
+            RectTransform content = reportRect.parent as RectTransform;
+            RectTransform viewport = content != null ? content.parent as RectTransform : null;
+            if (content == null || viewport == null ||
+                viewport.GetComponent<RectMask2D>() == null)
+                return;
+
+            // The viewport is nested under its ScrollRect, so the scroll object is an
+            // ancestor and receives wheel and drag events that bubble from the viewport.
+            ScrollRect scroll = viewport.GetComponentInParent<ScrollRect>(true);
+            FitReportBandToPanel(scroll, viewport);
+
+            content.sizeDelta = new Vector2(content.sizeDelta.x,
+                Mathf.Max(viewport.rect.height, reportText.preferredHeight));
+
+            if (scroll != null && reportText.text != _lastReportLine)
+            {
+                _lastReportLine = reportText.text;
+                scroll.verticalNormalizedPosition = 1f;
+            }
+        }
+
+        /// <summary>
+        /// Keeps the authored 700x68 report band inside the live panel. The household page
+        /// applies a shorter card than the panel authors, so the band is lifted and shortened
+        /// to stay between the action row and the card's lower edge.
+        /// </summary>
+        private void FitReportBandToPanel(ScrollRect scroll, RectTransform viewport)
+        {
+            RectTransform panel = panelRoot != null ? panelRoot.transform as RectTransform : null;
+            if (scroll == null || panel == null)
+                return;
+
+            _fittedPanelHeight = panel.rect.height;
+            float halfHeight = _fittedPanelHeight * 0.5f;
+            if (halfHeight >= 350f)
+            {
+                SetReportBand(scroll, viewport, ReportBandCenterY, ReportBandHeight);
+                return;
+            }
+
+            RectTransform action = confirmButton != null
+                ? confirmButton.transform as RectTransform
+                : null;
+            float topLimit = action != null
+                ? action.anchoredPosition.y - action.rect.height * 0.5f - 2f
+                : halfHeight - 2f;
+            float bottomLimit = -halfHeight + ReportBandBottomMargin;
+            float height = Mathf.Min(ReportBandHeight, topLimit - bottomLimit);
+            float center = (topLimit + bottomLimit) * 0.5f;
+            SetReportBand(scroll, viewport, center, Mathf.Max(0f, height));
+        }
+
+        private static void SetReportBand(ScrollRect scroll, RectTransform viewport,
+            float centerY, float height)
+        {
+            RectTransform scrollRect = scroll.transform as RectTransform;
+            if (scrollRect != null &&
+                (Mathf.Abs(scrollRect.anchoredPosition.y - centerY) > 0.01f ||
+                 Mathf.Abs(scrollRect.rect.height - height) > 0.01f))
+            {
+                scrollRect.anchoredPosition = new Vector2(scrollRect.anchoredPosition.x, centerY);
+                scrollRect.sizeDelta = new Vector2(scrollRect.sizeDelta.x, height);
+            }
+
+            RectTransform bar = scroll.verticalScrollbar != null
+                ? scroll.verticalScrollbar.transform as RectTransform
+                : null;
+            if (bar != null &&
+                (Mathf.Abs(bar.anchoredPosition.y - centerY) > 0.01f ||
+                 Mathf.Abs(bar.rect.height - height) > 0.01f))
+            {
+                bar.anchoredPosition = new Vector2(bar.anchoredPosition.x, centerY);
+                bar.sizeDelta = new Vector2(bar.sizeDelta.x, height);
+            }
+
+            viewport.sizeDelta = Vector2.zero;
+        }
+
+        private static bool ContainsReportText(string reportLine, string message) =>
+            !string.IsNullOrEmpty(reportLine) &&
+            reportLine.IndexOf(message, System.StringComparison.Ordinal) >= 0;
+
+        /// <summary>
+        /// The carried message leads the report so the feedback the player just triggered
+        /// keeps the visible lines; the month facts follow in the same scrolled region, which
+        /// keeps the whole report inside its authored viewport.
+        /// </summary>
+        private static string CarryIntoReport(string reportLine, string message) =>
+            string.IsNullOrEmpty(reportLine) ? message : message + ReportCarrySeparator + reportLine;
+
+        /// <summary>Rendered lines available in the band, measured with its own font and height.</summary>
+        private int ComputeStatusBandLineBudget()
+        {
+            if (!TryBuildStatusSettings(out TextGenerationSettings settings, out Rect band))
+                return 0;
+            float lineHeight = messageText.cachedTextGeneratorForLayout
+                                   .GetPreferredHeight("国", settings) /
+                               Mathf.Max(0.0001f, messageText.pixelsPerUnit);
+            return lineHeight <= 0f ? 0 : Mathf.FloorToInt((band.height + 0.5f) / lineHeight);
+        }
+
+        /// <summary>Wrapped line count of one candidate message at the band width.</summary>
+        private int CountStatusLines(string message)
+        {
+            if (!TryBuildStatusSettings(out TextGenerationSettings settings, out _))
+                return 0;
+            TextGenerator generator = messageText.cachedTextGeneratorForLayout;
+            generator.Populate(message, settings);
+            return generator.lineCount;
+        }
+
+        /// <summary>
+        /// Measurement settings for the band. Vertical overflow is forced open so a long
+        /// candidate is measured in full instead of being clamped by the authored truncation.
+        /// </summary>
+        private bool TryBuildStatusSettings(out TextGenerationSettings settings, out Rect band)
+        {
+            settings = default;
+            band = default;
+            if (messageText == null || messageText.font == null)
+                return false;
+            RectTransform target = messageText.rectTransform;
+            band = target != null ? target.rect : default;
+            if (band.width <= 0f || band.height <= 0f)
+                return false;
+            settings = messageText.GetGenerationSettings(band.size);
+            settings.horizontalOverflow = HorizontalWrapMode.Wrap;
+            settings.verticalOverflow = VerticalWrapMode.Overflow;
+            settings.generateOutOfBounds = true;
+            return true;
         }
 
         /// <summary>
@@ -222,7 +512,7 @@ namespace SengokuChronicle.Presentation
         }
 
         private void RefreshRow(string industryId, IndustryView view, GameObject row, Text statusText,
-            Text assigneeText, Button unassignButton, Transform candidateContainer)
+            Text detailText, Text assigneeText, Button unassignButton, Transform candidateContainer)
         {
             if (row == null)
                 return;
@@ -233,6 +523,7 @@ namespace SengokuChronicle.Presentation
             row.SetActive(true);
 
             statusText.text = slot.StatusReason;
+            RefreshDetail(detailText, definition);
             if (slot.AssigneeId.IsEmpty)
             {
                 assigneeText.text = "负责人：空缺";
@@ -245,16 +536,56 @@ namespace SengokuChronicle.Presentation
             }
 
             unassignButton.interactable = !slot.AssigneeId.IsEmpty && view.CanEditAssignments;
-            BuildCandidates(industryId, definition, view, candidateContainer);
+            BuildCandidates(industryId, view, candidateContainer);
             RebuildLayout(candidateContainer);
         }
 
-        private void BuildCandidates(string industryId, IndustryDefinition definition, IndustryView view,
-            Transform container)
+        /// <summary>
+        /// Authored per-month input and output of one industry, taken from the read-only
+        /// catalog rule. Fields the catalog does not define (location) stay hidden instead
+        /// of being invented, and a missing definition hides the line entirely.
+        /// </summary>
+        private static void RefreshDetail(Text detailText, IndustryDefinition definition)
+        {
+            if (detailText == null)
+                return;
+            string line = BuildDetailLine(definition);
+            detailText.text = line.Length > 0 ? "每月规则：" + line : string.Empty;
+            detailText.gameObject.SetActive(line.Length > 0);
+        }
+
+        private static string BuildDetailLine(IndustryDefinition definition)
+        {
+            if (string.IsNullOrEmpty(definition.Id))
+                return string.Empty;
+            string upkeep;
+            if (definition.MaintainsFromOutput)
+            {
+                upkeep = "维护 " + definition.UpkeepSupplies + " 物资（自留存）";
+            }
+            else
+            {
+                upkeep = "维护 " + definition.UpkeepFunds + " 资金";
+                if (definition.UpkeepSupplies > 0)
+                    upkeep += "、" + definition.UpkeepSupplies + " 物资";
+            }
+
+            string output = "产出 +" + definition.OutputFunds + " 资金";
+            if (definition.OutputSupplies > 0)
+                output += "、+" + definition.OutputSupplies + " 物资";
+            if (definition.OutputIntelligence > 0)
+                output += "、+" + definition.OutputIntelligence + " 情报";
+            if (definition.OutputFood > 0)
+                output += "、+" + definition.OutputFood + " 粮食";
+            return upkeep + "｜" + output;
+        }
+
+        private void BuildCandidates(string industryId, IndustryView view, Transform container)
         {
             if (candidateTemplate == null || container == null || !view.CanEditAssignments)
                 return;
 
+            bool canSelect = CanConfirmSelection;
             SuccessionState succession = gameSession.Succession;
             GameDate date = gameSession.WorldClock != null
                 ? gameSession.WorldClock.CurrentDate
@@ -276,33 +607,188 @@ namespace SengokuChronicle.Presentation
                 if (remaining < IndustryService.PostWorkUnits)
                     continue;
 
+                RememberEligible(personId);
+                bool pending = IsPending(industryId, personId);
                 GameObject buttonObject = Instantiate(candidateTemplate, container);
                 buttonObject.name = "IndustryCandidate_" + industryId + "_" + personId.Value;
                 buttonObject.SetActive(true);
                 Text label = buttonObject.GetComponentInChildren<Text>(true);
                 if (label != null)
-                    label.text = IndustryService.PersonName(succession, personId) +
+                    label.text = (pending ? "▶ " : string.Empty) +
+                                 IndustryService.PersonName(succession, personId) +
                                  "（剩余 " + remaining + "/" + IndustryService.MonthlyWorkUnits + "）";
                 Button button = buttonObject.GetComponent<Button>();
                 if (button != null)
                 {
+                    // Without the confirm controls a click could only change the highlight,
+                    // so the candidates stay disabled and the preview explains why.
+                    button.interactable = canSelect;
                     PersonId captured = personId;
                     string capturedIndustry = industryId;
-                    button.onClick.AddListener(() =>
-                    {
-                        IndustryAssignmentResult result =
-                            gameSession.TryAssignIndustry(capturedIndustry, captured);
-                        // Success already publishes SessionStateChanged; refresh here
-                        // only for a rejection so its visible reason appears.
-                        if (!result.Succeeded && IsOpen)
-                            Refresh();
-                    });
+                    button.onClick.AddListener(() => SelectPending(capturedIndustry, captured));
                 }
                 if (string.Equals(industryId, IndustryCatalog.FarmId, System.StringComparison.Ordinal))
                     _farmCandidates.Add(buttonObject);
                 else
                     _tradingCandidates.Add(buttonObject);
             }
+        }
+
+        /// <summary>Counts each selectable person once even when both rows list them.</summary>
+        private void RememberEligible(PersonId personId)
+        {
+            for (int i = 0; i < _eligiblePeople.Count; i++)
+                if (_eligiblePeople[i] == personId)
+                    return;
+            _eligiblePeople.Add(personId);
+        }
+
+        private bool IsPending(string industryId, PersonId personId) =>
+            !string.IsNullOrEmpty(_pendingIndustryId) && _pendingPersonId == personId &&
+            string.Equals(_pendingIndustryId, industryId, System.StringComparison.Ordinal);
+
+        /// <summary>
+        /// Selecting a candidate only previews the appointment; the domain changes when
+        /// the player confirms. Cancel clears the preview and writes nothing.
+        /// </summary>
+        public void SelectPending(string industryId, PersonId personId)
+        {
+            if (!CanConfirmSelection || string.IsNullOrEmpty(industryId) || personId.IsEmpty)
+                return;
+            _pendingIndustryId = industryId;
+            _pendingPersonId = personId;
+            if (IsOpen)
+                Refresh();
+        }
+
+        private void ConfirmPending()
+        {
+            if (gameSession == null || string.IsNullOrEmpty(_pendingIndustryId))
+                return;
+            IndustryAssignmentResult result =
+                gameSession.TryAssignIndustry(_pendingIndustryId, _pendingPersonId);
+            if (result.Succeeded)
+                ClearPending();
+            // Success already publishes SessionStateChanged; refresh a rejection or a cleared
+            // preview here so the panel never shows a stale preview.
+            if (IsOpen)
+                Refresh();
+        }
+
+        private void CancelPending()
+        {
+            if (!HasPendingAssignment)
+                return;
+            ClearPending();
+            if (IsOpen)
+                Refresh();
+        }
+
+        private void ClearPending()
+        {
+            _pendingIndustryId = string.Empty;
+            _pendingPersonId = default;
+        }
+
+        /// <summary>
+        /// Paints the pending recipient and the confirm/cancel choices. A scene authored
+        /// before the preview label existed has nowhere to paint that text, so the reason
+        /// for the disabled candidates goes to the message line it already binds instead.
+        /// </summary>
+        private void RefreshPendingPreview(IndustryView view)
+        {
+            if (previewText != null)
+            {
+                string line = BuildPreviewLine(view);
+                previewText.text = line;
+                previewText.gameObject.SetActive(line.Length > 0);
+            }
+            else if (!CanConfirmSelection)
+            {
+                ShowConfirmUnboundNotice();
+            }
+
+            bool show = HasPendingAssignment && view.CanEditAssignments;
+            if (confirmButton != null)
+            {
+                confirmButton.gameObject.SetActive(show);
+                confirmButton.interactable = show;
+            }
+            if (cancelButton != null)
+                cancelButton.gameObject.SetActive(show);
+        }
+
+        /// <summary>
+        /// Keeps the disabled candidates explainable on a pre-preview scene. The message
+        /// line is the surface such a scene already binds; the block-reason line is used
+        /// only when the message line is missing, and existing domain text keeps its place
+        /// after the notice rather than being replaced.
+        /// </summary>
+        private void ShowConfirmUnboundNotice()
+        {
+            Text surface = messageText != null ? messageText : blockReasonText;
+            if (surface == null)
+                return;
+            string existing = surface.text;
+            surface.text = string.IsNullOrWhiteSpace(existing)
+                ? ConfirmUnboundNotice
+                : ConfirmUnboundNotice + " " + existing;
+            surface.gameObject.SetActive(true);
+        }
+
+        private bool CanStillAssign(IndustryView view, string industryId, PersonId personId)
+        {
+            if (!view.CanEditAssignments || !IndustryCatalog.TryGet(industryId, out _))
+                return false;
+            SuccessionState succession = gameSession.Succession;
+            GameDate date = gameSession.WorldClock != null
+                ? gameSession.WorldClock.CurrentDate
+                : SengokuChronicle.Domain.WorldClock.NewGameDate;
+            if (!IndustryService.CanWork(succession, personId, date, out _))
+                return false;
+            foreach (IndustrySlotView slot in view.Slots)
+                if (!slot.AssigneeId.IsEmpty && slot.AssigneeId == personId)
+                    return slot.WorkUnitsRemaining >= IndustryService.PostWorkUnits;
+            return IndustryService.MonthlyWorkUnits >= IndustryService.PostWorkUnits;
+        }
+
+        /// <summary>
+        /// Preview of a pending appointment built from the catalog rule and the projected
+        /// slots only. It restates the authored monthly rule; the monthly settlement stays
+        /// the single authority on whether the month operates.
+        /// </summary>
+        private string BuildPreviewLine(IndustryView view)
+        {
+            if (!CanConfirmSelection)
+                return ConfirmUnboundNotice;
+            if (!view.CanEditAssignments)
+                return string.Empty;
+            if (!HasPendingAssignment)
+            {
+                return "选择一名家人后确认任命；下方「确认任命」提交，「取消」不改变现状。（可任命 " +
+                       EligibleCandidateTotal + " 人）\n" +
+                       "未成年、已隐居或本月工时不足者不列出；地点未在产业规则中定义，本页暂不显示。";
+            }
+            if (!IndustryCatalog.TryGet(_pendingIndustryId, out IndustryDefinition definition))
+                return string.Empty;
+
+            SuccessionState succession = gameSession.Succession;
+            int remaining = IndustryService.MonthlyWorkUnits;
+            foreach (IndustrySlotView slot in view.Slots)
+                if (!slot.AssigneeId.IsEmpty && slot.AssigneeId == _pendingPersonId)
+                    remaining = slot.WorkUnitsRemaining;
+
+            int after = remaining - IndustryService.PostWorkUnits;
+            IndustrySlotView target = view.Slot(_pendingIndustryId);
+            string holder = target.AssigneeId.IsEmpty
+                ? "职位空缺"
+                : "替换现任 " + target.AssigneeName;
+
+            return "已选择：" + IndustryService.PersonName(succession, _pendingPersonId) +
+                   " → " + definition.DisplayName + "（待确认）｜" + holder +
+                   "｜占用工时 " + IndustryService.PostWorkUnits + "/" +
+                   IndustryService.MonthlyWorkUnits + "，剩余 " + after + "\n" +
+                   "每月规则：" + BuildDetailLine(definition) + "。";
         }
 
         private void Subscribe()
@@ -331,6 +817,16 @@ namespace SengokuChronicle.Presentation
                 tradingUnassignButton.onClick.RemoveListener(OnUnassignTrading);
                 tradingUnassignButton.onClick.AddListener(OnUnassignTrading);
             }
+            if (confirmButton != null && _confirmListener == null)
+            {
+                _confirmListener = ConfirmPending;
+                confirmButton.onClick.AddListener(_confirmListener);
+            }
+            if (cancelButton != null && _cancelListener == null)
+            {
+                _cancelListener = CancelPending;
+                cancelButton.onClick.AddListener(_cancelListener);
+            }
         }
 
         private void Unsubscribe()
@@ -348,6 +844,12 @@ namespace SengokuChronicle.Presentation
                 farmUnassignButton.onClick.RemoveListener(OnUnassignFarm);
             if (tradingUnassignButton != null)
                 tradingUnassignButton.onClick.RemoveListener(OnUnassignTrading);
+            if (confirmButton != null && _confirmListener != null)
+                confirmButton.onClick.RemoveListener(_confirmListener);
+            _confirmListener = null;
+            if (cancelButton != null && _cancelListener != null)
+                cancelButton.onClick.RemoveListener(_cancelListener);
+            _cancelListener = null;
         }
 
         private void OnUnassignFarm() => Unassign(IndustryCatalog.FarmId);
@@ -368,6 +870,23 @@ namespace SengokuChronicle.Presentation
                 Refresh();
         }
 
+        /// <summary>
+        /// The household page resizes this panel to its 560-high card after the first refresh,
+        /// so a report band fitted for the authored 700-high page would hang outside the card.
+        /// LateUpdate runs after that layout change and before the frame is drawn, which is the
+        /// first point where the live height is known and the band can still be re-fitted for
+        /// the card the player actually sees.
+        /// </summary>
+        private void LateUpdate()
+        {
+            if (!IsOpen || reportText == null)
+                return;
+            RectTransform panel = panelRoot.transform as RectTransform;
+            if (panel == null || Mathf.Abs(panel.rect.height - _fittedPanelHeight) <= 0.01f)
+                return;
+            FitReportRegion();
+        }
+
         private void OnEnable()
         {
             Subscribe();
@@ -377,6 +896,7 @@ namespace SengokuChronicle.Presentation
         private void OnDisable()
         {
             Unsubscribe();
+            ClearPending();
             ClearCandidates();
             if (panelRoot != null)
                 panelRoot.SetActive(false);
