@@ -415,7 +415,7 @@
 
 ## 5. 当前状态
 
-- `main`、`origin/main`、`integration/v1-20261118` 三点同一提交 `2bca9d1`（「语言合规：修正剩余 6 处「城镉菜单」错字为「城镇菜单」」）。`git log main..integration/v1-20261118` 输出为空。本节由收口卡 `t_080705e2` 用命令逐条读回，不是转述汇报。
+- `main`、`origin/main`、`integration/v1-20261118` 三点同一提交 `2bca9d1`（「语言合规：修正剩余 6 处「城镉菜单」错字为「城镇菜单」」）。`git log main..integration/v1-20261118` 输出为空。本节由收口卡 `t_080705e2` 用命令逐条读回，不是转述汇报。收口卡随后只在 `main` 上追加文档提交，代码树仍是 `2bca9d1`，未合并、未打 tag。
 - 只有一个 Git 工作树，就是工程根目录 `C:\Users\panye\My project`；`git status --porcelain` 为空；`git worktree list` 只有一行。
 - 五个任务分支都已并入 `main`：`panyeung/m00-closeout`、`ui-m04-family`、`ui-m05-management`、`ui-m06-m07-missions`、`ui-m08-campaign` 逐个 `git merge-base --is-ancestor` 为真。相对合并起点 `d081c46` 共 51 个文件、+10077/−1821。
 - 全量 EditMode `2214/2214` passed、`failed=0`、`skipped=0`（2026-11-18 13:22:34Z–13:24:40Z，源提交 `c291dd3`），证据 `Logs/verify/20261118-integration-full/TestResults.xml`。F1 两条用例 `TownMenu_FacilitySlotsListRealTownEntries` 与 `TownMenu_FacilitySlotsStayEmptyWhenTheTownPageRenders` 在该 XML 内均为 Passed。

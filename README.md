@@ -2,7 +2,7 @@
 
 Unity 6（URP 2D）的战国忍者家族模拟游戏。核心是一座城、一个家族、一个可以结束月份推进的循环。
 
-**当前状态：代码与集成都已收口，只剩用户最终验收（PARTIAL）。** `main` 已在 `2bca9d1`，五个 UI 分支全部并入，全量 EditMode `2214/2214`、场景 Validator `PASS; Errors: 0`、独立复审 PASS、成品 Player 冒烟通过。仍然没闭合的是**用户本人的最终验收**（M00），另有 M08 战役回顾面板运行时打开与 M09 真机窗口拖动两条运行时未验证项。逐条见下方「已知缺口」，完整证据见 [docs/reports/20261118-completion-report.md](docs/reports/20261118-completion-report.md)。
+**当前状态：代码与集成都已收口，只剩用户最终验收（PARTIAL）。** `main` 的代码提交是 `2bca9d1`（收口卡其后只追加文档提交），五个 UI 分支全部并入，全量 EditMode `2214/2214`、场景 Validator `PASS; Errors: 0`、独立复审 PASS、成品 Player 冒烟通过。仍然没闭合的是**用户本人的最终验收**（M00），另有 M08 战役回顾面板运行时打开与 M09 真机窗口拖动两条运行时未验证项。逐条见下方「已知缺口」，完整证据见 [docs/reports/20261118-completion-report.md](docs/reports/20261118-completion-report.md)。
 
 ## 环境要求
 
