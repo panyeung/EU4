@@ -36,6 +36,12 @@
 
 **PARTIAL**。§3 七条中 5 条 PASS（1、2、3、4、5、7 计 6 条，第 6 条 BLOCKED）。第 6 条阻塞原因是 DebugSession 在正常开局里被激活，存档被面板主动拒绝——这是缺陷或状态污染，不是验证方法问题。
 
+## 编译、全量回归与场景验证（本轮实测）
+
+- 全量 EditMode：`run_tests --mode EditMode --detach` 作业 `bc1a32ce920d461fbe4f929335f22258`，`TestResults.xml` 记 `testcasecount=2141 passed=2141 failed=0 skipped=0 result=Passed`，起止 `2026-11-18 05:21:21Z`–`05:22:31Z`。副本 `Logs/verify/20261118-milestone/TestResults.xml`。
+- 场景 Validator：`run_script scripts/verify/RunValidator.cs RunValidator.Run` → `Logs/SceneValidationReport.txt` 末行 `RESULT: PASS; Errors: 0`。
+- 二者与本文件的 Play Mode 证据互不替代：编译与 EditMode 不等于运行时行为，Play Mode 也不证明测试集全绿。
+
 ## 复现第 6 条的最小步骤
 
 1. 重启 Editor，Play Mode → 标题 → 开始新游戏 → SC-010 标准样例。
