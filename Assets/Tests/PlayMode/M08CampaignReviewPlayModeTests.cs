@@ -1,0 +1,675 @@
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.IO;
+using NUnit.Framework;
+using SengokuChronicle.Application;
+using SengokuChronicle.Domain;
+using SengokuChronicle.Persistence;
+using SengokuChronicle.Presentation;
+using UnityEngine;
+using UnityEngine.SceneManagement;
+using UnityEngine.TestTools;
+using UnityEngine.UI;
+
+namespace SengokuChronicle.PlayModeTests
+{
+    /// <summary>
+    /// M08 五十五周年阶段回顾的端到端验证。它只走玩家路径：
+    /// 从 FoundationsScene 的标题界面点「新游戏」，再点 SC-013 固定剧本，
+    /// 之后每个自然月都用界面「结束本月」，事件与继承都用面板按钮选择，
+    /// 农庄空缺时用产业面板的真实候选按钮任命。任何日期、进度、确认标志、
+    /// 存档字段都不直接写入，也不调用 Refresh 伪造状态。
+    ///
+    /// 到 1615-04-01 时检查回顾页是否由会话状态自动打开、日期与阶段是否正确、
+    /// 正文是否真的渲染出文字；随后点真实的继续按钮，再用真实存读档验证
+    /// 已确认的阶段回顾不会再次弹出。
+    /// </summary>
+    public sealed class M08CampaignReviewPlayModeTests
+    {
+        private const string ScenePath = "Assets/Scenes/FoundationScene.unity";
+        private const string LogPrefix = "[M08-55] ";
+        private const string ContinueButtonName = "M08CampaignReviewContinueButton";
+        private const string EventOptionPrefix = "EventOption_";
+        private const string SuccessionCandidatePrefix = "SuccessionCandidate_";
+        private const string SuccessionRegentPrefix = "SuccessionRegent_";
+        private const string FarmCandidatePrefix = "IndustryCandidate_" + IndustryCatalog.FarmId + "_";
+        private const string MapTabButtonName = "ReferenceNavMapButton";
+        private const string HouseholdTabButtonName = "ReferenceNavHouseholdButton";
+        // 继承 HUD 与决策弹窗随「家族」页显示（见 PageMaskForRoot），家计页只挂产业面板。
+        private const string FamilyTabButtonName = "ReferenceNavFamilyButton";
+        private const int MonthCap = 700;
+
+        private static readonly GameDate ExpectedStart = new GameDate(1560, 4, 1);
+        private static readonly GameDate StageReviewDate = new GameDate(1615, 4, 1);
+
+        private GameSession _session;
+        private CampaignReviewPanel _panel;
+        private TitleScreenController _title;
+        private SaveLoadPanel _saveLoad;
+        private string _storeDir;
+        private int _months;
+        private int _events;
+        private int _successions;
+        private int _farmAssignments;
+
+        [UnityTest]
+        public IEnumerator StageReview_OpensAtFiftyFiveYears_ConfirmsAndSurvivesSaveLoad()
+        {
+            yield return LoadFoundationScene();
+
+            _session = FindComponent<GameSession>();
+            _panel = FindComponent<CampaignReviewPanel>();
+            _title = FindComponent<TitleScreenController>();
+            _saveLoad = FindComponent<SaveLoadPanel>();
+            Assert.IsNotNull(_session, "FoundationScene 缺少 GameSession。");
+            Assert.IsNotNull(_panel, "FoundationScene 缺少 CampaignReviewPanel。");
+            Assert.IsNotNull(_title, "FoundationScene 缺少 TitleScreenController。");
+            Assert.IsNotNull(_saveLoad, "FoundationScene 缺少 SaveLoadPanel。");
+            Assert.IsTrue(_panel.IsBound, "CampaignReviewPanel 未绑定依赖。");
+            Assert.IsFalse(_panel.IsVisible, "标题界面阶段不应显示五十五周年回顾。");
+
+            _storeDir = Path.Combine(Path.GetTempPath(),
+                "m08-55-review-playmode-" + Guid.NewGuid().ToString("N"));
+            var store = new SaveSlotStore(_storeDir);
+            _title.SetStore(store);
+            _saveLoad.SetStore(store);
+
+            yield return StartSC013NewGame();
+            yield return ShowGalleryPage(MapTabButtonName);
+            Button endMonthOnMap = FindButton("EndMonthButton");
+            Assert.IsNotNull(endMonthOnMap, "地图页没有「结束本月」按钮。");
+            Assert.IsTrue(endMonthOnMap.gameObject.activeInHierarchy,
+                "切到地图页后「结束本月」仍未激活。");
+
+            Assert.AreEqual(ExpectedStart, _session.WorldClock.CurrentDate,
+                "新游戏开局日期不是 1560-04-01。");
+            Assert.AreEqual(1560, _session.CampaignStartDate.Year, "战役开局年份未记录。");
+            Assert.AreEqual(0, _session.CampaignCompletedYears, "开局时不应已历年份。");
+            Assert.AreEqual(CampaignReviewMilestone.None, _session.PendingCampaignReview,
+                "开局时不应有阶段回顾待处理。");
+
+            yield return AdvanceToStageReview();
+
+            Assert.AreEqual(StageReviewDate, _session.WorldClock.CurrentDate,
+                "正常月结未能停在 1615-04-01。");
+            Assert.IsFalse(_session.IsFamilyExtinct, "到达评价日前家族已灭绝。");
+            Assert.AreEqual(55, _session.CampaignCompletedYears, "评价日应已历 55 年。");
+            Assert.AreEqual(CampaignReviewMilestone.StageReview, _session.PendingCampaignReview,
+                "1615-04-01 应有一个待确认的五十五周年阶段回顾。");
+
+            yield return AssertStageReviewPanelVisible();
+            yield return AcknowledgeStageReviewThroughUi();
+            yield return AssertReviewStaysConfirmedAfterFurtherPlay();
+            yield return AssertReviewStaysConfirmedAcrossSaveAndLoad();
+
+            Debug.Log(LogPrefix + "完成：月份=" + _months + " 事件=" + _events +
+                      " 继承=" + _successions + " 农庄任命=" + _farmAssignments +
+                      " 日期=" + _session.WorldClock.CurrentDate +
+                      " 待处理回顾=" + _session.PendingCampaignReview);
+        }
+
+        [TearDown]
+        public void DeleteIsolatedStore()
+        {
+            if (string.IsNullOrEmpty(_storeDir) || !Directory.Exists(_storeDir))
+                return;
+            try
+            {
+                Directory.Delete(_storeDir, true);
+            }
+            catch (IOException exception)
+            {
+                Debug.LogWarning(LogPrefix + "临时存档目录清理失败：" + exception.Message);
+            }
+        }
+
+        private static IEnumerator LoadFoundationScene()
+        {
+            AsyncOperation load = SceneManager.LoadSceneAsync(ScenePath, LoadSceneMode.Single);
+            Assert.IsNotNull(load, "无法加载 " + ScenePath + "，场景可能不在 Build Settings 中。");
+            while (!load.isDone)
+                yield return null;
+            // 让场景里 Start/OnEnable 的绑定与标题界面状态先跑完。
+            yield return null;
+            yield return null;
+        }
+
+        private IEnumerator StartSC013NewGame()
+        {
+            Assert.IsTrue(_title.IsTitleVisible, "场景加载后标题界面未显示。");
+            ClickButton("M6NewGameButton");
+            yield return null;
+            Assert.IsTrue(_title.IsScenarioSelectionVisible, "新游戏后未进入剧本选择页。");
+
+            ClickButton("SC013FixedScenarioButton");
+            yield return null;
+            yield return null;
+            Assert.IsFalse(_title.IsTitleVisible, "开始 SC-013 后标题界面仍可见。");
+        }
+
+        private static IEnumerator ShowGalleryPage(string tabButtonName)
+        {
+            Button tab = FindButton(tabButtonName);
+            if (tab == null || !tab.gameObject.activeInHierarchy)
+            {
+                Button launcher = FindButton("M02DailyActionOpenButton");
+                if (launcher != null && launcher.gameObject.activeInHierarchy)
+                {
+                    launcher.onClick.Invoke();
+                    yield return null;
+                }
+            }
+
+            tab = FindButton(tabButtonName);
+            Assert.IsNotNull(tab, "找不到页面按钮：" + tabButtonName);
+            Assert.IsTrue(tab.gameObject.activeInHierarchy, "页面按钮不在活动层级：" + tabButtonName);
+            Assert.IsTrue(tab.interactable, "页面按钮不可交互：" + tabButtonName);
+            tab.onClick.Invoke();
+            yield return null;
+        }
+
+        private IEnumerator AdvanceToStageReview()
+        {
+            while (_session.WorldClock.CurrentDate < StageReviewDate)
+            {
+                Assert.Less(_months, MonthCap, "在 " + MonthCap + " 个月内未到达 1615-04-01，停在 " +
+                                             _session.WorldClock.CurrentDate + "。");
+                Assert.IsFalse(_session.IsFamilyExtinct,
+                    "家族在第 " + _months + " 个月（" + _session.WorldClock.CurrentDate + "）灭绝。");
+                Assert.IsFalse(_panel.IsVisible,
+                    "五十五周年回顾在 " + _session.WorldClock.CurrentDate + " 就提前打开了。");
+
+                yield return ResolvePendingEvents();
+                yield return ResolvePendingSuccession();
+                yield return MaintainFarmIfVacant();
+
+                Button endMonth = FindButton("EndMonthButton");
+                if (endMonth == null || !endMonth.gameObject.activeInHierarchy)
+                {
+                    yield return ShowGalleryPage(MapTabButtonName);
+                    endMonth = FindButton("EndMonthButton");
+                }
+                Assert.IsNotNull(endMonth, "找不到「结束本月」按钮。");
+                Assert.IsTrue(endMonth.gameObject.activeInHierarchy,
+                    _session.WorldClock.CurrentDate + " 的「结束本月」不在活动层级。");
+                Assert.IsTrue(endMonth.interactable,
+                    _session.WorldClock.CurrentDate + " 的「结束本月」不可交互：" +
+                    _session.LastMonthTurnOutcome);
+                endMonth.onClick.Invoke();
+                _months++;
+                yield return null;
+
+                if (_months % 60 == 0)
+                    Debug.Log(LogPrefix + "月份=" + _months + " 日期=" + _session.WorldClock.CurrentDate +
+                              " 事件=" + _events + " 继承=" + _successions +
+                              " 农庄任命=" + _farmAssignments);
+            }
+        }
+
+        private IEnumerator ResolvePendingEvents()
+        {
+            for (int guard = 0; guard < 64 && !string.IsNullOrEmpty(_session.PendingEventId); guard++)
+            {
+                string eventId = _session.PendingEventId;
+                var attempted = new HashSet<string>(StringComparer.Ordinal);
+                bool chosen = false;
+                while (!chosen)
+                {
+                    Button option = FirstEventOptionButton(attempted);
+                    if (option == null)
+                        Assert.Fail("事件 " + eventId + " 在界面上没有可用选项：" +
+                                    _session.LastEventMessage);
+                    string optionId = option.gameObject.name.Substring(EventOptionPrefix.Length);
+                    attempted.Add(optionId);
+                    option.onClick.Invoke();
+                    yield return null;
+                    if (_session.PendingEventId != eventId)
+                    {
+                        chosen = true;
+                        _events++;
+                    }
+                }
+            }
+
+            Assert.IsTrue(string.IsNullOrEmpty(_session.PendingEventId),
+                "事件队列在 64 次界面选择后仍未排空：" + _session.PendingEventId);
+        }
+
+        private IEnumerator ResolvePendingSuccession()
+        {
+            SuccessionState initial = _session.Succession;
+            bool needsUi = initial.IsPending ||
+                           initial.IsRegencyHandoffDue(_session.WorldClock.CurrentDate);
+            if (!needsUi)
+                yield break;
+            // 继承面板挂在「家族」页上，由该页负责显示与隐藏。
+            yield return ShowGalleryPage(FamilyTabButtonName);
+
+            for (int step = 0; step < 32; step++)
+            {
+                SuccessionState state = _session.Succession;
+                if (!state.IsPending)
+                    yield break;
+
+                GameDate date = _session.WorldClock.CurrentDate;
+                if (state.Phase == SuccessionPhase.CrisisDecision)
+                {
+                    ClickButton("SuccessionAcceptCrisisButton");
+                    yield return null;
+                    continue;
+                }
+
+                if (state.Phase == SuccessionPhase.AwaitingRegentChoice)
+                {
+                    if (state.PendingRegentId.IsEmpty)
+                    {
+                        if (!TryClickFirst(SuccessionRegentPrefix))
+                            LogSuccessionDiagnostics("摄政候选");
+                        Assert.IsTrue(HasActiveButton(SuccessionRegentPrefix),
+                            "摄政选择阶段没有可用的摄政候选按钮。");
+                        yield return null;
+                        continue;
+                    }
+
+                    ClickButton("SuccessionConfirmButton");
+                    yield return null;
+                    _successions++;
+                    continue;
+                }
+
+                if (state.Phase == SuccessionPhase.AwaitingSuccessionChoice)
+                {
+                    if (state.PendingSuccessorId.IsEmpty)
+                    {
+                        if (!TryClickFirst(SuccessionCandidatePrefix))
+                            LogSuccessionDiagnostics("继承人候选");
+                        Assert.IsTrue(HasActiveButton(SuccessionCandidatePrefix),
+                            "继承人选择阶段没有可用的候选人按钮。");
+                        yield return null;
+                        continue;
+                    }
+
+                    ClickButton("SuccessionConfirmButton");
+                    yield return null;
+                    _successions++;
+                    continue;
+                }
+
+                if (state.IsRegencyHandoffDue(date))
+                {
+                    ClickButton("SuccessionConfirmButton");
+                    yield return null;
+                    _successions++;
+                    continue;
+                }
+
+                yield break;
+            }
+
+            Assert.Fail("继承决策在 32 步界面操作后仍未结束：" + _session.Succession.Phase);
+        }
+
+        private IEnumerator MaintainFarmIfVacant()
+        {
+            if (!_session.CanEditIndustryAssignments)
+                yield break;
+            if (!_session.Industry.Slot(IndustryCatalog.FarmId).AssigneeId.IsEmpty)
+                yield break;
+
+            // 产业面板嵌在「家计」页里，由该页显示为活动面板；结束后回到「地图」页月结。
+            yield return ShowGalleryPage(HouseholdTabButtonName);
+            Assert.IsTrue(_session.CanEditIndustryAssignments,
+                "家计页打开后产业面板仍不可编辑任命。");
+
+            var attempted = new HashSet<string>(StringComparer.Ordinal);
+            bool assigned = !_session.Industry.Slot(IndustryCatalog.FarmId).AssigneeId.IsEmpty;
+            for (int attempt = 0; attempt < 8 && !assigned; attempt++)
+            {
+                Button candidate = FirstCandidateButton(FarmCandidatePrefix, attempted);
+                if (candidate == null)
+                    break;
+                attempted.Add(candidate.gameObject.name);
+                candidate.onClick.Invoke();
+                yield return null;
+
+                Button confirm = FindButton("IndustryConfirmButton");
+                if (confirm == null || !confirm.gameObject.activeInHierarchy || !confirm.interactable)
+                    continue;
+                confirm.onClick.Invoke();
+                yield return null;
+                assigned = !_session.Industry.Slot(IndustryCatalog.FarmId).AssigneeId.IsEmpty;
+                if (assigned)
+                    _farmAssignments++;
+            }
+
+            if (!assigned)
+            {
+                IndustryPanel industry = FindComponent<IndustryPanel>();
+                Debug.Log(LogPrefix + _session.WorldClock.CurrentDate + " 农庄未能任命：" +
+                          (industry != null ? industry.MessageLine : "无产业面板"));
+            }
+
+            Button close = FindButton("IndustryCloseButton");
+            if (close != null && close.gameObject.activeInHierarchy)
+            {
+                close.onClick.Invoke();
+                yield return null;
+            }
+        }
+
+        private IEnumerator AssertStageReviewPanelVisible()
+        {
+            Canvas.ForceUpdateCanvases();
+            yield return null;
+            Canvas.ForceUpdateCanvases();
+
+            Assert.IsTrue(_panel.IsVisible, "1615-04-01 未自动打开五十五周年回顾页。");
+            GameObject page = GameObject.Find(CampaignReviewPanel.PageObjectName);
+            Assert.IsNotNull(page, "找不到回顾页 " + CampaignReviewPanel.PageObjectName + "。");
+            Assert.IsTrue(page.activeInHierarchy, "回顾页在层级中未激活。");
+            AssertReviewRendersAboveHud(page);
+
+            Assert.AreEqual(CampaignReviewView.MilestoneTitle(CampaignReviewMilestone.StageReview),
+                _panel.Title, "回顾页标题不正确。");
+            Assert.AreEqual(CampaignReviewView.MilestoneContinueLabel(CampaignReviewMilestone.StageReview),
+                _panel.ContinueLabel, "继续按钮标题不正确。");
+
+            string context = _panel.Context;
+            StringAssert.Contains("开局：1560-04-01", context, "回顾上下文缺少开局日期。");
+            StringAssert.Contains("已历 55 年", context, "回顾上下文缺少已历 55 年。");
+            StringAssert.Contains("评价日：1615-04-01", context, "回顾上下文缺少评价日。");
+
+            string body = _panel.Body;
+            Assert.Greater(body.Length, 1000, "回顾正文过短，可能是空页。");
+            StringAssert.Contains("【五项发展维度】", body, "回顾正文缺少五项发展维度段。");
+            Assert.GreaterOrEqual(_panel.BodyBlockCount, 1, "回顾正文没有渲染区块。");
+            Assert.IsTrue(_panel.CardScale > 0f, "回顾卡片缩放无效。");
+
+            Button continueButton = FindButton(ContinueButtonName);
+            Assert.IsNotNull(continueButton, "找不到回顾继续按钮。");
+            Assert.IsTrue(continueButton.gameObject.activeInHierarchy, "回顾继续按钮未激活。");
+            Assert.IsTrue(continueButton.interactable, "回顾继续按钮不可交互。");
+            Debug.Log(LogPrefix + "回顾页已打开：标题=" + _panel.Title +
+                      "｜上下文=" + _panel.Context +
+                      "｜正文长度=" + body.Length +
+                      "｜区块=" + _panel.BodyBlockCount +
+                      "｜缩放=" + _panel.CardScale.ToString("0.###",
+                          System.Globalization.CultureInfo.InvariantCulture) +
+                      "｜继续按钮=" + _panel.ContinueLabel);
+
+            var blocks = BodyBlockTexts();
+            Assert.AreEqual(_panel.BodyBlockCount, blocks.Count,
+                "正文区块数量与面板报告的区块数量不一致。");
+            var joined = new System.Text.StringBuilder();
+            for (int i = 0; i < blocks.Count; i++)
+                joined.Append(blocks[i].text);
+            Assert.AreEqual(body, joined.ToString(), "正文区块拼起来与面板正文不一致。");
+
+            int visibleBlocks = 0;
+            for (int i = 0; i < blocks.Count; i++)
+            {
+                int vertices = blocks[i].cachedTextGenerator != null
+                    ? blocks[i].cachedTextGenerator.vertexCount
+                    : 0;
+                if (vertices > 0)
+                    visibleBlocks++;
+                Debug.Log(LogPrefix + "正文区块 " + i + " 字符=" + blocks[i].text.Length +
+                          " 顶点=" + vertices);
+            }
+
+            Assert.Greater(visibleBlocks, 0, "回顾正文没有任何区块生成可见文字。");
+            Assert.Greater(blocks[0].cachedTextGenerator.vertexCount, 0,
+                "回顾正文第一个区块没有生成可见文字。");
+
+            Text hudDate = FindText("DateText");
+            Assert.IsNotNull(hudDate, "找不到主界面日期文本 DateText。");
+            Assert.AreEqual("1615-04-01", hudDate.text, "主界面日期未显示 1615-04-01。");
+        }
+
+        private static void AssertReviewRendersAboveHud(GameObject page)
+        {
+            Transform reviewRoot = page.transform.parent;
+            Assert.IsNotNull(reviewRoot, "回顾页缺少固定根节点。");
+            Transform canvas = reviewRoot.parent;
+            Assert.IsNotNull(canvas, "回顾根节点不在 Canvas 下。");
+            ReferenceGalleryNavigator navigator = FindComponent<ReferenceGalleryNavigator>();
+            Assert.IsNotNull(navigator, "FoundationScene 缺少 ReferenceGalleryNavigator。");
+            // Canvas 中靠后的兄弟节点渲染在上。M08 回顾页必须盖住 M02 日常行动页，
+            // 同时按 CanvasLayerOrder 的共享座次留在标题、事件选择与战术覆盖层之下。
+            Assert.Greater(reviewRoot.GetSiblingIndex(), navigator.transform.GetSiblingIndex(),
+                "回顾根节点没有排在 M02 日常行动页（" + navigator.name + "）之上。");
+            foreach (string overlay in new[]
+                     {
+                         "M6TitleRoot", "EventChoiceRoot", TacticalMissionPanel.OverlayObjectName
+                     })
+            {
+                Transform sibling = canvas.Find(overlay);
+                if (sibling == null)
+                    continue;
+                Assert.Less(reviewRoot.GetSiblingIndex(), sibling.GetSiblingIndex(),
+                    "回顾根节点没有排在 " + overlay + " 之下。");
+            }
+        }
+
+        private IEnumerator AcknowledgeStageReviewThroughUi()
+        {
+            ClickButton(ContinueButtonName);
+            yield return null;
+            yield return null;
+
+            Assert.AreEqual(CampaignReviewMilestone.None, _session.PendingCampaignReview,
+                "点击继续后阶段回顾仍未确认。");
+            Assert.IsFalse(_panel.IsVisible, "点击继续后回顾页仍然可见。");
+            GameObject page = GameObject.Find(CampaignReviewPanel.PageObjectName);
+            Assert.IsTrue(page == null || !page.activeInHierarchy,
+                "点击继续后回顾页仍留在层级中激活。");
+            Debug.Log(LogPrefix + "确认阶段回顾：" + _session.LastCampaignReviewMessage);
+        }
+
+        private IEnumerator AssertReviewStaysConfirmedAfterFurtherPlay()
+        {
+            yield return ResolvePendingEvents();
+            yield return ResolvePendingSuccession();
+            yield return MaintainFarmIfVacant();
+
+            Button endMonth = FindButton("EndMonthButton");
+            if (endMonth == null || !endMonth.gameObject.activeInHierarchy)
+            {
+                yield return ShowGalleryPage(MapTabButtonName);
+                endMonth = FindButton("EndMonthButton");
+            }
+            Assert.IsNotNull(endMonth, "找不到「结束本月」按钮。");
+            endMonth.onClick.Invoke();
+            yield return null;
+            yield return null;
+
+            Assert.AreEqual(new GameDate(1615, 5, 1), _session.WorldClock.CurrentDate,
+                "确认阶段回顾后正常月结没有推进到 1615-05-01。");
+            Assert.AreEqual(CampaignReviewMilestone.None, _session.PendingCampaignReview,
+                "确认之后的月份里阶段回顾又变成待处理。");
+            Assert.IsFalse(_panel.IsVisible, "确认之后回顾页再次出现。");
+        }
+
+        private IEnumerator AssertReviewStaysConfirmedAcrossSaveAndLoad()
+        {
+            Assert.IsTrue(_saveLoad.SaveInteractable, "存档按钮不可交互。");
+            ClickButton("M5SaveButton");
+            yield return null;
+            yield return null;
+            Assert.IsTrue(_saveLoad.LastOperationSucceeded, "存档失败：" + _saveLoad.Status);
+            string slotPath = Path.Combine(_storeDir, SaveSlotStore.FileName);
+            Assert.IsTrue(File.Exists(slotPath), "隔离存档槽中没有写出存档文件：" + slotPath);
+
+            GameDate savedDate = _session.WorldClock.CurrentDate;
+            Assert.IsTrue(_saveLoad.LoadInteractable, "读档按钮不可交互。");
+            ClickButton("M5LoadButton");
+            yield return null;
+            yield return null;
+
+            Assert.IsTrue(_saveLoad.LastOperationSucceeded, "读档失败：" + _saveLoad.Status);
+            Assert.AreEqual(savedDate, _session.WorldClock.CurrentDate,
+                "读档后日期与存档时不一致。");
+            Assert.AreEqual(CampaignReviewMilestone.None, _session.PendingCampaignReview,
+                "读档后已确认的阶段回顾又变成待处理。");
+            Assert.IsFalse(_panel.IsVisible, "读档后回顾页再次弹出。");
+            Debug.Log(LogPrefix + "隔离存档读档通过：" + slotPath);
+        }
+
+        private Button FirstEventOptionButton(ICollection<string> skip)
+        {
+            var found = new List<Button>();
+            foreach (Button button in UnityEngine.Object.FindObjectsByType<Button>(
+                         FindObjectsInactive.Exclude))
+            {
+                if (button == null || !button.gameObject.activeInHierarchy || !button.interactable)
+                    continue;
+                string name = button.gameObject.name;
+                if (!name.StartsWith(EventOptionPrefix, StringComparison.Ordinal))
+                    continue;
+                if (skip != null && skip.Contains(name.Substring(EventOptionPrefix.Length)))
+                    continue;
+                found.Add(button);
+            }
+
+            found.Sort((left, right) =>
+                left.transform.GetSiblingIndex().CompareTo(right.transform.GetSiblingIndex()));
+            return found.Count > 0 ? found[0] : null;
+        }
+
+        private void LogSuccessionDiagnostics(string stage)
+        {
+            SuccessionPanel panel = FindComponent<SuccessionPanel>();
+            ReferenceGalleryNavigator navigator = FindComponent<ReferenceGalleryNavigator>();
+            Transform successionRoot = panel != null
+                ? FindDeepChild(panel.transform.root, "SuccessionRoot")
+                : null;
+            Debug.Log(LogPrefix + "继承诊断(" + stage + ")：阶段=" + _session.Succession.Phase +
+                      " 候选数=" + _session.SuccessionCandidates.Count +
+                      " 摄政候选数=" + _session.SuccessionRegentCandidates.Count +
+                      " 页面=" + (navigator != null ? navigator.CurrentPage.ToString() : "无导航") +
+                      " 继承根激活=" + (successionRoot != null && successionRoot.gameObject.activeSelf) +
+                      " 面板可见=" + (panel != null && panel.IsModalVisible) +
+                      " 面板候选=" + (panel != null ? panel.VisibleCandidateCount : -1) +
+                      " 面板摄政=" + (panel != null ? panel.VisibleRegentCount : -1) +
+                      " 候选人按钮=" + CountButtons(SuccessionCandidatePrefix) +
+                      " 摄政按钮=" + CountButtons(SuccessionRegentPrefix) +
+                      " 确认按钮=" + (HasActiveButton("SuccessionConfirmButton") ? 1 : 0) +
+                      " 状态=" + (panel != null ? panel.StatusMessage : string.Empty) +
+                      " 弹窗状态=" + (panel != null ? panel.ModalStatusMessage : string.Empty));
+        }
+
+        private static Transform FindDeepChild(Transform parent, string name)
+        {
+            if (parent == null)
+                return null;
+            for (int i = 0; i < parent.childCount; i++)
+            {
+                Transform child = parent.GetChild(i);
+                if (child.name == name)
+                    return child;
+                Transform found = FindDeepChild(child, name);
+                if (found != null)
+                    return found;
+            }
+            return null;
+        }
+
+        private static int CountButtons(string namePrefix)
+        {
+            int count = 0;
+            foreach (Button button in UnityEngine.Object.FindObjectsByType<Button>(
+                         FindObjectsInactive.Exclude))
+                if (button != null && button.gameObject.name.StartsWith(namePrefix,
+                        StringComparison.Ordinal))
+                    count++;
+            return count;
+        }
+
+        private static bool HasActiveButton(string namePrefix)
+        {
+            foreach (Button button in UnityEngine.Object.FindObjectsByType<Button>(
+                         FindObjectsInactive.Exclude))
+                if (button != null && button.gameObject.name.StartsWith(namePrefix,
+                        StringComparison.Ordinal) && button.gameObject.activeInHierarchy &&
+                    button.interactable)
+                    return true;
+            return false;
+        }
+
+        private bool TryClickFirst(string namePrefix)
+        {
+            Button button = FirstCandidateButton(namePrefix, null);
+            if (button == null)
+                return false;
+            button.onClick.Invoke();
+            return true;
+        }
+
+        private static Button FirstCandidateButton(string namePrefix, ICollection<string> skip)
+        {
+            var found = new List<Button>();
+            foreach (Button button in UnityEngine.Object.FindObjectsByType<Button>(
+                         FindObjectsInactive.Exclude))
+            {
+                if (button == null || !button.gameObject.activeInHierarchy || !button.interactable)
+                    continue;
+                string name = button.gameObject.name;
+                if (!name.StartsWith(namePrefix, StringComparison.Ordinal))
+                    continue;
+                if (skip != null && skip.Contains(name))
+                    continue;
+                found.Add(button);
+            }
+
+            found.Sort((left, right) => string.CompareOrdinal(left.gameObject.name,
+                right.gameObject.name));
+            return found.Count > 0 ? found[0] : null;
+        }
+
+        private List<Text> BodyBlockTexts()
+        {
+            const string bodyName = "M08CampaignReviewBodyText";
+            var blocks = new List<Text>();
+            foreach (Text text in UnityEngine.Object.FindObjectsByType<Text>(
+                         FindObjectsInactive.Exclude))
+            {
+                if (text == null || text.gameObject.name != bodyName &&
+                    !text.gameObject.name.StartsWith(bodyName + CampaignReviewPanel.BodyBlockNameSuffix,
+                        StringComparison.Ordinal))
+                    continue;
+                blocks.Add(text);
+            }
+
+            blocks.Sort((left, right) =>
+                left.transform.GetSiblingIndex().CompareTo(right.transform.GetSiblingIndex()));
+            return blocks;
+        }
+
+        private static void ClickButton(string name)
+        {
+            Button button = FindButton(name);
+            Assert.IsNotNull(button, "找不到按钮：" + name);
+            Assert.IsTrue(button.gameObject.activeInHierarchy, "按钮不在活动层级：" + name);
+            Assert.IsTrue(button.interactable, "按钮不可交互：" + name);
+            button.onClick.Invoke();
+        }
+
+        private static Button FindButton(string name)
+        {
+            GameObject target = GameObject.Find(name);
+            return target != null ? target.GetComponent<Button>() : null;
+        }
+
+        private static Text FindText(string name)
+        {
+            GameObject target = GameObject.Find(name);
+            return target != null ? target.GetComponent<Text>() : null;
+        }
+
+        private static T FindComponent<T>() where T : Component
+        {
+            return UnityEngine.Object.FindAnyObjectByType<T>(FindObjectsInactive.Include);
+        }
+    }
+}
