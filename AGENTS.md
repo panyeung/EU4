@@ -13,22 +13,16 @@
 
 ## 团队
 
-以下每个角色都是 Hermes agent。Orca 与 OpenCode 已停用，任何任务、命令或指令都不得依赖它们。
+本项目通过 Orca 管理工作树与 agent。主控在当前会话负责决策，其他 agent 通过 Orca 在独立工作树中执行。
 
 | 角色 | Agent | 派工方式 | 负责 |
 |---|---|---|---|
-| 主控 | `default` profile（当前会话） | 会话内直接执行，其余任务派出去 | 规划、验收标准、单测、技术签核、对用户汇报 |
-| 实现 | `coden` profile | `delegate_task(option="code")` 或指派给 `coden` 的 kanban 卡 | 玩法与集成代码、Unity 测试执行、经既有 updater 改场景 |
-| 验证 | `tester` profile | 指派给 `tester` 的 kanban 卡，或 `delegate_task(option="review")` | 独立复审代码与证据，出 `kanban_request_changes` 结论 |
-| 研究 | `scout` profile | `delegate_task(option="fast")` 或 kanban 卡 | Unity API 与包调研、GitHub 复用调研、许可与兼容性核对 |
-| 分析 | `analyst` profile | `delegate_task(option="deep")` | 多来源调研与综合、架构问题、长文结论 |
+| 主控 | 当前会话 | 直接处理小任务；复杂任务通过 Orca 创建工作树并启动 agent | 规划、验收标准、单测、技术签核、对用户汇报 |
+| 实现 | Orca 中可用的 agent | `orca worktree create --name <任务名> --no-parent --agent <agent> --prompt <任务说明> --json` | 玩法与集成代码、Unity 测试执行、经既有 updater 改场景 |
+| 复审 | Orca 中可用的独立 agent | `orca agent launch --agent <agent> --worktree <工作树> --prompt <只读复审说明> --json` | 独立复审代码与证据，列出可执行修正项或通过结论 |
+| 研究与分析 | Orca 中可用的 agent | 只读研究可在当前工作树执行；需修改文件时创建独立工作树 | Unity API 与包调研、GitHub 复用调研、许可与兼容性核对、架构分析 |
 
-派工有两种形态，区别要认清。
-
-- `delegate_task` 在当前会话内跑一个有界任务，返回摘要。几分钟能结束、不需要持久卡片的工作用它。
-- kanban 卡让指定 profile 在自己的工作空间里跑，能活过当前会话。需要可复审、可续做、或交给另一个 profile 的工作用它。`hermes kanban assignees` 列出可派的 agent。
-
-小任务不要拉起整支团队。主控直接做琐碎工作，其余才派出去。
+派工前运行 `orca worktree list --json` 和 `orca agent list --json`，核实工作树和 agent 状态。短小任务由主控直接完成。需要持续执行或独立复审的任务使用 Orca 工作树，并在提示中写明范围、禁止事项、交付物和证据要求。
 
 ## 项目安全
 
@@ -64,7 +58,7 @@
 实现新功能之前。
 
 1. 先在现有代码里找可复用的方案。
-2. 让 `scout` 在 GitHub 上找相关仓库、库或现成实现。
+2. 让 Orca 中的研究 agent 在 GitHub 上找相关仓库、库或现成实现。
 3. 优先 Unity 6 兼容的方案。
 4. 评估许可与商用限制、Unity 与 URP 兼容性、维护活跃度、依赖与安全风险、实现成本。
 5. 把复用与自研做对比。
@@ -72,7 +66,7 @@
 7. 未经批准不装包、不克隆仓库、不抄外部代码。
 8. 确实没有合适方案时，做一个聚焦的自研实现。
 
-`scout` 的报告格式。仓库名与 URL、许可、兼容性、理由、预计接入成本、结论 `复用 / 改造 / 自研`。首轮只查三个最有希望的仓库，先读 README 再克隆。琐碎修复与既有代码维护跳过外部调研。
+研究报告格式。仓库名与 URL、许可、兼容性、理由、预计接入成本、结论 `复用 / 改造 / 自研`。首轮只查三个最有希望的仓库，先读 README 再克隆。琐碎修复与既有代码维护跳过外部调研。
 
 ## Git 与交付
 
@@ -87,24 +81,23 @@
 
 ## 并发与共享资源
 
-- 一张卡一个写者。同一棵工作树、同一个 Unity 实例，同一时刻只允许一个写者在跑。
+- 一个任务一个写者。同一棵工作树、同一个 Unity 实例，同一时刻只允许一个写者在跑。
 - 并行任务必须落在不同工作树；只有只读任务才可以和写者共用主工作树。
 - `TestResults.xml` 全机共用（`%LOCALLOW%\DefaultCompany\My project\`）。测试一律串行；每次跑完立刻 `scripts/copy-testresults.sh <证据目录>`，之后只引用副本。2026-11-17 并行覆盖过一次：主工程 2141 与 M04 工作树 2015 互相顶掉。
-- 派活前先查 `unity pipeline list` 与 `hermes kanban ls`，确认没有第二个写者；发现并行写者先停下来合流。
+- 派活前先查 `unity pipeline list` 与 `orca worktree list --json`，确认没有第二个写者；发现并行写者先停下来合流。
 
-## Kanban 复审循环
+## Orca 复审循环
 
-- `coden` 在原卡上实现，完成时调用 `kanban_request_review(reviewer="tester")`，附改动文件、测试与验证证据。
-- `tester` 复审同一张卡。可修的缺陷由它记录可执行结论并调用 `kanban_request_changes`，卡回到 `coden` 修正后同卡复审。复审通过且有已验证结果之后才调 `kanban_complete`。
-- 这条循环不另开 QA 卡。绝不因为实现完成就把功能标成可用。
-- 数同一张卡的复审次数。十次复审仍未通过，停止自动循环，把卡阻塞给用户并列出残余缺陷。这个上限由 agent 执行，不要声称 Kanban 系统本身限制十次，除非验证过。
-- 每个实质性功能由主控建一张依赖实现的最终签核卡。它只在实现卡复审通过并完成之后才可开工。主控看结论与证据，报告改动文件、未决问题与实际测试结果，并把编译证据与 Play Mode 证据分开。
+- 实现 agent 在自己的 Orca 工作树中完成任务，并提交改动文件、测试命令与结果、运行时证据。
+- 主控通过 Orca 启动独立只读复审。复审给出可执行修正项时，由实现 agent 修改后再复审；复审通过并核实证据后，主控才签核。
+- 记录同一改动的复审次数。十次仍未通过时停止循环，向用户列出未解决项。
+- 实质性功能由主控做最终技术签核。报告改动文件、未决问题与实际测试结果，并分别列出编译证据和 Play Mode 证据。实现完成或复审通过都不等于用户验收。
 
 ## 用户协作边界
 
-- 主控负责规划、验收标准、编写或更新单测。`coden` 负责玩法与集成代码，并执行测试，包括 EditMode、Play Mode、场景验证与相应回归检查。
-- `coden` 回传确切命令、结果文件、测试总数、失败项、Console 计数与运行时证据。主控审这些证据并做技术签核。除非用户明确改变分工，主控不执行测试。
-- 这个测试分工是用户的长期指令，覆盖任何更早把测试执行或 Play Mode 操作派给其他 agent 的条款。`tester` 可以审测试与证据，但不执行它们。
+- 主控负责规划、验收标准、编写或更新单测。实现 agent 负责玩法与集成代码，并执行测试，包括 EditMode、Play Mode、场景验证与相应回归检查。
+- 实现 agent 回传确切命令、结果文件、测试总数、失败项、Console 计数与运行时证据。主控审这些证据并做技术签核。除非用户明确改变分工，主控不执行测试。复审 agent 只审查代码与证据，不执行测试。
+- 这个测试分工是用户的长期指令。复审 agent 可以审测试与证据，但不执行它们。
 - Play Mode 验证获准使用 Computer Use 与截图，用户在场时同样可用。每次开工前查 Editor 进程与其 `-projectPath`，只操作本工程已开的那个。
 - 每张 Computer Use 截图在目视检查后立即删除。不在工程或备份里留截图，任务结束时清空 Computer Use 临时缓存。
 - 最终里程碑验收在用户手里。没有验收，不得建最终里程碑 checkpoint、不得合并 `main`、不得打 tag。
@@ -112,14 +105,9 @@
 ## 成本与依赖
 
 - 待在本仓库内。不用付费服务、订阅、素材或 API。
-- 不改 Hermes 的 provider 设置、API 密钥或模型路由。
 - 不抄太閤立志传或其他商业游戏的内容。用原创、CC0 或宽松许可的素材，每个来源与许可登记在 `ui设计规划.md` 第 10 节。新加 Unity 包与理由记在 `checkpoint.md` 决策记录。
 - 真阻塞就报给用户，不要靠无限派生后续卡撑着。
 
-## 任务完成通知
-
-每个任务结束时给 UnityDH 频道上的 `openManusBot` 发一条通知。工作来自 kanban 卡时，通知里必须写明卡号与标题。执行 `scripts/notify-openmanus.sh "<标题>" "<正文>" "<卡号>"`。脚本先把通知追加到 `Logs/notifications/outbox.txt`，再在设置 `OPENMANUS_TARGET` 时通过 `hermes send --to "$OPENMANUS_TARGET"` 发出。`hermes send --list` 显示是否配置了平台。没有目标就如实说明，不要声称已发出。通道接好后跑 `scripts/notify-openmanus.sh --drain` 补发。
-
 ## 美术资产
 
-按 `ui设计规划.md` 第 10 节执行。主控生成原创且与参考匹配的素材并登记到 `ui设计规划.md`，`coden` 负责实现与接入。`coden` 不可用或做不完时，主控可以接手实现。
+按 `ui设计规划.md` 第 10 节执行。主控生成原创且与参考匹配的素材并登记到 `ui设计规划.md`，实现 agent 负责实现与接入。实现 agent 不可用或做不完时，主控可以接手实现。
