@@ -15,15 +15,17 @@ using UnityEngine.UI;
 namespace SengokuChronicle.PlayModeTests
 {
     /// <summary>
-    /// M08 五十五周年阶段回顾的端到端验证。它只走玩家路径：
-    /// 从 FoundationsScene 的标题界面点「新游戏」，再点 SC-013 固定剧本，
-    /// 之后每个自然月都用界面「结束本月」，事件与继承都用面板按钮选择，
-    /// 农庄空缺时用产业面板的真实候选按钮任命。任何日期、进度、确认标志、
+    /// M08 五十五周年阶段回顾的端到端验证。它按生产 UI 的调用链驱动：
+    /// 直接触发 FoundationsScene 标题界面「新游戏」与 SC-013 剧本按钮的 onClick 回调，
+    /// 之后每个自然月都触发界面「结束本月」的回调，事件与继承都触发面板按钮回调，
+    /// 农庄空缺时触发产业面板的候选与确认按钮回调。它不模拟物理鼠标点击，
+    /// 也不验证 EventSystem 导航或焦点命中。任何日期、进度、确认标志、
     /// 存档字段都不直接写入，也不调用 Refresh 伪造状态。
     ///
     /// 到 1615-04-01 时检查回顾页是否由会话状态自动打开、日期与阶段是否正确、
-    /// 正文是否真的渲染出文字；随后点真实的继续按钮，再用真实存读档验证
-    /// 已确认的阶段回顾不会再次弹出。
+    /// 正文是否真的渲染出文字；随后触发继续按钮回调，随即在隔离槽存档，
+    /// 再触发「结束本月」成功推进一个月，最后读档，验证日期回到刚才的存档日、
+    /// 已确认的阶段回顾仍为 None 且回顾页不再显示。
     /// </summary>
     public sealed class M08CampaignReviewPlayModeTests
     {
@@ -100,8 +102,7 @@ namespace SengokuChronicle.PlayModeTests
 
             yield return AssertStageReviewPanelVisible();
             yield return AcknowledgeStageReviewThroughUi();
-            yield return AssertReviewStaysConfirmedAfterFurtherPlay();
-            yield return AssertReviewStaysConfirmedAcrossSaveAndLoad();
+            yield return AssertConfirmedReviewSurvivesSaveMonthTurnAndLoad();
 
             Debug.Log(LogPrefix + "完成：月份=" + _months + " 事件=" + _events +
                       " 继承=" + _successions + " 农庄任命=" + _farmAssignments +
@@ -467,7 +468,56 @@ namespace SengokuChronicle.PlayModeTests
             Debug.Log(LogPrefix + "确认阶段回顾：" + _session.LastCampaignReviewMessage);
         }
 
-        private IEnumerator AssertReviewStaysConfirmedAfterFurtherPlay()
+        private IEnumerator AssertConfirmedReviewSurvivesSaveMonthTurnAndLoad()
+        {
+            Assert.IsTrue(_saveLoad.SaveInteractable, "存档按钮不可交互。");
+            ClickButton("M5SaveButton");
+            yield return null;
+            yield return null;
+            Assert.IsTrue(_saveLoad.LastOperationSucceeded, "存档失败：" + _saveLoad.Status);
+            string slotPath = Path.Combine(_storeDir, SaveSlotStore.FileName);
+            Assert.IsTrue(File.Exists(slotPath), "隔离存档槽中没有写出存档文件：" + slotPath);
+
+            GameDate savedDate = _session.WorldClock.CurrentDate;
+            Assert.AreEqual(StageReviewDate, savedDate, "确认阶段回顾后应立即在 1615-04-01 存档。");
+
+            yield return AdvanceOneMonthThroughUi();
+
+            Assert.AreEqual(new GameDate(1615, 5, 1), _session.WorldClock.CurrentDate,
+                "存档后触发「结束本月」没有成功推进一个月到 1615-05-01。");
+            Text advancedHudDate = FindText("DateText");
+            Assert.IsNotNull(advancedHudDate, "找不到主界面日期文本 DateText。");
+            Assert.AreEqual("1615-05-01", advancedHudDate.text,
+                "存档后月结没有把主界面日期刷新到 1615-05-01。");
+            Assert.AreEqual(CampaignReviewMilestone.None, _session.PendingCampaignReview,
+                "确认之后的月份里阶段回顾又变成待处理。");
+            Assert.IsFalse(_panel.IsVisible, "确认之后回顾页再次出现。");
+            Debug.Log(LogPrefix + "存档后月结推进：" + savedDate + " → " +
+                      _session.WorldClock.CurrentDate);
+
+            Assert.IsTrue(_saveLoad.LoadInteractable, "读档按钮不可交互。");
+            ClickButton("M5LoadButton");
+            yield return null;
+            yield return null;
+
+            Assert.IsTrue(_saveLoad.LastOperationSucceeded, "读档失败：" + _saveLoad.Status);
+            Assert.AreEqual(savedDate, _session.WorldClock.CurrentDate,
+                "读档后日期没有恢复到存档时的 1615-04-01。");
+            Text loadedHudDate = FindText("DateText");
+            Assert.IsNotNull(loadedHudDate, "读档后找不到主界面日期文本 DateText。");
+            Assert.AreEqual("1615-04-01", loadedHudDate.text,
+                "读档后主界面日期没有恢复到 1615-04-01。");
+            Assert.AreEqual(CampaignReviewMilestone.None, _session.PendingCampaignReview,
+                "读档后已确认的阶段回顾又变成待处理。");
+            Assert.IsFalse(_panel.IsVisible, "读档后回顾页再次弹出。");
+            GameObject page = GameObject.Find(CampaignReviewPanel.PageObjectName);
+            Assert.IsTrue(page == null || !page.activeInHierarchy,
+                "读档后回顾页仍留在层级中激活。");
+            Debug.Log(LogPrefix + "隔离存档→月结→读档通过：" + slotPath +
+                      "｜读回日期=" + _session.WorldClock.CurrentDate);
+        }
+
+        private IEnumerator AdvanceOneMonthThroughUi()
         {
             yield return ResolvePendingEvents();
             yield return ResolvePendingSuccession();
@@ -480,40 +530,13 @@ namespace SengokuChronicle.PlayModeTests
                 endMonth = FindButton("EndMonthButton");
             }
             Assert.IsNotNull(endMonth, "找不到「结束本月」按钮。");
+            Assert.IsTrue(endMonth.gameObject.activeInHierarchy, "「结束本月」按钮不在活动层级。");
+            Assert.IsTrue(endMonth.interactable, "「结束本月」按钮不可交互：" +
+                                                _session.LastMonthTurnOutcome);
             endMonth.onClick.Invoke();
+            _months++;
             yield return null;
             yield return null;
-
-            Assert.AreEqual(new GameDate(1615, 5, 1), _session.WorldClock.CurrentDate,
-                "确认阶段回顾后正常月结没有推进到 1615-05-01。");
-            Assert.AreEqual(CampaignReviewMilestone.None, _session.PendingCampaignReview,
-                "确认之后的月份里阶段回顾又变成待处理。");
-            Assert.IsFalse(_panel.IsVisible, "确认之后回顾页再次出现。");
-        }
-
-        private IEnumerator AssertReviewStaysConfirmedAcrossSaveAndLoad()
-        {
-            Assert.IsTrue(_saveLoad.SaveInteractable, "存档按钮不可交互。");
-            ClickButton("M5SaveButton");
-            yield return null;
-            yield return null;
-            Assert.IsTrue(_saveLoad.LastOperationSucceeded, "存档失败：" + _saveLoad.Status);
-            string slotPath = Path.Combine(_storeDir, SaveSlotStore.FileName);
-            Assert.IsTrue(File.Exists(slotPath), "隔离存档槽中没有写出存档文件：" + slotPath);
-
-            GameDate savedDate = _session.WorldClock.CurrentDate;
-            Assert.IsTrue(_saveLoad.LoadInteractable, "读档按钮不可交互。");
-            ClickButton("M5LoadButton");
-            yield return null;
-            yield return null;
-
-            Assert.IsTrue(_saveLoad.LastOperationSucceeded, "读档失败：" + _saveLoad.Status);
-            Assert.AreEqual(savedDate, _session.WorldClock.CurrentDate,
-                "读档后日期与存档时不一致。");
-            Assert.AreEqual(CampaignReviewMilestone.None, _session.PendingCampaignReview,
-                "读档后已确认的阶段回顾又变成待处理。");
-            Assert.IsFalse(_panel.IsVisible, "读档后回顾页再次弹出。");
-            Debug.Log(LogPrefix + "隔离存档读档通过：" + slotPath);
         }
 
         private Button FirstEventOptionButton(ICollection<string> skip)
