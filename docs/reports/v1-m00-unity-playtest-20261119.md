@@ -29,7 +29,11 @@ Builds/Demo-v1-2bca9d1-r2/Demo-v1-2bca9d1-r2.exe
 
 ## 本轮主控预验收
 
-2026-11-19 在已打开的 Unity 6000.6.6f1 Editor / FoundationScene 中通过 Play Mode 走通相同玩法入口，月结与清洲委托页面读数符合上述预期，Console 本轮新增错误与警告均为 0。交互使用项目 VerifyUi.ClickPath 调用真实按钮回调并配合 Game View 截图目视检查；没有物理鼠标命中验证。本轮不替代用户在 Windows EXE 上的最终试玩验收。
+2026-11-19 在已打开的 Unity 6000.6.6f1 Editor / FoundationScene 中通过 Play Mode 走通相同玩法入口，月结与清洲委托页面读数符合上述预期，Console 本轮新增错误与警告均为 0。交互使用项目 VerifyUi.ClickPath 调用真实按钮回调并配合 Game View 截图目视检查；没有物理鼠标命中验证。
+
+同日另从 `Builds/Demo-v1-2bca9d1-r2/Demo-v1-2bca9d1-r2.exe` 启动 Windows 演示，以 CUA 输入走通开始新游戏、SC-013、地图、结束月份、处理家议、清洲城镇、本地委托及护送详情。目视确认初始日期 1560-04-01、资金 30、物资 12；月结后日期 1560-05-01、资金 28、物资 12；家议选择后的反馈为信任 +5。护送详情页已打开，未接取委托、未存档。CUA 输入不等同于实体鼠标测试。
+
+以上均为主控预验收，不替代用户按 Windows EXE 步骤进行的最终试玩验收。
 
 ## 未闭合门槛
 
