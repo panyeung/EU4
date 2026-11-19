@@ -1,0 +1,35 @@
+{
+  "name": "SengokuChronicle.PlayModeTests",
+  "rootNamespace": "SengokuChronicle.PlayModeTests",
+  "references": [
+    "UnityEngine.TestRunner",
+    "UnityEditor.TestRunner",
+    "SengokuChronicle.Domain",
+    "SengokuChronicle.Application",
+    "SengokuChronicle.Events",
+    "SengokuChronicle.Presentation",
+    "SengokuChronicle.Persistence"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "defineConstraints": [
+    "UNITY_INCLUDE_TESTS"
+  ],
+  "assemblyReferences": [],
+  "assemblyDefinitionReferences": [
+    "SengokuChronicle.Domain",
+    "SengokuChronicle.Application",
+    "SengokuChronicle.Events",
+    "SengokuChronicle.Presentation",
+    "SengokuChronicle.Persistence"
+  ],
+  "versionDefines": [],
+  "precompiledReferences": [
+    "Unity.TestRunner",
+    "UnityEditor.TestRunner",
+    "nunit.framework"
+  ],
+  "autoReferenced": true,
+  "useUnityAssemblies": false,
+  "isTestAssembly": true
+}
