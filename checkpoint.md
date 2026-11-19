@@ -331,6 +331,8 @@
 
 | 日期 | ID | 内容 | 状态 | 证据 |
 |---|---|---|---|---|
+| 2026-11-19 | M00 | v1 Windows 演示技术签核 ACCEPT；`t_39a5b047` RETURN 所要求的文档状态修订已获独立只读复审 ACCEPT | 进行中 | Player 构建与冒烟：`Logs/verify/v1-demo-build/20261118-r2-demo-build.md`（`2bca9d1`）；EditMode 2214/2214、Validator PASS、核心循环及隔离存读档：`Logs/verify/20261118-integration/20261118-1348-core-loop.md`（`c291dd3`）；`c291dd3..2bca9d1` 仅注释修订。用户最终验收仍待完成 |
+| 2026-11-19 | M08 | 全量验证归档复审 ACCEPT；FoundationScene Play Mode 真实跨过 55/100 周年并自动显示回顾，确认后继续；M08 仍未闭合 | 进行中 | `docs/reports/v1-m08-55-review-user-acceptance-20261119.md` 记录 `farm-managed-v1` 正常月结路线、两次实际 UI 及 55 年后隔离存读档。百年终态粮荒 53 月、极端通胀 41 月、粮食 0、资金 317；不能据此宣称经济可持续或用户验收 |
 | 2026-11-18 | v1 集成 | 五个 UI 分支并入 `main`：层序统一为 `CanvasLayerOrder`、场景在 main 侧重放、全量回归与演示构建全过、独立复审 PASS | 进行中 | 全量 EditMode 2214/2214、Validator `PASS; Errors: 0`（源 `c291dd3`）；`Builds/Demo-v1-2bca9d1-r2/` 由 `2bca9d1` 干净工作树构建 `Succeeded`、`totalErrors=0`；用户最终验收未完成 |
 | 2026-11-18 | M00 | 主工作树未提交项与 `panyeung/m00-closeout` `e57dd06` 内容等价：35 个已跟踪修改文件 `git diff --ignore-cr-at-eol` 为 0 行，34 个未跟踪文件与同名 blob 剥 CR 后逐字节相同，仅 5 项是本地新增（合计 69 项等价） | 进行中 | `git status --porcelain -uall` 74 项（35 修改 / 39 未跟踪）；本地新增为 `Assets/Logs/verify/_scratch/t3193-00-now.png`、`Assets/Scenes/TestResults_20261108_072929.xml` 与其 `.meta`、`scripts/verify/SaveGatePlayProbe.cs`、`scripts/verify/SaveLoadPendingChecks.cs`；分支现头 `5141474` |
 | 2026-11-18 | M00 | Editor 卡死恢复：PID 88424 在一次测试超时后由 `RestoreSceneSetupTask` 抛 `IndexOutOfRangeException` 卡死主线程（pipeline 全超时、UIA 不可用），按 PID 结束该进程并重启为 PID 96584 / 端口 7800 | 进行中 | `unity pipeline list` 现报 `My project` 96584 / 7800 / 可达 true；场景备份 `Logs/recovery-20261118/scene-0.backup` 与 `__Backupscenes/0.backup` 各 835,768 字节，MD5 同为 `5ca370eb0407f1d1f1ac2131063ffd1e` |
@@ -426,8 +428,8 @@
 - 演示构建：`Builds/Demo-v1-2bca9d1-r2/`，源提交 `2bca9d1`（干净工作树），`Succeeded`、`totalErrors=0`、218 个文件 183,882,557 B，exe 667,136 B、`sha256 7c5b8f3e…188247d`（本卡亲跑 `sha256sum` 核对）。唯一警告是 Pipeline 包自带的「No RuntimePipelineConfig asset found」，不再是「未编译改动」。Player 冒烟走通标题→开始新游戏→SC-013→营地 HUD（1560-04-01、清洲、贯 30）→结束月份（1560-05-01、贯 28）→清洲城镇页四条当地委托→任务页，`Player.log` 0 条 Exception/LogError/NullReference。
 - 画布层序已统一：`Assets` 内 `CanvasOverlayOrder` 零命中，`CanvasLayerOrder` 是唯一页面序来源。
 - 独立复审 `t_122d4d5b` 判 **PASS**，C1–C6 全过。
-- 仍未闭合：用户最终验收（M00）；M08 战役回顾面板的运行时打开；M09 真机窗口拖动；`Assets/Tests/PlayMode` 为空，运行时验证仍靠手工配方；其余 MINOR 见 §6。
-- 本次状态核对时，本机唯一 Unity Editor 为 PID `93704`，项目路径为 `C:\Users\panye\My project`，Unity `6000.6.6f1`，Pipeline 端口 `7800` 可达。依据是 `Logs/verify/20261118-m08-full-verification.md` 记录的 2026-11-18 20:18:31Z / 20:18:35Z / 20:18:40Z 连续三次 `status=ready`，以及本次一次只读 `editor_status` 查询（`lastHeartbeat` 2026-11-18T23:33:38Z）返回 `ready`、`compiling=false`、`playMode=stopped`。这只代表 Editor 可连接，不代表运行时行为。后续 Unity 工作开始前重新核对进程、`-projectPath` 与 Pipeline；已有实例时复用，不启动第二实例。
+- 仍未闭合：用户最终验收（M00）；M08 百年经济可持续性及玩家手动经营路线；M09 真机窗口拖动；`Assets/Tests/PlayMode` 为空，运行时验证仍靠手工配方；其余 MINOR 见 §6。
+- 2026-11-19 M08 实际试玩后，Unity Editor PID `49784`、项目路径 `C:\Users\panye\My project`、Unity `6000.6.6f1`、Pipeline 端口 `7801`；停止 Play Mode 后状态 `ready`、`compiling=false`，FoundationScene `isDirty=false`，实时 Console 错误/警告 0。累计 Console 的两条旧 CLI/评估命令错误不属于该路线。后续 Unity 工作开始前重新核对进程、`-projectPath` 与 Pipeline；已有实例时复用，不启动第二实例。
 - 证据边界。M01 与 M08C 子切片的验收都不代表 M00 或 M02–M08 整体验收。
 
 ---
@@ -437,7 +439,7 @@
 按依赖顺序，前一项不闭合不做下一项。开始 Unity 工作前先核对 Editor 进程的 `-projectPath` 和 `unity pipeline list`；本工程已有 Editor 时复用，只有确认无实例时才启动。
 
 1. **用户最终验收（唯一硬门）**：跑 `Builds/Demo-v1-2bca9d1-r2/Demo-v1-2bca9d1-r2.exe`，走标题→开始新游戏→SC-013→营地 HUD→结束月份→地图→清洲城镇页→当地委托。验收通过后由用户点头，才谈里程碑 tag。
-2. M08 战役回顾面板的运行时打开：面板只在真实 55 年阶段回顾或 100 年结局待处理时显示，需要一条长周期演示路线给证据。不以调试跳日期取证。
+2. M08 回顾 UI 的运行时触发已由 `farm-managed-v1` 自动路线证明：55 年和 100 年均用真实月结进入边界并在 FoundationScene 自动弹出，55 年后还验证一次隔离槽存读档。该模拟策略不是玩家手动经营；百年经济出现明显粮荒和通胀。下一步由 OpenCode2 只读提出最小经济规则修订方案及可量化验收指标，方案审定前不改经济代码；随后用可重放路线验证玩家实际可经营性。
 3. M09 窗口拖动：手上没有真实硬件下的窗口拖动证据，需在可交互桌面上复验。
 4. `Assets/Tests/PlayMode` 目前为空，运行时验证全靠手工配方。要么补自动化，要么把「手工配方即口径」写进规格。
 5. MINOR 清理（`Assets/Scenes/` 的 stray `TestResults_*.xml`、`Assets/Logs/verify/_scratch/` 截图、隔离槽目录）需要批准。

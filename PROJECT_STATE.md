@@ -1,6 +1,6 @@
 # 项目状态
 
-更新时间：2026-11-18（UTC）
+更新时间：2026-11-19（UTC）
 状态：IN PROGRESS
 
 本文件记录当前工作状态。设计目标、里程碑和测试口径以 [checkpoint.md](checkpoint.md) 为准。界面与美术规则以 [ui设计规划.md](ui设计规划.md) 为准。
@@ -10,12 +10,12 @@
 - 仓库：`https://github.com/panyeung/EU4.git`。
 - `main` 与 `origin/main` 同步。游戏代码基线为 `2bca9d1`。之后的主线提交只更新文档。本文件最初在 `feature/project-state-docs` 独立工作树编写；该文档分支已合入 `main`，不代表当前分支状态。
 - Unity 版本：`6000.6.6f1`，URP 2D，Windows。
-- 主工作树：`C:\Users\panye\My project`，基线工作区干净。本文件最初在 `feature/project-state-docs` 独立工作树编写，以免干扰 v1 演示签核。
-- 本工程当前有单一 Unity Editor 实例：PID `93704`，`6000.6.6f1`，Pipeline 端口 `7800`，`-projectPath` 为 `C:\Users\panye\My project`。连接状态有两份证据：`Logs/verify/20261118-m08-full-verification.md` 记录 2026-11-18 20:18:31Z / 20:18:35Z / 20:18:40Z 连续三次 `status=ready`、`playMode=stopped`、`compiling=false`；本次文档核对另做一次只读查询，`lastHeartbeat` 为 2026-11-18T23:33:38Z，返回 `ready`、`playMode=stopped`。这些只说明 Editor 可连接，不代表运行时行为。任何 Unity 操作前重查进程、`-projectPath` 与 `unity pipeline list`；已有实例时复用，不得启动第二实例，也不得据此启动 batchmode。
+- 当前 checkout：`C:\Users\panye\My project`，分支 `docs/orca-project-workflow`，HEAD `fc870c0`。本轮更新状态、checkpoint 与演示包报告；未改产品代码。`main` 与 `origin/main` 同步在 `65a021d`，游戏代码基线仍为 `2bca9d1`。
+- Unity Editor 当前为 PID `49784`、Unity `6000.6.6f1`、Pipeline 端口 `7801`，`-projectPath` 为本工程。2026-11-19 实时状态为 `ready`、`playMode=stopped`、`compiling=false`；FoundationScene 已加载且 `isDirty=false`。Play Mode 后 Console 实时错误/警告均为 0，未运行自动化测试。累计 Console 仍有两条更早的 CLI/评估命令错误（seq 16、17），不是本次游戏运行错误。任何 Unity 操作前重查进程、`-projectPath` 与 `unity pipeline list`；已有实例时复用，不得启动第二实例，也不得据此启动 batchmode。
 
 ## 当前阶段
 
-**v1 Windows 演示待最终技术签核与用户验收。** 演示包可运行，但整项目尚未完成。`tester` 于 2026-11-18 13:12Z 对 `t_39a5b047` 给出 RETURN，要求先修正文档里的过期当前状态再复审；本轮修订由 `t_1df7a5a1` 执行。签核通过后交付演示包和一到两分钟试玩步骤；用户验收仍未完成。
+**v1 Windows 演示的技术签核已通过，待用户最终验收。** `t_39a5b047` 于 2026-11-18 给出的 RETURN 针对文档过期状态；修订后，2026-11-19 的独立只读文档复审为 ACCEPT。主控基于现存构建、测试、Validator、Play Mode 与 Player 冒烟证据签核 M00 技术门。演示包可运行，但整项目尚未完成；用户试玩验收仍未完成。
 
 演示包：
 
@@ -40,11 +40,10 @@ Git 忽略 `Logs/` 与 `Builds/`。这些日志和 exe 目前只在本机工作�
 
 ## 未完成工作
 
-1. 完成 `t_1df7a5a1` 的 RETURN 修订及其后的独立复审，确认 `t_39a5b047` 技术签核通过后，交付 v1 演示并等待用户验收。
-2. `t_0a1e8ce8` 当前在 review，待 tester 复审。本轮已产出编译、EditMode `2214/2214`、场景 Validator `PASS; Errors: 0`、Play Mode 路线及 D3 两策略各 1000 种子归档，证据见 `Logs/verify/20261118-m08-full-verification.md`。这些证据不代表整个 M08 已闭合；战役回顾面板在真实 55 年回顾或 100 年结局时打开仍未验证。报告对模拟只陈述当前基线、策略 ID 与种子数，不据此宣称生存通过。
-3. M08 战役回顾面板尚无真实 55 年回顾或 100 年结局运行时打开证据。不可用调试跳日期替代。
-4. M09 窗口拖动尚无真实硬件输入证据。已有合成输入结果不算通过。
-5. `Assets/Tests/PlayMode` 为空。运行时路径仍按手工配方留证。
+1. M00 技术签核已通过；待用户试玩 v1 演示并给出最终验收结论。
+2. M08 全量验证归档卡 `t_0a1e8ce8` 于 2026-11-19 经独立只读复审 ACCEPT；本轮又在 FoundationScene 实际 Play Mode 通过正常月结路线触发并确认 55 年与 100 年回顾，55 年确认后隔离槽 `SaveTo/LoadFrom` 往返通过。路线由 `farm-managed-v1` 自动选择，不等于用户手动经营或用户验收。百年终态出现粮荒 53 个月、极端通胀 41 个月、粮食库存 0，经济健康仍未通过。详细证据见 `docs/reports/v1-m08-55-review-user-acceptance-20261119.md`。
+3. M09 窗口拖动尚无真实硬件输入证据。已有合成输入结果不算通过。
+4. `Assets/Tests/PlayMode` 为空。运行时路径仍按手工配方留证。
 
 checkpoint 记录的 M08B D3 基线中，`unmanaged` 1000 种子均未到达 50 年或 100 年。这个结果是已接受的风险基线，不是长期生存通过。SC-021 与 SC-023 已集成进 `main`，但集成事实本身不代表所有相关运行时体验均已验收。
 
