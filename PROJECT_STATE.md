@@ -32,7 +32,8 @@
 | FoundationScene Validator | `PASS; Errors: 0`，源 `c291dd3` | 历史结果，不是本轮重跑 |
 | Play Mode 核心循环与隔离存读档 | 已记录通过，源 `c291dd3` | 详见 `Logs/verify/20261118-integration/20261118-1348-core-loop.md`。此证据不代表 Player 存读档或用户验收 |
 | Windows Player 构建与冒烟 | 构建成功，报告记 0 错误。冒烟日志无 Exception、LogError、NullReference | 详见 `Logs/verify/v1-demo-build/20261118-r2-demo-build.md`。来源为 `2bca9d1` |
-| M08 五十五周年 PlayMode | PR #4 报告端到端用例 `1/1` 通过，含确认后存档、正常月结、读档恢复 | PR 分支证据，未在本轮重跑，不等于真实玩家路线或用户验收 |
+| Windows Player M00 试玩预验收 | 2026-11-19 本机 EXE 从标题页走到清洲护送委托详情；日期、资金、物资与事件反馈符合试玩步骤 | 详见 `docs/reports/v1-m00-unity-playtest-20261119.md`。Computer Use 输入属主控预验收；日志含 URP 后处理 Shader 警告，不等于用户最终验收 |
+| M08 五十五周年 PlayMode | PR #4 报告端到端用例 `1/1` 通过；最新需求复核 RETURN，因测试未逐次断言月结成功且日期恰好推进一月 | PR 分支证据，未在本轮重跑；待 OpenCode2 修正测试与报告并重跑后再签核，不等于用户验收 |
 | 用户验收 | 未完成 | 只有用户试玩后才能闭合 |
 
 Git 忽略 `Logs/` 与 `Builds/`。这些日志和 exe 目前只在本机工作区。GitHub 分支克隆不包含它们。交付演示时，确认用户能访问此工作区，或另行提供构建包。
