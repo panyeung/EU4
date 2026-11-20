@@ -35,6 +35,8 @@ Builds/Demo-v1-2bca9d1-r2/Demo-v1-2bca9d1-r2.exe
 
 2026-11-20 再次在现有 Unity 6000.6.6f1 Editor 的 FoundationScene Play Mode 走通上述路线。开始前 `unity pipeline list` 与 `editor_status` 确认目标为主工程 `C:\Users\panye\My project`、PID 49784、端口 7801、状态 Ready 且未运行 Play Mode；未启动新 Editor。通过 CUA 点击标题页「开始新游戏」→「固定三代剧本（SC-013）」→「地图与出行」→「结束月份」→在家议选择「守住对伊织的承诺」→地图点击「清洲」→「护送委托」。画面显示开局日期 1560-04-01；月结后为 1560-05-01、资金 28、物资 12，反馈为伊织对家族信任增加五点；清洲城镇页与护送委托详情可见，状态为待接取。未接取、未存档。随后用 `editor_stop` 退出；`editor_status` 为 Ready、Play Mode stopped、compiling=false；Console 游标仍为 17，本轮新增错误 0、警告 0（累计旧计数 error=2、warn=0）。没有运行自动化测试。截图只用于当场目视核对，未作为项目文件留存。此项仍是 Editor/CUA 合成输入预验收，不是 Windows EXE 的用户最终验收或实体鼠标证据。
 
+2026-11-20 另行尝试复验 Windows Player：启动前核对 EXE 为 667136 字节，SHA-256 与上方构建记录一致；进程成功启动，CUA 能列出窗口，但 `getApp` 返回「Accessibility state unavailable」。未对该窗口发送任何输入，随即关闭本轮启动的进程。此尝试没有产生游戏路线的通过或失败证据；不替代 2026-11-19 已记录的 Player 试玩，也不改变用户最终验收仍待完成的状态。
+
 以上均为主控预验收，不替代用户按 Windows EXE 步骤进行的最终试玩验收。
 
 ## 未闭合门槛
