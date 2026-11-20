@@ -44,7 +44,7 @@ Git 忽略 `Logs/` 与 `Builds/`。这些日志和 exe 目前只在本机工作�
 
 1. M00 技术签核已通过；待用户试玩 v1 演示并给出最终验收结论。
 2. M08 全量验证归档卡 `t_0a1e8ce8` 与其 55/100 年运行时记录已获独立复审 ACCEPT；FoundationScene 自动策略路线实际触发两次回顾，55 年确认后隔离槽 `SaveTo/LoadFrom` 往返通过。路线由 `farm-managed-v1` 自动选择，不等于玩家手动经营或用户验收。百年终态粮荒 53 个月、极端通胀 41 个月、粮食库存 0，经济健康未通过。PR #4 另报告五十五周年 PlayMode 用例 `1/1` 通过。证据见 `docs/reports/v1-m08-55-review-user-acceptance-20261119.md` 与 PR #4。
-3. M09 窗口拖动尚无真实硬件输入证据。已有合成输入结果不算通过。
+3. M09 窗口拖动：2026-11-20 主控在主工程 Editor 的 Play Mode 点击「Debug 综合测试」后，确认面板显示且日期为 `1560-04-01`；停止 Play Mode 后 FoundationScene `isDirty=false`，Console 无新增错误或警告。尚未验证标题栏拖动；Computer Use 注入不等于实体鼠标，M09 仍未闭合。
 4. M08B 经济方向仍待用户在 PR #5 选择 A/B/C/D，并确认方案参数与 1000 种子粮食崩溃率目标。独立文档复审已 ACCEPT；不表示规则获批或代码已实现。
 5. `main` 中 `Assets/Tests/PlayMode` 仍为空；PR #4 分支新增的单项测试尚未合并。运行时结果须按对应证据来源分别记录。
 
