@@ -1,6 +1,6 @@
 # v1 Windows 演示包
 
-状态：待 `t_39a5b047` 技术签核和用户试玩。项目整体仍为 IN PROGRESS。
+状态：M00 技术签核 ACCEPT（2026-11-19）；待用户试玩验收。项目整体仍为 IN PROGRESS。
 
 ## 运行方式
 
@@ -40,7 +40,7 @@
 ## 已知缺口与刻意未做
 
 - 用户验收尚未完成。
-- M08 战役回顾面板尚无真实 55 年或 100 年路线的运行时打开证据。
+- M08 55/100 年回顾面板已在 FoundationScene Play Mode 中由正常月结自动触发并实际确认；该证据使用 `farm-managed-v1` 自动路线，不代表玩家手动经营。百年终态粮荒 53 个月、极端通胀 41 个月、粮食库存 0，经济长期健康未通过。
 - M09 窗口拖动尚无真实硬件输入证据。
 - `Assets/Tests/PlayMode` 为空，运行时证据使用手工 Play Mode 配方。
 - 当前包无音频、切图与动画。
@@ -52,7 +52,7 @@
 - Player 冒烟路线和日志计数见 `Logs/verify/v1-demo-build/20261118-r2-demo-build.md`。这是 Player 冒烟，不是用户验收。
 - EditMode `2214/2214` 和场景 Validator `PASS; Errors: 0` 的证据基于 `c291dd3`。这是历史验证，不是本轮重跑。
 - Editor Play Mode 月结和隔离槽存读档证据见 `Logs/verify/20261118-integration/20261118-1348-core-loop.md`，来源为 `c291dd3`。它不证明 Player 存读档。
-- tester 最终技术签核仍在进行。收到 ACCEPT 或 RETURN 前，不把本包标为签核通过。
+- 主控于 2026-11-19 完成 M00 技术签核：ACCEPT。依据为本报告记录的 `2bca9d1` Player 构建与冒烟，以及 `c291dd3` 的 EditMode、Validator、Play Mode 核心循环和隔离存读档证据；`c291dd3..2bca9d1` 的差异仅为注释修订。2026-11-19 独立只读复审接受了 `t_39a5b047` RETURN 所要求的文档状态修订。以上不构成用户验收。
 - 用户试玩与验收尚未发生。
 
 ## 回滚
