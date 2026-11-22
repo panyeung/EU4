@@ -213,6 +213,7 @@
 
 | 日期 | 决策 | 一行理由 | 影响 |
 |---|---|---|---|
+| 2026-11-19 | M08B 长期粮食供给方向列入待选决策，不先改规则 | 单农庄每月产 4 粮只能覆盖 20 人，市场无外部粮源；方向属产品取舍，须由用户选择 | `docs/reports/m08b-economy-design-decision-20261119.md` 与 PR #5；A/B/C/D 均未批准；不改规则、存档、场景或 Prefab |
 | 2026-11-18 | 集成分支整体快进 `main`，不再逐支合并 | `t_122d4d5b` 独立复审 C1–C6 全 PASS，四支源码已在集成链里逐支过回归；让 `main` 与 `integration/v1-20261118` 同点，比再造五个合并提交少一层无法验证的中间态 | 用户 2026-11-18 授权；`main`、`origin/main`、`integration/v1-20261118` 同为 `2bca9d1`；只保留一个工作树 |
 | 2026-11-18 | 画布层序统一为 `CanvasLayerOrder`，删除 `CanvasOverlayOrder` | m04 与 m08 各带一套并行层序机制，合并后会同时生效；一个共享页面序才能让座次校验有唯一来源 | `Assets` 内 `CanvasOverlayOrder` 零命中；`CanvasLayerOrder.cs` 持七项页面序，`AddM08CampaignReviewPanel` 与 `AddSC010SuccessionPanel` 按共享序插入并校验，由 `CanvasLayerOrderTests` 与 `AddM08CampaignReviewPanelTests` 覆盖 |
 | 2026-11-18 | 主工作树未提交项按「与 `m00-closeout` 内容等价」处理，不再重复入库 | 69 项与 `e57dd06` 逐字节相同，差异只有行尾 LF/CRLF，另开提交只会造噪声 | 不新增镜像提交；后续收口以 `panyeung/m00-closeout` 为内容基准 |
