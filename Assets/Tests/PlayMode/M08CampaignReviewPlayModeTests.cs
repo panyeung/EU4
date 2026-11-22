@@ -20,7 +20,8 @@ namespace SengokuChronicle.PlayModeTests
     /// 之后每个自然月都触发界面「结束本月」的回调，事件与继承都触发面板按钮回调，
     /// 农庄空缺时触发产业面板的候选与确认按钮回调。它不模拟物理鼠标点击，
     /// 也不验证 EventSystem 导航或焦点命中。任何日期、进度、确认标志、
-    /// 存档字段都不直接写入，也不调用 Refresh 伪造状态。
+    /// 存档字段都不直接写入，也不调用 Refresh 伪造状态。随机数固定为 SC-013 新游戏
+    /// 使用的 <see cref="GameSession.DefaultRandomSeed"/>，并在存档里回读种子做断言。
     ///
     /// 到 1615-04-01 时检查回顾页是否由会话状态自动打开、日期与阶段是否正确、
     /// 正文是否真的渲染出文字；随后触发继续按钮回调，随即在隔离槽存档，
@@ -44,6 +45,9 @@ namespace SengokuChronicle.PlayModeTests
 
         private static readonly GameDate ExpectedStart = new GameDate(1560, 4, 1);
         private static readonly GameDate StageReviewDate = new GameDate(1615, 4, 1);
+        // SC-013 新游戏固定使用 GameSession.DefaultRandomSeed（0x5343414E4B4F3031）。
+        // 存档里的 initialSeedHex 是 16 位大写十六进制，这里断言整条路线都跑在这个固定种子上。
+        private const string ExpectedSeedHex = "5343414E4B4F3031";
 
         private GameSession _session;
         private CampaignReviewPanel _panel;
@@ -91,7 +95,13 @@ namespace SengokuChronicle.PlayModeTests
             Assert.AreEqual(CampaignReviewMilestone.None, _session.PendingCampaignReview,
                 "开局时不应有阶段回顾待处理。");
 
-            yield return AdvanceToStageReview();
+            Assert.AreEqual(ExpectedSeedHex,
+                GameSession.DefaultRandomSeed.ToString("X16",
+                    System.Globalization.CultureInfo.InvariantCulture),
+                "SC-013 固定剧本的默认种子已改变，本用例的复现前提不再成立。");
+            Debug.Log(LogPrefix + "固定种子=" + ExpectedSeedHex + "（GameSession.DefaultRandomSeed）");
+
+            yield return DriveMonthsToStageReview();
 
             Assert.AreEqual(StageReviewDate, _session.WorldClock.CurrentDate,
                 "正常月结未能停在 1615-04-01。");
@@ -170,7 +180,7 @@ namespace SengokuChronicle.PlayModeTests
             yield return null;
         }
 
-        private IEnumerator AdvanceToStageReview()
+        private IEnumerator DriveMonthsToStageReview()
         {
             while (_session.WorldClock.CurrentDate < StageReviewDate)
             {
@@ -477,6 +487,13 @@ namespace SengokuChronicle.PlayModeTests
             Assert.IsTrue(_saveLoad.LastOperationSucceeded, "存档失败：" + _saveLoad.Status);
             string slotPath = Path.Combine(_storeDir, SaveSlotStore.FileName);
             Assert.IsTrue(File.Exists(slotPath), "隔离存档槽中没有写出存档文件：" + slotPath);
+
+            SaveData savedSlot = JsonUtility.FromJson<SaveData>(File.ReadAllText(slotPath));
+            Assert.IsNotNull(savedSlot, "隔离存档槽的 JSON 无法解析。");
+            Assert.IsNotNull(savedSlot.randomState, "存档没有记录随机状态。");
+            Assert.AreEqual(ExpectedSeedHex, savedSlot.randomState.initialSeedHex,
+                "存档记录的随机种子不是 SC-013 的固定种子。");
+            Debug.Log(LogPrefix + "存档种子=" + savedSlot.randomState.initialSeedHex);
 
             GameDate savedDate = _session.WorldClock.CurrentDate;
             Assert.AreEqual(StageReviewDate, savedDate, "确认阶段回顾后应立即在 1615-04-01 存档。");

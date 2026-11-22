@@ -1,8 +1,16 @@
 # M08 五十五周年阶段回顾 Play Mode 端到端验证报告（2026-11-19）
 
-- 工作树 `C:\Users\panye\orca\workspaces\My project\m08-55-year-review-runtime`，分支 `feature/m08-55-year-review-runtime`，本轮回合开工 HEAD `2f7ecdf`。
-- 引擎 Unity 6000.6.6f1，本树 Editor 的 Pipeline 端口 7803（主工程 7801，未触碰）。
-- 证据副本：`Logs/verify/m08-55-20261119-2345/TestResults.xml`（6601 字节，SHA-256 `bae9603864fa62c141680bd3ab7735985efcad67478365f222c2b25772ab52d0`，`Logs/` 按仓库约定不入库）。
+- 工作树 `C:\Users\panye\orca\workspaces\My project\m08-55-year-review-runtime`，分支 `feature/m08-55-year-review-runtime`。
+- 引擎 Unity 6000.6.6f1，本树 Editor 的 Pipeline 端口 7803（主工程 7801，未触碰）。2026-11-21 本轮新起本树唯一 Editor，PID 79524，开工时 `console_status` 计数 `error:0, warn:0, log:6`。
+- 证据副本：`Logs/verify/m08-55-20261121-2029/TestResults.xml`（6745 字节，SHA-256 `36afa5f57e372d5ab760ff0c0c8d454d37ec79882e23f4d6003ebf75f0d402fe`，`Logs/` 按仓库约定不入库）。
+
+## 2026-11-21 补强：记录并断言固定种子
+
+任务要求「固定并记录种子」，上一轮只在报告里隐含这一前提，测试没有回读。本轮补上，且必须重跑证据才算数：
+
+- 测试断言 `GameSession.DefaultRandomSeed` 的 16 位十六进制为 `5343414E4B4F3031`，SC-013 新游戏固定走这个默认种子（`GameSession.InitNewGame()` → `InitNewGame(DefaultRandomSeed)`）。
+- 存档后直接解析隔离槽的 `save-slot-1.json`，断言 `randomState.initialSeedHex == 5343414E4B4F3031`，并在日志里记录，证明 660 次月结确实跑在这个固定种子上，而不是只在入口处声称。
+- 私有助手 `AdvanceToStageReview` 更名为 `DriveMonthsToStageReview`，避免与产品 API `AdvanceTo` 混名，独立复审 grep 时不再产生歧义。
 
 ## 本轮修正（独立复审 RETURN）
 
@@ -43,16 +51,22 @@ unity command run_tests --project-path "C:\Users\panye\orca\workspaces\My projec
 
 ## 验证（实测）
 
+2026-11-21 本轮实测（证据目录 `Logs/verify/m08-55-20261121-2029`）：
+
 | 项 | 命令 | 结果 |
 |---|---|---|
-| 编译 | `unity command recompile` + `recompile_status` | `completed`；`console_status` 报 `compilationFailed=false` |
-| Play Mode | 上表命令，`--filter M08CampaignReview` | `1/1 个通过`；`total="1" passed="1" failed="0"`，时长 11.245 s |
-| Console | `unity command console_status` 前后对比 | 运行前 `error:8, warn:9, log:210`（cursor 227），运行后 `error:8, warn:9, log:261`（cursor 278），同一 session 未 reset。本轮**新增 0 错误 0 警告、51 条 log**（8 条 error 是本次会话早前编译失败与 pipeline 超时的历史累计，非本轮） |
-| 证据副本 | `bash scripts/copy-testresults.sh Logs/verify/m08-55-20261119-2345` | 6601 B，SHA-256 `bae9603864fa62c141680bd3ab7735985efcad67478365f222c2b25772ab52d0` |
+| 编译 | `unity command recompile` + `recompile_status` | `up_to_date`（启动时已完成导入编译）；`console_status` 报 `compilationFailed=false`；`SengokuChronicle.PlayModeTests.dll` 时间晚于改后源文件且含新助手名，确认跑的是改后代码 |
+| Play Mode | `unity command run_tests --project-path "$PWD" --mode PlayMode --filter M08CampaignReview --async_tests true --timeout 1800`，再轮询 `test_status` | `completed：1/1 个通过`；`total="1" passed="1" failed="0"`，时长 19.67 s |
+| Console | `unity command console_status` 前后对比 | 运行前 `error:0, warn:0, log:6`，运行后 `error:0, warn:0, log:56`，同一 session 未 reset。本轮**新增 0 错误 0 警告、50 条 log** |
+| 证据副本 | `bash scripts/copy-testresults.sh Logs/verify/m08-55-20261121-2029` | 6745 B，SHA-256 `36afa5f57e372d5ab760ff0c0c8d454d37ec79882e23f4d6003ebf75f0d402fe` |
+
+上一轮（2026-11-19，证据 `Logs/verify/m08-55-20261119-2345`，6601 B，SHA-256 `bae9603864fa62c141680bd3ab7735985efcad67478365f222c2b25772ab52d0`）为 1/1 通过、11.245 s；该副本仍保留可对照。
 
 ### 运行时证据（摘自证据副本的测试日志）
 
 ```
+[M08-55] 固定种子=5343414E4B4F3031（GameSession.DefaultRandomSeed）
+[M08-55] 月份=60 日期=1565-04-01 事件=12 继承=0 农庄任命=1
 [M08-55] 月份=180 日期=1575-04-01 事件=12 继承=0 农庄任命=2
 [M08-55] 月份=360 日期=1590-04-01 事件=20 继承=2 农庄任命=2
 [M08-55] 月份=660 日期=1615-04-01 事件=20 继承=3 农庄任命=3
@@ -60,7 +74,9 @@ unity command run_tests --project-path "C:\Users\panye\orca\workspaces\My projec
          开局：1560-04-01｜已历 55 年｜55 年评价：1615-04-01｜100 年评定：1660-04-01｜
          评价日：1615-04-01｜正文长度=104675｜区块=27｜缩放=1｜
          继续按钮=继续家族（阶段评价不终止游戏）
+[M08-55] 正文区块 0 字符=3907 顶点=13892 … 正文区块 26 字符=2032 顶点=7768
 [M08-55] 确认阶段回顾：已确认五十五周年阶段评价：家族继续经营。
+[M08-55] 存档种子=5343414E4B4F3031
 [M08-55] 存档后月结推进：1615-04-01 → 1615-05-01
 [M08-55] 隔离存档→月结→读档通过：...\Temp\m08-55-review-playmode-<guid>\save-slot-1.json｜读回日期=1615-04-01
 [M08-55] 完成：月份=661 事件=20 继承=3 农庄任命=3 日期=1615-04-01 待处理回顾=None
@@ -86,8 +102,8 @@ unity command run_tests --project-path "C:\Users\panye\orca\workspaces\My projec
 
 ## 改动文件
 
-- `Assets/Tests/PlayMode/M08CampaignReviewPlayModeTests.cs`（本轮修改）—— 把「确认后继续游戏」与「存档读档」两步合成一步：先存档，再触发 `EndMonthButton` 回调成功推进一个月，最后读档并断言日期、回顾标记与回顾页三者都恢复到存档时刻。文件头注释同步收窄措辞。
-- `docs/reports/m08-55-review-playmode-20261119.md`（本轮修改）—— 记录 RETURN 修正、收窄措辞、更新证据路径与实测数字。
+- `Assets/Tests/PlayMode/M08CampaignReviewPlayModeTests.cs`（本轮修改）—— 新增固定种子断言：入口断言 `GameSession.DefaultRandomSeed` 为 `5343414E4B4F3031`，存档后回读 `save-slot-1.json` 的 `randomState.initialSeedHex` 再断言一次并写日志；私有助手 `AdvanceToStageReview` 更名为 `DriveMonthsToStageReview`。上一轮已把「确认后继续游戏」与「存档读档」合成一步：先存档，再触发 `EndMonthButton` 回调成功推进一个月，最后读档并断言日期、回顾标记与回顾页三者都恢复到存档时刻。
+- `docs/reports/m08-55-review-playmode-20261119.md`（本轮修改）—— 补记种子断言、更新证据路径与实测数字。
 - `Assets/Tests/PlayMode/SengokuChronicle.PlayModeTests.asmdef` 与两个 `.meta` 沿用上一提交，未再改动。
 - 产品代码、场景、预制体、`ProjectSettings` 均未改动。
 
