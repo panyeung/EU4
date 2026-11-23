@@ -44,7 +44,7 @@ Git 忽略 `Logs/` 与 `Builds/`。这些日志和 exe 目前只在本机工作�
 
 1. M00 技术签核已通过；待用户试玩 v1 演示并给出最终验收结论。
 2. M08 全量验证归档卡 `t_0a1e8ce8` 与其 55/100 年运行时记录已获独立复审 ACCEPT；FoundationScene 自动策略路线实际触发两次回顾，55 年确认后隔离槽 `SaveTo/LoadFrom` 往返通过。路线由 `farm-managed-v1` 自动选择，不等于玩家手动经营或用户验收。百年终态粮荒 53 个月、极端通胀 41 个月、粮食库存 0，经济健康未通过。PR #4 的阶段与百年 PlayMode 用例 `1/1` 通过，逐次检查了成功月结和自然月日期变化，独立复审 ACCEPT。证据见 `docs/reports/v1-m08-55-review-user-acceptance-20261119.md` 与 PR #4。
-3. M09 窗口拖动：2026-11-23 主控两次 Computer Use 合成拖动未观察到位移，日期页点击有效。PR #6 的真实 FoundationScene PlayMode 虚拟 Mouse 回归 3/3、EditMode 全量 2301/2301 通过，代码/报告复审均 ACCEPT；它们不证明 Windows 实体输入。M09 Editor 于 22:59 UTC 状态为 `ready`、`playMode=stopped`、`compiling=false`。实体鼠标拖动、松开后停留及底层控件未误触仍待用户验收。详见 [M09 拖动验证报告](https://github.com/panyeung/EU4/blob/panyeung/m09-debug-drag-fix/docs/reports/m09-debug-drag-fix-20261123.md) 与 [PR #6](https://github.com/panyeung/EU4/pull/6)。
+3. M09 窗口拖动：2026-11-23 主控第三次 Computer Use 拖动仍未观察到面板位移；追踪日志记录了 Computer Use 产生的 Mouse InputEvent 与 EventSystem 派发，按下和终点位置同帧，`pressPosition == position`，未触发 `BeginDrag`，面板未移动且切到事件页签。该证据不证明 Windows 原始输入链，也不能推断实体鼠标失败。PlayMode 虚拟 Mouse 回归 3/3、EditMode 全量 2301/2301 通过，代码/报告既有复审 ACCEPT；它们不替代实体输入验收。M09 Editor 于 23:33 UTC 为 `ready`、`playMode=stopped`、`compiling=false`，FoundationScene `isDirty=false`。追踪日志为 `Logs/verify/m09-input-trace/trace-20261123-132122.log`，SHA-256 `2846BF02668BA0170ED0CF6C2EB23B2D0AA52706724927962AC94083A473EF81`。实体鼠标拖动、松开后停留及底层控件未误触仍待用户验收。详见 [M09 拖动验证报告](https://github.com/panyeung/EU4/blob/panyeung/m09-debug-drag-fix/docs/reports/m09-debug-drag-fix-20261123.md) 与 [PR #6](https://github.com/panyeung/EU4/pull/6)。
 4. M08B 经济方向仍待用户在 PR #5 选择 A/B/C/D，并确认方案参数与 1000 种子粮食崩溃率目标。独立文档复审已 ACCEPT；不表示规则获批或代码已实现。
 5. `main` 中 `Assets/Tests/PlayMode` 仍为空；PR #4 分支新增 M08 阶段/百年端到端用例，PR #6 分支新增 M09 PlayMode 拖动用例，均尚未进入 `main`。运行时结果须按对应证据来源分别记录。
 
@@ -53,7 +53,7 @@ checkpoint 记录的 M08B D3 基线中，`unmanaged` 1000 种子均未到达 50 
 ## Git 与协作状态
 
 - Orca 当前为本项目登记主工作树及 M08 相关工作树；`m08-55-year-review-runtime` 含既有用户设置改动，必须保留。每项任务一个写者，Unity 测试串行执行。
-- PR #3、#4、#5 均开放且未合并。PR #5 以 `docs/orca-project-workflow` 为基底；用户最终验收前不合并 `main`、不打里程碑 tag。
+- PR #3、#4、#5、#6 均开放且未合并。PR #5 以 `docs/orca-project-workflow` 为基底；用户最终验收前不合并 `main`、不打里程碑 tag。
 - 代码实现和测试由指定的实现 agent 负责。只读研究与独立文档复审仍可进行。
 - `origin/panyeung/ui-m04-family` 的部分文件改动已在 `main`。直接合并旧分支历史会让场景和 UI 文件冲突。保留该引用，不重放旧历史。
 - `checkpoint.md` 顶部原先引用旧分支和旧基线。本次文档分支已改为当前代码基线。合入前由独立复审检查这项更正。
