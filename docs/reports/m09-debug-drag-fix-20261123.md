@@ -17,9 +17,10 @@ InputEvent 被 Input System 记录（位置、delta、`leftButton` 都有），E
 `PointerDown` / `PointerUp` / `PointerClick` 与窗口根的 `InitializePotentialDrag`；但合成拖动
 把 `leftButton=1` 与终点位置合并进同一帧，模块记录到的 `pressPosition` 就等于终点，uGUI 的
 10px 拖动阈值永远不满足，因此整段没有 `BeginDrag` / `Drag` / `EndDrag`。可见结果是面板未移动、
-「事件」页签被选中。断点在 Computer Use 合成输入的帧批处理，与产品和实体鼠标无关，也不能算作
-通过；实体鼠标拖动与用户最终验收仍未完成。追踪从 Input System 的 `onEvent` 起记，它能证明合成
-事件已进入 Input System，不能证明 Windows 原始输入链。
+「事件」页签被选中。这次观测只反映 Computer Use 合成输入把按下与位移合并到同一帧：它不能判断
+产品在真实输入下的运行表现，也不能判断实体鼠标是否正常，因此本轮不能算作通过；实体鼠标拖动与
+用户最终验收仍未完成。追踪从 Input System 的 `onEvent` 起记，它能证明合成事件已进入 Input
+System，不能证明 Windows 原始输入链。
 
 ## 复核对象
 
@@ -115,7 +116,9 @@ PlayMode 用例逐项：
 
 ## 2026-11-23 Computer Use 逐层追踪
 
-主控在同一台机器的 M09 Editor（PID `132232`，Pipeline 端口 `7803`）上做了一次 Computer Use：
+主控在同一台机器的 M09 Editor（PID `132232`，Pipeline 端口 `7803`）上做了第三次 Computer Use
+追踪（此前两次合成拖动均未移动面板，日期页点击有效）：
+
 先在 Game 视图点击 `(800,190)` 取焦点，再从 `(800,190)` 拖到 `(980,260)`。窗口坐标换算到游戏
 像素的比例约 2.468、y 轴向下翻转：起点 `(1786.7,1997.9)` 落在标题栏内，终点 `(2231.0,1825.1)`
 落在页签行。
@@ -182,17 +185,17 @@ System。这些行不能证明 Windows 原始输入链，包括 raw input 消息
 
 ### 边界
 
-这是 Computer Use 合成输入的帧批处理限制，不是坐标、射线或焦点缺陷，也不能归因于产品或实体鼠标。
-它不能说明实体鼠标失败，也不能算作通过：实体鼠标拖动、松开后窗口停留、底层控件未误触仍需用户在
-有实体鼠标的环境里验收。主控在 `13:25:17` 的焦点点击与 `13:25:26` 的拖动都发生在
-`focusedWindow=Game`、`appFocus=True`、`devicesEnabled=2/2` 的时段，Editor 侧记录排除了 Game 视图
-焦点门控这一原因。来源的边界与开头的结论相同：日志从 Input System 的 `onEvent` 起记，不能证明
-Windows 原始输入链。
+本次观测只反映 Computer Use 合成输入把按下与位移合并到同一帧。它不能判断产品在真实输入下的运行
+表现，也不能判断实体鼠标是否正常；它既不能说明实体鼠标会失败，也不能算作通过。实体鼠标拖动、
+松开后窗口停留、底层控件未误触仍需用户在有实体鼠标的环境里验收。主控在 `13:25:17` 的焦点点击
+与 `13:25:26` 的拖动都发生在 `focusedWindow=Game`、`appFocus=True`、`devicesEnabled=2/2` 的
+时段，Editor 侧记录排除了 Game 视图焦点门控这一原因。来源的边界与开头的结论相同：日志从 Input
+System 的 `onEvent` 起记，不能证明 Windows 原始输入链。
 
 ## 下一步建议
 
 1. 合入本分支的测试与报告，锁定坐标、命中与按钮冒泡行为；不需要场景或预制体改动。
-2. 用户按 PR #3 的步骤验收实体鼠标拖动；本轮不把它标为通过。
+2. 用户按 PR #6 的四步清单验收实体鼠标拖动；本轮不把它标为通过。
 3. 合成输入这一段已经解释：Computer Use 产生的 `Mouse` 事件进入 Input System，EventSystem 也完成
    了派发，断在“按下与位移同帧”导致拖动阈值不满足。要再用合成输入复现拖动，需要把按下与移动拆到
    不同帧（分步移动并插入等待），而不是再改坐标代码。日志止于 Input System，要核查 Windows 原始
