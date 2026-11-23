@@ -15,23 +15,25 @@ using UnityEngine.UI;
 namespace SengokuChronicle.PlayModeTests
 {
     /// <summary>
-    /// M08 五十五周年阶段回顾的端到端验证。它按生产 UI 的调用链驱动：
-    /// 直接触发 FoundationsScene 标题界面「新游戏」与 SC-013 剧本按钮的 onClick 回调，
-    /// 之后每个自然月都触发界面「结束本月」的回调，事件与继承都触发面板按钮回调，
-    /// 农庄空缺时触发产业面板的候选与确认按钮回调。它不模拟物理鼠标点击，
-    /// 也不验证 EventSystem 导航或焦点命中。任何日期、进度、确认标志、
+    /// M08 家族回顾的端到端验证：五十五周年阶段评价与百年名门评定。它按生产 UI 的
+    /// 调用链驱动：直接触发 FoundationsScene 标题界面「新游戏」与 SC-013 剧本按钮的
+    /// onClick 回调，之后每个自然月都触发界面「结束本月」的回调，事件与继承都触发
+    /// 面板按钮回调，农庄空缺时触发产业面板的候选与确认按钮回调。它不模拟物理鼠标
+    /// 点击，也不验证 EventSystem 导航或焦点命中。任何日期、进度、确认标志、
     /// 存档字段都不直接写入，也不调用 Refresh 伪造状态。随机数固定为 SC-013 新游戏
     /// 使用的 <see cref="GameSession.DefaultRandomSeed"/>，并在存档里回读种子做断言。
     ///
     /// 每触发一次「结束本月」都断言 <see cref="GameSession.LastMonthTurnOutcome"/> 为
     /// <see cref="MonthTurnOutcome.Succeeded"/>，且日期恰好前移一个真实日历月；
     /// 两项断言都通过后才把该月计入成功月结数。从 1560-04-01 到 1615-04-01
-    /// 必须正好是 660 次成功月结，而不是只靠终点日期反推。
+    /// 必须正好是 660 次成功月结，到 1660-04-01 必须正好是 1200 次，
+    /// 而不是只靠终点日期反推。
     ///
-    /// 到 1615-04-01 时检查回顾页是否由会话状态自动打开、日期与阶段是否正确、
-    /// 正文是否真的渲染出文字；随后触发继续按钮回调，随即在隔离槽存档，
+    /// 到 1615-04-01 与 1660-04-01 时分别检查回顾页是否由会话状态自动打开、
+    /// 标题、日期与正文是否正确；随后触发继续按钮回调，在隔离槽存档，
     /// 再触发「结束本月」成功推进一个月，最后读档，验证日期回到刚才的存档日、
-    /// 已确认的阶段回顾仍为 None 且回顾页不再显示。
+    /// 已确认的回顾仍为 None 且回顾页不再显示。存档往返里被读档回滚的那次月结
+    /// 不计入恢复后的时间线累计数。
     /// </summary>
     public sealed class M08CampaignReviewPlayModeTests
     {
@@ -46,12 +48,15 @@ namespace SengokuChronicle.PlayModeTests
         private const string HouseholdTabButtonName = "ReferenceNavHouseholdButton";
         // 继承 HUD 与决策弹窗随「家族」页显示（见 PageMaskForRoot），家计页只挂产业面板。
         private const string FamilyTabButtonName = "ReferenceNavFamilyButton";
-        private const int MonthCap = 700;
+        private const int MonthCap = 1260;
         // 1560-04-01 → 1615-04-01 是 55 个真实年，每年 12 个日历月，合计 660 次月结。
         private const int ExpectedStageReviewMonthTurns = 660;
+        // 1560-04-01 → 1660-04-01 是 100 个真实年，合计 1200 次月结。
+        private const int ExpectedCenturyReviewMonthTurns = 1200;
 
         private static readonly GameDate ExpectedStart = new GameDate(1560, 4, 1);
         private static readonly GameDate StageReviewDate = new GameDate(1615, 4, 1);
+        private static readonly GameDate CenturyReviewDate = new GameDate(1660, 4, 1);
         // SC-013 新游戏固定使用 GameSession.DefaultRandomSeed（0x5343414E4B4F3031）。
         // 存档里的 initialSeedHex 是 16 位大写十六进制，这里断言整条路线都跑在这个固定种子上。
         private const string ExpectedSeedHex = "5343414E4B4F3031";
@@ -62,12 +67,13 @@ namespace SengokuChronicle.PlayModeTests
         private SaveLoadPanel _saveLoad;
         private string _storeDir;
         private int _successfulMonthTurns;
+        private int _rolledBackMonthTurns;
         private int _events;
         private int _successions;
         private int _farmAssignments;
 
         [UnityTest]
-        public IEnumerator StageReview_OpensAtFiftyFiveYears_ConfirmsAndSurvivesSaveLoad()
+        public IEnumerator ReviewMilestones_OpenAtFiftyFiveAndOneHundredYears_ConfirmAndSurviveSaveLoad()
         {
             yield return LoadFoundationScene();
 
@@ -108,21 +114,40 @@ namespace SengokuChronicle.PlayModeTests
                 "SC-013 固定剧本的默认种子已改变，本用例的复现前提不再成立。");
             Debug.Log(LogPrefix + "固定种子=" + ExpectedSeedHex + "（GameSession.DefaultRandomSeed）");
 
-            yield return DriveMonthsToStageReview();
+            yield return DriveMonthsTo(StageReviewDate, ExpectedStageReviewMonthTurns, "五十五周年");
 
             Assert.AreEqual(StageReviewDate, _session.WorldClock.CurrentDate,
                 "正常月结未能停在 1615-04-01。");
-            Assert.IsFalse(_session.IsFamilyExtinct, "到达评价日前家族已灭绝。");
+            Assert.IsFalse(_session.IsFamilyExtinct, "到达五十五周年评价日前家族已灭绝。");
             Assert.AreEqual(55, _session.CampaignCompletedYears, "评价日应已历 55 年。");
             Assert.AreEqual(CampaignReviewMilestone.StageReview, _session.PendingCampaignReview,
                 "1615-04-01 应有一个待确认的五十五周年阶段回顾。");
 
-            yield return AssertStageReviewPanelVisible();
-            yield return AcknowledgeStageReviewThroughUi();
-            yield return AssertConfirmedReviewSurvivesSaveMonthTurnAndLoad();
+            yield return AssertReviewPanelVisible(CampaignReviewMilestone.StageReview,
+                StageReviewDate, 55, true);
+            yield return AcknowledgeReviewThroughUi(CampaignReviewMilestone.StageReview);
+            yield return AssertConfirmedReviewSurvivesSaveMonthTurnAndLoad(
+                CampaignReviewMilestone.StageReview, StageReviewDate);
 
-            Debug.Log(LogPrefix + "完成：成功月结=" + _successfulMonthTurns + " 事件=" + _events +
-                      " 继承=" + _successions + " 农庄任命=" + _farmAssignments +
+            yield return DriveMonthsTo(CenturyReviewDate, ExpectedCenturyReviewMonthTurns, "百年名门");
+
+            Assert.AreEqual(CenturyReviewDate, _session.WorldClock.CurrentDate,
+                "正常月结未能停在 1660-04-01。");
+            Assert.IsFalse(_session.IsFamilyExtinct, "到达百年评定日前家族已灭绝。");
+            Assert.AreEqual(100, _session.CampaignCompletedYears, "评定日应已历 100 年。");
+            Assert.AreEqual(CampaignReviewMilestone.CenturyReview, _session.PendingCampaignReview,
+                "1660-04-01 应有一个待确认的百年名门评定。");
+
+            yield return AssertReviewPanelVisible(CampaignReviewMilestone.CenturyReview,
+                CenturyReviewDate, 100, false);
+            yield return AcknowledgeReviewThroughUi(CampaignReviewMilestone.CenturyReview);
+            yield return AssertConfirmedReviewSurvivesSaveMonthTurnAndLoad(
+                CampaignReviewMilestone.CenturyReview, CenturyReviewDate);
+
+            Debug.Log(LogPrefix + "完成：成功月结=" + _successfulMonthTurns +
+                      "（另有存档往返验证后回滚的月结 " + _rolledBackMonthTurns + " 次）" +
+                      " 事件=" + _events + " 继承=" + _successions +
+                      " 农庄任命=" + _farmAssignments +
                       " 日期=" + _session.WorldClock.CurrentDate +
                       " 待处理回顾=" + _session.PendingCampaignReview);
         }
@@ -187,23 +212,22 @@ namespace SengokuChronicle.PlayModeTests
             yield return null;
         }
 
-        private IEnumerator DriveMonthsToStageReview()
+        private IEnumerator DriveMonthsTo(GameDate target, int expectedMonthTurns, string label)
         {
-            Assert.AreEqual(ExpectedStageReviewMonthTurns,
-                CalendarMonthsBetween(ExpectedStart, StageReviewDate),
-                "SC-013 起点 " + ExpectedStart + " 到 " + StageReviewDate +
-                " 不是 " + ExpectedStageReviewMonthTurns + " 个日历月，用例前提不成立。");
+            Assert.AreEqual(expectedMonthTurns, CalendarMonthsBetween(ExpectedStart, target),
+                label + "：SC-013 起点 " + ExpectedStart + " 到 " + target +
+                " 不是 " + expectedMonthTurns + " 个日历月，用例前提不成立。");
 
-            while (_session.WorldClock.CurrentDate < StageReviewDate)
+            while (_session.WorldClock.CurrentDate < target)
             {
                 Assert.Less(_successfulMonthTurns, MonthCap,
-                    "在 " + MonthCap + " 个月内未到达 " + StageReviewDate + "，停在 " +
+                    label + "：在 " + MonthCap + " 次月结内未到达 " + target + "，停在 " +
                     _session.WorldClock.CurrentDate + "，成功月结=" + _successfulMonthTurns + "。");
                 Assert.IsFalse(_session.IsFamilyExtinct,
-                    "家族在第 " + _successfulMonthTurns + " 次成功月结（" +
+                    label + "：家族在第 " + _successfulMonthTurns + " 次成功月结（" +
                     _session.WorldClock.CurrentDate + "）灭绝。");
                 Assert.IsFalse(_panel.IsVisible,
-                    "五十五周年回顾在 " + _session.WorldClock.CurrentDate + " 就提前打开了。");
+                    label + "：回顾页在 " + _session.WorldClock.CurrentDate + " 就提前打开了。");
 
                 yield return ResolvePendingEvents();
                 yield return ResolvePendingSuccession();
@@ -211,15 +235,15 @@ namespace SengokuChronicle.PlayModeTests
                 yield return TriggerEndMonthAndAssertOneCalendarMonth();
 
                 if (_successfulMonthTurns % 60 == 0)
-                    Debug.Log(LogPrefix + "成功月结=" + _successfulMonthTurns +
+                    Debug.Log(LogPrefix + label + " 成功月结=" + _successfulMonthTurns +
                               " 日期=" + _session.WorldClock.CurrentDate +
                               " 事件=" + _events + " 继承=" + _successions +
                               " 农庄任命=" + _farmAssignments);
             }
 
-            Assert.AreEqual(ExpectedStageReviewMonthTurns, _successfulMonthTurns,
-                "从 " + ExpectedStart + " 到 " + StageReviewDate + " 应正好是 " +
-                ExpectedStageReviewMonthTurns + " 次成功月结，实际为 " + _successfulMonthTurns +
+            Assert.AreEqual(expectedMonthTurns, _successfulMonthTurns,
+                label + "：从 " + ExpectedStart + " 到 " + target + " 应正好是 " +
+                expectedMonthTurns + " 次成功月结，实际为 " + _successfulMonthTurns +
                 "，当前日期 " + _session.WorldClock.CurrentDate + "。");
         }
 
@@ -429,27 +453,33 @@ namespace SengokuChronicle.PlayModeTests
             }
         }
 
-        private IEnumerator AssertStageReviewPanelVisible()
+        private IEnumerator AssertReviewPanelVisible(CampaignReviewMilestone milestone,
+            GameDate reviewDate, int completedYears, bool logBodyBlocks)
         {
+            string dateText = reviewDate.ToString();
             Canvas.ForceUpdateCanvases();
             yield return null;
             Canvas.ForceUpdateCanvases();
 
-            Assert.IsTrue(_panel.IsVisible, "1615-04-01 未自动打开五十五周年回顾页。");
+            Assert.IsTrue(_panel.IsVisible, dateText + " 未自动打开家族回顾页。");
             GameObject page = GameObject.Find(CampaignReviewPanel.PageObjectName);
             Assert.IsNotNull(page, "找不到回顾页 " + CampaignReviewPanel.PageObjectName + "。");
             Assert.IsTrue(page.activeInHierarchy, "回顾页在层级中未激活。");
             AssertReviewRendersAboveHud(page);
 
-            Assert.AreEqual(CampaignReviewView.MilestoneTitle(CampaignReviewMilestone.StageReview),
-                _panel.Title, "回顾页标题不正确。");
-            Assert.AreEqual(CampaignReviewView.MilestoneContinueLabel(CampaignReviewMilestone.StageReview),
+            Assert.AreEqual(CampaignReviewView.MilestoneTitle(milestone), _panel.Title,
+                "回顾页标题不正确。");
+            Assert.AreEqual(CampaignReviewView.MilestoneContinueLabel(milestone),
                 _panel.ContinueLabel, "继续按钮标题不正确。");
 
             string context = _panel.Context;
-            StringAssert.Contains("开局：1560-04-01", context, "回顾上下文缺少开局日期。");
-            StringAssert.Contains("已历 55 年", context, "回顾上下文缺少已历 55 年。");
-            StringAssert.Contains("评价日：1615-04-01", context, "回顾上下文缺少评价日。");
+            StringAssert.Contains("开局：" + ExpectedStart, context, "回顾上下文缺少开局日期。");
+            StringAssert.Contains("已历 " + completedYears + " 年", context,
+                "回顾上下文缺少已历 " + completedYears + " 年。");
+            StringAssert.Contains("评价日：" + dateText, context, "回顾上下文缺少评价日。");
+            if (milestone == CampaignReviewMilestone.CenturyReview)
+                StringAssert.Contains("100 年评定：" + dateText, context,
+                    "百年评定上下文缺少百年评定日期。");
 
             string body = _panel.Body;
             Assert.Greater(body.Length, 1000, "回顾正文过短，可能是空页。");
@@ -461,7 +491,8 @@ namespace SengokuChronicle.PlayModeTests
             Assert.IsNotNull(continueButton, "找不到回顾继续按钮。");
             Assert.IsTrue(continueButton.gameObject.activeInHierarchy, "回顾继续按钮未激活。");
             Assert.IsTrue(continueButton.interactable, "回顾继续按钮不可交互。");
-            Debug.Log(LogPrefix + "回顾页已打开：标题=" + _panel.Title +
+            Debug.Log(LogPrefix + CampaignReviewView.MilestoneTitle(milestone) +
+                      " 回顾页已打开：标题=" + _panel.Title +
                       "｜上下文=" + _panel.Context +
                       "｜正文长度=" + body.Length +
                       "｜区块=" + _panel.BodyBlockCount +
@@ -485,17 +516,22 @@ namespace SengokuChronicle.PlayModeTests
                     : 0;
                 if (vertices > 0)
                     visibleBlocks++;
-                Debug.Log(LogPrefix + "正文区块 " + i + " 字符=" + blocks[i].text.Length +
-                          " 顶点=" + vertices);
+                if (logBodyBlocks)
+                    Debug.Log(LogPrefix + "正文区块 " + i + " 字符=" + blocks[i].text.Length +
+                              " 顶点=" + vertices);
             }
 
             Assert.Greater(visibleBlocks, 0, "回顾正文没有任何区块生成可见文字。");
             Assert.Greater(blocks[0].cachedTextGenerator.vertexCount, 0,
                 "回顾正文第一个区块没有生成可见文字。");
+            Debug.Log(LogPrefix + CampaignReviewView.MilestoneTitle(milestone) +
+                      " 正文可见区块=" + visibleBlocks + "/" + blocks.Count +
+                      "｜首块字符=" + blocks[0].text.Length +
+                      "｜首块顶点=" + blocks[0].cachedTextGenerator.vertexCount);
 
             Text hudDate = FindText("DateText");
             Assert.IsNotNull(hudDate, "找不到主界面日期文本 DateText。");
-            Assert.AreEqual("1615-04-01", hudDate.text, "主界面日期未显示 1615-04-01。");
+            Assert.AreEqual(dateText, hudDate.text, "主界面日期未显示 " + dateText + "。");
         }
 
         private static void AssertReviewRendersAboveHud(GameObject page)
@@ -523,23 +559,35 @@ namespace SengokuChronicle.PlayModeTests
             }
         }
 
-        private IEnumerator AcknowledgeStageReviewThroughUi()
+        private IEnumerator AcknowledgeReviewThroughUi(CampaignReviewMilestone milestone)
         {
             ClickButton(ContinueButtonName);
             yield return null;
             yield return null;
 
             Assert.AreEqual(CampaignReviewMilestone.None, _session.PendingCampaignReview,
-                "点击继续后阶段回顾仍未确认。");
+                "点击继续后回顾仍未确认。");
             Assert.IsFalse(_panel.IsVisible, "点击继续后回顾页仍然可见。");
             GameObject page = GameObject.Find(CampaignReviewPanel.PageObjectName);
             Assert.IsTrue(page == null || !page.activeInHierarchy,
                 "点击继续后回顾页仍留在层级中激活。");
-            Debug.Log(LogPrefix + "确认阶段回顾：" + _session.LastCampaignReviewMessage);
+            if (milestone == CampaignReviewMilestone.StageReview)
+                Assert.IsTrue(_session.CampaignState.StageReviewAcknowledged,
+                    "确认五十五周年评价后 StageReviewAcknowledged 仍为 false。");
+            else
+                Assert.IsTrue(_session.CampaignState.CenturyReviewAcknowledged,
+                    "确认百年评定后 CenturyReviewAcknowledged 仍为 false。");
+            Debug.Log(LogPrefix + "确认回顾（" + CampaignReviewView.MilestoneTitle(milestone) +
+                      "）：" + _session.LastCampaignReviewMessage);
         }
 
-        private IEnumerator AssertConfirmedReviewSurvivesSaveMonthTurnAndLoad()
+        private IEnumerator AssertConfirmedReviewSurvivesSaveMonthTurnAndLoad(
+            CampaignReviewMilestone milestone, GameDate reviewDate)
         {
+            string dateText = reviewDate.ToString();
+            GameDate nextDate = ExpectedNextCalendarMonth(reviewDate);
+            string nextDateText = nextDate.ToString();
+
             Assert.IsTrue(_saveLoad.SaveInteractable, "存档按钮不可交互。");
             ClickButton("M5SaveButton");
             yield return null;
@@ -553,21 +601,31 @@ namespace SengokuChronicle.PlayModeTests
             Assert.IsNotNull(savedSlot.randomState, "存档没有记录随机状态。");
             Assert.AreEqual(ExpectedSeedHex, savedSlot.randomState.initialSeedHex,
                 "存档记录的随机种子不是 SC-013 的固定种子。");
+            Assert.IsNotNull(savedSlot.campaign, "存档没有记录战役回顾状态。");
+            Assert.IsTrue(savedSlot.campaign.stageReviewAcknowledged,
+                "存档未记录已确认的五十五周年评价。");
+            Assert.AreEqual(milestone == CampaignReviewMilestone.CenturyReview,
+                savedSlot.campaign.centuryReviewAcknowledged,
+                "存档里的百年评定确认标志与当前阶段不符。");
             Debug.Log(LogPrefix + "存档种子=" + savedSlot.randomState.initialSeedHex);
 
             GameDate savedDate = _session.WorldClock.CurrentDate;
-            Assert.AreEqual(StageReviewDate, savedDate, "确认阶段回顾后应立即在 1615-04-01 存档。");
+            Assert.AreEqual(reviewDate, savedDate,
+                "确认回顾后应立即在 " + dateText + " 存档。");
+            int savedMonthTurns = _successfulMonthTurns;
 
             yield return AdvanceOneMonthThroughUi();
 
-            Assert.AreEqual(new GameDate(1615, 5, 1), _session.WorldClock.CurrentDate,
-                "存档后触发「结束本月」没有成功推进一个月到 1615-05-01。");
+            Assert.AreEqual(nextDate, _session.WorldClock.CurrentDate,
+                "存档后触发「结束本月」没有成功推进一个月到 " + nextDateText + "。");
+            Assert.AreEqual(savedMonthTurns + 1, _successfulMonthTurns,
+                "存档后月结没有计入一次成功月结。");
             Text advancedHudDate = FindText("DateText");
             Assert.IsNotNull(advancedHudDate, "找不到主界面日期文本 DateText。");
-            Assert.AreEqual("1615-05-01", advancedHudDate.text,
-                "存档后月结没有把主界面日期刷新到 1615-05-01。");
+            Assert.AreEqual(nextDateText, advancedHudDate.text,
+                "存档后月结没有把主界面日期刷新到 " + nextDateText + "。");
             Assert.AreEqual(CampaignReviewMilestone.None, _session.PendingCampaignReview,
-                "确认之后的月份里阶段回顾又变成待处理。");
+                "确认之后的月份里回顾又变成待处理。");
             Assert.IsFalse(_panel.IsVisible, "确认之后回顾页再次出现。");
             Debug.Log(LogPrefix + "存档后月结推进：" + savedDate + " → " +
                       _session.WorldClock.CurrentDate);
@@ -579,19 +637,34 @@ namespace SengokuChronicle.PlayModeTests
 
             Assert.IsTrue(_saveLoad.LastOperationSucceeded, "读档失败：" + _saveLoad.Status);
             Assert.AreEqual(savedDate, _session.WorldClock.CurrentDate,
-                "读档后日期没有恢复到存档时的 1615-04-01。");
+                "读档后日期没有恢复到存档时的 " + dateText + "。");
             Text loadedHudDate = FindText("DateText");
             Assert.IsNotNull(loadedHudDate, "读档后找不到主界面日期文本 DateText。");
-            Assert.AreEqual("1615-04-01", loadedHudDate.text,
-                "读档后主界面日期没有恢复到 1615-04-01。");
+            Assert.AreEqual(dateText, loadedHudDate.text,
+                "读档后主界面日期没有恢复到 " + dateText + "。");
             Assert.AreEqual(CampaignReviewMilestone.None, _session.PendingCampaignReview,
-                "读档后已确认的阶段回顾又变成待处理。");
+                "读档后已确认的回顾又变成待处理。");
             Assert.IsFalse(_panel.IsVisible, "读档后回顾页再次弹出。");
             GameObject page = GameObject.Find(CampaignReviewPanel.PageObjectName);
             Assert.IsTrue(page == null || !page.activeInHierarchy,
                 "读档后回顾页仍留在层级中激活。");
+            Assert.IsTrue(_session.CampaignState.StageReviewAcknowledged,
+                "读档后五十五周年评价的确认状态丢失。");
+            Assert.AreEqual(milestone == CampaignReviewMilestone.CenturyReview,
+                _session.CampaignState.CenturyReviewAcknowledged,
+                "读档后百年评定的确认状态与当前阶段不符。");
+
+            // 读档把会话时间线恢复到存档时刻，存档往返里多推的那一个月不在恢复后的
+            // 时间线上，因此把成功月结累计数同步回存档时的值。660 与 1200 两个阈值
+            // 仍按 1560-04-01 起的真实时间线计算，而不是被这次被回滚的月结抬高。
+            Assert.AreEqual(savedMonthTurns + 1, _successfulMonthTurns,
+                "读档前成功月结数应比存档时多一次。");
+            _successfulMonthTurns = savedMonthTurns;
+            _rolledBackMonthTurns++;
             Debug.Log(LogPrefix + "隔离存档→月结→读档通过：" + slotPath +
-                      "｜读回日期=" + _session.WorldClock.CurrentDate);
+                      "｜读回日期=" + _session.WorldClock.CurrentDate +
+                      "｜时间线成功月结=" + _successfulMonthTurns +
+                      "（已回滚存档验证月结 " + _rolledBackMonthTurns + " 次）");
         }
 
         private IEnumerator AdvanceOneMonthThroughUi()
