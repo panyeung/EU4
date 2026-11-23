@@ -98,7 +98,7 @@ PlayMode 用例逐项：
 编译历史（`Logs/Editor.log`）：
 
 - 初次接入 PlayMode 程序集时出现 6 条 `CS0246: UnityTestAttribute/UnityTest`，原因是把测试程序集引用写进了 `precompiledReferences`，而不是 `references`；改正后消失。同一文件此前还有 2 条 `CS0618 FindFirstObjectByType` 弃用警告，已改用 `FindAnyObjectByType`。
-- 最终编译（2026-11-23 22:47:29Z 采样）`compilationFailed=false`、`consoleErrors=0`、`consoleWarnings=0`；`Logs/Editor.log` 第 2739 行之后没有任何 `error CS` / `warning CS`。
+- 最终编译采样记录 `compilationFailed=false`、`consoleErrors=0`、`consoleWarnings=0`；`Logs/Editor.log` 第 2738 行记录 Tundra build success，但紧随的第 2739–2740 行仍保留两条 `CS0618 FindFirstObjectByType` 弃用警告。因此不能表述为该日志尾部没有 `warning CS`。
 
 按运行分段（`console_status.groundTruth` 与 XML 内输出对照）：
 
