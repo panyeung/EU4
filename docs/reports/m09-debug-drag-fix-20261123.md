@@ -7,17 +7,18 @@ Unity：`6000.6.6f1`
 
 ## 结论
 
-拖动链路在坐标与标题栏命中两处都没有缺陷，本轮**不改产品代码**。Persistent PlayMode 测试
-加载真实的 `FoundationScene`，用场景自己的 `CanvasScaler`、`GraphicRaycaster`、
-`EventSystem` 与 `InputSystemUIInputModule`，配合 Input System 虚拟 `Mouse` 的按下、移动、
-释放状态序列，证明指针事件一旦进入真实 UI 模块，窗口就按屏幕像素 1:1 移动，从折叠按钮按下
-后拖动同样成立，松手也不会误触折叠。
+拖动链路在坐标与标题栏命中两处都没有缺陷，本轮**不改产品代码**。PlayMode 回归测试加载真实
+`FoundationScene`，用场景自己的 `CanvasScaler`、`GraphicRaycaster`、`EventSystem` 与
+`InputSystemUIInputModule`，配合虚拟 `Mouse` 的按下、移动、释放序列，证明指针事件一旦进入
+真实 UI 模块，窗口就按屏幕像素 1:1 移动；从折叠按钮按下后拖动同样成立，松手也不会误触折叠。
 
-仍未闭合的是“实体鼠标/OS 到 Input System 这一段”。本轮没有采集 Computer Use 合成拖动在
-OS 与 Input System 交界处的事件流，因此“合成输入没有派发 EventSystem 事件”仍然只是唯一
-候选假设，没有被证实。主控 2026-11-23 的两次 Computer Use 拖动没有移动面板，同一次预验收里
-日期页点击有效；实体鼠标与用户最终验收都还没有完成。虚拟设备不等于实体鼠标，本轮结果不能
-推断实体鼠标失效，也没有找到 OS 根因。
+2026-11-23 的 Computer Use 追踪补上了“OS 到 Input System”这一段：真实的 `Mouse` InputEvent
+确实到达（位置、delta、`leftButton` 全有记录），EventSystem 也真实派发了
+`PointerDown` / `PointerUp` / `PointerClick` 与窗口根的 `InitializePotentialDrag`；但合成拖动
+把 `leftButton=1` 与终点位置合并进同一帧，模块记录到的 `pressPosition` 就等于终点，uGUI 的
+10px 拖动阈值永远不满足，因此整段没有 `BeginDrag` / `Drag` / `EndDrag`。可见结果是面板未移动、
+「事件」页签被选中。这是 Computer Use 合成输入的帧批处理限制，不能外推为实体鼠标失败，也不能
+算作通过；实体鼠标拖动与用户最终验收仍未完成。
 
 ## 复核对象
 
@@ -29,7 +30,7 @@ OS 与 Input System 交界处的事件流，因此“合成输入没有派发 Ev
 
 | 假设 | 结论 | 依据 |
 |---|---|---|
-| 合成输入没有派发 EventSystem 事件 | 未证实，仍是唯一候选 | 虚拟鼠标状态事件进入真实 `InputSystemUIInputModule` 后窗口按屏幕像素 1:1 移动；本轮仍未采集 Computer Use 合成输入在 OS/Input System 交界的事件流 |
+| 合成输入没有派发 EventSystem 事件 | 不成立 | 本轮追踪里 EventSystem 真实派发了 `PointerDown` / `PointerUp` / `PointerClick`（焦点点击）与 `InitializePotentialDrag`（拖动按下）；断点在之后的拖动阈值：按下与终点同帧，`pressPosition == position` |
 | 屏幕像素与 RectTransform 坐标空间不一致 | 不成立 | PlayMode 在真实画布缩放下断言屏幕位移与指针位移逐像素相等，锚点位移等于屏幕位移除以 `scaleFactor`；EditMode 手工夹具在缩放 1.5 下得到同一结果 |
 | 标题栏射线被其他 UI 截获 | 不成立 | PlayMode 渲染后 `EventSystem.RaycastAll` 在标题栏抓取点的首位命中是 `DebugHeader`；折叠按钮位置的首位命中落在按钮层级内 |
 
@@ -111,25 +112,84 @@ PlayMode 用例逐项：
 
 `test_status` 读取全机共享的 `Temp/pipeline_test_status.json`，会返回最后一次完成的结果（当时是 2301/2301 EditMode）。PlayMode 结果以下列三项为准：复制副本的 `start-time=2026-11-23 22:47:43Z`（晚于修复后的编译）、`<property name="platform" value="PlayMode" />`、三个 `SengokuChronicle.Tests.PlayMode.M09DebugPanelInputChainTests` 用例。旧 22:43 副本（含 1 条失败）已重命名为 `Logs/verify/20261123-m09-drag-playmode-superseded-2243`，不再作为证据。
 
-## 2026-11-23 主控 Computer Use 结果
+## 2026-11-23 Computer Use 逐层追踪
 
-同一台机器、同一个 M09 Editor 上，主控用 Computer Use 做过两次合成拖动：两次都没有让面板
-移动；同一次预验收里日期页点击有效。结论边界：
+主控在同一台机器的 M09 Editor（PID `132232`，Pipeline 端口 `7803`）上做了一次 Computer Use：
+先在 Game 视图点击 `(800,190)` 取焦点，再从 `(800,190)` 拖到 `(980,260)`。窗口坐标换算到游戏
+像素的比例约 2.468、y 轴向下翻转：起点 `(1786.7,1997.9)` 落在标题栏内，终点 `(2231.0,1825.1)`
+落在页签行。
 
-- 点击有效、拖动无效，说明合成指针至少能到达部分 UI，但没有证据说明拖动事件流在哪一层
-  丢失。本轮 PlayMode 测试只证明“事件进入真实 UI 模块后的行为正确”，不覆盖 OS 采集段。
-- 虚拟鼠标设备不是实体鼠标，也不经过 Windows 的原始输入路径；不能据此说实体鼠标拖动可用或
-  失效。
-- 实体鼠标拖动、松开后窗口停留、底层控件未误触仍需用户在有实体鼠标的环境里验收。
-- 本轮没有找到 OS 根因；Computer Use 的合成拖动仍标为未闭合。
+### 采集方式与可信范围
+
+临时诊断器（`Assets/Scripts/Editor/M09InputTrace/`，诊断后已删除）挂在
+`EditorApplication.update` 与运行期 `EventTrigger` 观察项上，记录 `InputSystem.onEvent` 事件流、
+EventSystem 首命中、标题栏与窗口根收到的指针/拖动回调、窗口屏幕位置与焦点。
+
+可信范围必须说清：`Pointer.current.position` 在 editor 侧回调里始终读回 `(0,0)`，由它派生的
+`POINTER-MOVE` 与 `RAYCAST` 行在这段时间**不可用**。结论只采用两类行：`INPUT-EVENT`
+（`InputSystem.onEvent` 的原始事件）与 `EVT`（EventTrigger 收到的真实 `PointerEventData`）。
+
+### 原始记录
+
+焦点点击（帧 146796）：
+
+- `13:25:17.908`：`/Mouse/position/x=1786.697 y=1997.897 delta=(-300,-10)`
+- `13:25:17.962`：同一帧内 `/Mouse/leftButton=1` 与 `/Mouse/leftButton=0`
+- 同一帧：`EVT HEADER PointerDown → InitializePotentialDrag → PointerUp → PointerClick`，
+  `clickCount=1`，`pos=(1786.70,1997.90)`，`pressObject=DebugHeader`
+
+拖动（帧 150818–150824）：
+
+- `13:25:26.665`：`/Mouse/delta/x=270 y=-105` 与 `/Mouse/leftButton=1` 在同一条事件里；
+  同一帧 `/Mouse/position/x=2231.04 y=1825.097 delta=(0,0)`
+- `13:25:26.667`：`EVT WINDOW-ROOT InitializePotentialDrag pos=(2231.04,1825.10)
+  press=(2231.04,1825.10) pressObject=DebugTab4 dragObject=M09DebugModeRoot`
+- `13:25:26.669`：`SELECTION DebugTab4`
+- `13:25:26.689`：`/Mouse/leftButton=0`
+- 整段没有 `BeginDrag` / `Drag` / `EndDrag`，也没有窗口位置变化行
+
+### 逐层判定
+
+| 层 | 观测 | 判定 |
+|---|---|---|
+| Windows → Input System | 位置、delta、`leftButton` 变化事件都到齐（焦点点击与拖动两段都有） | 有 |
+| Input System → `InputSystemUIInputModule` → EventSystem 射线与派发 | 焦点点击命中 `DebugHeader` 并派发 PointerDown/PointerUp/PointerClick；拖动按下命中 `DebugTab4`，`InitializePotentialDrag` 派发到 `M09DebugModeRoot` | 有 |
+| uGUI 拖动阈值 → `BeginDrag` | `pressPosition` 与 `position` 完全相等，按住期间位置不再变化，10px 阈值不满足 | **首个缺失** |
+| 标题栏 `BeginDrag` / `Drag` / `EndDrag` | 无 | 未到达 |
+| 窗口位移 | 无 | 未发生 |
+
+### 机制
+
+`PointerInputModule` 用 `pressPosition` 与当前指针位置比较判断拖动阈值。合成拖动把按下与位移
+压进同一帧，模块处理该帧时指针已在终点，`pressPosition` 直接等于终点；之后按住期间指针不再
+移动，阈值永远不满足。松手按“点击”处理，落点是 `DebugTab4`，所以内容页切到「事件」而窗口不动，
+与主控观察一致。上一轮虚拟鼠标用例能拖动，是因为状态序列分帧推进，`BeginDrag` 时 `press` 与
+`pos` 相差一个台阶（`press=(1020,2001)`、`pos=(1100,1971)`）。
+
+### 证据文件
+
+| 文件 | 行数 | SHA-256 |
+|---|---|---|
+| `Logs/verify/m09-input-trace/trace-20261123-132122.log`（本轮 Computer Use 全程） | 313 | `2846bf02668ba0170ed0cf6c2eb23b2d0aa52706724927962ac94083a473ef81` |
+| `Logs/verify/m09-input-trace/trace-20261123-131926.log`（仪器自检） | 27 | `6493bf176751a38154e02740946a2549e60767f8d8a786eeb311469f1dbfb326` |
+| `Logs/verify/m09-input-trace/trace-20261123-131530.log`（首次安装失败） | 2 | `85a817915cb24f28732f9d9327dd3be338d9913fffa4e497d04aab5b65788011` |
+
+日志位于被 `.gitignore` 排除的 `Logs/verify/`，只在本机保留，未提交；本轮没有留下任何截图。
+
+### 边界
+
+这是 Computer Use 合成输入的帧批处理限制，不是坐标、射线或焦点缺陷。它不能说明实体鼠标失败，
+也不能算作通过：实体鼠标拖动、松开后窗口停留、底层控件未误触仍需用户在有实体鼠标的环境里验收。
+主控在 `13:25:17` 的焦点点击与 `13:25:26` 的拖动都发生在 `focusedWindow=Game`、
+`appFocus=True`、`devicesEnabled=2/2` 的时段，焦点不是原因。
 
 ## 下一步建议
 
 1. 合入本分支的测试与报告，锁定坐标、命中与按钮冒泡行为；不需要场景或预制体改动。
 2. 用户按 PR #3 的步骤验收实体鼠标拖动；本轮不把它标为通过。
-3. 若要闭合“合成输入为何不派发事件”，下一步应采集 `InputSystemUIInputModule` 的 pointer
-   事件流与 OS 侧原始输入（例如 Input System 事件日志、`InputSystem.onEvent` 记录、Windows
-   原始输入计数器），而不是再改坐标代码。
+3. 合成输入这一段已经解释：事件到达 Input System 与 EventSystem，断在“按下与位移同帧”导致
+   拖动阈值不满足。要再用合成输入复现拖动，需要把按下与移动拆到不同帧（分步移动并插入等待），
+   而不是再改坐标代码。
 4. 现在不要为“坐标空间”加防御性转换。只有将来把该画布改成 Screen Space - Camera 时，
    `rect.position` 直写才会失效，届时应改用
    `RectTransformUtility.ScreenPointToWorldPointInRectangle`。
@@ -137,5 +197,9 @@ PlayMode 用例逐项：
 ## 未改动范围
 
 未改 `DebugModePanel.cs` 或任何产品代码；未改场景、预制体、`ProjectSettings`、`AGENTS.md`
-或 `.vscode/settings.json`。Unity 运行产生的临时差异（性能测试资源删除、IET 设置、编辑器
-设置）保留在工作树但未提交。
+或 `.vscode/settings.json`。Computer Use 追踪用的临时诊断器
+`Assets/Scripts/Editor/M09InputTrace/` 及其 `.meta` 已在停止 Play Mode、确认场景
+`isDirty=false` 之后整目录删除，没有留在提交里。Unity 打开工程产生的差异
+（`.vscode/settings.json` 修改、`Assets/Resources/PerformanceTestRun*.json` 及其 `.meta`
+删除、`ProjectSettings/Packages/com.unity.learn.iet-framework/Settings.json` 修改）保留在
+工作树但未提交。
