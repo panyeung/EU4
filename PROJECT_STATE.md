@@ -1,6 +1,6 @@
 # 项目状态
 
-更新时间：2026-11-20（UTC）
+更新时间：2026-11-23（UTC）
 状态：IN PROGRESS
 
 本文件记录当前工作状态。设计目标、里程碑和测试口径以 [checkpoint.md](checkpoint.md) 为准。界面与美术规则以 [ui设计规划.md](ui设计规划.md) 为准。
@@ -33,7 +33,7 @@
 | Play Mode 核心循环与隔离存读档 | 已记录通过，源 `c291dd3` | 详见 `Logs/verify/20261118-integration/20261118-1348-core-loop.md`。此证据不代表 Player 存读档或用户验收 |
 | Windows Player 构建与冒烟 | 构建成功，报告记 0 错误。冒烟日志无 Exception、LogError、NullReference | 详见 `Logs/verify/v1-demo-build/20261118-r2-demo-build.md`。来源为 `2bca9d1` |
 | Windows Player M00 试玩预验收 | 2026-11-19 本机 EXE 从标题页走到清洲护送委托详情；日期、资金、物资与事件反馈符合试玩步骤 | 详见 `docs/reports/v1-m00-unity-playtest-20261119.md`。Computer Use 输入属主控预验收；日志含 URP 后处理 Shader 警告，不等于用户最终验收 |
-| M08 五十五周年 PlayMode | PR #4 报告端到端用例 `1/1` 通过；最新需求复核 RETURN，因测试未逐次断言月结成功且日期恰好推进一月 | PR 分支证据，未在本轮重跑；待修正测试与报告并重跑后再签核，不等于用户验收 |
+| M08 五十五周年与百年 PlayMode | 合并在同一端到端用例，1/1 通过；逐次断言月结成功和自然月日期变化，覆盖 660/1200 次成功月结、两次回顾与隔离存读档；独立复审 ACCEPT | PR #4 当前提交 `74f7579`；自动按钮回调测试不等于实体输入或用户最终验收 |
 | 用户验收 | 未完成 | 只有用户试玩后才能闭合 |
 
 Git 忽略 `Logs/` 与 `Builds/`。这些日志和 exe 目前只在本机工作区。GitHub 分支克隆不包含它们。交付演示时，确认用户能访问此工作区，或另行提供构建包。
@@ -43,10 +43,10 @@ Git 忽略 `Logs/` 与 `Builds/`。这些日志和 exe 目前只在本机工作�
 ## 未完成工作
 
 1. M00 技术签核已通过；待用户试玩 v1 演示并给出最终验收结论。
-2. M08 全量验证归档卡 `t_0a1e8ce8` 与其 55/100 年运行时记录已获独立复审 ACCEPT；FoundationScene 自动策略路线实际触发两次回顾，55 年确认后隔离槽 `SaveTo/LoadFrom` 往返通过。路线由 `farm-managed-v1` 自动选择，不等于玩家手动经营或用户验收。百年终态粮荒 53 个月、极端通胀 41 个月、粮食库存 0，经济健康未通过。PR #4 另报告五十五周年 PlayMode 用例 `1/1` 通过。证据见 `docs/reports/v1-m08-55-review-user-acceptance-20261119.md` 与 PR #4。
-3. M09 窗口拖动：2026-11-20 主控在主工程 Editor 的 Play Mode 点击「Debug 综合测试」后，确认面板显示且日期为 `1560-04-01`；停止 Play Mode 后 FoundationScene `isDirty=false`，Console 无新增错误或警告。尚未验证标题栏拖动；Computer Use 注入不等于实体鼠标，M09 仍未闭合。
+2. M08 全量验证归档卡 `t_0a1e8ce8` 与其 55/100 年运行时记录已获独立复审 ACCEPT；FoundationScene 自动策略路线实际触发两次回顾，55 年确认后隔离槽 `SaveTo/LoadFrom` 往返通过。路线由 `farm-managed-v1` 自动选择，不等于玩家手动经营或用户验收。百年终态粮荒 53 个月、极端通胀 41 个月、粮食库存 0，经济健康未通过。PR #4 的阶段与百年 PlayMode 用例 `1/1` 通过，逐次检查了成功月结和自然月日期变化，独立复审 ACCEPT。证据见 `docs/reports/v1-m08-55-review-user-acceptance-20261119.md` 与 PR #4。
+3. M09 窗口拖动：2026-11-20 已确认入口能打开面板，日期为 `1560-04-01`。2026-11-23 在 M08 百年工作树再次打开面板后，两次 Computer Use 合成拖动都未观察到位移；点击关闭有效。停止 Play Mode 后 `FoundationScene isDirty=false`，Console 错误和警告均为 0。该结果不代表实体鼠标行为；M09 仍未闭合。详见 [M09 Debug 面板拖动预验收记录](docs/reports/m09-debug-panel-drag-pretest-20261123.md)。
 4. M08B 经济方向仍待用户在 PR #5 选择 A/B/C/D，并确认方案参数与 1000 种子粮食崩溃率目标。独立文档复审已 ACCEPT；不表示规则获批或代码已实现。
-5. `main` 中 `Assets/Tests/PlayMode` 仍为空；PR #4 分支新增的单项测试尚未合并。运行时结果须按对应证据来源分别记录。
+5. `main` 中 `Assets/Tests/PlayMode` 仍为空；PR #4 分支新增的阶段与百年端到端用例尚未合并。运行时结果须按对应证据来源分别记录。
 
 checkpoint 记录的 M08B D3 基线中，`unmanaged` 1000 种子均未到达 50 年或 100 年。这个结果是已接受的风险基线，不是长期生存通过。SC-021 与 SC-023 已集成进 `main`，但集成事实本身不代表所有相关运行时体验均已验收。
 
