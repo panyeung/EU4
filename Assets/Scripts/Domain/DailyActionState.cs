@@ -465,7 +465,8 @@ namespace SengokuChronicle.Domain
             if (kind == DailyActionKind.Travel)
             {
                 if (!origin.IsValid || !destination.IsValid || origin == destination ||
-                    !WorldMapRules.TryGetTravelDays(origin, destination, out int routeDays) ||
+                    !WorldMapRules.TryGetInFlightTravelDays(origin, destination,
+                        out int routeDays) ||
                     routeDays != durationDays)
                 {
                     error = "每日旅行行动的起点、目的地或耗时不符合世界地图规则。";

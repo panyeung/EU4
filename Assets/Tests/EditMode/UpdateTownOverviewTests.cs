@@ -86,6 +86,96 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
+        public void Update_StretchesEveryButtonLabelInsideItsButton()
+        {
+            Assert.That(UpdateTownOverview.Update(scene),
+                Is.EqualTo(UpdateTownOverview.UpdateResult.Success));
+
+            Transform overview = town.Find("TownOverviewRoot");
+            Transform template = overview.Find("TownActivityButtons/ActivityButtonTemplate");
+            Button[] buttons =
+            {
+                overview.Find("MissionButton").GetComponent<Button>(),
+                overview.Find("RosterButton").GetComponent<Button>(),
+                template.GetComponent<Button>(),
+                returnButton,
+                commissionEntry,
+                tacticalEntry
+            };
+            foreach (Button button in buttons)
+            {
+                Text label = button.GetComponentInChildren<Text>(true);
+                var rect = label != null ? label.transform as RectTransform : null;
+                Assert.That(rect, Is.Not.Null, $"'{button.name}' needs a label.");
+                if (rect == null) continue;
+                Assert.That(rect.anchorMin, Is.EqualTo(Vector2.zero),
+                    $"'{button.name}' label must start at the button's lower-left anchor.");
+                Assert.That(rect.anchorMax, Is.EqualTo(Vector2.one),
+                    $"'{button.name}' label must stretch to the button's upper-right anchor.");
+                Assert.That(rect.offsetMin, Is.EqualTo(new Vector2(6f, 2f)),
+                    $"'{button.name}' label must keep 6px horizontal and 2px vertical insets.");
+                Assert.That(rect.offsetMax, Is.EqualTo(new Vector2(-6f, -2f)),
+                    $"'{button.name}' label must not keep uGUI's default 100x100 rect.");
+                Assert.That(label.preferredWidth, Is.LessThanOrEqualTo(rect.rect.width + 0.01f),
+                    $"'{label.text}' must fit the button on one line.");
+            }
+        }
+
+        [Test]
+        public void ActivityCards_KeepSevenCharacterLabelsOnOneLineWithReadablePaperInk()
+        {
+            Assert.That(UpdateTownOverview.Update(scene),
+                Is.EqualTo(UpdateTownOverview.UpdateResult.Success));
+            controller.OpenTownMenu();
+            var missionPanel = Create("SupplyShortageMissionPanel", null,
+                typeof(SupplyShortageMissionPanel)).GetComponent<SupplyShortageMissionPanel>();
+            controller.BindSupplyShortageMissionPanel(missionPanel);
+
+            Transform overview = town.Find("TownOverviewRoot");
+            Transform activityRoot = overview.Find("TownActivityButtons");
+            Button template = activityRoot.Find("ActivityButtonTemplate").GetComponent<Button>();
+            TownOverviewPanel panel = overview.GetComponent<TownOverviewPanel>();
+            panel.Refresh();
+            Button[] cards = Cards(activityRoot, template);
+            Assert.That(cards.Length, Is.EqualTo(4),
+                "Kiyosu's four available local commissions must each keep a readable card.");
+
+            Text supplyLabel = null;
+            foreach (Button card in cards)
+            {
+                Text label = card.GetComponentInChildren<Text>(true);
+                var rect = label != null ? label.transform as RectTransform : null;
+                Assert.That(rect, Is.Not.Null, $"'{card.name}' needs a label.");
+                if (rect == null) continue;
+                Assert.That(rect.anchorMin, Is.EqualTo(Vector2.zero));
+                Assert.That(rect.anchorMax, Is.EqualTo(Vector2.one));
+                Assert.That(rect.offsetMin, Is.EqualTo(new Vector2(6f, 2f)));
+                Assert.That(rect.offsetMax, Is.EqualTo(new Vector2(-6f, -2f)));
+                Assert.That(label.preferredWidth, Is.LessThanOrEqualTo(rect.rect.width + 0.01f),
+                    $"'{label.text}' must fit the activity card on one line.");
+
+                Image background = card.targetGraphic as Image;
+                Assert.That(background, Is.Not.Null, $"'{card.name}' needs an Image background.");
+                if (background == null) continue;
+                Assert.That(ContrastRatio(background.color, label.color),
+                    Is.GreaterThanOrEqualTo(4.5f),
+                    $"'{label.text}' must keep normal-text contrast on its card.");
+                if (label.text == "补给短缺：领取") supplyLabel = label;
+            }
+
+            Assert.That(supplyLabel, Is.Not.Null, "The supply-shortage card label must be present.");
+            if (supplyLabel != null)
+            {
+                Assert.That(supplyLabel.text.Length, Is.EqualTo(7));
+                Assert.That(supplyLabel.preferredWidth,
+                    Is.LessThanOrEqualTo(((RectTransform)supplyLabel.transform).rect.width + 0.01f));
+            }
+            Assert.That(ContrastRatio(SengokuUiTheme.ParchmentDeep, SengokuUiTheme.Ink),
+                Is.GreaterThanOrEqualTo(4.5f),
+                "The runtime paper/ink palette must stay readable.");
+        }
+
+        [Test]
         public void Update_BuildsRefreshableActivityButtonsAndRoutesTheSelectedEntry()
         {
             Assert.That(UpdateTownOverview.Update(scene),
@@ -420,7 +510,25 @@ namespace SengokuChronicle.Tests.EditMode
             var band = (RectTransform)town;
             Transform overview = town.Find("TownOverviewRoot");
             var art = (RectTransform)overview.Find("TownArt");
+            var veil = (RectTransform)overview.Find("TownArtVeil");
             var activity = (RectTransform)overview.Find("LocalActions");
+            Assert.That(art, Is.Not.Null);
+            Assert.That(veil, Is.Not.Null);
+            if (art == null || veil == null) return;
+            Assert.That(art.anchorMin, Is.EqualTo(Vector2.zero));
+            Assert.That(art.anchorMax, Is.EqualTo(Vector2.one));
+            Assert.That(art.offsetMin, Is.EqualTo(Vector2.zero));
+            Assert.That(art.offsetMax, Is.EqualTo(Vector2.zero));
+            Assert.That(veil.anchorMin, Is.EqualTo(Vector2.zero));
+            Assert.That(veil.anchorMax, Is.EqualTo(Vector2.one));
+            Assert.That(veil.offsetMin, Is.EqualTo(Vector2.zero));
+            Assert.That(veil.offsetMax, Is.EqualTo(Vector2.zero));
+            Assert.That(art.GetSiblingIndex(), Is.EqualTo(0),
+                "The illustration must be the page backing layer.");
+            Assert.That(veil.GetSiblingIndex(), Is.EqualTo(1),
+                "The washi wash must sit between the illustration and every label.");
+            Assert.That(art.GetComponent<Image>().preserveAspect, Is.False,
+                "The illustration must stretch instead of leaving a framed border.");
             Assert.That(((RectTransform)overview).localScale, Is.EqualTo(Vector3.one),
                 "The generated town page must inherit the town band's UI scale.");
             Transform activityRoot = overview.Find("TownActivityButtons");
@@ -439,10 +547,11 @@ namespace SengokuChronicle.Tests.EditMode
             var commission = (RectTransform)commissionEntry.transform;
             var tactical = (RectTransform)tacticalEntry.transform;
 
-            foreach (RectTransform item in new[] { art, activity, mission, commission, tactical })
+            foreach (RectTransform item in new[] { art, veil, activity, mission, commission, tactical })
                 Assert.That(Contained(item, band), Is.True,
                     $"{item.name} must stay inside the town band at {width}x{height}.");
-            Assert.That(Overlaps(art, activity), Is.False);
+            Assert.That(Overlaps(art, activity), Is.True,
+                "The illustration must back the whole page, including the local-action column.");
             Assert.That(Overlaps(activity, mission), Is.False);
             Assert.That(Overlaps(mission, commission), Is.False);
             Assert.That(Overlaps(commission, tactical), Is.False);
@@ -470,6 +579,19 @@ namespace SengokuChronicle.Tests.EditMode
         private static Button[] Cards(Transform activityRoot, Button template) =>
             activityRoot.GetComponentsInChildren<Button>(true)
                 .Where(button => button != template && button.gameObject.activeSelf).ToArray();
+
+        private static float ContrastRatio(Color first, Color second)
+        {
+            float high = Mathf.Max(RelativeLuminance(first), RelativeLuminance(second));
+            float low = Mathf.Min(RelativeLuminance(first), RelativeLuminance(second));
+            return (high + 0.05f) / (low + 0.05f);
+        }
+
+        private static float RelativeLuminance(Color color) =>
+            0.2126f * Linear(color.r) + 0.7152f * Linear(color.g) + 0.0722f * Linear(color.b);
+
+        private static float Linear(float channel) =>
+            channel <= 0.03928f ? channel / 12.92f : Mathf.Pow((channel + 0.055f) / 1.055f, 2.4f);
 
         private static bool Contained(RectTransform child, RectTransform parent)        {
             var corners = new Vector3[4];

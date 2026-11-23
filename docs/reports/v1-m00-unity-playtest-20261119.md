@@ -33,10 +33,18 @@ Builds/Demo-v1-2bca9d1-r2/Demo-v1-2bca9d1-r2.exe
 
 同日另从 `Builds/Demo-v1-2bca9d1-r2/Demo-v1-2bca9d1-r2.exe` 启动 Windows 演示，以 CUA 输入走通开始新游戏、SC-013、地图、结束月份、处理家议、清洲城镇、本地委托及护送详情。目视确认初始日期 1560-04-01、资金 30、物资 12；月结后日期 1560-05-01、资金 28、物资 12；家议选择后的反馈为信任 +5。护送详情页已打开，未接取委托、未存档。CUA 输入不等同于实体鼠标测试。
 
+2026-11-19 再次在现有 Unity 6000.6.6f1 Editor 的 FoundationScene Play Mode 走通上述路线。开始前 `unity pipeline list` 与 `editor_status` 确认目标为主工程 `C:\Users\panye\My project`、PID 49784、端口 7801、状态 Ready 且未运行 Play Mode；未启动新 Editor。通过 CUA 点击标题页「开始新游戏」→「固定三代剧本（SC-013）」→「地图与出行」→「结束月份」→在家议选择「守住对伊织的承诺」→地图点击「清洲」→「护送委托」。画面显示开局日期 1560-04-01；月结后为 1560-05-01、资金 28、物资 12，反馈为伊织对家族信任增加五点；清洲城镇页与护送委托详情可见，状态为待接取。未接取、未存档。随后用 `editor_stop` 退出；`editor_status` 为 Ready、Play Mode stopped、compiling=false；Console 游标仍为 17，本轮新增错误 0、警告 0（累计旧计数 error=2、warn=0）。没有运行自动化测试。截图只用于当场目视核对，未作为项目文件留存。此项仍是 Editor/CUA 合成输入预验收，不是 Windows EXE 的用户最终验收或实体鼠标证据。
+
+2026-11-19 另行尝试复验 Windows Player：启动前核对 EXE 为 667136 字节，SHA-256 与上方构建记录一致；进程成功启动，CUA 能列出窗口，但 `getApp` 返回「Accessibility state unavailable」。未对该窗口发送任何输入，随即关闭本轮启动的进程。此尝试没有产生游戏路线的通过或失败证据；不替代此前已记录的 Player 试玩，也不改变用户最终验收仍待完成的状态。
+
+2026-11-19 随后用 Computer Use 的窗口截图完成 Windows Player 路线。启动同一 EXE（667136 字节，SHA-256 `7C5B8F3ECAF9EF88A16646EACC9F817F327E3DDE3244CCC627BD2E273188247D`），标题页、新游戏、SC-013 固定三代剧本、地图、清洲城镇页和护送委托详情均可打开。开局显示 1560-04-01、资金 30、物资 12；结束月份后显示 1560-05-01、资金 28、物资 12。处理「继承前的家议」时选择「守住对伊织的承诺」，反馈显示伊织对家族信任增加五点。护送委托详情页显示待接取；没有接取委托、存档或推进后续月份。Player 窗口留在委托详情页，游戏进度只在本次进程内。
+
+本次读取 `%USERPROFILE%\AppData\LocalLow\DefaultCompany\My project\Player.log`，未找到 `Exception`、`LogError`、`NullReference` 或 `Error` 记录。日志包含 Direct3D 12 信息队列接口查询失败提示，以及 URP GaussianDepthOfField、BokehDepthOfField、CameraMotionBlur、Bloom 等后处理 Shader 不支持或已裁剪的警告；日志说明对应后处理通道不会执行。未保存 Computer Use 截图。此结果是主控 Windows Player 预验收，仍不等于用户最终验收。
+
 以上均为主控预验收，不替代用户按 Windows EXE 步骤进行的最终试玩验收。
 
 ## 未闭合门槛
 
 - 用户需要按上述步骤亲自运行 Windows EXE 并给出最终验收结论。
-- M08 真实 55/100 年回顾运行时证据仍未闭合。
-- 本轮没有操作存读档、接取/结算委托、验证物理输入或执行自动化测试。
+- M08 的 55/100 年回顾已由 `farm-managed-v1` 自动策略在 FoundationScene 正常月结路线实际触发；55 年确认后隔离槽存读档往返也有运行时记录。此证据不代表玩家手动经营或经济可持续通过。
+- 本轮没有操作存读档、接取/结算委托、验证实体鼠标输入或执行自动化测试。

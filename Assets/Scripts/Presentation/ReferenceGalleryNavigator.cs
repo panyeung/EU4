@@ -923,19 +923,53 @@ namespace SengokuChronicle.Presentation
             }
         }
 
+        /// <summary>顶栏资源条的字段顺序，与场景生成器一致。</summary>
+        public static readonly string[] HeaderChipNames = { "功名", "人口", "资金", "物资", "情报" };
+
+        /// <summary>家族名册滚动区在设计稿里的高度，栏高不足时按剩余空间收缩。</summary>
+        public const float MaxRosterHeight = 320f;
+
+        public const float HeaderChipSpacing = 116f;
+        public const float HeaderChipWidth = 108f;
+        public const float HeaderChipRowGap = 12f;
+        public const float HeaderChipCompactOriginX = 166f;
+        public const float HeaderChipWideOriginX = 662f;
+
+        /// <summary>资源条总宽度：五个 chip 加四个间距。</summary>
+        public static float HeaderChipRowWidth =>
+            HeaderChipNames.Length * HeaderChipWidth
+            + (HeaderChipNames.Length - 1) * (HeaderChipSpacing - HeaderChipWidth);
+
+        /// <summary>低于此宽度时资源条换到日期行下方，避免与日期、所在挤在同一行。</summary>
+        public static float HeaderCompactWidth =>
+            HeaderChipWideOriginX + JapanMapSceneBootstrap.LauncherReservedWidth
+            + HeaderChipRowGap + HeaderChipRowWidth;
+
+        /// <summary>
+        /// 资源条左端起点：宽屏保留设计稿的 662，窗口变窄时整体左移，
+        /// 始终在右侧给全国地图入口留出空位，两者不会重叠。
+        /// </summary>
+        public static float ResolveHeaderChipOriginX(float pageWidth, float preferredOrigin)
+        {
+            float limit = pageWidth - JapanMapSceneBootstrap.LauncherReservedWidth
+                - HeaderChipRowGap - HeaderChipRowWidth;
+            return Mathf.Max(8f, Mathf.Min(preferredOrigin, limit));
+        }
+
         private void LayoutSharedHeader(Vector2 page)
         {
-            bool compact = page.x < 1240f;
+            bool compact = page.x < HeaderCompactWidth;
             float height = compact ? 82f : 52f;
             if (headerRoot != null && headerRoot.transform is RectTransform header)
             {
                 header.sizeDelta = new Vector2(page.x, height);
-                string[] resources = { "功名", "人口", "资金", "物资", "情报" };
-                for (int i = 0; i < resources.Length; i++)
-                    if (header.Find("M02Chip_" + resources[i]) is RectTransform chip)
+                float originX = ResolveHeaderChipOriginX(page.x, compact
+                    ? HeaderChipCompactOriginX : HeaderChipWideOriginX);
+                for (int i = 0; i < HeaderChipNames.Length; i++)
+                    if (header.Find("M02Chip_" + HeaderChipNames[i]) is RectTransform chip)
                         chip.anchoredPosition = compact
-                            ? new Vector2(166f + i * 116f, -44f)
-                            : new Vector2(662f + i * 116f, -8f);
+                            ? new Vector2(originX + i * HeaderChipSpacing, -44f)
+                            : new Vector2(originX + i * HeaderChipSpacing, -8f);
                 Transform subtitle = header.Find("M02BrandSubText");
                 if (subtitle != null) subtitle.gameObject.SetActive(!compact);
                 if (header.Find("M02HeaderGoldLine") is RectTransform line)
@@ -967,6 +1001,17 @@ namespace SengokuChronicle.Presentation
                 roster.SetParent(rail, false);
                 rect.anchoredPosition = new Vector2(8f, -330f);
             }
+
+            // The rail shortens when the header grows taller on narrow windows, so the
+            // roster must stop at the rail bottom edge instead of spilling past it.
+            float railHeight = rail is RectTransform railRect ? railRect.rect.height : 0f;
+            if (railHeight > 0f)
+            {
+                float top = -rect.anchoredPosition.y;
+                float height = Mathf.Clamp(railHeight - top, 0f, MaxRosterHeight);
+                rect.sizeDelta = new Vector2(rect.sizeDelta.x, height);
+            }
+
             SetPanel(roster.gameObject, _currentPage == ReferenceGalleryPage.Character);
         }
 

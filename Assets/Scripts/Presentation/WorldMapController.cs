@@ -157,6 +157,7 @@ namespace SengokuChronicle.Presentation
         {
             if (gameSession == null)
                 gameSession = GetComponentInParent<GameSession>() ?? FindAnyObjectByType<GameSession>();
+            JapanMapSceneBootstrap.EnsureFor(gameSession, GetComponentInParent<Canvas>());
             if (worldClockPanel == null)
                 worldClockPanel = FindAnyObjectByType<WorldClockPanel>();
             BindButtonListeners(true);
@@ -478,7 +479,8 @@ namespace SengokuChronicle.Presentation
         {
             if (!_inTownMenu ||
                 gameSession == null ||
-                townNpcDialoguePanel == null)
+                townNpcDialoguePanel == null ||
+                !LocationCapabilities.CanUseNpc(gameSession.CurrentLocation))
                 return;
 
             townNpcDialoguePanel.BindWorldMapController(this);
@@ -506,6 +508,13 @@ namespace SengokuChronicle.Presentation
             if (gameSession == null || location != gameSession.CurrentLocation)
             {
                 SelectDestination(location);
+                return;
+            }
+
+            if (!LocationCapabilities.CanUseTownServices(location))
+            {
+                SetFeedback(LocationCapabilities.NonTownHubMessage);
+                RefreshAll();
                 return;
             }
 
@@ -587,6 +596,18 @@ namespace SengokuChronicle.Presentation
         /// </summary>
         public void OpenTownMenu()
         {
+            if (gameSession != null &&
+                !LocationCapabilities.CanUseTownServices(gameSession.CurrentLocation))
+            {
+                _inTownMenu = false;
+                if (townMenuRoot != null)
+                    townMenuRoot.SetActive(false);
+                SetMapContentVisible(true);
+                SetFeedback(LocationCapabilities.NonTownHubMessage);
+                RefreshAll();
+                return;
+            }
+
             _inTownMenu = true;
             if (supplyShortageMissionPanel != null)
             {

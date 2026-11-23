@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.Events;
 using SengokuChronicle.Application;
@@ -29,6 +29,15 @@ namespace SengokuChronicle.Presentation
         [SerializeField] private Text marketTallyFeedbackText;
         [SerializeField] private Button marketTallyActionButton;
         [SerializeField] private Button missionBoardToggleButton;
+
+        // The mission page shares the town page's paper language. These values are applied
+        // at runtime so an older scene that stored the former near-black panel cannot leave
+        // dark ink on a dark card. Both pairs stay well above WCAG AA (4.5:1).
+        public static readonly Color PanelBackground = new Color32(0xEF, 0xE4, 0xCC, 0xFF);
+        public static readonly Color BodyInk = new Color32(0x33, 0x2E, 0x26, 0xFF);
+        public static readonly Color ButtonBackground = new Color32(0x2F, 0x37, 0x42, 0xFF);
+        public static readonly Color ButtonLabel = new Color32(0xF7, 0xEF, 0xDD, 0xFF);
+        public const int BodyFontSize = 18;
 
         public bool IsOpen { get; private set; }
         public bool IsM4bPage { get; private set; }
@@ -104,6 +113,7 @@ namespace SengokuChronicle.Presentation
 
         public void Refresh()
         {
+            ApplyPalette();
             bool hasSession = gameSession != null;
             SupplyShortageStage stage = hasSession
                 ? gameSession.SupplyShortageStage : SupplyShortageStage.NotAccepted;
@@ -297,6 +307,44 @@ namespace SengokuChronicle.Presentation
                 return;
             button.gameObject.SetActive(visible && pageVisible);
             button.interactable = visible && pageVisible && atLocation && IsOpen && isActiveAndEnabled;
+        }
+
+        /// <summary>
+        /// Writes the final paper/ink colours onto the scene objects instead of trusting
+        /// serialized values. A Button's label is paired with its own button background; all
+        /// other text uses ink on the opaque paper card.
+        /// </summary>
+        private void ApplyPalette()
+        {
+            GameObject root = panelRoot != null ? panelRoot : gameObject;
+            Image background = root.GetComponent<Image>();
+            if (background != null)
+                background.color = PanelBackground;
+
+            foreach (Button button in root.GetComponentsInChildren<Button>(true))
+            {
+                Image image = button.targetGraphic as Image;
+                if (image == null) image = button.GetComponent<Image>();
+                if (image != null)
+                {
+                    image.color = ButtonBackground;
+                    if (button.targetGraphic == null) button.targetGraphic = image;
+                }
+                // A tinted normal state would multiply the explicit background; keep the
+                // stored colour as the final one while leaving the standard hover/press tints.
+                ColorBlock colors = button.colors;
+                if (colors.normalColor != Color.white)
+                {
+                    colors.normalColor = Color.white;
+                    button.colors = colors;
+                }
+            }
+            foreach (Text text in root.GetComponentsInChildren<Text>(true))
+            {
+                Button owner = text.GetComponentInParent<Button>();
+                text.color = owner != null ? ButtonLabel : BodyInk;
+                text.fontSize = BodyFontSize;
+            }
         }
 
         private void OnEnable()

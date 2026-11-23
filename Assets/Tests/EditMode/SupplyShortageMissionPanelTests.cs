@@ -1,4 +1,5 @@
-﻿using NUnit.Framework;
+using System;
+using NUnit.Framework;
 using UnityEngine;
 using System.Reflection;
 using UnityEngine.UI;
@@ -30,6 +31,7 @@ namespace SengokuChronicle.Tests.EditMode
             _fixture = new GameObject("MissionPanelTests");
             _panel = _fixture.AddComponent<SupplyShortageMissionPanel>();
             _root = Child("MissionRoot");
+            _root.AddComponent<Image>();
             _stage = Text("Stage"); _objective = Text("Objective");
             _merit = Text("Merit"); _feedback = Text("Feedback");
             _accept = Button("Accept"); _investigate = Button("Investigate");
@@ -292,6 +294,71 @@ namespace SengokuChronicle.Tests.EditMode
             AssertAction(_letterAction, false, false);
         }
 
+        [Test]
+        public void Panel_RefreshKeepsInkReadableOnOpaquePaperAndButtonFaces()
+        {
+            Image background = _root.GetComponent<Image>();
+            Assert.That(background, Is.Not.Null);
+            // Simulate the old scene: a near-black card with dark serialized text and buttons.
+            var legacyDark = new Color(0.10f, 0.13f, 0.17f, 1f);
+            background.color = legacyDark;
+            foreach (Text text in _root.GetComponentsInChildren<Text>(true))
+            {
+                text.color = legacyDark;
+                text.fontSize = 10;
+            }
+            foreach (Button button in _root.GetComponentsInChildren<Button>(true))
+            {
+                Image image = ButtonImage(button);
+                if (image != null) image.color = legacyDark;
+            }
+
+            _panel.Refresh();
+
+            Assert.That(background.color.a, Is.EqualTo(1f).Within(0.001f),
+                "The paper card must be opaque so it stays readable over the town illustration.");
+            foreach (Text text in _root.GetComponentsInChildren<Text>(true))
+            {
+                Color backdrop = BackdropFor(text, background.color);
+                Assert.That(ContrastRatio(text.color, backdrop), Is.GreaterThanOrEqualTo(4.5),
+                    $"'{text.name}' must keep at least 4.5:1 contrast after Refresh.");
+                Assert.That(text.fontSize, Is.GreaterThanOrEqualTo(
+                        SupplyShortageMissionPanel.BodyFontSize),
+                    $"'{text.name}' must keep the readable body size after Refresh.");
+            }
+        }
+
+        private static Color BackdropFor(Text text, Color page)
+        {
+            Button owner = text.GetComponentInParent<Button>();
+            Image image = owner != null ? ButtonImage(owner) : null;
+            return image != null ? image.color : page;
+        }
+
+        private static Image ButtonImage(Button button)
+        {
+            Image image = button.targetGraphic as Image;
+            return image != null ? image : button.GetComponent<Image>();
+        }
+
+        private static double ContrastRatio(Color first, Color second)
+        {
+            double a = RelativeLuminance(first);
+            double b = RelativeLuminance(second);
+            return (Math.Max(a, b) + 0.05) / (Math.Min(a, b) + 0.05);
+        }
+
+        private static double RelativeLuminance(Color color)
+        {
+            return 0.2126 * Linear(color.r) + 0.7152 * Linear(color.g) + 0.0722 * Linear(color.b);
+        }
+
+        private static double Linear(float channel)
+        {
+            double value = channel;
+            return value <= 0.04045 ? value / 12.92 : Math.Pow((value + 0.055) / 1.055, 2.4);
+        }
+
         private void InvokeLifecycle(string methodName)
         {
             MethodInfo method = typeof(SupplyShortageMissionPanel).GetMethod(
@@ -329,7 +396,13 @@ namespace SengokuChronicle.Tests.EditMode
         {
             var go = Child(name);
             go.transform.SetParent(_root.transform, false);
-            return go.AddComponent<Button>();
+            var image = go.AddComponent<Image>();
+            var button = go.AddComponent<Button>();
+            button.targetGraphic = image;
+            var label = new GameObject("Label", typeof(RectTransform), typeof(Text));
+            label.transform.SetParent(go.transform, false);
+            label.GetComponent<Text>().text = name;
+            return button;
         }
     }
 }

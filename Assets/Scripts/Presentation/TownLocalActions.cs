@@ -52,6 +52,8 @@ namespace SengokuChronicle.Presentation
                 return new Entry[0];
 
             LocationId location = session.CurrentLocation;
+            if (!LocationCapabilities.CanUseLocalActions(location))
+                return new Entry[0];
             var entries = new List<Entry>(KindCount);
             AddSupplyShortage(session, location, entries);
             AddSealedLetter(session, location, entries);

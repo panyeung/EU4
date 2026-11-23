@@ -1899,7 +1899,8 @@ namespace SengokuChronicle.Persistence
                     if (!LocationId.TryParse(entry.travelOriginId, out LocationId origin) ||
                         !LocationId.TryParse(entry.travelDestinationId, out LocationId destination) ||
                         origin == destination ||
-                        !WorldMapRules.TryGetTravelDays(origin, destination, out int routeDays) ||
+                        !WorldMapRules.TryGetInFlightTravelDays(origin, destination,
+                            out int routeDays) ||
                         routeDays != entry.actionDurationDays)
                         return Invalid("存档旅行行动不符合世界地图直达路线规则。");
                 }

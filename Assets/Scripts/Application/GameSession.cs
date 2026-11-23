@@ -884,6 +884,8 @@ namespace SengokuChronicle.Application
 
         public DialogueStartResult TryStartDialogue(CharacterId characterId)
         {
+            if (!LocationCapabilities.CanUseNpc(CurrentLocation))
+                return new DialogueStartResult(Guid.Empty, string.Empty, false, LocationCapabilities.NonTownHubMessage);
             if (!BranchingDialogueCatalog.TryGet(characterId, out DialogueDefinition definition) || !definition.TryGetNode(definition.StartNodeId, out _))
                 return new DialogueStartResult(Guid.Empty, string.Empty, false, "No dialogue is configured for this character.");
             Guid id = Guid.NewGuid();
@@ -895,6 +897,8 @@ namespace SengokuChronicle.Application
         {
             if (!_dialogues.TryGetValue(dialogueInstanceId, out DialogueState state))
                 return new DialogueSelectionResult(string.Empty, false, false, "Dialogue instance is invalid.", false, default);
+            if (!LocationCapabilities.CanUseNpc(CurrentLocation))
+                return new DialogueSelectionResult(state.CurrentNodeId, state.Ended, false, LocationCapabilities.NonTownHubMessage, false, default);
             if (state.Ended || !string.Equals(state.CurrentNodeId, nodeId, StringComparison.Ordinal) || !state.Definition.TryGetNode(nodeId, out DialogueNode node))
                 return new DialogueSelectionResult(state.CurrentNodeId, state.Ended, false, "Dialogue node is invalid or no longer current.", false, default);
             DialogueOption selected = null;
@@ -2995,6 +2999,8 @@ namespace SengokuChronicle.Application
         public SealedLetterActionResult TryAcceptSealedLetterMission()
         {
             SealedLetterStage before = _sealedLetterMission.Stage;
+            if (!LocationCapabilities.CanAcceptMission(CurrentLocation))
+                return new SealedLetterActionResult(false, before, 0, LocationCapabilities.NonTownHubMessage);
             SealedLetterActionResult result = _sealedLetterMission.TryAccept(CurrentLocation);
             RecordMission(FamilyChronicleEntry.SealedLetterMissionId, "accept", "密信", (int)before, (int)result.Stage,
                 result.Succeeded, result.Feedback);
@@ -3004,6 +3010,8 @@ namespace SengokuChronicle.Application
         public SealedLetterActionResult TryDeliverSealedLetter()
         {
             SealedLetterStage before = _sealedLetterMission.Stage;
+            if (!LocationCapabilities.CanAcceptMission(CurrentLocation))
+                return new SealedLetterActionResult(false, before, 0, LocationCapabilities.NonTownHubMessage);
             SealedLetterActionResult result = _sealedLetterMission.TryDeliver(CurrentLocation);
             RecordMission(FamilyChronicleEntry.SealedLetterMissionId, "deliver", "密信", (int)before, (int)result.Stage,
                 result.Succeeded, result.Feedback);
@@ -3013,6 +3021,8 @@ namespace SengokuChronicle.Application
         public MarketTallyActionResult TryAcceptMarketTallyMission()
         {
             MarketTallyStage before = _marketTallyMission.Stage;
+            if (!LocationCapabilities.CanAcceptMission(CurrentLocation))
+                return new MarketTallyActionResult(false, before, 0, LocationCapabilities.NonTownHubMessage);
             MarketTallyActionResult result = _marketTallyMission.TryAccept(CurrentLocation);
             RecordMission(FamilyChronicleEntry.MarketTallyMissionId, "accept", "市集账目", (int)before, (int)result.Stage,
                 result.Succeeded, result.Feedback);
@@ -3022,6 +3032,8 @@ namespace SengokuChronicle.Application
         public MarketTallyActionResult TryInvestigateMarketTally()
         {
             MarketTallyStage before = _marketTallyMission.Stage;
+            if (!LocationCapabilities.CanAcceptMission(CurrentLocation))
+                return new MarketTallyActionResult(false, before, 0, LocationCapabilities.NonTownHubMessage);
             MarketTallyActionResult result = _marketTallyMission.TryInvestigate(CurrentLocation);
             RecordMission(FamilyChronicleEntry.MarketTallyMissionId, "investigate", "市集账目", (int)before,
                 (int)result.Stage, result.Succeeded, result.Feedback);
@@ -3031,6 +3043,8 @@ namespace SengokuChronicle.Application
         public MarketTallyActionResult TryReportMarketTally()
         {
             MarketTallyStage before = _marketTallyMission.Stage;
+            if (!LocationCapabilities.CanAcceptMission(CurrentLocation))
+                return new MarketTallyActionResult(false, before, 0, LocationCapabilities.NonTownHubMessage);
             MarketTallyActionResult result = _marketTallyMission.TryReport(CurrentLocation);
             RecordMission(FamilyChronicleEntry.MarketTallyMissionId, "report", "市集账目", (int)before, (int)result.Stage,
                 result.Succeeded, result.Feedback);
@@ -3040,6 +3054,8 @@ namespace SengokuChronicle.Application
         public SupplyShortageActionResult TryAcceptSupplyShortageMission()
         {
             SupplyShortageStage before = _supplyShortageMission.Stage;
+            if (!LocationCapabilities.CanAcceptMission(CurrentLocation))
+                return new SupplyShortageActionResult(false, before, 0, LocationCapabilities.NonTownHubMessage);
             SupplyShortageActionResult result = _supplyShortageMission.TryAccept(CurrentLocation);
             RecordMission(FamilyChronicleEntry.SupplyShortageMissionId, "accept", "补给短缺", (int)before,
                 (int)result.Stage, result.Succeeded, result.Feedback);
@@ -3049,6 +3065,8 @@ namespace SengokuChronicle.Application
         public SupplyShortageActionResult TryInvestigateSupplyShortage()
         {
             SupplyShortageStage before = _supplyShortageMission.Stage;
+            if (!LocationCapabilities.CanAcceptMission(CurrentLocation))
+                return new SupplyShortageActionResult(false, before, 0, LocationCapabilities.NonTownHubMessage);
             SupplyShortageActionResult result = _supplyShortageMission.TryInvestigate(CurrentLocation);
             RecordMission(FamilyChronicleEntry.SupplyShortageMissionId, "investigate", "补给短缺", (int)before,
                 (int)result.Stage, result.Succeeded, result.Feedback);
@@ -3058,6 +3076,8 @@ namespace SengokuChronicle.Application
         public SupplyShortageActionResult TryNegotiateSupplyShortage(CharacterId merchantId)
         {
             SupplyShortageStage before = _supplyShortageMission.Stage;
+            if (!LocationCapabilities.CanAcceptMission(CurrentLocation))
+                return new SupplyShortageActionResult(false, before, 0, LocationCapabilities.NonTownHubMessage);
             SupplyShortageActionResult result =
                 _supplyShortageMission.TryNegotiate(CurrentLocation, merchantId);
             RecordMission(FamilyChronicleEntry.SupplyShortageMissionId, "negotiate", "补给短缺", (int)before,
@@ -3068,6 +3088,8 @@ namespace SengokuChronicle.Application
         public SupplyShortageActionResult TryReportSupplyShortage()
         {
             SupplyShortageStage before = _supplyShortageMission.Stage;
+            if (!LocationCapabilities.CanAcceptMission(CurrentLocation))
+                return new SupplyShortageActionResult(false, before, 0, LocationCapabilities.NonTownHubMessage);
             SupplyShortageActionResult result = _supplyShortageMission.TryReport(CurrentLocation);
             RecordMission(FamilyChronicleEntry.SupplyShortageMissionId, "report", "补给短缺", (int)before,
                 (int)result.Stage, result.Succeeded, result.Feedback);
@@ -3080,6 +3102,13 @@ namespace SengokuChronicle.Application
         /// </summary>
         public ShadowEscortActionResult TryAcceptCommission()
         {
+            if (!LocationCapabilities.CanAcceptMission(CurrentLocation))
+            {
+                LastCommissionMessage = LocationCapabilities.NonTownHubMessage;
+                return new ShadowEscortActionResult(false, _commission.Stage,
+                    CommissionOutcome.None, LastCommissionMessage);
+            }
+
             EnsureIndustryState();
             EnsureFamilyDoctrine();
             IndustryResources before = _industryState.Resources;
@@ -3112,6 +3141,13 @@ namespace SengokuChronicle.Application
         /// </summary>
         public ShadowEscortActionResult TryAssignCommission(PersonId assigneeId)
         {
+            if (!LocationCapabilities.CanAcceptMission(CurrentLocation))
+            {
+                LastCommissionMessage = LocationCapabilities.NonTownHubMessage;
+                return new ShadowEscortActionResult(false, _commission.Stage,
+                    _commission.Outcome, LastCommissionMessage);
+            }
+
             EnsureSuccession();
             DailyActionState actions = EnsureDailyActions();
             EnsureIndustryState();
