@@ -16,6 +16,15 @@ namespace SengokuChronicle.Presentation
     public sealed class JapanMapSceneBootstrap : MonoBehaviour
     {
         public const string LauncherName = "JapanMapLauncherButton";
+
+        /// <summary>入口按钮固定尺寸；右上角右对齐，避免按画布百分比缩放后压住顶栏资源条。</summary>
+        public const float LauncherWidth = 150f;
+        public const float LauncherHeight = 40f;
+        public const float LauncherRightMargin = 16f;
+        public const float LauncherTopMargin = 6f;
+
+        /// <summary>入口按钮右侧占用的水平总宽度，顶栏资源条据此让位。</summary>
+        public const float LauncherReservedWidth = LauncherWidth + LauncherRightMargin;
         public const string RootName = "JapanMapRoot";
         public const string TitleOverlayName = "M6TitleRoot";
         public const string EventChoiceOverlayName = "EventChoiceRoot";
@@ -70,10 +79,13 @@ namespace SengokuChronicle.Presentation
                     typeof(Button));
                 var launcherRect = (RectTransform)launcher.transform;
                 launcherRect.SetParent(canvas.transform, false);
-                launcherRect.anchorMin = new Vector2(0.86f, 0.925f);
-                launcherRect.anchorMax = new Vector2(0.985f, 0.985f);
-                launcherRect.offsetMin = Vector2.zero;
-                launcherRect.offsetMax = Vector2.zero;
+                // 固定尺寸右对齐：按画布百分比摆放时，窄窗口下按钮会横跨顶栏资源条，
+                // 盖住物资与情报两个 chip。顶栏布局按同一组常量让出这块区域。
+                launcherRect.anchorMin = new Vector2(1f, 1f);
+                launcherRect.anchorMax = new Vector2(1f, 1f);
+                launcherRect.pivot = new Vector2(1f, 1f);
+                launcherRect.sizeDelta = new Vector2(LauncherWidth, LauncherHeight);
+                launcherRect.anchoredPosition = new Vector2(-LauncherRightMargin, -LauncherTopMargin);
                 launcher.layer = canvas.gameObject.layer;
 
                 var launcherImage = launcher.GetComponent<Image>();

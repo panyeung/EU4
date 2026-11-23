@@ -908,6 +908,45 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
+        public void Bootstrap_LauncherKeepsFixedTopRightGeometryAndClearsTheHeaderRow()
+        {
+            GameSession session = NewSession();
+            GameObject canvasObject = null;
+            try
+            {
+                Canvas canvas = CreateCanvas(out canvasObject);
+                Assert.That(JapanMapSceneBootstrap.EnsureFor(session, canvas), Is.Not.Null);
+
+                var launcher = (RectTransform)canvas.transform.Find(
+                    JapanMapSceneBootstrap.LauncherName);
+                Assert.That(launcher.anchorMin, Is.EqualTo(Vector2.one));
+                Assert.That(launcher.anchorMax, Is.EqualTo(Vector2.one));
+                Assert.That(launcher.pivot, Is.EqualTo(Vector2.one));
+                Assert.That(launcher.sizeDelta, Is.EqualTo(new Vector2(
+                    JapanMapSceneBootstrap.LauncherWidth, JapanMapSceneBootstrap.LauncherHeight)));
+                Assert.That(launcher.anchoredPosition, Is.EqualTo(new Vector2(
+                    -JapanMapSceneBootstrap.LauncherRightMargin,
+                    -JapanMapSceneBootstrap.LauncherTopMargin)));
+
+                foreach (float width in new[] { 1108f, 1249f, 1280f, 1920f })
+                {
+                    bool compact = width < ReferenceGalleryNavigator.HeaderCompactWidth;
+                    float origin = ReferenceGalleryNavigator.ResolveHeaderChipOriginX(width, compact
+                        ? ReferenceGalleryNavigator.HeaderChipCompactOriginX
+                        : ReferenceGalleryNavigator.HeaderChipWideOriginX);
+                    float rowRight = origin + ReferenceGalleryNavigator.HeaderChipRowWidth;
+                    float launcherLeft = width - JapanMapSceneBootstrap.LauncherReservedWidth;
+                    Assert.That(rowRight, Is.LessThanOrEqualTo(launcherLeft + 0.01f),
+                        "the entry button must not cover the resource row at width " + width);
+                }
+            }
+            finally
+            {
+                DestroyCanvas(canvasObject, session);
+            }
+        }
+
+        [Test]
         public void MapOpenAndClose_KeepProtectedOverlaysAboveAndStopBlockingInput()
         {
             GameSession session = NewSession();
