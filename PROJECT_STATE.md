@@ -10,7 +10,7 @@
 - 仓库：`https://github.com/panyeung/EU4.git`。
 - `main` 与 `origin/main` 同步。游戏代码基线为 `2bca9d1`。之后的主线提交只更新文档。本文件最初在 `feature/project-state-docs` 独立工作树编写；该文档分支已合入 `main`，不代表当前分支状态。
 - Unity 版本：`6000.6.6f1`，URP 2D，Windows。
-- 当前主工作树：`C:\Users\panye\My project`，分支 `docs/orca-project-workflow`，跟踪 `origin/docs/orca-project-workflow`；`main` 与 `origin/main` 同步在 `65a021d`，游戏代码基线仍为 `2bca9d1`。当前变更范围仅为文档。
+- 当前主工作树：`C:\Users\panye\My project`，分支 `docs/orca-project-workflow`，跟踪 `origin/docs/orca-project-workflow`；`main` 与 `origin/main` 同步在 `65a021d`，游戏代码基线仍为 `2bca9d1`。本工作树当前唯一未提交改动为用户修改的 `AGENTS.md`；该集成分支相对 `main` 的已提交差异包含日本全境地图、场景接线、存档迁移、地图/城镇 UI、测试与验收文档，详见 PR #3。
 - 本次状态核对（2026-11-23 21:54 UTC）：主工作树未运行 Unity Editor。PID `54508` / Pipeline `7800` 对应 `m08-55-success-evidence`，PID `68216` / Pipeline `7801` 对应 `m08-100-year-review`；两实例 `editor_status` 均为 `ready`、`playMode=stopped`、`compiling=false`。本次未核查这两个实例的 Console 与 FoundationScene `isDirty`。2026-11-19 主工作树 PID `49784` 的 Play Mode 结果属于历史记录，详见 checkpoint §4。任何 Unity 操作前重查进程、`-projectPath` 与 `unity pipeline list`；已有实例时复用，不得启动第二实例，也不得据此启动 batchmode。
 
 ## 当前阶段
@@ -44,9 +44,9 @@ Git 忽略 `Logs/` 与 `Builds/`。这些日志和 exe 目前只在本机工作�
 
 1. M00 技术签核已通过；待用户试玩 v1 演示并给出最终验收结论。
 2. M08 全量验证归档卡 `t_0a1e8ce8` 与其 55/100 年运行时记录已获独立复审 ACCEPT；FoundationScene 自动策略路线实际触发两次回顾，55 年确认后隔离槽 `SaveTo/LoadFrom` 往返通过。路线由 `farm-managed-v1` 自动选择，不等于玩家手动经营或用户验收。百年终态粮荒 53 个月、极端通胀 41 个月、粮食库存 0，经济健康未通过。PR #4 的阶段与百年 PlayMode 用例 `1/1` 通过，逐次检查了成功月结和自然月日期变化，独立复审 ACCEPT。证据见 `docs/reports/v1-m08-55-review-user-acceptance-20261119.md` 与 PR #4。
-3. M09 窗口拖动：2026-11-20 已确认入口能打开面板，日期为 `1560-04-01`。2026-11-23 在 M08 百年工作树再次打开面板后，两次 Computer Use 合成拖动都未观察到位移；点击关闭有效。停止 Play Mode 后 `FoundationScene isDirty=false`，Console 错误和警告均为 0。该结果不代表实体鼠标行为；M09 仍未闭合。详见 [M09 Debug 面板拖动预验收记录](docs/reports/m09-debug-panel-drag-pretest-20261123.md)。
+3. M09 窗口拖动：2026-11-23 主控两次 Computer Use 合成拖动未观察到位移，日期页点击有效。PR #6 的真实 FoundationScene PlayMode 虚拟 Mouse 回归 3/3、EditMode 全量 2301/2301 通过，代码/报告复审均 ACCEPT；它们不证明 Windows 实体输入。M09 Editor 于 22:59 UTC 状态为 `ready`、`playMode=stopped`、`compiling=false`。实体鼠标拖动、松开后停留及底层控件未误触仍待用户验收。详见 [M09 拖动验证报告](https://github.com/panyeung/EU4/blob/panyeung/m09-debug-drag-fix/docs/reports/m09-debug-drag-fix-20261123.md) 与 [PR #6](https://github.com/panyeung/EU4/pull/6)。
 4. M08B 经济方向仍待用户在 PR #5 选择 A/B/C/D，并确认方案参数与 1000 种子粮食崩溃率目标。独立文档复审已 ACCEPT；不表示规则获批或代码已实现。
-5. `main` 中 `Assets/Tests/PlayMode` 仍为空；PR #4 分支新增的阶段与百年端到端用例尚未合并。运行时结果须按对应证据来源分别记录。
+5. `main` 中 `Assets/Tests/PlayMode` 仍为空；PR #4 分支新增 M08 阶段/百年端到端用例，PR #6 分支新增 M09 PlayMode 拖动用例，均尚未进入 `main`。运行时结果须按对应证据来源分别记录。
 
 checkpoint 记录的 M08B D3 基线中，`unmanaged` 1000 种子均未到达 50 年或 100 年。这个结果是已接受的风险基线，不是长期生存通过。SC-021 与 SC-023 已集成进 `main`，但集成事实本身不代表所有相关运行时体验均已验收。
 
