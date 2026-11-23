@@ -12,13 +12,14 @@ Unity：`6000.6.6f1`
 `InputSystemUIInputModule`，配合虚拟 `Mouse` 的按下、移动、释放序列，证明指针事件一旦进入
 真实 UI 模块，窗口就按屏幕像素 1:1 移动；从折叠按钮按下后拖动同样成立，松手也不会误触折叠。
 
-2026-11-23 的 Computer Use 追踪补上了“OS 到 Input System”这一段：真实的 `Mouse` InputEvent
-确实到达（位置、delta、`leftButton` 全有记录），EventSystem 也真实派发了
+2026-11-23 的 Computer Use 追踪只覆盖到 Input System 这一层：Computer Use 产生的 `Mouse`
+InputEvent 被 Input System 记录（位置、delta、`leftButton` 都有），EventSystem 也派发了
 `PointerDown` / `PointerUp` / `PointerClick` 与窗口根的 `InitializePotentialDrag`；但合成拖动
 把 `leftButton=1` 与终点位置合并进同一帧，模块记录到的 `pressPosition` 就等于终点，uGUI 的
 10px 拖动阈值永远不满足，因此整段没有 `BeginDrag` / `Drag` / `EndDrag`。可见结果是面板未移动、
-「事件」页签被选中。这是 Computer Use 合成输入的帧批处理限制，不能外推为实体鼠标失败，也不能
-算作通过；实体鼠标拖动与用户最终验收仍未完成。
+「事件」页签被选中。断点在 Computer Use 合成输入的帧批处理，与产品和实体鼠标无关，也不能算作
+通过；实体鼠标拖动与用户最终验收仍未完成。追踪从 Input System 的 `onEvent` 起记，它能证明合成
+事件已进入 Input System，不能证明 Windows 原始输入链。
 
 ## 复核对象
 
@@ -125,9 +126,12 @@ PlayMode 用例逐项：
 `EditorApplication.update` 与运行期 `EventTrigger` 观察项上，记录 `InputSystem.onEvent` 事件流、
 EventSystem 首命中、标题栏与窗口根收到的指针/拖动回调、窗口屏幕位置与焦点。
 
-可信范围必须说清：`Pointer.current.position` 在 editor 侧回调里始终读回 `(0,0)`，由它派生的
-`POINTER-MOVE` 与 `RAYCAST` 行在这段时间**不可用**。结论只采用两类行：`INPUT-EVENT`
-（`InputSystem.onEvent` 的原始事件）与 `EVT`（EventTrigger 收到的真实 `PointerEventData`）。
+可信范围有两重限制。其一，`Pointer.current.position` 在 editor 侧回调里始终读回 `(0,0)`，由它
+派生的 `POINTER-MOVE` 与 `RAYCAST` 行在这段时间不可用。结论只采用两类行：`INPUT-EVENT`
+（`InputSystem.onEvent` 收到的 `Mouse` 事件）与 `EVT`（EventTrigger 收到的 `PointerEventData`）。
+其二，`INPUT-EVENT` 在 Input System 的 `onEvent` 回调里采集，所以它只能说明事件已进入 Input
+System。这些行不能证明 Windows 原始输入链，包括 raw input 消息如何到达、是否存在中间注入或改写
+层；报告不据此推断 Computer Use 到 Input System 之间的具体路径。
 
 ### 原始记录
 
@@ -152,7 +156,7 @@ EventSystem 首命中、标题栏与窗口根收到的指针/拖动回调、窗�
 
 | 层 | 观测 | 判定 |
 |---|---|---|
-| Windows → Input System | 位置、delta、`leftButton` 变化事件都到齐（焦点点击与拖动两段都有） | 有 |
+| Computer Use 合成输入 → Input System | Input System 的 `onEvent` 记录到 `Mouse` 事件，位置、delta、`leftButton` 变化都在（焦点点击与拖动两段都有） | 有（仅到此层） |
 | Input System → `InputSystemUIInputModule` → EventSystem 射线与派发 | 焦点点击命中 `DebugHeader` 并派发 PointerDown/PointerUp/PointerClick；拖动按下命中 `DebugTab4`，`InitializePotentialDrag` 派发到 `M09DebugModeRoot` | 有 |
 | uGUI 拖动阈值 → `BeginDrag` | `pressPosition` 与 `position` 完全相等，按住期间位置不再变化，10px 阈值不满足 | **首个缺失** |
 | 标题栏 `BeginDrag` / `Drag` / `EndDrag` | 无 | 未到达 |
@@ -178,18 +182,21 @@ EventSystem 首命中、标题栏与窗口根收到的指针/拖动回调、窗�
 
 ### 边界
 
-这是 Computer Use 合成输入的帧批处理限制，不是坐标、射线或焦点缺陷。它不能说明实体鼠标失败，
-也不能算作通过：实体鼠标拖动、松开后窗口停留、底层控件未误触仍需用户在有实体鼠标的环境里验收。
-主控在 `13:25:17` 的焦点点击与 `13:25:26` 的拖动都发生在 `focusedWindow=Game`、
-`appFocus=True`、`devicesEnabled=2/2` 的时段，焦点不是原因。
+这是 Computer Use 合成输入的帧批处理限制，不是坐标、射线或焦点缺陷，也不能归因于产品或实体鼠标。
+它不能说明实体鼠标失败，也不能算作通过：实体鼠标拖动、松开后窗口停留、底层控件未误触仍需用户在
+有实体鼠标的环境里验收。主控在 `13:25:17` 的焦点点击与 `13:25:26` 的拖动都发生在
+`focusedWindow=Game`、`appFocus=True`、`devicesEnabled=2/2` 的时段，Editor 侧记录排除了 Game 视图
+焦点门控这一原因。来源的边界与开头的结论相同：日志从 Input System 的 `onEvent` 起记，不能证明
+Windows 原始输入链。
 
 ## 下一步建议
 
 1. 合入本分支的测试与报告，锁定坐标、命中与按钮冒泡行为；不需要场景或预制体改动。
 2. 用户按 PR #3 的步骤验收实体鼠标拖动；本轮不把它标为通过。
-3. 合成输入这一段已经解释：事件到达 Input System 与 EventSystem，断在“按下与位移同帧”导致
-   拖动阈值不满足。要再用合成输入复现拖动，需要把按下与移动拆到不同帧（分步移动并插入等待），
-   而不是再改坐标代码。
+3. 合成输入这一段已经解释：Computer Use 产生的 `Mouse` 事件进入 Input System，EventSystem 也完成
+   了派发，断在“按下与位移同帧”导致拖动阈值不满足。要再用合成输入复现拖动，需要把按下与移动拆到
+   不同帧（分步移动并插入等待），而不是再改坐标代码。日志止于 Input System，要核查 Windows 原始
+   输入链需要另用 OS 层抓取手段。
 4. 现在不要为“坐标空间”加防御性转换。只有将来把该画布改成 Screen Space - Camera 时，
    `rect.position` 直写才会失效，届时应改用
    `RectTransformUtility.ScreenPointToWorldPointInRectangle`。
