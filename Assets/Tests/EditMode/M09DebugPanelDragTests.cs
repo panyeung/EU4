@@ -15,16 +15,16 @@ using UnityEngine.UI;
 namespace SengokuChronicle.Tests.EditMode
 {
     /// <summary>
-    /// M09 标题栏拖动的回归测试。拖动不是直接调用 <c>OnBeginDrag</c>/<c>OnDrag</c>，而是走
-    /// EventSystem 的派发链路：解析按下与最上层图形 →
-    /// <c>ExecuteEvents.GetEventHandler</c> 解析 pointerDrag → BeginDrag/Drag 派发。
-    /// 断言的量是屏幕像素：面板在屏幕上必须跟随指针走同样的距离，被抓取的那个标题栏点必须始终
-    /// 停在指针下方，并且标题栏在整个绘制顺序里是最上层的指针目标。
+    /// M09 标题栏拖动的 EditMode 回归测试。它是<strong>手工夹具 + 手工派发</strong>：
+    /// 画布矩形与局部缩放由测试自己按 CanvasScaler 在 1920x1080 下的结果写死
+    /// （<see cref="CanvasScaler"/> 在本夹具里被禁用，从未执行），最上层图形按绘制顺序
+    /// 近似（画布不渲染，<see cref="GraphicRaycaster"/> 拿不到 depth），
+    /// BeginDrag/Drag 由测试手工调用 <see cref="ExecuteEvents"/> 派发，不经过
+    /// EventSystem.Process、真实指针输入或 <c>InputSystemUIInputModule</c>。
     /// <para>
-    /// 屏幕按 1920x1080 建模。Canvas 使用 Screen Space - Overlay、CanvasScaler 参考分辨率
-    /// 1280x720、match 0.5，因此缩放因子为 <c>sqrt(1.5 * 1.5) = 1.5</c>：画布矩形为 1280x720，
-    /// 画布局部缩放为 1.5。这两点正是 Unity 在 Overlay 下把画布铺满屏幕的方式，EditMode 里没有
-    /// 真实的 Game 视图来驱动 CanvasScaler，所以测试按同一结果显式铺设画布矩形。
+    /// 因此本文件断言的是“回调数学与层级绑定在给定输入下成立”，不是生产输入链路。
+    /// 真实 CanvasScaler、GraphicRaycaster、EventSystem 与 InputSystemUIInputModule
+    /// 的整链证据见 PlayMode 的 <c>M09DebugPanelInputChainTests</c>。
     /// </para>
     /// </summary>
     public sealed class M09DebugPanelDragTests
@@ -57,8 +57,8 @@ namespace SengokuChronicle.Tests.EditMode
             scaler.referenceResolution = new Vector2(1280f, 720f);
             scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
             scaler.matchWidthOrHeight = 0.5f;
-            // 预览场景不跑渲染与 willRenderCanvases，CanvasScaler 不会自己把画布铺好；
-            // 下面按它在 1920x1080 下的结果显式铺设，并由测试断言该结果。
+            // 预览场景不跑渲染与 willRenderCanvases，CanvasScaler 在本夹具里始终不执行；
+            // 下面按它在 1920x1080 下的结果手工铺设画布矩形与局部缩放，再由测试断言该结果。
             scaler.enabled = false;
 
             var canvasRect = (RectTransform)canvasObject.transform;
@@ -112,8 +112,8 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(_header, Is.Not.Null);
             Canvas.ForceUpdateCanvases();
 
-            // 画布映射前提：1280x720 的参考分辨率铺满 1920x1080 后缩放为 1.5，
-            // 于是画布 1 个世界单位仍然等于 1 个屏幕像素。
+            // 画布映射前提（夹具写死，不是 CanvasScaler 算出）：1280x720 的参考分辨率
+            // 铺满 1920x1080 后缩放为 1.5，于是画布 1 个世界单位仍然等于 1 个屏幕像素。
             Assert.That(_canvas.transform.localScale.x, Is.EqualTo(ExpectedCanvasScale).Within(1e-4f));
             Assert.That(((RectTransform)_canvas.transform).rect.width,
                 Is.EqualTo(1280f).Within(0.01f));
@@ -195,6 +195,8 @@ namespace SengokuChronicle.Tests.EditMode
                 "画布缩放 1.5 时，-60 屏幕像素应等于 -40 参考单位。");
 
             // 抓取点必须始终停在指针下方：窗口不能跳，也不能只走一半距离。
+            // 注意：夹具从按下点直接派发 BeginDrag，没有拖动阈值台阶；生产链路里阈值内的
+            // 位移会被 BeginDrag 吸收，PlayMode 测试因此把基线取在越过阈值之后。
             Assert.That(RectTransformUtility.ScreenPointToLocalPointInRectangle(
                 _header, to, null, out Vector2 grabbed), Is.True);
             Assert.That(grabbed.x, Is.EqualTo(grabLocal.x).Within(0.5f),
@@ -229,10 +231,11 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         /// <summary>
-        /// 复刻 EventSystem 的鼠标拖动派发：先拿到按下的物体，用
-        /// <see cref="ExecuteEvents.GetEventHandler{T}"/> 解析 pointerDrag，再依次派发
-        /// BeginDrag 与 Drag。这四步就是 InputSystemUIInputModule 在 ProcessDrag 里做的事，
-        /// 所以断言的是生产输入链路，而不是直接调用回调。
+        /// 手工复刻 <c>InputSystemUIInputModule.ProcessDrag</c> 的两步：先用
+        /// <see cref="ExecuteEvents.GetEventHandler{T}"/> 解析 pointerDrag，再直接
+        /// <see cref="ExecuteEvents.Execute{T}"/> 派发 BeginDrag 与 Drag。测试自己构造
+        /// <see cref="PointerEventData"/>，没有 EventSystem.Process、没有 GraphicRaycaster、
+        /// 没有真实或虚拟输入设备。断言的是回调数学，不是生产输入链路。
         /// </summary>
         private GameObject DispatchDrag(Vector2 from, Vector2 to)
         {
@@ -261,7 +264,8 @@ namespace SengokuChronicle.Tests.EditMode
         /// EditMode 的画布从不渲染，<see cref="Graphic.depth"/> 恒为 -1，
         /// <see cref="GraphicRaycaster"/> 因此会跳过所有图形，拿不到任何命中。这里改用画布的
         /// 绘制顺序取最上层：父对象先于子对象、同级按兄弟顺序，与 Canvas 的绘制顺序一致。
-        /// 渲染之后的真实射线由 Play Mode 证据覆盖。
+        /// 这是近似，不是射线；渲染后的真实射线由 PlayMode 的
+        /// <c>M09DebugPanelInputChainTests</c> 覆盖。
         /// </summary>
         private Graphic TopmostGraphicAt(Vector2 screenPoint)
         {
