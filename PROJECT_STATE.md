@@ -11,7 +11,7 @@
 - `main` 与 `origin/main` 同步。游戏代码基线为 `2bca9d1`。之后的主线提交只更新文档。本文件最初在 `feature/project-state-docs` 独立工作树编写；该文档分支已合入 `main`，不代表当前分支状态。
 - Unity 版本：`6000.6.6f1`，URP 2D，Windows。
 - 当前主工作树：`C:\Users\panye\My project`，分支 `docs/orca-project-workflow`，跟踪 `origin/docs/orca-project-workflow`；`main` 与 `origin/main` 同步在 `65a021d`，游戏代码基线仍为 `2bca9d1`。当前变更范围仅为文档。
-- Unity Editor 当前为 PID `49784`、Unity `6000.6.6f1`、Pipeline 端口 `7801`，`-projectPath` 为本工程。2026-11-19 实时状态为 `ready`、`playMode=stopped`、`compiling=false`；FoundationScene 已加载且 `isDirty=false`。Play Mode 后 Console 实时错误/警告均为 0，未运行自动化测试。累计 Console 仍有两条更早的 CLI/评估命令错误（seq 16、17），不是本次游戏运行错误。任何 Unity 操作前重查进程、`-projectPath` 与 `unity pipeline list`；已有实例时复用，不得启动第二实例，也不得据此启动 batchmode。
+- 本次状态核对（2026-11-23 21:54 UTC）：主工作树未运行 Unity Editor。PID `54508` / Pipeline `7800` 对应 `m08-55-success-evidence`，PID `68216` / Pipeline `7801` 对应 `m08-100-year-review`；两实例 `editor_status` 均为 `ready`、`playMode=stopped`、`compiling=false`。本次未核查这两个实例的 Console 与 FoundationScene `isDirty`。2026-11-19 主工作树 PID `49784` 的 Play Mode 结果属于历史记录，详见 checkpoint §4。任何 Unity 操作前重查进程、`-projectPath` 与 `unity pipeline list`；已有实例时复用，不得启动第二实例，也不得据此启动 batchmode。
 
 ## 当前阶段
 
