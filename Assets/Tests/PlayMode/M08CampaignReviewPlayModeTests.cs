@@ -23,6 +23,11 @@ namespace SengokuChronicle.PlayModeTests
     /// 存档字段都不直接写入，也不调用 Refresh 伪造状态。随机数固定为 SC-013 新游戏
     /// 使用的 <see cref="GameSession.DefaultRandomSeed"/>，并在存档里回读种子做断言。
     ///
+    /// 每触发一次「结束本月」都断言 <see cref="GameSession.LastMonthTurnOutcome"/> 为
+    /// <see cref="MonthTurnOutcome.Succeeded"/>，且日期恰好前移一个真实日历月；
+    /// 两项断言都通过后才把该月计入成功月结数。从 1560-04-01 到 1615-04-01
+    /// 必须正好是 660 次成功月结，而不是只靠终点日期反推。
+    ///
     /// 到 1615-04-01 时检查回顾页是否由会话状态自动打开、日期与阶段是否正确、
     /// 正文是否真的渲染出文字；随后触发继续按钮回调，随即在隔离槽存档，
     /// 再触发「结束本月」成功推进一个月，最后读档，验证日期回到刚才的存档日、
@@ -42,6 +47,8 @@ namespace SengokuChronicle.PlayModeTests
         // 继承 HUD 与决策弹窗随「家族」页显示（见 PageMaskForRoot），家计页只挂产业面板。
         private const string FamilyTabButtonName = "ReferenceNavFamilyButton";
         private const int MonthCap = 700;
+        // 1560-04-01 → 1615-04-01 是 55 个真实年，每年 12 个日历月，合计 660 次月结。
+        private const int ExpectedStageReviewMonthTurns = 660;
 
         private static readonly GameDate ExpectedStart = new GameDate(1560, 4, 1);
         private static readonly GameDate StageReviewDate = new GameDate(1615, 4, 1);
@@ -54,7 +61,7 @@ namespace SengokuChronicle.PlayModeTests
         private TitleScreenController _title;
         private SaveLoadPanel _saveLoad;
         private string _storeDir;
-        private int _months;
+        private int _successfulMonthTurns;
         private int _events;
         private int _successions;
         private int _farmAssignments;
@@ -114,7 +121,7 @@ namespace SengokuChronicle.PlayModeTests
             yield return AcknowledgeStageReviewThroughUi();
             yield return AssertConfirmedReviewSurvivesSaveMonthTurnAndLoad();
 
-            Debug.Log(LogPrefix + "完成：月份=" + _months + " 事件=" + _events +
+            Debug.Log(LogPrefix + "完成：成功月结=" + _successfulMonthTurns + " 事件=" + _events +
                       " 继承=" + _successions + " 农庄任命=" + _farmAssignments +
                       " 日期=" + _session.WorldClock.CurrentDate +
                       " 待处理回顾=" + _session.PendingCampaignReview);
@@ -182,40 +189,93 @@ namespace SengokuChronicle.PlayModeTests
 
         private IEnumerator DriveMonthsToStageReview()
         {
+            Assert.AreEqual(ExpectedStageReviewMonthTurns,
+                CalendarMonthsBetween(ExpectedStart, StageReviewDate),
+                "SC-013 起点 " + ExpectedStart + " 到 " + StageReviewDate +
+                " 不是 " + ExpectedStageReviewMonthTurns + " 个日历月，用例前提不成立。");
+
             while (_session.WorldClock.CurrentDate < StageReviewDate)
             {
-                Assert.Less(_months, MonthCap, "在 " + MonthCap + " 个月内未到达 1615-04-01，停在 " +
-                                             _session.WorldClock.CurrentDate + "。");
+                Assert.Less(_successfulMonthTurns, MonthCap,
+                    "在 " + MonthCap + " 个月内未到达 " + StageReviewDate + "，停在 " +
+                    _session.WorldClock.CurrentDate + "，成功月结=" + _successfulMonthTurns + "。");
                 Assert.IsFalse(_session.IsFamilyExtinct,
-                    "家族在第 " + _months + " 个月（" + _session.WorldClock.CurrentDate + "）灭绝。");
+                    "家族在第 " + _successfulMonthTurns + " 次成功月结（" +
+                    _session.WorldClock.CurrentDate + "）灭绝。");
                 Assert.IsFalse(_panel.IsVisible,
                     "五十五周年回顾在 " + _session.WorldClock.CurrentDate + " 就提前打开了。");
 
                 yield return ResolvePendingEvents();
                 yield return ResolvePendingSuccession();
                 yield return MaintainFarmIfVacant();
+                yield return TriggerEndMonthAndAssertOneCalendarMonth();
 
-                Button endMonth = FindButton("EndMonthButton");
-                if (endMonth == null || !endMonth.gameObject.activeInHierarchy)
-                {
-                    yield return ShowGalleryPage(MapTabButtonName);
-                    endMonth = FindButton("EndMonthButton");
-                }
-                Assert.IsNotNull(endMonth, "找不到「结束本月」按钮。");
-                Assert.IsTrue(endMonth.gameObject.activeInHierarchy,
-                    _session.WorldClock.CurrentDate + " 的「结束本月」不在活动层级。");
-                Assert.IsTrue(endMonth.interactable,
-                    _session.WorldClock.CurrentDate + " 的「结束本月」不可交互：" +
-                    _session.LastMonthTurnOutcome);
-                endMonth.onClick.Invoke();
-                _months++;
-                yield return null;
-
-                if (_months % 60 == 0)
-                    Debug.Log(LogPrefix + "月份=" + _months + " 日期=" + _session.WorldClock.CurrentDate +
+                if (_successfulMonthTurns % 60 == 0)
+                    Debug.Log(LogPrefix + "成功月结=" + _successfulMonthTurns +
+                              " 日期=" + _session.WorldClock.CurrentDate +
                               " 事件=" + _events + " 继承=" + _successions +
                               " 农庄任命=" + _farmAssignments);
             }
+
+            Assert.AreEqual(ExpectedStageReviewMonthTurns, _successfulMonthTurns,
+                "从 " + ExpectedStart + " 到 " + StageReviewDate + " 应正好是 " +
+                ExpectedStageReviewMonthTurns + " 次成功月结，实际为 " + _successfulMonthTurns +
+                "，当前日期 " + _session.WorldClock.CurrentDate + "。");
+        }
+
+        /// <summary>
+        /// 触发生产「结束本月」按钮回调，并断言行随后状态：
+        /// outcome 为 Succeeded，且日期恰好前移一个真实日历月。
+        /// 两项都成立后才把这次月结计入成功月结数；失败信息带上触发前日期、成功计数与 outcome。
+        /// </summary>
+        private IEnumerator TriggerEndMonthAndAssertOneCalendarMonth(int settleFrames = 1)
+        {
+            Button endMonth = FindButton("EndMonthButton");
+            if (endMonth == null || !endMonth.gameObject.activeInHierarchy)
+            {
+                yield return ShowGalleryPage(MapTabButtonName);
+                endMonth = FindButton("EndMonthButton");
+            }
+            Assert.IsNotNull(endMonth, "找不到「结束本月」按钮。");
+            Assert.IsTrue(endMonth.gameObject.activeInHierarchy,
+                _session.WorldClock.CurrentDate + " 的「结束本月」不在活动层级。");
+            Assert.IsTrue(endMonth.interactable,
+                _session.WorldClock.CurrentDate + " 的「结束本月」不可交互：" +
+                _session.LastMonthTurnOutcome);
+
+            GameDate before = _session.WorldClock.CurrentDate;
+            GameDate expected = ExpectedNextCalendarMonth(before);
+            endMonth.onClick.Invoke();
+
+            MonthTurnOutcome outcome = _session.LastMonthTurnOutcome;
+            GameDate after = _session.WorldClock.CurrentDate;
+            Assert.AreEqual(MonthTurnOutcome.Succeeded, outcome,
+                "「结束本月」未成功推进：触发前=" + before + "｜成功月结=" +
+                _successfulMonthTurns + "｜outcome=" + outcome + "｜触发后=" + after +
+                "｜期望日期=" + expected);
+            Assert.AreEqual(expected, after,
+                "「结束本月」没有恰好前进一个真实日历月：触发前=" + before +
+                "｜成功月结=" + _successfulMonthTurns + "｜outcome=" + outcome +
+                "｜触发后=" + after + "｜期望日期=" + expected);
+            _successfulMonthTurns++;
+
+            for (int i = 0; i < settleFrames; i++)
+                yield return null;
+        }
+
+        /// <summary>同一日号推进一个真实日历月，月内日号超出目标月天数时取目标月末。</summary>
+        private static GameDate ExpectedNextCalendarMonth(GameDate date)
+        {
+            int year = date.Month == 12 ? date.Year + 1 : date.Year;
+            int month = date.Month == 12 ? 1 : date.Month + 1;
+            int day = Math.Min(date.Day, GameDate.DaysInMonth(year, month));
+            return new GameDate(year, month, day);
+        }
+
+        /// <summary>两日期间隔的日历月数；仅在同日号时使用，本用例两端都是月初。</summary>
+        private static int CalendarMonthsBetween(GameDate from, GameDate to)
+        {
+            return (to.Year - from.Year) * 12 + (to.Month - from.Month);
         }
 
         private IEnumerator ResolvePendingEvents()
@@ -539,21 +599,8 @@ namespace SengokuChronicle.PlayModeTests
             yield return ResolvePendingEvents();
             yield return ResolvePendingSuccession();
             yield return MaintainFarmIfVacant();
-
-            Button endMonth = FindButton("EndMonthButton");
-            if (endMonth == null || !endMonth.gameObject.activeInHierarchy)
-            {
-                yield return ShowGalleryPage(MapTabButtonName);
-                endMonth = FindButton("EndMonthButton");
-            }
-            Assert.IsNotNull(endMonth, "找不到「结束本月」按钮。");
-            Assert.IsTrue(endMonth.gameObject.activeInHierarchy, "「结束本月」按钮不在活动层级。");
-            Assert.IsTrue(endMonth.interactable, "「结束本月」按钮不可交互：" +
-                                                _session.LastMonthTurnOutcome);
-            endMonth.onClick.Invoke();
-            _months++;
-            yield return null;
-            yield return null;
+            // 存档后这一步也是真实月结：同样断言 Succeeded 与恰好一个日历月，再计入成功月结数。
+            yield return TriggerEndMonthAndAssertOneCalendarMonth(2);
         }
 
         private Button FirstEventOptionButton(ICollection<string> skip)

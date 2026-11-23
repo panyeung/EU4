@@ -4,6 +4,20 @@
 - 引擎 Unity 6000.6.6f1，本树 Editor 的 Pipeline 端口 7803（主工程 7801，未触碰）。2026-11-21 本轮新起本树唯一 Editor，PID 79524，开工时 `console_status` 计数 `error:0, warn:0, log:6`。
 - 证据副本：`Logs/verify/m08-55-20261121-2029/TestResults.xml`（6745 字节，SHA-256 `36afa5f57e372d5ab760ff0c0c8d454d37ec79882e23f4d6003ebf75f0d402fe`，`Logs/` 按仓库约定不入库）。
 
+## 2026-11-23 补强：逐次证明月结成功
+
+本节是本报告的最新验证记录，并取代此前只按调用次数记录 660 个月的证据口径。
+
+- 工作树 `C:\Users\panye\orca\workspaces\My project\m08-55-success-evidence`，分支 `panyeung/m08-55-success-evidence`，基于 PR #4 原提交 `aec75e8b198808128709dfea05980f481150a00b`。Unity 6000.6.6f1 Editor PID 54508，Pipeline 端口 7800。
+- 编译：`recompile` 与 `recompile_status` 均为 `up_to_date`，`compilationFailed=false`。`SengokuChronicle.PlayModeTests.dll` 时间为 2026-11-23 20:22:47 UTC，晚于测试源文件的 20:17:05 UTC。
+- Play Mode：`M08CampaignReviewPlayModeTests.StageReview_OpensAtFiftyFiveYears_ConfirmsAndSurvivesSaveLoad`，1/1 通过，16.160 秒。证据副本 `Logs/verify/m08-55-20261123-2025/TestResults.xml`，6786 字节，SHA-256 `35B46F1E4096535823A4B36825FF6152AE058522A8816BDE322A17C45A39F715`。
+- 测试每次触发生产 `EndMonthButton` 后都断言 `LastMonthTurnOutcome == Succeeded`，并断言日期恰好前进一个日历月；两项通过后才增加成功月结数。测试另核对 1560-04-01 至 1615-04-01 相差 660 个日历月，并在到达该日时断言恰有 660 次成功月结。
+- `Editor.log` 记录固定游戏种子 `5343414E4B4F3031`、成功月结 660 时的日期 1615-04-01、阶段回顾页打开、确认后保存、月结到 1615-05-01、读档恢复 1615-04-01。最终日志为成功月结 661，因为存档验证额外推进了一个月；这不改变到达评价日时的 660 次断言。
+- Console 运行前计数 `error:0, warn:3, log:0`，运行后 `error:0, warn:3, log:59`，本轮新增 0 错误、0 警告。初始 3 条警告在测试前已存在。
+- Orca 独立只读复审结论：ACCEPT。复审核对了逐次断言、660 次计数及 XML 与 `Editor.log`。
+
+此测试触发生产按钮的 `Button.onClick` 回调，不模拟物理输入；它不替代 Windows Player 试玩或用户最终验收。
+
 ## 2026-11-21 补强：记录并断言固定种子
 
 任务要求「固定并记录种子」，上一轮只在报告里隐含这一前提，测试没有回读。本轮补上，且必须重跑证据才算数：
