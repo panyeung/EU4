@@ -36,12 +36,27 @@ namespace SengokuChronicle.Presentation
             if (session == null)
                 return;
 
-            WorldMapController controller = FindFirstObjectByType<WorldMapController>();
-            Canvas canvas = controller != null ? controller.GetComponentInParent<Canvas>() : null;
-            if (canvas == null)
-                canvas = FindFirstObjectByType<Canvas>();
+            EnsureFor(session, ResolveTargetCanvas(session));
+        }
 
-            EnsureFor(session, canvas);
+        /// <summary>
+        /// 入口要挂到的 Canvas。多 Canvas 场景里场景首个 Canvas 不一定是 HUD，
+        /// 因此顺序固定为：GameSession 所在 Canvas，其次 WorldMapController 所在
+        /// Canvas，最后才回退场景首个 Canvas。三者都没有时返回 null，入口静默跳过。
+        /// </summary>
+        public static Canvas ResolveTargetCanvas(GameSession session)
+        {
+            Canvas canvas = session != null ? session.GetComponentInParent<Canvas>() : null;
+            if (canvas != null)
+                return canvas;
+
+            WorldMapController controller = FindFirstObjectByType<WorldMapController>();
+            if (controller != null)
+                canvas = controller.GetComponentInParent<Canvas>();
+            if (canvas != null)
+                return canvas;
+
+            return FindFirstObjectByType<Canvas>();
         }
 
         public static JapanMapScreen EnsureFor(GameSession session, Canvas canvas)

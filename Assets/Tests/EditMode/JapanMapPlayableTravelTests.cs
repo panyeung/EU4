@@ -908,6 +908,40 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
+        public void BootstrapTargetCanvas_PrefersGameSessionCanvasWhenItIsNotTheSceneFirstCanvas()
+        {
+            GameSession session = NewSession();
+            GameObject firstCanvasObject = null;
+            GameObject sessionCanvasObject = null;
+            try
+            {
+                Canvas firstCanvas = CreateCanvas(out firstCanvasObject);
+                Canvas sessionCanvas = CreateCanvas(out sessionCanvasObject);
+                Assert.That(firstCanvas, Is.Not.SameAs(sessionCanvas));
+                Assert.That(UnityEngine.Object.FindFirstObjectByType<Canvas>(),
+                    Is.SameAs(firstCanvas),
+                    "夹具前提：GameSession 所在 Canvas 必须排在场景首个 Canvas 之后");
+                Assert.That(UnityEngine.Object.FindFirstObjectByType<WorldMapController>(), Is.Null,
+                    "夹具前提：本用例只覆盖没有 WorldMapController 时的 Canvas 选择");
+
+                session.gameObject.transform.SetParent(sessionCanvas.transform, false);
+
+                Canvas resolved = JapanMapSceneBootstrap.ResolveTargetCanvas(session);
+
+                Assert.That(resolved, Is.SameAs(sessionCanvas),
+                    "入口必须挂到 GameSession 所在的 Canvas");
+                Assert.That(resolved, Is.Not.SameAs(firstCanvas),
+                    "场景首个 Canvas 不是 GameSession 所在 Canvas 时不得被选中");
+            }
+            finally
+            {
+                DestroyCanvas(sessionCanvasObject, session);
+                if (firstCanvasObject != null)
+                    UnityEngine.Object.DestroyImmediate(firstCanvasObject);
+            }
+        }
+
+        [Test]
         public void Bootstrap_LauncherKeepsFixedTopRightGeometryAndClearsTheHeaderRow()
         {
             GameSession session = NewSession();
