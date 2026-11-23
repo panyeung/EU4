@@ -17,6 +17,7 @@ namespace SengokuChronicle.Presentation
     public sealed class TownOverviewPanel : MonoBehaviour
     {
         [SerializeField] private Image townIllustration;
+        [SerializeField] private Image townArtVeil;
         [SerializeField] private Text townNameText;
         [SerializeField] private Text townFeatureText;
         [SerializeField] private Text residentText;
@@ -43,6 +44,15 @@ namespace SengokuChronicle.Presentation
         public const float ActivityCardStep = 40f;
 
         /// <summary>
+        /// Opacity of the washi wash between the full-page town illustration and the ink
+        /// labels. Kept here so the scene updater and runtime ordering share one value.
+        /// </summary>
+        public const float TownArtVeilAlpha = 0.55f;
+
+        /// <summary>Warm paper tint used by the washi wash over the town illustration.</summary>
+        public static readonly Color TownArtVeilColor = new Color(0.96f, 0.92f, 0.83f, TownArtVeilAlpha);
+
+        /// <summary>
         /// Height of the area that holds one card per activity kind. The town page sizes its
         /// activity root from this value, so the runtime step and the updater cannot drift
         /// apart and let a card run into the mission entry below.
@@ -58,10 +68,11 @@ namespace SengokuChronicle.Presentation
 
         public void BindReferences(Image illustration, Text townName, Text feature,
             Text residents, Text localActions, Button roster, Button mission, Button returnToMap,
-            RectTransform actionsRoot = null, Button actionTemplate = null)
+            RectTransform actionsRoot = null, Button actionTemplate = null, Image veil = null)
         {
             BindListeners(false);
             townIllustration = illustration;
+            if (veil != null) townArtVeil = veil;
             townNameText = townName;
             townFeatureText = feature;
             residentText = residents;
@@ -83,6 +94,7 @@ namespace SengokuChronicle.Presentation
 
         public void Refresh()
         {
+            ApplyTownArtOrder();
             GameSession session = _controller != null ? _controller.Session : null;
             if (session == null)
             {
@@ -102,6 +114,24 @@ namespace SengokuChronicle.Presentation
             }
 
             LocationId location = session.CurrentLocation;
+            if (!LocationCapabilities.CanUseTownServices(location))
+            {
+                Set(townNameText, LocationId.GetChineseName(location));
+                Set(townFeatureText, "旅行枢纽：没有城镇活动、居民或当地委托。");
+                Set(residentText, "当地人物\n暂无登记居民");
+                Set(localActionsText, ActivitySummary(null, NoActivities));
+                RefreshActivityButtons(NoActivities);
+                if (townIllustration != null)
+                {
+                    townIllustration.sprite = null;
+                    townIllustration.color = new Color(0.2f, 0.24f, 0.29f, 0.12f);
+                }
+                if (rosterButton != null) rosterButton.interactable = false;
+                if (missionButton != null) missionButton.interactable = false;
+                if (returnToMapButton != null) returnToMapButton.interactable = _controller.InTownMenu;
+                return;
+            }
+
             Set(townNameText, LocationId.GetChineseName(location));
             Set(townFeatureText, FeatureFor(location));
             if (townIllustration != null)
@@ -146,11 +176,26 @@ namespace SengokuChronicle.Presentation
 
         private void OnEnable()
         {
-            if (townIllustration != null)
-                townIllustration.transform.SetAsFirstSibling();
+            ApplyTownArtOrder();
             if (returnToMapButton != null)
                 returnToMapButton.transform.SetAsLastSibling();
             BindListeners(true);
+        }
+
+        /// <summary>
+        /// Keeps the illustration below its washi wash and both below every label and control,
+        /// including after a scene reload or a mission button reparented to the town page.
+        /// </summary>
+        private void ApplyTownArtOrder()
+        {
+            if (townIllustration == null) return;
+            if (townArtVeil == null)
+                townArtVeil = transform.Find("TownArtVeil")?.GetComponent<Image>();
+            townIllustration.transform.SetAsFirstSibling();
+            if (townArtVeil == null || townArtVeil.transform.parent != townIllustration.transform.parent)
+                return;
+            int index = Mathf.Min(1, townArtVeil.transform.parent.childCount - 1);
+            townArtVeil.transform.SetSiblingIndex(index);
         }
 
         private void OnDisable() => BindListeners(false);

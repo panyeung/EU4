@@ -5297,6 +5297,7 @@ RectTransform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 684482860}
+  - {fileID: 1582620154}
   - {fileID: 26036669}
   - {fileID: 1268188971}
   - {fileID: 675664524}
@@ -5324,6 +5325,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: SengokuChronicle.Presentation::SengokuChronicle.Presentation.TownOverviewPanel
   townIllustration: {fileID: 684482861}
+  townArtVeil: {fileID: 1582620155}
   townNameText: {fileID: 26036670}
   townFeatureText: {fileID: 1268188972}
   residentText: {fileID: 675664525}
@@ -8218,7 +8220,7 @@ RectTransform:
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 1, y: 1}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 0, y: 0}
+  m_SizeDelta: {x: -12, y: -4}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &212965129
 MonoBehaviour:
@@ -21253,10 +21255,10 @@ RectTransform:
   m_Children: []
   m_Father: {fileID: 604452099}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0.5, y: 0.5}
-  m_AnchorMax: {x: 0.5, y: 0.5}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 1, y: 1}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 100, y: 100}
+  m_SizeDelta: {x: -12, y: -4}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &580303415
 MonoBehaviour:
@@ -25325,9 +25327,9 @@ RectTransform:
   m_Father: {fileID: 131728013}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
-  m_AnchorMax: {x: 0, y: 0}
-  m_AnchoredPosition: {x: 28, y: 200}
-  m_SizeDelta: {x: 540, y: 304}
+  m_AnchorMax: {x: 1, y: 1}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0, y: 0}
 --- !u!114 &684482861
 MonoBehaviour:
@@ -25351,7 +25353,7 @@ MonoBehaviour:
       m_Calls: []
   m_Sprite: {fileID: 0}
   m_Type: 0
-  m_PreserveAspect: 1
+  m_PreserveAspect: 0
   m_FillCenter: 1
   m_FillMethod: 4
   m_FillAmount: 1
@@ -26174,10 +26176,10 @@ RectTransform:
   m_Children: []
   m_Father: {fileID: 763924358}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0.5, y: 0.5}
-  m_AnchorMax: {x: 0.5, y: 0.5}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 1, y: 1}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 208, y: 34}
+  m_SizeDelta: {x: -12, y: -4}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &706620292
 MonoBehaviour:
@@ -31951,7 +31953,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 1
     m_LineSpacing: 1
-  m_Text: "\u5F53\u5730\u59D4\u6258\n\u5F53\u524D\u6682\u65E0\u53EF\u529E\u7406\u7684\u672C\u5730\u59D4\u6258"
+  m_Text: "\u5F53\u5730\u59D4\u6258\n\u5F53\u524D\u5730\u70B9\u4E0D\u53EF\u7528"
 --- !u!222 &850337766
 CanvasRenderer:
   m_ObjectHideFlags: 0
@@ -35937,7 +35939,7 @@ RectTransform:
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 1, y: 1}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 0, y: 0}
+  m_SizeDelta: {x: -12, y: -4}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &967559358
 MonoBehaviour:
@@ -42197,6 +42199,7 @@ GameObject:
   - component: {fileID: 1156767150}
   - component: {fileID: 1156767149}
   - component: {fileID: 1156767151}
+  - component: {fileID: 1156767152}
   m_Layer: 0
   m_Name: GameSession
   m_TagString: Untagged
@@ -42290,6 +42293,18 @@ MonoBehaviour:
   m_EditorClassIdentifier: SengokuChronicle.Presentation::SengokuChronicle.Presentation.RankPanel
   gameSession: {fileID: 1156767147}
   rankText: {fileID: 995774993}
+--- !u!114 &1156767152
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1156767146}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a1b2c3d4e5f6470891a2b3c4d5e6f708, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: SengokuChronicle.Presentation::SengokuChronicle.Presentation.JapanMapSceneBootstrap
 --- !u!1 &1158835647
 GameObject:
   m_ObjectHideFlags: 0
@@ -46757,7 +46772,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 1
     m_LineSpacing: 1
-  m_Text: "\u5C1A\u65E0\u6B64\u5730\u7684\u57CE\u9547\u8D44\u6599\u3002"
+  m_Text: "\u65C5\u884C\u67A2\u7EBD\uFF1A\u6CA1\u6709\u57CE\u9547\u6D3B\u52A8\u3001\u5C45\u6C11\u6216\u5F53\u5730\u59D4\u6258\u3002"
 --- !u!222 &1268188973
 CanvasRenderer:
   m_ObjectHideFlags: 0
@@ -56716,7 +56731,7 @@ RectTransform:
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 1, y: 1}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 0, y: 0}
+  m_SizeDelta: {x: -12, y: -4}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1546959739
 MonoBehaviour:
@@ -57718,6 +57733,81 @@ CanvasRenderer:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1578408639}
+  m_CullTransparentMesh: 1
+--- !u!1 &1582620153
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1582620154}
+  - component: {fileID: 1582620156}
+  - component: {fileID: 1582620155}
+  m_Layer: 0
+  m_Name: TownArtVeil
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!224 &1582620154
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1582620153}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 131728013}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 1, y: 1}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 0, y: 0}
+  m_Pivot: {x: 0.5, y: 0.5}
+--- !u!114 &1582620155
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1582620153}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
+  m_Material: {fileID: 0}
+  m_Color: {r: 0.96, g: 0.92, b: 0.83, a: 0.55}
+  m_RaycastTarget: 0
+  m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
+  m_Maskable: 1
+  m_OnCullStateChanged:
+    m_PersistentCalls:
+      m_Calls: []
+  m_Sprite: {fileID: 0}
+  m_Type: 0
+  m_PreserveAspect: 0
+  m_FillCenter: 1
+  m_FillMethod: 4
+  m_FillAmount: 1
+  m_FillClockwise: 1
+  m_FillOrigin: 0
+  m_UseSpriteMesh: 0
+  m_PixelsPerUnitMultiplier: 1
+--- !u!222 &1582620156
+CanvasRenderer:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1582620153}
   m_CullTransparentMesh: 1
 --- !u!1 &1583759492
 GameObject:
@@ -73258,10 +73348,10 @@ RectTransform:
   m_Children: []
   m_Father: {fileID: 258600694}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0.5, y: 0.5}
-  m_AnchorMax: {x: 0.5, y: 0.5}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 1, y: 1}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 208, y: 34}
+  m_SizeDelta: {x: -12, y: -4}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &2089217743
 MonoBehaviour:

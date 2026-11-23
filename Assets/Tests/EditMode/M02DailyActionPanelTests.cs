@@ -1970,6 +1970,59 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
+        public void Panel_KnownDestinationsMatchVisibleTravelButtons()
+        {
+            DailyActionPanel panel = Panel();
+            panel.Open();
+            panel.SelectPerson(M2FixedScenario.HarunobuId);
+
+            Assert.That(DestinationsShownInProfile(panel), Is.EquivalentTo(
+                    InteractableTravelButtonDestinations()),
+                "every destination named by 可前往 must have a clickable travel button");
+            Assert.That(DestinationsShownInProfile(panel), Is.EquivalentTo(new[] { "热田", "那古野" }),
+                "only the two direct routes with frozen M02 buttons are offered from 清洲");
+            Assert.That(panel.SelectedLine, Does.Not.Contain("冈崎"),
+                "a graph-reachable hub without a button must not be advertised");
+            Assert.That(panel.SelectedLine, Does.Not.Contain("山田"),
+                "a graph-reachable hub without a button must not be advertised");
+            Assert.That(panel.SelectedLine, Does.Not.Contain("稻叶山"),
+                "a graph-reachable hub without a button must not be advertised");
+        }
+
+        private static string[] DestinationsShownInProfile(DailyActionPanel panel)
+        {
+            const string marker = "可前往：";
+            string line = panel.SelectedLine;
+            int start = line.IndexOf(marker, StringComparison.Ordinal);
+            Assert.That(start, Is.GreaterThanOrEqualTo(0), "the profile must show 可前往");
+            start += marker.Length;
+            int end = line.IndexOf('\n', start);
+            string value = end < 0 ? line.Substring(start) : line.Substring(start, end - start);
+            return value == "无直达路线" ? Array.Empty<string>() : value.Split('、');
+        }
+
+        private string[] InteractableTravelButtonDestinations()
+        {
+            var destinations = new System.Collections.Generic.List<string>();
+            AddInteractableTravelButton(AddM02DailyActionPanel.TravelKiyosuButtonName,
+                LocationId.Kiyosu, destinations);
+            AddInteractableTravelButton(AddM02DailyActionPanel.TravelAtsutaButtonName,
+                LocationId.Atsuta, destinations);
+            AddInteractableTravelButton(AddM02DailyActionPanel.TravelNagoyaButtonName,
+                LocationId.Nagoya, destinations);
+            return destinations.ToArray();
+        }
+
+        private void AddInteractableTravelButton(string buttonName, LocationId destination,
+            System.Collections.Generic.List<string> destinations)
+        {
+            Transform button = Find(buttonName);
+            Assert.That(button, Is.Not.Null, buttonName);
+            if (button.GetComponent<Button>().interactable)
+                destinations.Add(LocationId.GetChineseName(destination));
+        }
+
+        [Test]
         public void Panel_InterruptAndReplanShowExplicitOutcomeFeedback()
         {
             DailyActionPanel panel = Panel();

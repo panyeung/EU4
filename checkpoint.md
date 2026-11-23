@@ -213,6 +213,7 @@
 
 | 日期 | 决策 | 一行理由 | 影响 |
 |---|---|---|---|
+| 2026-11-22 | 直接旅行期间 NPC 只在抵达后重规划一次，记为有意设计；每日行动面板“可前往”文案必须与可点击按钮集合一致 | 逐日改走 `AdvanceAutonomyDay` 会改变事件、经济与计划刷新节奏，属玩法变更需单独验收；文案列 37 项而按钮只有三镇是本轮地图引入的可见缺陷 | `GameSession.ConfirmTravel` 保持现状并以此条为准；`DailyActionPanel` 由 t52 修复并加 EditMode 集合一致性断言；`JapanTravelGraph` 恒假断言（L1）同步清理 |
 | 2026-11-18 | 集成分支整体快进 `main`，不再逐支合并 | `t_122d4d5b` 独立复审 C1–C6 全 PASS，四支源码已在集成链里逐支过回归；让 `main` 与 `integration/v1-20261118` 同点，比再造五个合并提交少一层无法验证的中间态 | 用户 2026-11-18 授权；`main`、`origin/main`、`integration/v1-20261118` 同为 `2bca9d1`；只保留一个工作树 |
 | 2026-11-18 | 画布层序统一为 `CanvasLayerOrder`，删除 `CanvasOverlayOrder` | m04 与 m08 各带一套并行层序机制，合并后会同时生效；一个共享页面序才能让座次校验有唯一来源 | `Assets` 内 `CanvasOverlayOrder` 零命中；`CanvasLayerOrder.cs` 持七项页面序，`AddM08CampaignReviewPanel` 与 `AddSC010SuccessionPanel` 按共享序插入并校验，由 `CanvasLayerOrderTests` 与 `AddM08CampaignReviewPanelTests` 覆盖 |
 | 2026-11-18 | 主工作树未提交项按「与 `m00-closeout` 内容等价」处理，不再重复入库 | 69 项与 `e57dd06` 逐字节相同，差异只有行尾 LF/CRLF，另开提交只会造噪声 | 不新增镜像提交；后续收口以 `panyeung/m00-closeout` 为内容基准 |
@@ -331,6 +332,7 @@
 
 | 日期 | ID | 内容 | 状态 | 证据 |
 |---|---|---|---|---|
+| 2026-11-20 | M09 | Debug 综合测试面板入口预验：从标题页打开面板并确认日期为 `1560-04-01`；停止 Play Mode 后场景 `isDirty=false`，Console 无新增错误或警告 | 进行中 | 仅证明面板可见与退出状态正常；标题栏实体鼠标拖动、底层控件未误触仍待验证。详见 `PROJECT_STATE.md` §未完成工作第 3 项及 PR #3 的 M09 用户硬件输入验收步骤 |
 | 2026-11-19 | M00 | v1 Windows 演示技术签核 ACCEPT；`t_39a5b047` RETURN 所要求的文档状态修订已获独立只读复审 ACCEPT | 进行中 | Player 构建与冒烟：`Logs/verify/v1-demo-build/20261118-r2-demo-build.md`（`2bca9d1`）；EditMode 2214/2214、Validator PASS、核心循环及隔离存读档：`Logs/verify/20261118-integration/20261118-1348-core-loop.md`（`c291dd3`）；`c291dd3..2bca9d1` 仅注释修订。用户最终验收仍待完成 |
 | 2026-11-19 | M08 | 全量验证归档复审 ACCEPT；FoundationScene Play Mode 真实跨过 55/100 周年并自动显示回顾，确认后继续；M08 仍未闭合 | 进行中 | `docs/reports/v1-m08-55-review-user-acceptance-20261119.md` 记录 `farm-managed-v1` 正常月结路线、两次实际 UI 及 55 年后隔离存读档。百年终态粮荒 53 月、极端通胀 41 月、粮食 0、资金 317；不能据此宣称经济可持续或用户验收 |
 | 2026-11-18 | v1 集成 | 五个 UI 分支并入 `main`：层序统一为 `CanvasLayerOrder`、场景在 main 侧重放、全量回归与演示构建全过、独立复审 PASS | 进行中 | 全量 EditMode 2214/2214、Validator `PASS; Errors: 0`（源 `c291dd3`）；`Builds/Demo-v1-2bca9d1-r2/` 由 `2bca9d1` 干净工作树构建 `Succeeded`、`totalErrors=0`；用户最终验收未完成 |
@@ -428,7 +430,7 @@
 - 演示构建：`Builds/Demo-v1-2bca9d1-r2/`，源提交 `2bca9d1`（干净工作树），`Succeeded`、`totalErrors=0`、218 个文件 183,882,557 B，exe 667,136 B、`sha256 7c5b8f3e…188247d`（本卡亲跑 `sha256sum` 核对）。唯一警告是 Pipeline 包自带的「No RuntimePipelineConfig asset found」，不再是「未编译改动」。Player 冒烟走通标题→开始新游戏→SC-013→营地 HUD（1560-04-01、清洲、贯 30）→结束月份（1560-05-01、贯 28）→清洲城镇页四条当地委托→任务页，`Player.log` 0 条 Exception/LogError/NullReference。
 - 画布层序已统一：`Assets` 内 `CanvasOverlayOrder` 零命中，`CanvasLayerOrder` 是唯一页面序来源。
 - 独立复审 `t_122d4d5b` 判 **PASS**，C1–C6 全过。
-- 仍未闭合：M00 用户最终验收；M08 玩家手动经营路线与经济可持续性；M08B 用户规则选择；M09 真实硬件窗口拖动。`main` 的 `Assets/Tests/PlayMode` 为空，PR #4 分支已增加一项五十五周年端到端用例；其余 MINOR 见 §6。
+- 仍未闭合：M00 用户最终验收；M08 玩家手动经营路线与经济可持续性；M08B 用户规则选择；M09 真实硬件窗口拖动。M09 已于 2026-11-20 在主工程 Play Mode 确认入口能打开面板且初始日期为 `1560-04-01`，实体鼠标拖动及不误触底层控件仍待验。`main` 的 `Assets/Tests/PlayMode` 为空，PR #4 分支已增加一项五十五周年端到端用例；其余 MINOR 见 §6。
 - 2026-11-19 M08 实际试玩后，Unity Editor PID `49784`、项目路径 `C:\Users\panye\My project`、Unity `6000.6.6f1`、Pipeline 端口 `7801`；停止 Play Mode 后状态 `ready`、`compiling=false`，FoundationScene `isDirty=false`，实时 Console 错误/警告 0。累计 Console 的两条旧 CLI/评估命令错误不属于该路线。后续 Unity 工作开始前重新核对进程、`-projectPath` 与 Pipeline；已有实例时复用，不启动第二实例。
 - 证据边界。M01 与 M08C 子切片的验收都不代表 M00 或 M02–M08 整体验收。
 
@@ -439,9 +441,9 @@
 按依赖关系推进；等待用户试玩或决策期间，继续完成不依赖该答复的工作。开始 Unity 工作前先核对 Editor 进程的 `-projectPath` 和 `unity pipeline list`；本工程已有 Editor 时复用，只有确认无实例时才启动。
 
 1. **M00 用户验收**：按 PR #3 中的 Windows EXE 步骤试玩；所有页面、日期、资金、物资与委托内容符合预期后，由用户明确给出最终结论。未验收前不合并 `main` 或打 tag。
-2. **M08B 用户决策**：PR #5 的经济供给方案记录已通过独立文档复审，等待用户选择 A/B/C/D 及参数和模拟门槛。选定前不改经济代码；选定后由 OpenCode2 实施并提交代码、测试与模拟证据，再由主控复审。
+2. **M08B 用户决策**：PR #5 的经济供给方案记录已通过独立文档复审，等待用户选择 A/B/C/D 及参数和模拟门槛。选定前不改经济代码；选定后完成代码、测试与模拟证据，再由主控复审。
 3. **M08 玩家路线**：现有 `farm-managed-v1` FoundationScene 路线已真实触发并确认 55/100 年回顾，55 年存读档往返通过；PR #4 的 PlayMode 用例报告 1/1 通过。仍需可重放的玩家手动经营路线验证经济目标，自动策略证据不能替代。
-4. **M09 真实硬件窗口拖动**：按 PR #3 的步骤用实体鼠标拖动 Debug 面板标题栏，确认位置变化、未误触底层控件且退出后场景未修改、Console 无新增错误或警告。
+4. **M09 真实硬件窗口拖动（剩余验收）**：面板入口与 `1560-04-01` 初始日期已于 2026-11-20 预验。按 PR #3 的剩余步骤用实体鼠标拖动 Debug 面板标题栏，确认位置变化、未误触底层控件；关闭面板并停止 Play Mode 后，确认场景未修改且 Console 无新增错误或警告。注入式输入不能代替本项。
 5. `Assets/Tests/PlayMode` 在 `main` 中为空，PR #4 分支新增 M08 五十五周年端到端测试。后续按里程碑补齐自动化覆盖，且与真实运行时证据分别报告。
 6. `Assets/Logs/` 与 `Assets/Logs.meta` 当前均不存在；剩余 MINOR 清理仅包括 `Assets/Scenes/` 的 stray `TestResults_*.xml` 与隔离槽目录，按授权范围处理。
 7. 画布层序已统一为 `CanvasLayerOrder`，后续任何新面板都必须按这套共享序插入并让 `CanvasLayerOrderTests` 覆盖，不要再引入第二套顺序表。
@@ -457,5 +459,5 @@
 - 场景未接入 HEAD。`git show HEAD:Assets/Scenes/FoundationScene.unity` 中无 `SC024` 相关对象，接入只在未提交工作区。
 - 测试工具收尾异常。PID 88424 的崩溃现场已被重启覆盖，现 `Logs/Editor.log` 与 `%LOCALAPPDATA%\Unity\Editor\Editor.log` 中 `IndexOutOfRange` 命中 0 次；崩溃经过只留在本节与 `Logs/recovery-20261118/` 的场景备份里，没有原始调用栈。`IPostBuildCleanup` 页脚仍会出现，属既有噪声。
 - `unmanaged` 基线 1000 个种子均未到达 50/100 年；`farm-managed-v1` 可完成部分 100 年路线，但记录仍有 803/1000 粮荒/崩溃和 801/1000 极端通胀。自动策略不代表玩家行为，风险基线不等于经济可持续通过。
-- 输入路径未证实。窗口拖动返回 `synthetic_input`/`unverified`，坐标点击返回 `actionUnsupported`，实体键盘未单独验证。
+- M09 输入仍未完整验收。2026-11-20 已确认面板可见与初始日期；此前注入式窗口拖动为 `synthetic_input`/`unverified`，坐标点击为 `actionUnsupported`，都不能证明实体鼠标标题栏拖动、未误触底层控件或实体键盘行为。
 - Pipeline 请求多次超时。30 秒客户端上限与 `run_tests` 600 秒超时都曾中断验证流程。

@@ -12,7 +12,7 @@
 - 技术底。Unity 6、URP、uGUI 加 TextMeshPro。全部界面为实时 uGUI，不做整页烘焙图。
 - 参考画布 1280×720，16:9，用 `CanvasScaler` 缩放。这是逻辑画布，不是纹理尺寸。
 - 窄窗口保留边距，正文优先滚动，不靠缩小字号解决溢出。
-- 中文字体沿用系统 CJK 宋楷，依次尝试 `KaiTi`、`STKaiti`、`FangSong`、`SimSun`、`Noto Serif CJK SC`、`Microsoft YaHei`，再回退 `LegacyRuntime.ttf`。不新增字体包，不分发字体文件。
+- 全国地图只从批准列表 `KaiTi`、`STKaiti`、`FangSong`、`SimSun`、`Noto Serif CJK SC`、`Microsoft YaHei` 选择系统字体。TMP Settings 存在且能创建批准字体时，动态创建 TMP 字体资产；TMP Settings 缺失或 TMP 创建失败时改用 uGUI `Text` 加同一批准字体。批准字体不可用时，状态/警告字符串与 `Debug.LogWarning` 记录缺字，文本改用不渲染占位；无字体时这些 UI 字符串本身也可能不可见，因此以 Console 警告为可审计提示。不把批准列表之外的系统字体作为候选，不使用 TMP 默认字体或内置 `LegacyRuntime`/Arial 掩盖问题。不新增字体包，不分发字体文件；实际系统字体覆盖、字形完整性和许可仍需目标机验收。
 
 ### 1.2 版式分区
 
@@ -216,6 +216,8 @@ M04 版式约束已由测试锁定。1280×600 下面板高 440、摘要条带�
 | `Assets/Resources/Generated/ui_icons_atlas.png` | 1312×1199 | 4×4 图集，16 图标 |
 | `Assets/Resources/Generated/world_map_illustration.png` | 1672×941 | 无文字地区地图 |
 | `Assets/Art/UI/start_screen_background.png` | 1672×941 | 标题底图，`M6TitleRoot` 使用 |
+
+日本全境离散地图（t40 当前登记）：无新增 PNG、图集或分发字体文件。五畿七道目录、68 旧国、37 旅行枢纽、40 条路线与证据分类标签均为代码文本数据；`FoundationScene` 通过 `JapanMapSceneBootstrap` 在运行时创建“全国地图”入口，界面优先使用 uGUI 与 TextMeshPro。字体只从批准的 CJK 系统字体列表选择：TMP Settings 可用且创建成功时使用动态 TMP 字体，TMP Settings 缺失或创建失败时用 uGUI `Text`；没有批准字体时状态/警告字符串与 `Debug.LogWarning` 记录缺字并停止渲染文本；无字体时 UI 字符串本身也可能不可见，以 Console 警告为可审计提示。不遍历其他系统字体，不使用 TMP 默认字体或内置 `LegacyRuntime`/Arial 替代。实际字体覆盖、字形与许可仍待实机验收；史料来源、许可与阶段边界见 `docs/maps/japan-discrete-map-implementation.md`。
 
 历史参考裁片，非生产素材，待夹具不再引用后移除。
 `Assets/Art/UI/paper_grain.png` 512×512、`Assets/Art/UI/ReferenceArt/portrait_elder.png` 118×118、`portrait_main.png` 212×256、`portrait_master.png` 118×118、`portrait_youth.png` 115×115、`seal.png` 44×44、`travel_scene.png` 102×76、`Assets/Resources/ReferenceArt/map_illustration.png` 908×854，以及 `Assets/Resources/ReferenceArt/` 下同名四张肖像。

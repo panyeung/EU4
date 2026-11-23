@@ -33,7 +33,7 @@
 | Play Mode 核心循环与隔离存读档 | 已记录通过，源 `c291dd3` | 详见 `Logs/verify/20261118-integration/20261118-1348-core-loop.md`。此证据不代表 Player 存读档或用户验收 |
 | Windows Player 构建与冒烟 | 构建成功，报告记 0 错误。冒烟日志无 Exception、LogError、NullReference | 详见 `Logs/verify/v1-demo-build/20261118-r2-demo-build.md`。来源为 `2bca9d1` |
 | Windows Player M00 试玩预验收 | 2026-11-19 本机 EXE 从标题页走到清洲护送委托详情；日期、资金、物资与事件反馈符合试玩步骤 | 详见 `docs/reports/v1-m00-unity-playtest-20261119.md`。Computer Use 输入属主控预验收；日志含 URP 后处理 Shader 警告，不等于用户最终验收 |
-| M08 五十五周年 PlayMode | PR #4 报告端到端用例 `1/1` 通过；最新需求复核 RETURN，因测试未逐次断言月结成功且日期恰好推进一月 | PR 分支证据，未在本轮重跑；待 OpenCode2 修正测试与报告并重跑后再签核，不等于用户验收 |
+| M08 五十五周年 PlayMode | PR #4 报告端到端用例 `1/1` 通过；最新需求复核 RETURN，因测试未逐次断言月结成功且日期恰好推进一月 | PR 分支证据，未在本轮重跑；待修正测试与报告并重跑后再签核，不等于用户验收 |
 | 用户验收 | 未完成 | 只有用户试玩后才能闭合 |
 
 Git 忽略 `Logs/` 与 `Builds/`。这些日志和 exe 目前只在本机工作区。GitHub 分支克隆不包含它们。交付演示时，确认用户能访问此工作区，或另行提供构建包。
@@ -54,8 +54,8 @@ checkpoint 记录的 M08B D3 基线中，`unmanaged` 1000 种子均未到达 50 
 
 - Orca 当前为本项目登记主工作树及 M08 相关工作树；`m08-55-year-review-runtime` 含既有用户设置改动，必须保留。每项任务一个写者，Unity 测试串行执行。
 - PR #3、#4、#5 均开放且未合并。PR #5 以 `docs/orca-project-workflow` 为基底；用户最终验收前不合并 `main`、不打里程碑 tag。
-- OpenCode2 负责所有代码实现和测试执行。最近一次派工报告其用量达到月度限制；额度恢复前不转交其他 agent 实现代码。只读研究与独立文档复审仍可进行。
+- 代码实现和测试由指定的实现 agent 负责。只读研究与独立文档复审仍可进行。
 - `origin/panyeung/ui-m04-family` 的部分文件改动已在 `main`。直接合并旧分支历史会让场景和 UI 文件冲突。保留该引用，不重放旧历史。
 - `checkpoint.md` 顶部原先引用旧分支和旧基线。本次文档分支已改为当前代码基线。合入前由独立复审检查这项更正。
 - v1 演示运行说明见 [v1 Windows 演示包](docs/reports/v1-demo-package-20261118.md)。
-- 下次启动 Unity 前，重新检查本工程 Editor 进程及 `-projectPath`，并核实 `unity pipeline list` 与 Orca 工作树状态。OpenCode2 执行代码实现和测试；独立复审 agent 只读审代码与证据。
+- 下次启动 Unity 前，重新检查本工程 Editor 进程及 `-projectPath`，并核实 `unity pipeline list` 与 Orca 工作树状态。指定的实现 agent 执行代码实现和测试；独立复审 agent 只读审代码与证据。

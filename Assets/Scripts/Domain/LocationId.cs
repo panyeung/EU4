@@ -4,9 +4,10 @@ using System.Collections.Generic;
 namespace SengokuChronicle.Domain
 {
     /// <summary>
-    /// 地点标识符：仅三处固定地点（清洲 / 热田 / 那古野）。
-    /// 字符串常量作为稳定 ID；不存在第四地点。
-    /// 中文名称是地点身份的固有数据，故在此一并提供。
+    /// 地点标识符：全国旅行图中的每一处旅行枢纽都是合法地点。
+    /// 三个 M02 旧地点（清洲 / 热田 / 那古野）的字符串 ID 与顺序保持不变，
+    /// 新增枢纽只追加稳定 ID，因此旧存档中的 locationId 与路线端点无需改写。
+    /// 中文名称是地点身份的固有数据，统一从 <see cref="JapanTravelGraph"/> 读取。
     /// </summary>
     public readonly struct LocationId : IEquatable<LocationId>
     {
@@ -14,10 +15,7 @@ namespace SengokuChronicle.Domain
         public static readonly LocationId Atsuta = new LocationId("owari.atsuta");
         public static readonly LocationId Nagoya = new LocationId("owari.nagoya");
 
-        private static readonly LocationId[] AllLocations =
-        {
-            Kiyosu, Atsuta, Nagoya,
-        };
+        private static IReadOnlyList<LocationId> _allLocations;
 
         private readonly string _value;
 
@@ -29,14 +27,26 @@ namespace SengokuChronicle.Domain
         /// <summary>稳定地点 ID 字符串（如 "owari.kiyosu"）。</summary>
         public string Value => _value;
 
-        /// <summary>是否为已知的三个合法地点之一。</summary>
+        /// <summary>是否为全国旅行图中的已知旅行枢纽。</summary>
         public bool IsValid =>
-            _value == Kiyosu._value ||
-            _value == Atsuta._value ||
-            _value == Nagoya._value;
+            !string.IsNullOrEmpty(_value) && JapanTravelGraph.TryGetHub(_value, out _);
 
-        /// <summary>全部合法地点（只读快照，顺序固定）。</summary>
-        public static IReadOnlyList<LocationId> All => AllLocations;
+        /// <summary>全部合法地点（只读快照，顺序与旅行图枢纽顺序一致，旧三地点在前）。</summary>
+        public static IReadOnlyList<LocationId> All
+        {
+            get
+            {
+                if (_allLocations == null)
+                {
+                    IReadOnlyList<JapanMapHub> hubs = JapanTravelGraph.Hubs;
+                    var locations = new List<LocationId>(hubs.Count);
+                    for (int i = 0; i < hubs.Count; i++)
+                        locations.Add(new LocationId(hubs[i].Id));
+                    _allLocations = locations.AsReadOnly();
+                }
+                return _allLocations;
+            }
+        }
 
         public static bool operator ==(LocationId a, LocationId b) => a._value == b._value;
         public static bool operator !=(LocationId a, LocationId b) => a._value != b._value;
@@ -50,19 +60,18 @@ namespace SengokuChronicle.Domain
         public static bool TryParse(string value, out LocationId result)
         {
             result = default;
-            if (value == Kiyosu._value) { result = Kiyosu; return true; }
-            if (value == Atsuta._value) { result = Atsuta; return true; }
-            if (value == Nagoya._value) { result = Nagoya; return true; }
-            return false;
+            if (string.IsNullOrEmpty(value) || !JapanTravelGraph.TryGetHub(value, out _))
+                return false;
+            result = new LocationId(value);
+            return true;
         }
 
         /// <summary>获取地点的中文名称；未知地点返回空字符串。</summary>
         public static string GetChineseName(LocationId id)
         {
-            if (id == Kiyosu) return "清洲";
-            if (id == Atsuta) return "热田";
-            if (id == Nagoya) return "那古野";
-            return string.Empty;
+            return JapanTravelGraph.TryGetHub(id.Value, out JapanMapHub hub)
+                ? hub.Name
+                : string.Empty;
         }
     }
 }

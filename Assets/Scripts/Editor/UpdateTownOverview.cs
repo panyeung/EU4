@@ -38,7 +38,7 @@ namespace SengokuChronicle.Editor
         // ReferenceGalleryNavigator restyles that band at runtime. Layout validation reads the
         // live band rect instead of restating a size here, so a scene whose band no longer fits
         // the page is refused instead of silently overflowing it.
-        private static readonly Vector2 ArtSize = new Vector2(540f, 304f);
+
         private static readonly Vector2 ResidentsSize = new Vector2(300f, 96f);
         private static readonly Vector2 FooterSize = new Vector2(FooterWidth, FooterHeight);
         private static readonly Vector2 TitleSize = new Vector2(640f, 46f);
@@ -52,7 +52,6 @@ namespace SengokuChronicle.Editor
             new Vector2(ColumnWidth, TownOverviewPanel.ActivityAreaHeight);
         private static readonly Vector2 ColumnActionSize = new Vector2(ColumnWidth, ActionHeight);
 
-        private const float ArtBottom = 200f;
         private const float ResidentsBottom = 96f;
         private const float FooterBottom = 28f;
         private const float TitleTop = -10f;
@@ -112,8 +111,8 @@ namespace SengokuChronicle.Editor
                 return false;
             }
 
-            string[] required = { "TownArt", "TownName", "TownFeature", "Residents", ActivityName,
-                ActivityButtonsName, "RosterButton", "MissionButton" };
+            string[] required = { "TownArt", "TownArtVeil", "TownName", "TownFeature", "Residents",
+                ActivityName, ActivityButtonsName, "RosterButton", "MissionButton" };
             foreach (string name in required)
             {
                 if (overview.Find(name) == null)
@@ -139,6 +138,10 @@ namespace SengokuChronicle.Editor
                 error = "Town overview labels, illustration, or actions are not bound.";
                 return false;
             }
+            if (!ButtonLabelFills(overview.Find("RosterButton"), out error) ||
+                !ButtonLabelFills(overview.Find("MissionButton"), out error) ||
+                !ButtonLabelFills(town.Find("ReturnToMapButton"), out error))
+                return false;
 
             Transform commission = FindTownEntry(town, CommissionEntryName);
             Transform tactical = FindTownEntry(town, TacticalEntryName);
@@ -254,6 +257,7 @@ namespace SengokuChronicle.Editor
                 SengokuUiArt.ApplyParchmentSurface(background);
 
                 Image art = EnsureImage(scene, root.transform, "TownArt");
+                Image veil = EnsureImage(scene, root.transform, "TownArtVeil");
                 Text title = EnsureText(scene, root.transform, "TownName", font, 34, TextAnchor.MiddleLeft);
                 Text feature = EnsureText(scene, root.transform, "TownFeature", font, 20, TextAnchor.MiddleLeft);
                 Text residents = EnsureText(scene, root.transform, "Residents", font, 20, TextAnchor.UpperLeft);
@@ -267,11 +271,11 @@ namespace SengokuChronicle.Editor
                 Button roster = EnsureButton(scene, root.transform, "RosterButton", "当地人物", font);
                 Button mission = EnsureButton(scene, root.transform, "MissionButton", "查看全部委托", font);
 
-                ApplyLayout(root, art, title, feature, residents, activity, activityButtons,
+                ApplyLayout(root, art, veil, title, feature, residents, activity, activityButtons,
                     roster, mission, returnButton, commissionEntry, tacticalEntry);
 
                 panel.BindReferences(art, title, feature, residents, activity, roster, mission,
-                    returnButton, activityButtons, activityTemplate);
+                    returnButton, activityButtons, activityTemplate, veil);
                 Undo.RecordObject(controller, UndoName);
                 controller.BindTownOverviewPanel(panel);
                 EditorUtility.SetDirty(controller);
@@ -317,7 +321,7 @@ namespace SengokuChronicle.Editor
             }
         }
 
-        private static void ApplyLayout(GameObject root, Image art, Text title, Text feature,
+        private static void ApplyLayout(GameObject root, Image art, Image veil, Text title, Text feature,
             Text residents, Text activity, RectTransform activityButtons, Button roster, Button mission, Button returnButton,
             Transform commissionEntry, Transform tacticalEntry)
         {
@@ -329,9 +333,16 @@ namespace SengokuChronicle.Editor
 
             PlaceTopLeft((RectTransform)title.transform, PageInset, TitleTop, TitleSize);
             PlaceTopLeft((RectTransform)feature.transform, PageInset, FeatureTop, FeatureSize);
-            PlaceBottomLeft((RectTransform)art.transform, PageInset, ArtBottom, ArtSize);
-            art.preserveAspect = true;
+            // The illustration is the page backing, not a framed card: stretch it to all four
+            // edges and keep the washi wash immediately above it so every label stays readable.
+            Stretch((RectTransform)art.transform, 0f, 0f, 0f, 0f);
+            art.preserveAspect = false;
             art.transform.SetAsFirstSibling();
+            Stretch((RectTransform)veil.transform, 0f, 0f, 0f, 0f);
+            veil.color = TownOverviewPanel.TownArtVeilColor;
+            veil.preserveAspect = false;
+            veil.raycastTarget = false;
+            veil.transform.SetSiblingIndex(1);
             PlaceBottomLeft((RectTransform)residents.transform, PageInset, ResidentsBottom, ResidentsSize);
             PlaceTopRight((RectTransform)activity.transform, -PageInset, ActivityTop, ActivitySize);
             PlaceTopRight(activityButtons, -PageInset, ActivityButtonsTop, ActivityButtonsSize);
@@ -421,9 +432,22 @@ namespace SengokuChronicle.Editor
             Text label = button.GetComponentInChildren<Text>(true);
             if (label == null) return;
             Undo.RecordObject(label, UndoName);
+            FitActionLabel(label);
             label.fontSize = fontSize;
             label.color = ActionLabel;
             label.raycastTarget = false;
+        }
+
+        /// <summary>
+        /// A button's label must occupy the button instead of keeping uGUI's default 100x100
+        /// rect. The 6/2 inset keeps a single-line action caption clear of the button edge.
+        /// </summary>
+        private static void FitActionLabel(Text label)
+        {
+            if (label == null) return;
+            var rect = (RectTransform)label.transform;
+            Undo.RecordObject(rect, UndoName);
+            Stretch(rect, 6f, 2f, 6f, 2f);
         }
 
         private static bool LayoutIsClear(Transform overview, Transform commissionEntry,
@@ -448,8 +472,8 @@ namespace SengokuChronicle.Editor
             // because ReferenceGalleryNavigator restyles the same band at runtime.
             Vector2 bandSize = root.rect.size;
             if (!BandCanHoldPage(bandSize, out error)) return false;
-            if (!TryRectInBand((RectTransform)overview.Find("TownArt"), bandSize, out Rect art, out error) ||
-                !TryRectInBand((RectTransform)overview.Find("TownName"), bandSize, out Rect title, out error) ||
+            if (!ArtFillsBand(overview, out error)) return false;
+            if (!TryRectInBand((RectTransform)overview.Find("TownName"), bandSize, out Rect title, out error) ||
                 !TryRectInBand((RectTransform)overview.Find("TownFeature"), bandSize, out Rect feature, out error) ||
                 !TryRectInBand((RectTransform)overview.Find("Residents"), bandSize, out Rect residents, out error) ||
                 !TryRectInBand((RectTransform)overview.Find("RosterButton"), bandSize, out Rect roster, out error) ||
@@ -461,28 +485,13 @@ namespace SengokuChronicle.Editor
                 return false;
 
             var band = new Rect(Vector2.zero, bandSize);
-            if (!Inside(art, band) || !Inside(title, band) || !Inside(feature, band) ||
+            if (!Inside(title, band) || !Inside(feature, band) ||
                 !Inside(residents, band) || !Inside(roster, band) ||
                 !Inside(activity, band) || !Inside(activityButtons, band) ||
                 !Inside(mission, band) || !Inside(commission, band) ||
                 !Inside(tactical, band))
             {
                 error = "A town page element extends outside the town page band.";
-                return false;
-            }
-            if (art.xMax > activity.xMin)
-            {
-                error = "The town illustration must not reach the local-action column.";
-                return false;
-            }
-            if (art.yMax > feature.yMin)
-            {
-                error = "The town illustration must stay clear of the town name and feature lines.";
-                return false;
-            }
-            if (residents.yMax > art.yMin)
-            {
-                error = "The resident list must not cover the town illustration.";
                 return false;
             }
             if (roster.yMax > residents.yMin)
@@ -528,14 +537,99 @@ namespace SengokuChronicle.Editor
                    ActionIsReadable(tacticalEntry, out error);
         }
 
+        /// <summary>
+        /// The illustration must be the bottom layer of the page and cover its whole rect; the
+        /// translucent washi wash sits immediately above it and below every label and control.
+        /// </summary>
+        private static bool ArtFillsBand(Transform overview, out string error)
+        {
+            error = null;
+            Image art = overview.Find("TownArt")?.GetComponent<Image>();
+            Image veil = overview.Find("TownArtVeil")?.GetComponent<Image>();
+            if (art == null || veil == null || art.transform.parent != overview ||
+                veil.transform.parent != overview)
+            {
+                error = "The town illustration and its washi wash must be direct children of the page.";
+                return false;
+            }
+            if (!StretchedToParent((RectTransform)art.transform) ||
+                !StretchedToParent((RectTransform)veil.transform))
+            {
+                error = "The town illustration and washi wash must stretch to all four page edges.";
+                return false;
+            }
+            if (art.preserveAspect)
+            {
+                error = "The town illustration must fill the page instead of preserving a framed aspect.";
+                return false;
+            }
+            if (art.raycastTarget || veil.raycastTarget)
+            {
+                error = "The town illustration and washi wash must not intercept pointer input.";
+                return false;
+            }
+            if (Mathf.Abs(veil.color.a - TownOverviewPanel.TownArtVeilAlpha) > 0.01f)
+            {
+                error = "The washi wash must use the shared translucent opacity.";
+                return false;
+            }
+            if (art.transform.GetSiblingIndex() != 0 || veil.transform.GetSiblingIndex() != 1)
+            {
+                error = "The washi wash must sit directly above the illustration and below the page content.";
+                return false;
+            }
+            return true;
+        }
+
+        private static bool StretchedToParent(RectTransform rect)
+        {
+            return rect.anchorMin == Vector2.zero && rect.anchorMax == Vector2.one &&
+                   rect.offsetMin == Vector2.zero && rect.offsetMax == Vector2.zero;
+        }
+
         private static bool ActionIsReadable(Transform action, out string error)
         {
             error = null;
             Text label = action != null ? action.GetComponentInChildren<Text>(true) : null;
-            if (label != null && label.fontSize >= 15) return true;
-            error = $"'{action?.name}' needs a label of at least 15px.";
-            return false;
+            if (label == null)
+            {
+                error = $"'{action?.name}' needs a label.";
+                return false;
+            }
+            if (label.fontSize < 15)
+            {
+                error = $"'{action.name}' needs a label of at least 15px.";
+                return false;
+            }
+            return ButtonLabelFills(action, out error);
         }
+
+        /// <summary>
+        /// The validator checks the one geometry invariant that keeps a seven-character
+        /// action caption on one line: the label spans the button with the 6/2 inset.
+        /// </summary>
+        private static bool ButtonLabelFills(Transform action, out string error)
+        {
+            error = null;
+            Text label = action != null ? action.GetComponentInChildren<Text>(true) : null;
+            var rect = label != null ? label.transform as RectTransform : null;
+            if (rect == null)
+            {
+                error = $"'{action?.name}' needs a label with a RectTransform.";
+                return false;
+            }
+            if (!Near(rect.anchorMin, Vector2.zero) || !Near(rect.anchorMax, Vector2.one) ||
+                !Near(rect.offsetMin, new Vector2(6f, 2f)) ||
+                !Near(rect.offsetMax, new Vector2(-6f, -2f)))
+            {
+                error = $"'{action.name}' label must fill the button with a 6/2 inset.";
+                return false;
+            }
+            return true;
+        }
+
+        private static bool Near(Vector2 first, Vector2 second) =>
+            Mathf.Abs(first.x - second.x) <= 0.01f && Mathf.Abs(first.y - second.y) <= 0.01f;
 
         private static bool TryRectInBand(RectTransform rect, Vector2 bandSize, out Rect result,
             out string error)
@@ -556,18 +650,18 @@ namespace SengokuChronicle.Editor
         }
 
         /// <summary>
-        /// The live band has to be able to hold the page's own metrics: the illustration's top
-        /// edge must clear the feature line, and the activity column must clear the illustration.
+        /// The live band has to hold the fixed content metrics while the illustration stretches
+        /// underneath it: the title column on the left and the action column on the right.
         /// </summary>
         private static bool BandCanHoldPage(Vector2 band, out string error)
         {
             error = null;
-            float requiredHeight = ArtBottom + ArtSize.y + Mathf.Abs(FeatureTop) + FeatureSize.y;
-            float requiredWidth = PageInset + ArtSize.x + PageInset + ColumnWidth + PageInset;
+            float requiredHeight = Mathf.Max(ResidentsBottom + ResidentsSize.y,
+                Mathf.Abs(ColumnActionTop - 2f * ColumnActionStep) + ColumnActionSize.y);
+            float requiredWidth = PageInset + TitleSize.x + PageInset + ColumnWidth + PageInset;
             if (band.x + 0.5f >= requiredWidth && band.y + 0.5f >= requiredHeight) return true;
             error = $"The town page band is {band.x:0}x{band.y:0}, but the page needs at least " +
-                    $"{requiredWidth:0}x{requiredHeight:0} for its illustration, feature line, and " +
-                    "activity column.";
+                    $"{requiredWidth:0}x{requiredHeight:0} for its title and activity columns.";
             return false;
         }
 
@@ -598,7 +692,7 @@ namespace SengokuChronicle.Editor
             var serialized = new SerializedObject(panel);
             string[] fields =
             {
-                "townIllustration", "townNameText", "townFeatureText", "residentText",
+                "townIllustration", "townArtVeil", "townNameText", "townFeatureText", "residentText",
                 "localActionsText", "activityButtonsRoot", "activityButtonTemplate",
                 "rosterButton", "missionButton", "returnToMapButton"
             };
@@ -708,6 +802,7 @@ namespace SengokuChronicle.Editor
             Undo.RecordObject(button, UndoName);
             button.targetGraphic = image;
             Text text = EnsureText(scene, obj.transform, "Label", font, 20, TextAnchor.MiddleCenter);
+            FitActionLabel(text);
             text.text = label;
             text.color = ActionLabel;
             return button;
