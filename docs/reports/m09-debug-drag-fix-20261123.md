@@ -78,7 +78,8 @@ Overlay 画布下画布 1 个世界单位等于 1 个屏幕像素，所以 `rect
 | 结果 | `3/3` 通过，失败 0，`duration=1.3884227s`（`2026-11-23 22:47:43Z`–`22:47:45Z`） | `2301/2301` 通过，失败 0，`duration=65.7882723s`（`2026-11-23 22:48:13Z`–`22:49:19Z`） |
 | 副本 | `Logs/verify/20261123-m09-drag-playmode-final/TestResults.xml` | `Logs/verify/20261123-m09-drag-editmode-final/TestResults.xml` |
 | SHA-256 | `73bb6d04cbd1d47d8b95359593996f719cca50e01ced71c4b554c823b445f27e` | `9b9b8490645df0c3d6829fe125b6cf86be91186f958d68d637e1188941771308` |
-| Console | 跑完 `error=0`、`warn=1`（TMP 后备字体提示） | 跑完 `error=2`，两条都是故障注入用例经 `GameSession.ReportChronicleAppendFailure` 主动打印，非新缺陷 |
+| Console | 跑完 `error=0`、`warn=1`（TMP 后备字体提示，逐条见下表归因） | 跑完 `error=2`，两条都是故障注入用例经 `GameSession.ReportChronicleAppendFailure` 主动打印，非新缺陷 |
+| XML 标识 | `<property name="platform" value="PlayMode" />`，程序集 `SengokuChronicle.PlayModeTests.dll`，3 个 M09 用例 | `<property name="platform" value="EditMode" />`，2301 个用例，其中 M09 拖动 3 个 |
 | Editor 状态 | `playMode=stopped`、`compiling=false` | 同左 |
 | 场景 | `FoundationScene` 为活动场景，`isDirty=false` | 同左 |
 
@@ -91,6 +92,24 @@ PlayMode 用例逐项：
 | `VirtualMouse_DragStartingOnFoldButton_MovesWindowWithoutClickingIt` | Passed | 0.2982916s |
 
 本机证据目录 `Logs/verify/` 被 `.gitignore` 排除，只在本机保留副本；提交里不放结果文件。
+
+### Console 归因（按运行分段）
+
+编译历史（`Logs/Editor.log`）：
+
+- 初次接入 PlayMode 程序集时出现 6 条 `CS0246: UnityTestAttribute/UnityTest`，原因是把测试程序集引用写进了 `precompiledReferences`，而不是 `references`；改正后消失。同一文件此前还有 2 条 `CS0618 FindFirstObjectByType` 弃用警告，已改用 `FindAnyObjectByType`。
+- 最终编译（2026-11-23 22:47:29Z 采样）`compilationFailed=false`、`consoleErrors=0`、`consoleWarnings=0`；`Logs/Editor.log` 第 2739 行之后没有任何 `error CS` / `warning CS`。
+
+按运行分段（`console_status.groundTruth` 与 XML 内输出对照）：
+
+| 运行 | 紧接其后的 groundTruth | XML 内可归因内容 |
+|---|---|---|
+| PlayMode 3 项（22:47:43Z–22:47:45Z） | error=0、warn=1、log=4 | PlayMode XML 唯一的输出行就是 TMP 后备字体警告，挂在 `SceneWiring_...` 用例的 `<output>` 下；没有 error 行 |
+| EditMode 全量（22:48:13Z–22:49:19Z） | error=2、warn=58、log=15 | 2 条 error 正是故障注入用例的「家族编年史记录写入失败（家族收养/婚姻）」；warn 噪声来自既有的各 M0x/SC-0xx updater rolled back 探针、UAC0009 与 TMP 提示 |
+
+主控先前读到的 `error=2`、`warn=51` 属于 EditMode 全量运行的 Console，不是 PlayMode 运行；Test Runner 在每次运行开始时清空 Console，因此 PlayMode 运行后的窗口里只剩 `0 error / 1 warning`。警告没有逐条归因到每个用例，只对上述 2 条 error 与 PlayMode 的 1 条 warning 做了逐条对照。
+
+`test_status` 读取全机共享的 `Temp/pipeline_test_status.json`，会返回最后一次完成的结果（当时是 2301/2301 EditMode）。PlayMode 结果以下列三项为准：复制副本的 `start-time=2026-11-23 22:47:43Z`（晚于修复后的编译）、`<property name="platform" value="PlayMode" />`、三个 `SengokuChronicle.Tests.PlayMode.M09DebugPanelInputChainTests` 用例。旧 22:43 副本（含 1 条失败）已重命名为 `Logs/verify/20261123-m09-drag-playmode-superseded-2243`，不再作为证据。
 
 ## 2026-11-23 主控 Computer Use 结果
 
