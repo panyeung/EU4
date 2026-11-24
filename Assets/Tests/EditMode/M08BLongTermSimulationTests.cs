@@ -456,6 +456,67 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
+        public void SummaryNamesOnlyThePolicyThatProducedTheFile()
+        {
+            var seeds = new List<M08BSeedResult> { SyntheticSeed(1, 10, true, 3, 100) };
+            int[] years = { 10 };
+
+            string dual = M08BLongTermSimulationRunner.BuildSummaryJson(
+                seeds, 1, 1, 100, years, M08BIndustryPolicy.DualFarmV1);
+            string single = M08BLongTermSimulationRunner.BuildSummaryJson(
+                seeds, 1, 1, 100, years, M08BIndustryPolicy.FarmManagedV1);
+            string none = M08BLongTermSimulationRunner.BuildSummaryJson(
+                seeds, 1, 1, 100, years, M08BIndustryPolicy.Unmanaged);
+
+            StringAssert.Contains("\"policy\":\"dual-farm-v1\"", dual);
+            StringAssert.Contains("fills every vacant Farm post in post order", dual);
+            StringAssert.Contains("two-post Farm can hold two appointed members", dual);
+            StringAssert.DoesNotContain("first Farm post only", dual);
+
+            StringAssert.Contains("\"policy\":\"farm-managed-v1\"", single);
+            StringAssert.Contains("fills the vacant first Farm post only", single);
+            StringAssert.Contains("leaves any second Farm post vacant", single);
+            StringAssert.DoesNotContain("every vacant Farm post", single);
+
+            StringAssert.Contains("\"policy\":\"unmanaged\"", none);
+            StringAssert.Contains("makes no industry appointment at all", none);
+            StringAssert.DoesNotContain("TryAssignIndustry", none,
+                "an unmanaged artifact must not describe appointments it never made");
+        }
+
+        [Test]
+        public void CheckpointRatiosStayConditionalWhileOverallRatiosCoverEverySeed()
+        {
+            int[] years = { 10 };
+            var seeds = new List<M08BSeedResult>
+            {
+                SyntheticSeed(1, 10, true, 4, 100),
+                SyntheticSeed(2, 10, true, 4, 100),
+                SyntheticSeed(3, 10, true, 4, 100),
+                SyntheticSeed(4, 10, true, 4, 100),
+                SyntheticSeed(5, 10, true, 4, 100)
+            };
+            // Seed-level flag: the condition held at some point in the run.
+            // Checkpoint flag: the condition held in the 12 months ending at the checkpoint.
+            seeds[0].FamineCollapse = true;
+            seeds[0].Checkpoints[0].FamineCollapse = true;
+            // Seed 5 stopped before the checkpoint: it leaves the checkpoint denominator
+            // while staying in every seed-level denominator.
+            seeds[4].Checkpoints[0].Reached = false;
+
+            string json = M08BLongTermSimulationRunner.BuildSummaryJson(seeds, 1, 5, 100, years);
+
+            StringAssert.Contains("\"reached\":4", json);
+            StringAssert.Contains("\"notReached\":1", json);
+            StringAssert.Contains(
+                "\"famineCollapse\":{\"numerator\":1,\"denominator\":4,\"permille\":250}", json);
+            StringAssert.Contains(
+                "\"famineCollapse\":{\"numerator\":1,\"denominator\":5,\"permille\":200}", json);
+            StringAssert.Contains("conditional on the seeds that survived that far", json);
+            StringAssert.Contains("never be read as a whole-range result", json);
+        }
+
+        [Test]
         public void CsvAndJsonSerializationIsStableAndRoundTrips()
         {
             int[] years = { 1 };

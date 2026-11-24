@@ -2799,6 +2799,47 @@ namespace SengokuChronicle.Editor
         // ---- normalized summary JSON ----------------------------------------------------
 
         /// <summary>
+        /// Self-description of the policy that produced the file. Each run names only its own
+        /// policy, so a dual-farm artifact can never carry a single-farm description and an
+        /// unmanaged artifact can never claim appointments happened.
+        /// </summary>
+        private static string IndustryPolicyDefinition(M08BIndustryPolicy policy)
+        {
+            switch (policy)
+            {
+                case M08BIndustryPolicy.FarmManagedV1:
+                    return "farm-managed-v1 is a simulation-only comparison policy, not player " +
+                           "behaviour and not a survival threshold. At each management-stable " +
+                           "point after pending events and succession are resolved it fills the " +
+                           "vacant first Farm post only and leaves any second Farm post vacant, " +
+                           "through GameSession.TryAssignIndustry by trying living family " +
+                           "members in ordinal PersonId order until one real-rule appointment " +
+                           "succeeds; a post stays vacant when nobody qualifies. Trading House " +
+                           "stays vacant, an occupied post is never replaced or unassigned, and " +
+                           "the policy consumes no random state. farmVacancyStablePoints is the " +
+                           "opportunity count and farmAppointments the accepted appointments " +
+                           "behind it";
+                case M08BIndustryPolicy.DualFarmV1:
+                    return "dual-farm-v1 is a simulation-only comparison policy, not player " +
+                           "behaviour and not a survival threshold. At each management-stable " +
+                           "point after pending events and succession are resolved it fills " +
+                           "every vacant Farm post in post order, so a two-post Farm can hold " +
+                           "two appointed members and each post settles its own line, through " +
+                           "GameSession.TryAssignIndustry by trying living family members in " +
+                           "ordinal PersonId order until one real-rule appointment succeeds; a " +
+                           "post stays vacant when nobody qualifies. Trading House stays vacant, " +
+                           "an occupied post is never replaced or unassigned, and the policy " +
+                           "consumes no random state. farmVacancyStablePoints is the opportunity " +
+                           "count and farmAppointments the accepted appointments behind it";
+                default:
+                    return "unmanaged is the accepted baseline: the harness makes no industry " +
+                           "appointment at all, so every Farm post and the Trading House stay " +
+                           "vacant unless a real session rule fills them. No seed under this " +
+                           "policy counts as managed play";
+            }
+        }
+
+        /// <summary>
         /// Deterministic summary over the completed seed rows. Every ratio prints its
         /// numerator and denominator; wall-clock timing stays in the batch log so the same
         /// range always produces the same bytes.
@@ -2875,8 +2916,9 @@ namespace SengokuChronicle.Editor
             JsonProperty(json, 4, "successionPolicy",
                 "approved simulation-only policy: prefer the valid designated heir, otherwise the eligible candidate with the lowest stable PersonId; pick the regent by the same stable-ID rule and complete a due regency through the public session command. A crisis adoption is never accepted, so a family with no lawful candidate keeps the PendingSuccession stop",
                 true);
-            JsonProperty(json, 4, "industryPolicy",
-                "farm-managed-v1 and dual-farm-v1 are simulation-only comparison policies, not player behaviour and not a survival threshold. At each management-stable point after pending events and succession are resolved, farm-managed-v1 fills the vacant first Farm post only, while dual-farm-v1 fills every vacant Farm post in post order, both through GameSession.TryAssignIndustry by trying living family members in ordinal PersonId order until one real-rule appointment succeeds; a post stays vacant when nobody qualifies. Trading House stays vacant, an occupied post is never replaced or unassigned, and neither policy consumes random state. farmVacancyStablePoints is the opportunity count and farmAppointments the accepted appointments behind it",
+            JsonProperty(json, 4, "industryPolicy", IndustryPolicyDefinition(policy), true);
+            JsonProperty(json, 4, "checkpoints",
+                "per-checkpoint ratios and distributions use only the seeds that reached that checkpoint (reached); notReached seeds stopped earlier and stay out of the checkpoint denominator, so a checkpoint ratio such as 0/N is conditional on the seeds that survived that far and must never be read as a whole-range result. The seed-level overall ratios in this file always use every seed in the range",
                 true);
             JsonProperty(json, 4, "progressionDeadlock",
                 "world progression stopped by an unresolved blocking event that still prevents the calendar advancing. A rule-required pending succession keeps its own stop category and is not a deadlock. A three-refusal advance stall is reported separately as Timeout, and an escaped harness exception as SimulatorFault",
