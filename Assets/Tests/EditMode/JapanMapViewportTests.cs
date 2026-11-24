@@ -9,9 +9,10 @@ namespace SengokuChronicle.Tests.EditMode
 {
     /// <summary>
     /// 日本全境地图视口的纯几何回归：绑定、全境复位、指针锚定缩放、
-    /// 1x–6x 倍率限制、四边夹取、窄视口轴居中、非 1:1 画布换算与视口尺寸变更。
+    /// 1x–6x 倍率限制、四边夹取、窄视口轴居中、非 1:1 画布换算、视口尺寸变更，
+    /// 以及透视相机倾斜视口下按真实拖动起终点换算平移。
     /// 同时锁定绑定边界：地图内容必须是视口的直接子级且未旋转。
-    /// 夹具只创建矩形与 Canvas，不加载底图、坐标数据、场景或预制体；
+    /// 夹具只创建矩形、Canvas 与相机，不加载底图、坐标数据、场景或预制体；
     /// 不覆盖 uGUI 按下拖动阈值与节点点击防误选，那些留给屏幕集成测试。
     /// </summary>
     public sealed class JapanMapViewportTests
@@ -24,6 +25,7 @@ namespace SengokuChronicle.Tests.EditMode
         private Scene _previousScene;
         private bool _previousDirty;
         private Canvas _canvas;
+        private Camera _canvasCamera;
         private RectTransform _viewport;
         private RectTransform _content;
         private JapanMapViewport _controller;
@@ -108,7 +110,7 @@ namespace SengokuChronicle.Tests.EditMode
             float initialScale = _content.localScale.x;
 
             _controller.ZoomAt(ScreenPointFor(new Vector2(100f, 100f)), 1f);
-            _controller.PanBy(new Vector2(120f, -80f));
+            PanByScreenDelta(new Vector2(120f, -80f));
             Assert.That(_content.localScale.x, Is.GreaterThan(initialScale),
                 "缩放后倍率应大于全境适配。");
 
@@ -179,18 +181,18 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(ContentWidth, Is.GreaterThan(800f));
             Assert.That(ContentHeight, Is.GreaterThan(600f));
 
-            _controller.PanBy(new Vector2(100000f, 100000f));
+            PanByScreenDelta(new Vector2(100000f, 100000f));
             Assert.That(ContentLeft, Is.EqualTo(_viewport.rect.xMin).Within(Tolerance),
                 "向右拖到底时内容左边必须贴住视口左边，不能露空白。");
-            Assert.That(ContentTop, Is.EqualTo(_viewport.rect.yMax).Within(Tolerance),
-                "向上拖到底时内容上边必须贴住视口上边，不能露空白。");
+            Assert.That(ContentBottom, Is.EqualTo(_viewport.rect.yMin).Within(Tolerance),
+                "向上拖到底时内容下边必须贴住视口下边，不能露空白。");
             AssertCoversViewport();
 
-            _controller.PanBy(new Vector2(-200000f, -200000f));
+            PanByScreenDelta(new Vector2(-200000f, -200000f));
             Assert.That(ContentRight, Is.EqualTo(_viewport.rect.xMax).Within(Tolerance),
                 "向左拖到底时内容右边必须贴住视口右边，不能露空白。");
-            Assert.That(ContentBottom, Is.EqualTo(_viewport.rect.yMin).Within(Tolerance),
-                "向下拖到底时内容下边必须贴住视口下边，不能露空白。");
+            Assert.That(ContentTop, Is.EqualTo(_viewport.rect.yMax).Within(Tolerance),
+                "向下拖到底时内容上边必须贴住视口上边，不能露空白。");
             AssertCoversViewport();
 
             // 在靠近角落的指针继续放大，锚定后的位置仍要被夹回边界内。
@@ -212,14 +214,14 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(ContentHeight, Is.EqualTo(270f).Within(Tolerance));
             Assert.That(_content.localPosition.y, Is.EqualTo(0f).Within(Tolerance));
 
-            _controller.PanBy(new Vector2(5000f, 5000f));
+            PanByScreenDelta(new Vector2(5000f, 5000f));
             Assert.That(_content.localPosition.x, Is.EqualTo(0f).Within(Tolerance),
                 "内容宽度等于视口宽度时，横向不允许拖动。");
             Assert.That(_content.localPosition.y, Is.EqualTo(0f).Within(Tolerance),
                 "内容高度小于视口时，纵向必须保持居中。");
 
             _controller.ZoomAt(ScreenPointFor(Vector2.zero), 1f);
-            _controller.PanBy(new Vector2(5000f, 5000f));
+            PanByScreenDelta(new Vector2(5000f, 5000f));
 
             // 放大后宽度大于视口、高度仍小于视口：横向夹到边缘，纵向继续居中。
             Assert.That(ContentWidth, Is.GreaterThan(360f));
@@ -243,12 +245,52 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(after.y, Is.EqualTo(before.y).Within(0.05f));
 
             Vector2 positionBefore = _content.localPosition;
-            _controller.PanBy(new Vector2(30f, -17.5f));
+            Vector2 dragStart = ScreenPointFor(new Vector2(-120f, 90f));
+            _controller.PanBy(dragStart, dragStart + new Vector2(30f, -17.5f));
             Vector2 moved = (Vector2)_content.localPosition - positionBefore;
             Assert.That(moved.x, Is.EqualTo(20f).Within(0.05f),
                 "画布横向缩放 1.5 时，30 屏幕像素等于 20 个视口单位。");
             Assert.That(moved.y, Is.EqualTo(-10f).Within(0.05f),
                 "画布纵向缩放 1.75 时，-17.5 屏幕像素等于 -10 个视口单位。");
+        }
+
+        [Test]
+        public void TiltedPerspectiveViewportMapsPanFromRealDragPoints()
+        {
+            SwitchToPerspectiveCanvas();
+            Build(new Vector2(800f, 600f), new Vector2(1600f, 1200f));
+            _viewport.localRotation = Quaternion.Euler(30f, 0f, 0f);
+            _controller.Refresh();
+
+            Vector2 center = ScreenPointFor(Vector2.zero);
+            for (int i = 0; i < 10; i++)
+                _controller.ZoomAt(center, 1f);
+            Assert.That(ContentWidth, Is.GreaterThan(2000f),
+                "必须放大到留出足够的夹取余量，才能观测未被夹取的拖位移。");
+
+            Vector2 dragStart = new Vector2(-250f, 180f);
+            Vector2 start = ScreenPointFor(dragStart);
+            Vector2 end = ScreenPointFor(dragStart + new Vector2(120f, -90f));
+
+            Vector2 positionBefore = _content.localPosition;
+            _controller.PanBy(start, end);
+            Vector2 moved = (Vector2)_content.localPosition - positionBefore;
+
+            Vector2 expected = MapToViewportLocal(end) - MapToViewportLocal(start);
+            Assert.That(expected.magnitude, Is.GreaterThan(1f),
+                "回归夹具的拖动必须产生可观测位移。");
+            Assert.That(expected.magnitude, Is.LessThan(400f),
+                "回归夹具的拖动量必须留在夹取余量内，否则断言会测到边界而不是换算。");
+            Assert.That(moved.x, Is.EqualTo(expected.x).Within(0.05f),
+                "平移量必须等于起终点各自投影到视口平面后的差值。");
+            Assert.That(moved.y, Is.EqualTo(expected.y).Within(0.05f),
+                "平移量必须等于起终点各自投影到视口平面后的差值。");
+
+            // 旧契约把屏幕原点当作拖动起点：同一段屏幕增量会算出不同的局部量。
+            Vector2 fromScreenOrigin = MapToViewportLocal(end - start) - MapToViewportLocal(Vector2.zero);
+            Assert.That((fromScreenOrigin - expected).magnitude,
+                Is.GreaterThan(expected.magnitude * 0.1f),
+                "透视倾斜视口下按屏幕原点推算的增量与真实起点不同，回归必须能分辨两者。");
         }
 
         [Test]
@@ -315,14 +357,54 @@ namespace SengokuChronicle.Tests.EditMode
 
         private Vector2 ScreenPointFor(Vector2 viewportLocal)
         {
-            return RectTransformUtility.WorldToScreenPoint(null, _viewport.TransformPoint(viewportLocal));
+            return RectTransformUtility.WorldToScreenPoint(
+                _canvasCamera, _viewport.TransformPoint(viewportLocal));
+        }
+
+        private Vector2 MapToViewportLocal(Vector2 screen)
+        {
+            bool mapped = RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                _viewport, screen, _canvasCamera, out Vector2 viewportLocal);
+            Assert.That(mapped, Is.True, "屏幕坐标必须能映射到视口局部坐标。");
+            return viewportLocal;
+        }
+
+        private void PanByScreenDelta(Vector2 screenDelta)
+        {
+            Vector2 start = ScreenPointFor(Vector2.zero);
+            _controller.PanBy(start, start + screenDelta);
+        }
+
+        private void SwitchToPerspectiveCanvas()
+        {
+            var cameraObject = Create("CanvasCamera", null);
+            var camera = cameraObject.AddComponent<Camera>();
+            camera.orthographic = false;
+            camera.fieldOfView = 60f;
+            camera.nearClipPlane = 0.5f;
+            camera.farClipPlane = 5000f;
+            cameraObject.transform.position = Vector3.zero;
+            cameraObject.transform.rotation = Quaternion.identity;
+
+            // 让画布平面距相机一个屏幕高对应的距离，视口局部单位与屏幕像素同量级。
+            float planeDistance = ScreenHeight * 0.5f /
+                Mathf.Tan(camera.fieldOfView * 0.5f * Mathf.Deg2Rad);
+
+            _canvas.renderMode = RenderMode.ScreenSpaceCamera;
+            _canvas.worldCamera = camera;
+            _canvas.planeDistance = planeDistance;
+
+            var canvasRect = (RectTransform)_canvas.transform;
+            canvasRect.localScale = Vector3.one;
+            canvasRect.rotation = Quaternion.identity;
+            canvasRect.position = new Vector3(0f, 0f, planeDistance);
+
+            _canvasCamera = camera;
         }
 
         private Vector2 ContentPointAt(Vector2 screen)
         {
-            bool mapped = RectTransformUtility.ScreenPointToLocalPointInRectangle(
-                _viewport, screen, null, out Vector2 viewportLocal);
-            Assert.That(mapped, Is.True, "屏幕坐标必须能映射到视口局部坐标。");
+            Vector2 viewportLocal = MapToViewportLocal(screen);
             Vector3 contentLocal = _content.InverseTransformPoint(_viewport.TransformPoint(viewportLocal));
             return new Vector2(contentLocal.x, contentLocal.y);
         }

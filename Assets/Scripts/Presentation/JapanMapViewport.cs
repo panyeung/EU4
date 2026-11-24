@@ -125,16 +125,28 @@ namespace SengokuChronicle.Presentation
         }
 
         /// <summary>
-        /// 按屏幕像素增量平移地图内容。非 1:1 画布缩放会先换算成视口局部单位，
-        /// 然后按边界夹取。
+        /// 按一次拖动的屏幕起点与终点平移地图内容。两点各自映射到视口局部坐标后
+        /// 取差值，因此透视相机、倾斜视口或非 1:1 画布缩放都按真实拖动位置的投影
+        /// 换算，而不是用屏幕原点推算近似增量。结果再按边界夹取。
         /// </summary>
-        public void PanBy(Vector2 screenDelta)
+        public void PanBy(Vector2 screenStart, Vector2 screenEnd)
         {
             EnsureBound();
 
             float scale = CurrentScale();
             _contentPosition = ClampToViewport(_contentPosition, scale);
-            _contentPosition += ScreenDeltaToLocal(screenDelta);
+
+            Camera camera = ResolveCamera();
+            if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                    _viewport, screenStart, camera, out Vector2 from) ||
+                !RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                    _viewport, screenEnd, camera, out Vector2 to))
+            {
+                ApplyTransform();
+                return;
+            }
+
+            _contentPosition += to - from;
             ApplyTransform();
         }
 
@@ -202,20 +214,6 @@ namespace SengokuChronicle.Presentation
             float minimum = viewportMax - (1f - pivot) * contentSize;
             float maximum = viewportMin + pivot * contentSize;
             return Mathf.Clamp(position, minimum, maximum);
-        }
-
-        private Vector2 ScreenDeltaToLocal(Vector2 screenDelta)
-        {
-            Camera camera = ResolveCamera();
-            if (RectTransformUtility.ScreenPointToLocalPointInRectangle(
-                    _viewport, Vector2.zero, camera, out Vector2 from) &&
-                RectTransformUtility.ScreenPointToLocalPointInRectangle(
-                    _viewport, screenDelta, camera, out Vector2 to))
-            {
-                return to - from;
-            }
-
-            return Vector2.zero;
         }
 
         private Camera ResolveCamera()
