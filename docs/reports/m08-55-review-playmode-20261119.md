@@ -1,6 +1,119 @@
 # M08 家族回顾（五十五周年与百年名门）Play Mode 端到端验证报告（2026-11-19 起）
 
-以下三条为首轮（2026-11-21）元数据，保留作历史记录；本轮 2026-11-23 的元数据见下一节。
+## 2026-11-23 15:30 / 15:33 本轮定稿：同版本两轮复跑
+
+本节是本轮最新结果。它用同一份测试源、同一 Editor、同一固定种子，连续跑两轮完整路线，并把 33 条玩家决策逐字节比对。下方各节保留为历史证据，不替代本节。
+
+### 运行身份与前置检查
+
+- 工作树 `C:\Users\panye\orca\workspaces\My project\m08-100-year-review`，分支 `panyeung/m08-100-year-review`，基线 HEAD `74f7579`；本轮只改 `Assets/Tests/PlayMode/M08CampaignReviewPlayModeTests.cs` 与文档。
+- Unity 6000.6.6f1，Editor PID 68216，Pipeline 端口 7801。运行前 `editor_status` 为 `ready`、`compiling=false`、`playMode=stopped`，`projectPath` 指向本树。
+- 同机另有 `m08-55-success-evidence`（PID 54508 / 7800）、`m09-debug-drag-fix`（PID 132232 / 7803）与主工程（PID 95724 / 7804）的 Editor，均未操作。运行前后没有 `-runTests` 进程；`hermes kanban ls` 无匹配任务。测试串行执行。
+- 共享结果文件在开工前被 m09 的 2301/2301 全量运行覆盖。本轮每次 `run_tests` 完成后立即用 `scripts/copy-testresults.sh` 复制；下文哈希均指复制副本，不引用共享源文件的旧内容。
+- 编译 `recompile` 完成，`console_status` 报 `compilationFailed=false`；`Library/ScriptAssemblies/SengokuChronicle.PlayModeTests.dll` 时间晚于测试源文件。
+
+### 命令
+
+```
+unity command recompile --project-path "$PWD"
+unity command run_tests --project-path "$PWD" --mode PlayMode \
+  --filter "SengokuChronicle.PlayModeTests.M08CampaignReviewPlayModeTests.ReviewMilestones_OpenAtFiftyFiveAndOneHundredYears_ConfirmAndSurviveSaveLoad" \
+  --async_tests true --timeout 1800
+unity command test_status --project-path "$PWD"
+bash scripts/copy-testresults.sh Logs/verify/<本轮目录>
+```
+
+### 两轮结果
+
+| 轮次 | 证据目录 | 结果 | 耗时 | 起止（UTC） | TestResults.xml |
+|---|---|---|---|---|---|
+| 第一轮 | `Logs/verify/m08-100-20261123-1530/` | 1/1 通过，0 失败，0 跳过 | 37.7019182 s | 01:29:03–01:29:41 | 35507 B，SHA-256 `17366bde0b28fda5bc3eb658e5dc6fa1d6e8407c11f00c0ee577ec6a66f85d68` |
+| 第二轮 | `Logs/verify/m08-100-20261123-1533/` | 1/1 通过，0 失败，0 跳过 | 36.6106735 s | 01:30:00–01:30:37 | 35508 B，SHA-256 `b7c0142d6aed990c43fa481623f0394fc54abb9f5672118e8802b663b2e96fb9` |
+
+两轮 XML 都记录 `_PID=68216`，Assembly 路径指向本树 `Library/ScriptAssemblies/SengokuChronicle.PlayModeTests.dll`。第二轮复制时与共享 `TestResults.xml` 同哈希。
+
+### Console 与场景
+
+| 项 | 第一轮 | 第二轮 |
+|---|---|---|
+| 清空前累计 | `error:0, warn:0, log:104`，cursor 259 | `error:0, warn:0, log:96`，cursor 355 |
+| 清空后基线 | `error:0, warn:0, log:0` | `error:0, warn:0, log:0` |
+| 本轮时间窗新增 | `error:0, warn:0, log:96`，cursor 259→355；`groundTruth.consoleLogs` 94 | `error:0, warn:0, log:98`，cursor 355→453；`groundTruth.consoleLogs` 95 |
+| 时间窗内 level 计数 | error 0 / warn 0 | error 0 / warn 0 |
+| `[M08-55]` 日志行 | 91 | 91 |
+
+- 时间窗按 `console --since <baseline_cursor>` 取，累计数按 `console_status.counts` 单列；两者原文分别在 `console_entries.after.txt` 与 `console_status.after.txt`。
+- `Editor.log.this-round.txt` 从运行前字节偏移切片，包含 91 条 `[M08-55]` 日志；没有 `NullReferenceException`、`AssertionException`、`InvalidOperationException`、`Argument*Exception`、`Unhandled Exception` 或测试失败行。
+- 两轮结束后 `FoundationScene` 均为 `dirty=False|rootCount=4`，没有保存场景。
+- `.vscode/settings.json` 运行前后 SHA-256 都是 `9432d680c0d25334199aac3191668726749cf199e20c7f57f20828bae256cc7b`，未暂存、未还原。
+- Test Runner 每轮删除 `PerformanceTestRunInfo.json`、`PerformanceTestRunSettings.json` 及两个 `.meta`；开工前四项 `git diff --quiet` 为干净，跑完只对这四项执行 `git checkout --` 恢复。`ProjectSettings/Packages/com.unity.learn.iet-framework/Settings.json` 是 Editor 打开期间产生的本地改动，本轮未恢复、未暂存。
+
+### 最小经营决策与路线
+
+路线只做四类玩家动作，全部触发生产面板的 `Button.onClick` 回调：
+
+- 月结。切到「地图」页，触发 `EndMonthButton`。每次先断言 `LastMonthTurnOutcome == Succeeded`，再断言日期恰好前进一个自然月，两项都成立才累计成功月结数。
+- 事件。触发 `EventChoice_*` 的首个可用选项；若该事件未解决，依次尝试下一个选项，直到 `PendingEventId` 改变。
+- 继承。切到「家族」页；首个合法 `SuccessionCandidate_*` 加 `SuccessionConfirmButton`；幼主时首个 `SuccessionRegent_*` 加确认；危机时 `SuccessionAcceptCrisisButton`；成年交权时确认。
+- 农庄补任。切到「家计」页；农庄空缺时触发首个 `IndustryCandidate_industry.farm_*` 加 `IndustryConfirmButton`，失败再试下一个。
+
+除此之外没有市场买卖、商馆任命、研究、教育、婚姻、任务或产业扩产操作。商馆 `industry.trading-house` 全程空缺。两轮产生的 33 条决策台账逐字节相同，SHA-256 都是 `4835e2e6717515058250f6f31b5619f0dfbaefdcd7702d5f38c46d17183c1648`：
+
+```
+diff -u Logs/verify/m08-100-20261123-1530/decision_ledger.txt \
+        Logs/verify/m08-100-20261123-1533/decision_ledger.txt
+# 无输出，退出码 0
+```
+
+台账内容为 20 次事件、5 次继承、5 次农庄任命、2 次回顾页打开与 1 条终局状态。关键节点：
+
+| 日期 | 决策 | 结果 |
+|---|---|---|
+| 1560-04-01 | 农庄任命 | `person.sc013.chie` |
+| 1560-05-01 至 1561-04-01 | 12 次事件 | 首个可用选项，事件 ID 与选项 ID 见台账 |
+| 1570-01-01 | 农庄补任 | `person.marriage.person-sc013-sakon.1562` |
+| 1578-01-01 | 第 1 次继承 | 家主 `person.sc013.masatsuna` |
+| 1588-01-01 | 第 2 次继承 | 家主 `person.sc013.nobumasa` |
+| 1599-01-01 | 农庄补任 | 长子系出生人物 |
+| 1601-01-01 | 第 3 次继承 | 长子系出生人物 |
+| 1615-04-01 | 五十五周年回顾 | 自动打开，确认后继续 |
+| 1657-01-01 | 第 4 次继承 | 幼主加摄政，同日补任农庄 |
+| 1660-01-01 | 第 5 次继承 | 家主交接，同日补任农庄 |
+| 1660-04-01 | 百年名门评定 | 自动打开，确认后继续 |
+
+### 五十五周年与百年的状态
+
+| 项 | 1615-04-01（660 次成功月结） | 1660-04-01（1200 次成功月结） |
+|---|---|---|
+| 已历年份 | 55 | 100 |
+| 待处理回顾 | `StageReview` | `CenturyReview` |
+| 家族 | 未灭绝 | 未灭绝 |
+| 人口 | 13 | 29 |
+| 资金 / 物资 / 情报 | 673 / 1992 / 0 | 317 / 3612 / 0 |
+| 粮食 / 粮价 | 1263 / 100‰ | 0 / 13910‰ |
+| 连续缺粮 | 0 个月 | 53 个月 |
+| 事件 / 继承 / 农庄任命 | 20 / 3 / 3 | 20 / 5 / 5 |
+
+- 55 年时资源健康，家族 13 人；这是继续跑到百年的依据。
+- 百年时家族仍存续、两处回顾都正确打开并确认，但路线已经进入饥荒：粮食 0、粮价 13910‰、连续短缺 53 个月，人口从 1655-04-01 的 73 人降到 29 人。结论只能写“这条最小路线能到百年”，不能写“这条路线经营健康”。
+- 存档只在 `Path.GetTempPath()/m08-55-review-playmode-<guid>/save-slot-1.json` 的隔离槽；两轮各做一次“确认后存档 → 月结一个月 → 读档回滚”，共回滚 2 次月结，不覆盖用户存档。存档内 `randomState.initialSeedHex` 回读为 `5343414E4B4F3031`。
+
+### 可重放性
+
+- 两轮使用同一测试源 SHA-256 `546134d22c30ad07f3d5c58119d85eb9505bcc0a9bb6c5c8f86c5c1e635eec37`，同一 Editor 进程与会话，同一固定种子。
+- 33 条决策台账、终局日期、人口、资源、产业、家主与待处理状态完全一致。
+- 这是同一 Editor 会话内的重放证据，不是跨 Editor 重启、跨机器或跨 Player 的证据。
+
+### 边界
+
+- 「玩家操作」只指自动触发生产按钮的 `Button.onClick.Invoke()` 回调并让会话状态自然联动。没有模拟物理鼠标、触摸、EventSystem 射线命中、导航路径或键盘焦点。
+- 没有构建或运行 Windows Player；没有人工逐帧检查两次回顾的滚动、排版与文字截断。
+- 自动化 PlayMode 通过不等于用户实机验收。用户最终验收仍是关闭条件。
+- 本轮没有改玩法、经济公式、产业规则、平衡参数、场景、预制体或 ProjectSettings 的产品内容；测试只增加日志，不改断言与路线。
+
+---
+
+以下三条为首轮（2026-11-21）元数据，保留作历史记录；本轮 2026-11-23 的元数据见上一节。
 
 - 工作树 `C:\Users\panye\orca\workspaces\My project\m08-55-year-review-runtime`，分支 `feature/m08-55-year-review-runtime`。
 - 引擎 Unity 6000.6.6f1，本树 Editor 的 Pipeline 端口 7803（主工程 7801，未触碰）。2026-11-21 本轮新起本树唯一 Editor，PID 79524，开工时 `console_status` 计数 `error:0, warn:0, log:6`。

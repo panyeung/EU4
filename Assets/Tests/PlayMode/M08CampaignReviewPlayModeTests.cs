@@ -149,7 +149,43 @@ namespace SengokuChronicle.PlayModeTests
                       " 事件=" + _events + " 继承=" + _successions +
                       " 农庄任命=" + _farmAssignments +
                       " 日期=" + _session.WorldClock.CurrentDate +
-                      " 待处理回顾=" + _session.PendingCampaignReview);
+                      " 待处理回顾=" + _session.PendingCampaignReview +
+                      "｜终局状态：" + DescribeState());
+        }
+
+        /// <summary>
+        /// 只读快照：日期、成功月结、在世人口、资源、产业任命、待处理事件、继承阶段与
+        /// 待处理回顾。用于每 60 个月和终局日志，便于失败时保留当时的家族与经济状态。
+        /// </summary>
+        private string DescribeState()
+        {
+            int living = 0;
+            foreach (PersonState person in _session.Succession.World.Persons)
+                if (_session.Succession.World.IsLiving(person.Id))
+                    living++;
+
+            var slots = new System.Text.StringBuilder();
+            foreach (IndustrySlotView slot in _session.Industry.Slots)
+            {
+                if (slots.Length > 0)
+                    slots.Append('、');
+                slots.Append(slot.IndustryId).Append('=')
+                    .Append(slot.AssigneeId.IsEmpty ? "空缺" : slot.AssigneeId.Value);
+            }
+
+            return "日期=" + _session.WorldClock.CurrentDate +
+                   "｜成功月结=" + _successfulMonthTurns +
+                   "｜人口=" + living +
+                   "｜" + _session.Industry.ResourceLine +
+                   "｜" + _session.Industry.ShortageLine +
+                   "｜产业=" + (slots.Length > 0 ? slots.ToString() : "无") +
+                   "｜家主=" + _session.Succession.HeadPersonId.Value +
+                   "（第 " + _session.Succession.SuccessionCount + " 次继承）" +
+                   "｜待处理事件=" + (string.IsNullOrEmpty(_session.PendingEventId)
+                       ? "无"
+                       : _session.PendingEventId) +
+                   "｜继承阶段=" + _session.Succession.Phase +
+                   "｜待处理回顾=" + _session.PendingCampaignReview;
         }
 
         [TearDown]
@@ -238,7 +274,8 @@ namespace SengokuChronicle.PlayModeTests
                     Debug.Log(LogPrefix + label + " 成功月结=" + _successfulMonthTurns +
                               " 日期=" + _session.WorldClock.CurrentDate +
                               " 事件=" + _events + " 继承=" + _successions +
-                              " 农庄任命=" + _farmAssignments);
+                              " 农庄任命=" + _farmAssignments +
+                              "｜状态：" + DescribeState());
             }
 
             Assert.AreEqual(expectedMonthTurns, _successfulMonthTurns,
@@ -323,6 +360,8 @@ namespace SengokuChronicle.PlayModeTests
                     {
                         chosen = true;
                         _events++;
+                        Debug.Log(LogPrefix + "事件 " + _session.WorldClock.CurrentDate +
+                                  " " + eventId + " → " + optionId);
                     }
                 }
             }
@@ -352,6 +391,8 @@ namespace SengokuChronicle.PlayModeTests
                 {
                     ClickButton("SuccessionAcceptCrisisButton");
                     yield return null;
+                    Debug.Log(LogPrefix + "继承危机 " + date + " 接受危机决策，阶段=" +
+                              _session.Succession.Phase);
                     continue;
                 }
 
@@ -370,6 +411,10 @@ namespace SengokuChronicle.PlayModeTests
                     ClickButton("SuccessionConfirmButton");
                     yield return null;
                     _successions++;
+                    Debug.Log(LogPrefix + "继承 " + date + " 摄政=" +
+                              state.PendingRegentId.Value + " 幼主=" +
+                              _session.Succession.HeadPersonId.Value + "（第 " +
+                              _session.Succession.SuccessionCount + " 次继承）");
                     continue;
                 }
 
@@ -388,6 +433,9 @@ namespace SengokuChronicle.PlayModeTests
                     ClickButton("SuccessionConfirmButton");
                     yield return null;
                     _successions++;
+                    Debug.Log(LogPrefix + "继承 " + date + " 家主=" +
+                              _session.Succession.HeadPersonId.Value + "（第 " +
+                              _session.Succession.SuccessionCount + " 次继承）");
                     continue;
                 }
 
@@ -396,6 +444,8 @@ namespace SengokuChronicle.PlayModeTests
                     ClickButton("SuccessionConfirmButton");
                     yield return null;
                     _successions++;
+                    Debug.Log(LogPrefix + "成年交权 " + date + " 家主=" +
+                              _session.Succession.HeadPersonId.Value);
                     continue;
                 }
 
@@ -435,7 +485,11 @@ namespace SengokuChronicle.PlayModeTests
                 yield return null;
                 assigned = !_session.Industry.Slot(IndustryCatalog.FarmId).AssigneeId.IsEmpty;
                 if (assigned)
+                {
                     _farmAssignments++;
+                    Debug.Log(LogPrefix + "农庄任命 " + _session.WorldClock.CurrentDate +
+                              " → " + _session.Industry.Slot(IndustryCatalog.FarmId).AssigneeId.Value);
+                }
             }
 
             if (!assigned)

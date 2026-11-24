@@ -331,6 +331,7 @@
 
 | 日期 | ID | 内容 | 状态 | 证据 |
 |---|---|---|---|---|
+| 2026-11-23 | M08 | SC-013 最小经营路线两轮同版本复跑：660 次成功月结到 1615-04-01、1200 次到 1660-04-01；20 次事件、5 次继承、5 次农庄任命全部经生产按钮回调；33 条决策台账逐字节一致 | 进行中 | `Logs/verify/m08-100-20261123-1530/` 与 `...-1533/`：1/1 通过，XML SHA-256 `17366bde…85d68`、`b7c0142d…e96fb9`；Console 时间窗 0 error / 0 warn；场景 `dirty=False`；`decision_ledger.txt` 同哈希 `4835e2e6…3c1648`；详见 `docs/reports/m08-55-review-playmode-20261119.md` 本轮定稿节 |
 | 2026-11-18 | v1 集成 | 五个 UI 分支并入 `main`：层序统一为 `CanvasLayerOrder`、场景在 main 侧重放、全量回归与演示构建全过、独立复审 PASS | 进行中 | 全量 EditMode 2214/2214、Validator `PASS; Errors: 0`（源 `c291dd3`）；`Builds/Demo-v1-2bca9d1-r2/` 由 `2bca9d1` 干净工作树构建 `Succeeded`、`totalErrors=0`；用户最终验收未完成 |
 | 2026-11-18 | M00 | 主工作树未提交项与 `panyeung/m00-closeout` `e57dd06` 内容等价：35 个已跟踪修改文件 `git diff --ignore-cr-at-eol` 为 0 行，34 个未跟踪文件与同名 blob 剥 CR 后逐字节相同，仅 5 项是本地新增（合计 69 项等价） | 进行中 | `git status --porcelain -uall` 74 项（35 修改 / 39 未跟踪）；本地新增为 `Assets/Logs/verify/_scratch/t3193-00-now.png`、`Assets/Scenes/TestResults_20261108_072929.xml` 与其 `.meta`、`scripts/verify/SaveGatePlayProbe.cs`、`scripts/verify/SaveLoadPendingChecks.cs`；分支现头 `5141474` |
 | 2026-11-18 | M00 | Editor 卡死恢复：PID 88424 在一次测试超时后由 `RestoreSceneSetupTask` 抛 `IndexOutOfRangeException` 卡死主线程（pipeline 全超时、UIA 不可用），按 PID 结束该进程并重启为 PID 96584 / 端口 7800 | 进行中 | `unity pipeline list` 现报 `My project` 96584 / 7800 / 可达 true；场景备份 `Logs/recovery-20261118/scene-0.backup` 与 `__Backupscenes/0.backup` 各 835,768 字节，MD5 同为 `5ca370eb0407f1d1f1ac2131063ffd1e` |
@@ -426,8 +427,8 @@
 - 演示构建：`Builds/Demo-v1-2bca9d1-r2/`，源提交 `2bca9d1`（干净工作树），`Succeeded`、`totalErrors=0`、218 个文件 183,882,557 B，exe 667,136 B、`sha256 7c5b8f3e…188247d`（本卡亲跑 `sha256sum` 核对）。唯一警告是 Pipeline 包自带的「No RuntimePipelineConfig asset found」，不再是「未编译改动」。Player 冒烟走通标题→开始新游戏→SC-013→营地 HUD（1560-04-01、清洲、贯 30）→结束月份（1560-05-01、贯 28）→清洲城镇页四条当地委托→任务页，`Player.log` 0 条 Exception/LogError/NullReference。
 - 画布层序已统一：`Assets` 内 `CanvasOverlayOrder` 零命中，`CanvasLayerOrder` 是唯一页面序来源。
 - 独立复审 `t_122d4d5b` 判 **PASS**，C1–C6 全过。
-- 仍未闭合：用户最终验收（M00）；M08 战役回顾面板的运行时打开；M09 真机窗口拖动；`Assets/Tests/PlayMode` 为空，运行时验证仍靠手工配方；其余 MINOR 见 §6。
-- 本次状态核对时，本机唯一 Unity Editor 为 PID `93704`，项目路径为 `C:\Users\panye\My project`，Unity `6000.6.6f1`，Pipeline 端口 `7800` 可达。依据是 `Logs/verify/20261118-m08-full-verification.md` 记录的 2026-11-18 20:18:31Z / 20:18:35Z / 20:18:40Z 连续三次 `status=ready`，以及本次一次只读 `editor_status` 查询（`lastHeartbeat` 2026-11-18T23:33:38Z）返回 `ready`、`compiling=false`、`playMode=stopped`。这只代表 Editor 可连接，不代表运行时行为。后续 Unity 工作开始前重新核对进程、`-projectPath` 与 Pipeline；已有实例时复用，不启动第二实例。
+- 仍未闭合：用户最终验收（M00）；M08 回顾面板的实体鼠标/键盘输入、EventSystem 命中、Player 构建与用户手动验收；M09 真机窗口拖动；`Assets/Tests/PlayMode` 已含 M08 长周期用例，但其他运行时路径仍靠手工配方；其余 MINOR 见 §6。
+- 本次状态核对时，本机有四个 Unity Editor：本工作树 `m08-100-year-review` 为 PID `68216` / 端口 `7801`，`editor_status` 报 `ready`、`compiling=false`、`playMode=stopped`、`projectPath` 指向本树；另有 `m08-55-success-evidence`（54508 / 7800）、`m09-debug-drag-fix`（132232 / 7803）与主工程（95724 / 7804），均未操作。测试串行执行，运行前后无 `-runTests` 进程。这只代表 Editor 可连接，不代表运行时行为。后续 Unity 工作开始前重新核对进程、`-projectPath` 与 Pipeline；已有实例时复用，不启动第二实例。
 - 证据边界。M01 与 M08C 子切片的验收都不代表 M00 或 M02–M08 整体验收。
 
 ---
@@ -437,9 +438,9 @@
 按依赖顺序，前一项不闭合不做下一项。开始 Unity 工作前先核对 Editor 进程的 `-projectPath` 和 `unity pipeline list`；本工程已有 Editor 时复用，只有确认无实例时才启动。
 
 1. **用户最终验收（唯一硬门）**：跑 `Builds/Demo-v1-2bca9d1-r2/Demo-v1-2bca9d1-r2.exe`，走标题→开始新游戏→SC-013→营地 HUD→结束月份→地图→清洲城镇页→当地委托。验收通过后由用户点头，才谈里程碑 tag。
-2. M08 战役回顾面板的运行时打开：面板只在真实 55 年阶段回顾或 100 年结局待处理时显示，需要一条长周期演示路线给证据。不以调试跳日期取证。
+2. M08 战役回顾面板已由 `M08CampaignReviewPlayModeTests` 在 1615-04-01 与 1660-04-01 自动打开并确认；剩余门槛是用户在 Play Mode 或 Player 中手动走同一路线，亲眼确认两次回顾的显示、滚动、继续与存读档，以及实体输入链路。不以调试跳日期取证。
 3. M09 窗口拖动：手上没有真实硬件下的窗口拖动证据，需在可交互桌面上复验。
-4. `Assets/Tests/PlayMode` 目前为空，运行时验证全靠手工配方。要么补自动化，要么把「手工配方即口径」写进规格。
+4. `Assets/Tests/PlayMode` 已有 M08 长周期用例；其他运行时路径仍靠手工配方。要么继续补自动化，要么把「手工配方即口径」写进规格。跨工作树测试仍必须串行，跑完立即复制 `TestResults.xml`。
 5. MINOR 清理（`Assets/Scenes/` 的 stray `TestResults_*.xml`、`Assets/Logs/verify/_scratch/` 截图、隔离槽目录）需要批准。
 6. 画布层序已统一为 `CanvasLayerOrder`，后续任何新面板都必须按这套共享序插入并让 `CanvasLayerOrderTests` 覆盖，不要再引入第二套顺序表。
 
@@ -453,6 +454,7 @@
 - 场景语义 diff 过宽。M04 保存后除预期注册外还含尺寸归一化与 sibling 顺序变化。
 - 场景未接入 HEAD。`git show HEAD:Assets/Scenes/FoundationScene.unity` 中无 `SC024` 相关对象，接入只在未提交工作区。
 - 测试工具收尾异常。PID 88424 的崩溃现场已被重启覆盖，现 `Logs/Editor.log` 与 `%LOCALAPPDATA%\Unity\Editor\Editor.log` 中 `IndexOutOfRange` 命中 0 次；崩溃经过只留在本节与 `Logs/recovery-20261118/` 的场景备份里，没有原始调用栈。`IPostBuildCleanup` 页脚仍会出现，属既有噪声。
-- M08B 生存结论不成立。50/100 年存活样本为零，风险接受不等于生存通过。
+- M08B 生存结论不成立。1000 种子模拟基线的 50/100 年存活样本为零，风险接受不等于生存通过；2026-11-23 的 SC-013 单路线 PlayMode 证据只证明存在一条可重放路线，不构成生存率结论。
+- 最小路线在百年终点已进入饥荒。1660-04-01 粮食 0、粮价 13910‰、连续短缺 53 个月，人口从 1655-04-01 的 73 降到 29；两处回顾仍能打开并不代表经济可持续。若要做健康的百年路线，需要商馆/市场或产业扩产决策，属后续独立任务。
 - 输入路径未证实。窗口拖动返回 `synthetic_input`/`unverified`，坐标点击返回 `actionUnsupported`，实体键盘未单独验证。
 - Pipeline 请求多次超时。30 秒客户端上限与 `run_tests` 600 秒超时都曾中断验证流程。

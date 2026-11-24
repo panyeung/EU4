@@ -52,7 +52,8 @@ scripts/copy-testresults.sh Logs/verify/<证据目录>     # 跑完立刻复制�
 - `Assets/Scripts/Application` — `GameSession`（partial，6 个文件）与调试会话。
 - `Assets/Scripts/Presentation` — 全部 UI 面板与控制器。
 - `Assets/Scripts/Editor` — 场景/UI 生成器与 updater，改场景只走这里；`CanvasLayerOrder.cs` 是唯一的页面层次序来源。
-- `Assets/Tests/EditMode` — EditMode 测试（全量 2214 项；`Assets/Tests/PlayMode` 为空）。
+- `Assets/Tests/EditMode` — EditMode 测试（全量 2214 项）。
+- `Assets/Tests/PlayMode` — PlayMode 测试；`M08CampaignReviewPlayModeTests` 覆盖 SC-013 到 55/100 年的长周期回顾路线。
 - `Assets/Resources` — `Events/event-catalog-v1.json`、`Localization/*.json`、生成图。
 - `Assets/Scenes/FoundationScene.unity` — 唯一启用的构建场景。
 - `docs/` 设计与证据报告，`scripts/` 验证与通知脚本，`Logs/` 运行证据，`Builds/` 构建产物（忽略）。
@@ -70,9 +71,9 @@ scripts/copy-testresults.sh Logs/verify/<证据目录>     # 跑完立刻复制�
 | 严重度 | 缺口 | 为什么还在 |
 |---|---|---|
 | MAJOR | M00 用户最终验收未完成 | 验收权在用户。证据齐了，只差人过一遍成品 |
-| MINOR | M08 战役回顾面板的运行时打开未验证 | 面板只在真实 55 年阶段回顾或 100 年结局待处理时显示，需一条长周期演示路线；按裁定不靠调试跳日期取证 |
+| MINOR | M08 战役回顾面板只完成自动化 UI 路线验证 | 1615-04-01 与 1660-04-01 的自动打开、确认与存读档已由 PlayMode 用例覆盖；仍缺实体鼠标/键盘输入与用户手动验收。百年终点粮食 0、连续短缺 53 个月，路线能到但不健康 |
 | MINOR | M09 窗口拖动只在合成输入下验过 | 需真实硬件与可交互桌面 |
-| MINOR | `Assets/Tests/PlayMode` 为空 | 运行时验证靠手工 Play Mode 配方，规格列为非目标 |
+| MINOR | PlayMode 只覆盖 M08 长周期路线 | 其他运行时路径仍靠手工 Play Mode 配方；跨工作树测试必须串行并立即复制 `TestResults.xml` |
 | MINOR | 成品约 22 条 URP 后处理着色器被剥离 | Bloom/景深/运动模糊在构建产物中不生效，属着色器变体裁剪 |
 | MINOR | 城镇菜单三个 `Facility1..3Text` 场景节点仍在 | 内容由 `RefreshFacilitySlots` 决定，无总览页时按设计清空禁用；删节点属场景改动 |
 | MINOR | 世界地图屏「NPC 自主性」按钮与「清洲」卡片局部重叠 | 目视记录，未判定是否为设计意图 |
