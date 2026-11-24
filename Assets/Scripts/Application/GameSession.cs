@@ -5564,8 +5564,6 @@ namespace SengokuChronicle.Application
             int suppression = _dailyActionNotificationSuppression;
             _dailyActionNotificationSuppression++;
             var allOutcomes = new List<DailyActionResult>();
-            bool needsGrown = false;
-            bool commissionChanged = false;
             GameDate cursor = previousDate;
             try
             {
@@ -5573,14 +5571,14 @@ namespace SengokuChronicle.Application
                 {
                     if (!WorldClock.AdvanceOneDay())
                         return false;
-                    needsGrown |= GrowNpcNeeds(1);
+                    GrowNpcNeeds(1);
                     IReadOnlyList<DailyActionResult> outcomes =
                         EnsureDailyActions().AdvanceDays(cursor, 1);
                     allOutcomes.AddRange(outcomes);
                     ApplyNpcActionCompletions(outcomes);
                     // A direct trip simulates each travel day, so the commission must
                     // consume the same days and settle on the due day, exactly once.
-                    commissionChanged |= AdvanceCommissionDay(WorldClock.CurrentDate);
+                    AdvanceCommissionDay(WorldClock.CurrentDate);
                     cursor = WorldClock.CurrentDate;
                 }
 
@@ -5599,9 +5597,10 @@ namespace SengokuChronicle.Application
             PublishDailyActionReport(allOutcomes);
             SyncCurrentLocationFromDailyActions();
             LastTravelBlockReason = string.Empty;
-            if (NoticeRegencyHandoffIfDue() || allOutcomes.Count > 0 || needsGrown ||
-                commissionChanged)
-                SessionStateChanged?.Invoke();
+            NoticeRegencyHandoffIfDue();
+            // 一次确认过的旅程必然推进日期并移动当前位置：即便沿途没有其它副作用，
+            // 所有已订阅的页面也必须刷新。
+            SessionStateChanged?.Invoke();
             return true;
         }
 
