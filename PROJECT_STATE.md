@@ -57,7 +57,7 @@ checkpoint 记录的 M08B D3 基线中，`unmanaged` 1000 种子均未到达 50 
 ## Git 与协作状态
 
 - Orca 当前为本项目登记主工作树及 M08 相关工作树；`m08-55-year-review-runtime` 含既有用户设置改动，必须保留。每项任务一个写者，Unity 测试串行执行。
-- PR #3、#4、#5、#6 均开放且未合并。PR #5 以 `docs/orca-project-workflow` 为基底；用户最终验收前不合并 `main`、不打里程碑 tag。
+- PR #3、#4、#5 仍开放；PR #6 已合并至 `docs/orca-project-workflow`（`efe8f761451ef7ecbec71ef4864d1cf39d615b18`），不等于合并到 `main`。PR #3/#4 目标为 `main`，PR #5 以 `docs/orca-project-workflow` 为基底；用户最终验收前不合并 `main`、不打里程碑 tag。
 - 代码实现和测试由指定的实现 agent 负责。只读研究与独立文档复审仍可进行。
 - `origin/panyeung/ui-m04-family` 的部分文件改动已在 `main`。直接合并旧分支历史会让场景和 UI 文件冲突。保留该引用，不重放旧历史。
 - `checkpoint.md` 顶部原先引用旧分支和旧基线。本次文档分支已改为当前代码基线。合入前由独立复审检查这项更正。
