@@ -47,17 +47,17 @@ namespace SengokuChronicle.Domain
     /// </summary>
     public static class JapanGeoAnchors
     {
-        /// <summary>地图投影的南界（纬度）。</summary>
-        public const double SouthLatitude = 24d;
+        /// <summary>地图投影的南界（纬度），与登记底图范围一致。</summary>
+        public const double SouthLatitude = 23.5d;
 
-        /// <summary>地图投影的北界（纬度）。</summary>
-        public const double NorthLatitude = 46d;
+        /// <summary>地图投影的北界（纬度），与登记底图范围一致。</summary>
+        public const double NorthLatitude = 46.0d;
 
-        /// <summary>地图投影的西界（经度）。</summary>
-        public const double WestLongitude = 122d;
+        /// <summary>地图投影的西界（经度），与登记底图范围一致。</summary>
+        public const double WestLongitude = 122.5d;
 
-        /// <summary>地图投影的东界（经度）。</summary>
-        public const double EastLongitude = 146d;
+        /// <summary>地图投影的东界（经度），与登记底图范围一致。</summary>
+        public const double EastLongitude = 147.0d;
 
         /// <summary>旅行枢纽数量，与 <see cref="JapanTravelGraph.Hubs"/> 一致。</summary>
         public const int AnchorCount = 37;

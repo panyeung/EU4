@@ -35,6 +35,10 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(layout.NodeSize.y, Is.LessThanOrEqualTo(JapanMapLayout.NodeHeight));
 
             var distinct = new HashSet<Vector2>();
+            Vector2 mapSize = JapanGeoProjection.FitMapSize(new Vector2(width, height));
+            Assert.That(mapSize.x / mapSize.y,
+                Is.EqualTo(JapanGeoProjection.RegisteredBasemapAspect).Within(1e-4f),
+                "地图矩形没有保持登记底图纵横比。");
             for (int i = 0; i < layout.Positions.Length; i++)
             {
                 Vector2 position = layout.Positions[i];
@@ -46,13 +50,13 @@ namespace SengokuChronicle.Tests.EditMode
                     "两个枢纽复用了同一落点：" + position);
 
                 Assert.That(position.x - layout.NodeSize.x * 0.5f,
-                    Is.GreaterThanOrEqualTo(-width * 0.5f - 0.01f));
+                    Is.GreaterThanOrEqualTo(-mapSize.x * 0.5f - 0.01f));
                 Assert.That(position.x + layout.NodeSize.x * 0.5f,
-                    Is.LessThanOrEqualTo(width * 0.5f + 0.01f));
+                    Is.LessThanOrEqualTo(mapSize.x * 0.5f + 0.01f));
                 Assert.That(position.y - layout.NodeSize.y * 0.5f,
-                    Is.GreaterThanOrEqualTo(-height * 0.5f - 0.01f));
+                    Is.GreaterThanOrEqualTo(-mapSize.y * 0.5f - 0.01f));
                 Assert.That(position.y + layout.NodeSize.y * 0.5f,
-                    Is.LessThanOrEqualTo(height * 0.5f + 0.01f));
+                    Is.LessThanOrEqualTo(mapSize.y * 0.5f + 0.01f));
             }
         }
 

@@ -155,14 +155,71 @@ namespace SengokuChronicle.Tests.EditMode
         [TestCase(-91d, 136d)]
         [TestCase(35d, 181d)]
         [TestCase(35d, -181d)]
-        [TestCase(23d, 136d)]
-        [TestCase(47d, 136d)]
+        [TestCase(23.4d, 136d)]
+        [TestCase(46.1d, 136d)]
+        [TestCase(35d, 122.4d)]
+        [TestCase(35d, 147.1d)]
         [TestCase(35d, 121d)]
-        [TestCase(35d, 147d)]
         public void Projection_RejectsIllegalCoordinates(double latitude, double longitude)
         {
             Assert.Throws<ArgumentOutOfRangeException>(
                 () => JapanGeoProjection.ToNormalized(latitude, longitude));
+        }
+
+        [Test]
+        public void Projection_AcceptsTheRegisteredBasemapExtentEdges()
+        {
+            Vector2 southWest = JapanGeoProjection.ToNormalized(23.5d, 122.5d);
+            Vector2 northEast = JapanGeoProjection.ToNormalized(46.0d, 147.0d);
+
+            Assert.That(southWest.x, Is.EqualTo(0f).Within(1e-6f));
+            Assert.That(southWest.y, Is.EqualTo(0f).Within(1e-6f));
+            Assert.That(northEast.x, Is.EqualTo(1f).Within(1e-6f));
+            Assert.That(northEast.y, Is.EqualTo(1f).Within(1e-6f));
+
+            Vector2 center = JapanGeoProjection.ToNormalized(
+                JapanGeoAnchors.SouthLatitude * 0.5d +
+                JapanGeoAnchors.NorthLatitude * 0.5d,
+                JapanGeoAnchors.WestLongitude * 0.5d +
+                JapanGeoAnchors.EastLongitude * 0.5d);
+            Assert.That(center.x, Is.EqualTo(0.5f).Within(1e-6f));
+            Assert.That(center.y, Is.EqualTo(0.5f).Within(1e-6f));
+        }
+
+        [Test]
+        public void MapRect_FollowsRegisteredBasemapAspectWithoutStretching()
+        {
+            Assert.That(JapanGeoProjection.RegisteredBasemapAspect,
+                Is.EqualTo(1824f / 2048f).Within(1e-6f));
+
+            Vector2 wideArea = new Vector2(864f, 324f);
+            Vector2 wideMap = JapanGeoProjection.FitMapSize(wideArea);
+            Assert.That(wideMap.y, Is.EqualTo(324f).Within(0.01f));
+            Assert.That(wideMap.x, Is.EqualTo(324f * 1824f / 2048f).Within(0.01f));
+            Assert.That(wideMap.x, Is.LessThanOrEqualTo(wideArea.x));
+            Assert.That(wideMap.y, Is.LessThanOrEqualTo(wideArea.y));
+
+            Vector2 tallArea = new Vector2(253f, 300f);
+            Vector2 tallMap = JapanGeoProjection.FitMapSize(tallArea);
+            Assert.That(tallMap.x, Is.EqualTo(253f).Within(0.01f));
+            Assert.That(tallMap.y, Is.EqualTo(253f * 2048f / 1824f).Within(0.01f));
+            Assert.That(tallMap.x, Is.LessThanOrEqualTo(tallArea.x));
+            Assert.That(tallMap.y, Is.LessThanOrEqualTo(tallArea.y));
+
+            Assert.That(JapanGeoProjection.FitMapSize(Vector2.zero), Is.EqualTo(Vector2.zero));
+        }
+
+        [Test]
+        public void MapRect_TheoreticalEquirectangularAspect_StaysWithinDocumentedLimit()
+        {
+            // 计划记载等距圆柱 + 全境中心纬度经度修正；登记 PNG 未登记精确生成投影，
+            // 两者的 0.4% 差异是明确保留的近似限制，不是像素级地理配准。
+            float difference = Mathf.Abs(
+                JapanGeoProjection.EquirectangularAspect -
+                JapanGeoProjection.RegisteredBasemapAspect);
+            Assert.That(difference, Is.LessThan(0.005f));
+            Assert.That(JapanGeoProjection.EquirectangularAspect,
+                Is.EqualTo(0.8941f).Within(0.001f));
         }
 
         [Test]

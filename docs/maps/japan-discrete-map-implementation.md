@@ -43,7 +43,7 @@
 - `Assets/Scripts/Application/JapanMapExplorer.cs`：只读视图模型，负责五畿七道折叠、旧国选择、枢纽选择、陆/海筛选和路线卡生成；虾夷地与琉球单独列出，不混入 8 个省份目录组或 68 国计数。
 - `Assets/Scripts/Application/JapanMapText.cs`：把目录、枢纽详情、路线卡渲染为中文文本，显式标注“史料走廊支持”/“游戏设计推演”和“既有 M2 路线”；对新增枢纽显示“没有城镇活动、居民或委托”，对空旧国显示“旧国本身不是可访问地点”。
 - `Assets/Scripts/Domain/JapanGeoAnchors.cs`：37 个旅行枢纽的 GeoNames 区域锚点（`geonameId`、WGS84 纬度、经度），按稳定枢纽 ID 索引；声明顺序不影响按 ID 查找。坐标是区域近似代表点，不称城市中心、遗址中心、港口中心或精确历史地点；`MapX`/`MapY` 不被当作经纬度。`Validate()` 检查数量、ID/geonameId 唯一、经纬度有限且合法、落在日本投影范围内、锚点与枢纽一一对应，并由 `JapanTravelGraph.Validate()` 一并执行。来源与许可登记见 `docs/maps/geonames-attribution.md`。
-- `Assets/Scripts/Presentation/JapanMapGeoLayout.cs`：`JapanGeoProjection` 把经纬度线性归一化为 x 东、y 北的 0..1 坐标（投影范围北纬 24°–46°、东经 122°–146°），非法坐标抛出 `ArgumentOutOfRangeException`。`JapanMapGeoLayout.ComputeLayout` 用该归一化坐标作为网格偏好格位，复用 `JapanMapLayout` 的网格容量、74×28 节点尺寸与最近空格规则；分配顺序按枢纽 ID 排序，因此改变枢纽输入顺序不改变任一 ID 的落点。真实锚点过密，落点只做可点击性所需的就近微调，不改变 ID、路线、天数或存档。
+- `Assets/Scripts/Presentation/JapanMapGeoLayout.cs`：`JapanGeoProjection` 把经纬度线性归一化为 x 东、y 北的 0..1 坐标（范围东经 122.5°–147.0°、北纬 23.5°–46.0°，与 `ui设计规划.md` §10 登记的底图一致），非法坐标抛出 `ArgumentOutOfRangeException`。地图矩形按登记底图 1824×2048 的宽高比在视口内拟合，节点与底图共用同一矩形，经度/纬度不会被分别拉伸；计划记载的等距圆柱中心纬度修正理论宽高比约 0.8941 与登记 PNG 的 0.8906 相差约 0.4%，底图生成投影未登记，故明确保留该近似限制，不声称像素级地理配准。`JapanMapGeoLayout` 用归一化坐标作为网格偏好格位，复用 `JapanMapLayout` 的网格容量、74×28 节点尺寸与最近空格规则；分配顺序按枢纽 ID 排序，因此改变枢纽输入顺序不改变任一 ID 的落点。真实锚点过密，落点只做可点击性所需的就近微调，不改变 ID、路线、天数或存档。
 - `Assets/Scripts/Presentation/JapanMapLayout.cs`：纯静态布局，把归一化坐标映射到自适应网格并按最近空格确定节点位置；优先保留 74×28 点击目标。在 1280×720 的地图区（864×324）使用 10×10 网格；在审核报告的 720×720 窗口/逻辑 Canvas 960×960/地图区 648×432 下自动改为 8×10 网格，节点仍是 74×28，不会横向重叠。更窄的画布只有在本机确实放不下 74×28 时才按比例缩小节点，且始终保持在界内。若连缩小后的 74×28 网格也放不下全部枢纽，则按视口宽高比选择容量不少于枢纽数的列×行网格，再以列宽和行高为上限分别限制节点宽高；这样 100×100、100×1000、1000×100、1600×40 等极小或极端宽高比视口仍为每个枢纽分配唯一格位，不会回退到重复坐标。1×1 及以下视为退化视口，返回零位置且不绘制。布局不改动任何枢纽/路线 ID。`ComputeLayout` 的 `MapX`/`MapY` 入口保留为兼容路径，网格容量与摆放规则由地理布局共用。
 - `Assets/Scripts/Presentation/JapanMapScreen.cs`：运行时 uGUI 界面，TMP Settings 可用时文本使用 TMP，缺失时由 `JapanMapFonts` 改用 uGUI `Text`；左栏 68 旧国/区域目录，右栏节点与陆/海连线，底部可滚动详情和“确认出发/取消”。节点和连线共用 `JapanMapGeoLayout.ComputeLayout` 的位置与节点尺寸，落点由经纬度投影决定，不再由 `MapX`/`MapY` 决定；`LateUpdate` 记录上次地图区尺寸，宽度或高度变化超过 0.5 像素时重建节点与连线，因此窗口 resize 后不会沿用旧格宽造成重叠。每个节点仍是铺满 74×28（窄屏为布局返回值）的 uGUI `Button`，标签不拦截点击。选中任意枢纽时，即使当前不可旅行，详情仍列出每条相邻路线的类型、时期、控制、证据、来源和“游戏设计推演”标注；选择可直达枢纽时调用 `GameSession.PreviewTravel`，确认调用 `GameSession.ConfirmTravel`，不另建旅行状态。详情区使用 `ScrollRect` + `ContentSizeFitter`，不再以 `Truncate` 裁切长文本。
 - `Assets/Scripts/Presentation/JapanMapFonts.cs`：只从 `ui设计规划.md` 批准的字体列表（KaiTi、STKaiti、FangSong、SimSun、Noto Serif CJK SC、Microsoft YaHei）选择系统字体；不新增或分发字体文件。TMP Settings 存在且批准字体能生成 TMP 字体时走 TMP；TMP Settings 缺失或 TMP 创建失败时走 uGUI `Text`，仍只用同一批准字体。批准字体不可用时，代码状态/警告字符串与 `Debug.LogWarning` 记录“字体缺口”，文本使用不渲染的占位 `Graphic`；无字体时这些 UI 字符串本身也可能不可见，因此以 Console 警告为可审计提示。不遍历其他系统字体，不使用 TMP 默认字体或内置 `LegacyRuntime`/Arial 替代。实际系统字体覆盖、字形完整性和许可仍需目标机验收。
@@ -105,7 +105,7 @@
 - 1560 年逐条路线的通行权、关所、天数与港口关系；现有边只能作为游戏连通设计。
 - 高松—伊予松前、赤间关—博多与鹿儿岛—那霸的具体 1560 航线、船期、控制权和天数仍无直接史料；新增港口枢纽只提供区域背景，相关边明确标为游戏设计推演。
 - 虾夷地/琉球在具体年份的政治控制与可达性细节。
-- 美术底图、图集、最终视觉布局和预置 TMP 字体资源；本次只接入 GeoNames 区域近似锚点与可验证的自适应节点网格，不新增素材。锚点精度未由 GeoNames 逐条声明，也不能还原战国期实际地点。
+- 美术底图、图集、最终视觉布局和预置 TMP 字体资源；本次只接入 GeoNames 区域近似锚点与可验证的自适应节点网格，不新增素材。锚点精度未由 GeoNames 逐条声明，也不能还原战国期实际地点。登记底图 `japan_geographic_basemap.png` 尚未接入本工作树；其生成投影未在登记资料中写明，节点落点是同一范围/方向/纵横比矩形内的离散格位，不是像素级地理配准。
 - 用户尚未选择的视觉/交互选项不在本实现中臆定。
 
 ## 7. 复核入口
