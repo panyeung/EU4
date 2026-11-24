@@ -311,7 +311,7 @@
 - 唯一长期场景是 `Assets/Scenes/FoundationScene.unity`，根路径固定，例如 `Canvas/M6TitleRoot`、`Canvas/SC020EducationRoot`、`Canvas/SC022FamilyFormationRoot`、`Canvas/M2WorldMapRoot/TownMenuRoot/M5ShadowEscortCommissionRoot`。
 - 场景改动只走事务式 updater。单一固定根、一个 Undo 组、先验证后保存、异常用 Undo 回滚且不重载场景。
 - updater 只识别并替换精确的旧层级，遇到其他部分对象直接拒绝，可重复执行，负向路径留回滚测试。
-- 不手改 `.unity` 与 `.prefab` YAML。`SampleScene.unity`、`Assets/1.unity`、`ProjectSettings/SceneTemplateSettings.json` 属用户 WIP，保持不动。
+- 不手改 `.unity` 与 `.prefab` YAML；场景改动只通过 updater。操作本地文件前先核对其存在性、Git 状态与归属，保留用户未提交或被忽略的数据，不根据历史清单推定当前文件状态。
 - 生成后必须让 `FoundationSceneValidator` 复验，报告写 `Logs/SceneValidationReport.txt`，读时分行看，既有失败项会拉低总结果。
 
 ### 3.5 验证工具链
@@ -456,11 +456,11 @@
 
 ## 7. 风险与阻塞
 
-- 工作区保护的既有 WIP 长期未收敛。`SampleScene.unity`、`Assets/1.unity`、`ProjectSettings/SceneTemplateSettings.json`、`graphify-out/`、`nul` 均保留未提交。
+- 根工作树中 `graphify-out/` 存在并被 Git 忽略，`nul` 被 Git 报告为忽略项；`ProjectSettings/SceneTemplateSettings.json` 是干净的已跟踪文件，`SampleScene.unity` 与 `Assets/1.unity` 当前不存在。清理任何本地文件前仍须重新核对工作树状态与文件归属。
 - 共享 `TestResults.xml` 被并行测试争用，M00 报告的 error 部分归因于此。并行跑测试会互相覆盖证据。
 - 历史工件不能代表当前状态。M08C 的 1971/1971、M06/M07 的 1991/1991、M07 的 1710 项 XML 均已被覆盖或早于后续修改。
 - 场景语义 diff 过宽。M04 保存后除预期注册外还含尺寸归一化与 sibling 顺序变化。
-- 场景未接入 HEAD。`git show HEAD:Assets/Scenes/FoundationScene.unity` 中无 `SC024` 相关对象，接入只在未提交工作区。
+- HEAD 的 `Assets/Scenes/FoundationScene.unity` 已含 SC024 家训演示按钮、根节点与 `FamilyDoctrinePanel`；场景对象存在不等于本轮运行时或用户验收通过。
 - 测试工具收尾异常。PID 88424 的崩溃现场已被重启覆盖，现 `Logs/Editor.log` 与 `%LOCALAPPDATA%\Unity\Editor\Editor.log` 中 `IndexOutOfRange` 命中 0 次；崩溃经过只留在本节与 `Logs/recovery-20261118/` 的场景备份里，没有原始调用栈。`IPostBuildCleanup` 页脚仍会出现，属既有噪声。
 - `unmanaged` 基线 1000 个种子均未到达 50/100 年；`farm-managed-v1` 可完成部分 100 年路线，但记录仍有 803/1000 粮荒/崩溃和 801/1000 极端通胀。自动策略不代表玩家行为，风险基线不等于经济可持续通过。
 - M09 输入仍未完整验收。PR #6 的 PlayMode 虚拟 Mouse 回归只证明事件进入 `InputSystemUIInputModule` 后的 UI 行为；Computer Use 追踪证明其生成的 Mouse InputEvent 被 Input System 记录、EventSystem 派发到潜在拖动阶段，但按下与终点位置同帧使 `pressPosition == position`，未满足 uGUI 拖动阈值。该证据不证明 Windows 原始输入链，也不能判断实体鼠标结果。用户仍需验证标题栏拖动、松开后位置和底层控件未误触。此前坐标点击为 `actionUnsupported`，也不能证明实体键盘行为。
