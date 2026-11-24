@@ -332,7 +332,7 @@
 
 | 日期 | ID | 内容 | 状态 | 证据 |
 |---|---|---|---|---|
-| 2026-11-24 | M2 地图 | 主控 FoundationScene Play Mode 全国地图预验收：清洲→冈崎取消不改状态；确认后 1560-04-03/冈崎，筛选与目录滚动可用；关闭覆盖层后旧地图页仍留“当前位置：清洲”，切到家族内务再返回才刷新。预验收 RETURN，按根因修复并回归 | 修复处理中 | 根因两条：`WorldMapController` 整句缓存地点提示；`GameSession.ConfirmTravel` 仅在 NPC 需求成长等副作用成立时才发 `SessionStateChanged`。修复 `696af80` 已推 `origin/docs/orca-project-workflow`；回归红灯 5 例 2 过 3 败→绿灯 5/5，全量 2306/2306，Play Mode 复验关闭后即显示冈崎。证据 `Logs/verify/20261124-m2-overlay-close-refresh/`（XML SHA256 红灯 `c56f17dc…`、绿灯 `ee068b8e…`、全量 `2ea52b4b…`）；Console 累计含修复前红灯的 1236 条 Destroy 报错、1 条编译错误与 4 条既有负向用例 error，Play Mode 复验窗口新增 error 0，不记为全程零错误。用户最终验收未完成 |
+| 2026-11-24 | M2 地图 | 主控 FoundationScene Play Mode 全国地图预验收：清洲→冈崎取消不改状态；确认后 1560-04-03/冈崎，筛选与目录滚动可用；关闭覆盖层后旧地图页仍留“当前位置：清洲”，切到家族内务再返回才刷新。预验收 RETURN，按根因修复并回归；独立只读技术复审 ACCEPT，用户验收待完成 | 进行中 | 根因两条：`WorldMapController` 整句缓存地点提示；`GameSession.ConfirmTravel` 仅在 NPC 需求成长等副作用成立时才发 `SessionStateChanged`。修复 `696af80` 已推 `origin/docs/orca-project-workflow`；回归红灯 5 例 2 过 3 败→绿灯 5/5，全量 2306/2306，Play Mode 复验关闭后即显示冈崎。证据 `Logs/verify/20261124-m2-overlay-close-refresh/`（XML SHA256 红灯 `c56f17dc…`、绿灯 `ee068b8e…`、全量 `2ea52b4b…`）；Console 累计含修复前红灯的 1236 条 Destroy 报错、1 条编译错误与 4 条既有负向用例 error，Play Mode 复验窗口新增 error 0，不记为全程零错误。用户最终验收未完成 |
 | 2026-11-20 | M09 | Debug 综合测试面板入口预验：从标题页打开面板并确认日期为 `1560-04-01`；停止 Play Mode 后场景 `isDirty=false`，Console 无新增错误或警告 | 进行中 | 仅证明面板可见与退出状态正常；标题栏实体鼠标拖动、底层控件未误触仍待验证。详见 `PROJECT_STATE.md` §未完成工作第 3 项及 PR #3 的 M09 用户硬件输入验收步骤 |
 | 2026-11-19 | M00 | v1 Windows 演示技术签核 ACCEPT；`t_39a5b047` RETURN 所要求的文档状态修订已获独立只读复审 ACCEPT | 进行中 | Player 构建与冒烟：`Logs/verify/v1-demo-build/20261118-r2-demo-build.md`（`2bca9d1`）；EditMode 2214/2214、Validator PASS、核心循环及隔离存读档：`Logs/verify/20261118-integration/20261118-1348-core-loop.md`（`c291dd3`）；`c291dd3..2bca9d1` 仅注释修订。用户最终验收仍待完成 |
 | 2026-11-19 | M08 | 全量验证归档复审 ACCEPT；FoundationScene Play Mode 真实跨过 55/100 周年并自动显示回顾，确认后继续；M08 仍未闭合 | 进行中 | `docs/reports/v1-m08-55-review-user-acceptance-20261119.md` 记录 `farm-managed-v1` 正常月结路线、两次实际 UI 及 55 年后隔离存读档。百年终态粮荒 53 月、极端通胀 41 月、粮食 0、资金 317；不能据此宣称经济可持续或用户验收 |
@@ -450,7 +450,7 @@
 5. `Assets/Tests/PlayMode` 在 `main` 中为空，PR #4 分支新增 M08 五十五周年与百年端到端测试。后续按里程碑补齐自动化覆盖，且与真实运行时证据分别报告。
 6. `Assets/Logs/` 与 `Assets/Logs.meta` 当前均不存在；剩余 MINOR 清理仅包括 `Assets/Scenes/` 的 stray `TestResults_*.xml` 与隔离槽目录，按授权范围处理。
 7. 画布层序已统一为 `CanvasLayerOrder`，后续任何新面板都必须按这套共享序插入并让 `CanvasLayerOrderTests` 覆盖，不要再引入第二套顺序表。
-8. **日本全境地图用户试玩**：PR #3 已包含 Canvas 修正的 `2bc3b56`（独立只读复审 ACCEPT）、关闭刷新修复的 `696af80`（本轮红灯→绿灯→全量→Play Mode 复验通过，尚未单独派发独立复审），以及 68/68 与 5/5 EditMode 结果。主控预验收已于 2026-11-23/24 观察到取消不改状态、确认后 `1560-04-03`/冈崎、筛选与目录滚动可用；关闭覆盖层时旧地图页暂留“清洲”的缺陷已按根因修复并复验。仍须按 PR #3 步骤用实体鼠标滚轮、键盘焦点、目标设备中文显示和关闭后即时刷新完成用户验收；试玩未完成前不得记为通过。
+8. **日本全境地图用户试玩**：PR #3 已包含 Canvas 修正的 `2bc3b56`（独立只读复审 ACCEPT）、关闭刷新修复的 `696af80`（红灯→绿灯→全量→Play Mode 复验通过，独立只读复审 ACCEPT），以及 68/68 与 5/5 EditMode 结果。主控预验收已于 2026-11-23/24 观察到取消不改状态、确认后 `1560-04-03`/冈崎、筛选与目录滚动可用；关闭覆盖层时旧地图页暂留“清洲”的缺陷已按根因修复并复验。仍须按 PR #3 步骤用实体鼠标滚轮、键盘焦点、目标设备中文显示和关闭后即时刷新完成用户验收；试玩未完成前不得记为通过。
 
 ---
 
