@@ -710,7 +710,14 @@ namespace SengokuChronicle.Presentation
             if (parent == null)
                 return;
             for (int i = parent.childCount - 1; i >= 0; i--)
-                Destroy(parent.GetChild(i).gameObject);
+            {
+                GameObject child = parent.GetChild(i).gameObject;
+                // EditMode 回归测试也在非 Play Mode 下重建目录。
+                if (UnityEngine.Application.isPlaying)
+                    Destroy(child);
+                else
+                    DestroyImmediate(child);
+            }
         }
     }
 }
