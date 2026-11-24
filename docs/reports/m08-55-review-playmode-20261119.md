@@ -100,7 +100,7 @@ diff -u Logs/verify/m08-100-20261123-1530/decision_ledger.txt \
 
 ### 可重放性
 
-- 两轮使用同一测试源 SHA-256 `546134d22c30ad07f3d5c58119d85eb9505bcc0a9bb6c5c8f86c5c1e635eec37`，同一 Editor 进程与会话，同一固定种子。
+- 两轮使用同一测试源。工作区 CRLF 字节的 SHA-256 为 `546134d22c30ad07f3d5c58119d85eb9505bcc0a9bb6c5c8f86c5c1e635eec37`；提交内按 LF 存储，`git show HEAD:Assets/Tests/PlayMode/M08CampaignReviewPlayModeTests.cs` 的 SHA-256 为 `cf9f5557d8bc6cb4b202e05b88a67f42de65a00f4b402f23da9ac4dc4d4a2900`，`diff --strip-trailing-cr` 为 0。两轮是同一 Editor 进程与会话、同一固定种子。
 - 33 条决策台账、终局日期、人口、资源、产业、家主与待处理状态完全一致。
 - 这是同一 Editor 会话内的重放证据，不是跨 Editor 重启、跨机器或跨 Player 的证据。
 
