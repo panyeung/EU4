@@ -41,6 +41,7 @@ namespace SengokuChronicle.Presentation
         private readonly JapanMapViewport _mapViewport = new JapanMapViewport();
         private JapanMapViewportInput _mapInput;
         private Vector2 _lastMapSize;
+        private RectTransform _basemap;
         private RectTransform _lineLayer;
         private RectTransform _nodeLayer;
         private Graphic _detail;
@@ -401,6 +402,8 @@ namespace SengokuChronicle.Presentation
 
             var extent = new Vector2(size.width, size.height);
             EnsureViewport(extent);
+            if (_basemap != null)
+                _basemap.sizeDelta = JapanGeoProjection.FitMapSize(extent);
             DestroyChildren(_nodeLayer);
             DestroyChildren(_lineLayer);
 
@@ -602,9 +605,20 @@ namespace SengokuChronicle.Presentation
                 new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
             _mapContent.sizeDelta = Vector2.zero;
 
+            // 底图是 MapContent 的最底层，与路线、枢纽共用同一套缩放/平移变换；
+            // 矩形由 JapanGeoProjection.FitMapSize 决定，保持 1824×2048 原比例。
+            _basemap = NewRect("Basemap", _mapContent,
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+            var basemapImage = _basemap.gameObject.AddComponent<Image>();
+            Sprite basemapSprite = JapanMapBasemap.LoadSprite();
+            basemapImage.sprite = basemapSprite;
+            basemapImage.enabled = basemapSprite != null;
+            basemapImage.preserveAspect = true;
+            basemapImage.raycastTarget = false;
+
             _lineLayer = NewRect("RouteLines", _mapContent, Vector2.zero, Vector2.one);
             _nodeLayer = NewRect("HubNodes", _mapContent, Vector2.zero, Vector2.one);
-            _lineLayer.SetAsFirstSibling();
+            _basemap.SetAsFirstSibling();
             _nodeLayer.SetAsLastSibling();
 
             var detailPanel = CreatePanel("DetailPanel", _root, new Vector2(0.31f, 0.02f),
