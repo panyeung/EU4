@@ -431,7 +431,7 @@
 - 演示构建：`Builds/Demo-v1-2bca9d1-r2/`，源提交 `2bca9d1`（干净工作树），`Succeeded`、`totalErrors=0`、218 个文件 183,882,557 B，exe 667,136 B、`sha256 7c5b8f3e…188247d`（本卡亲跑 `sha256sum` 核对）。唯一警告是 Pipeline 包自带的「No RuntimePipelineConfig asset found」，不再是「未编译改动」。Player 冒烟走通标题→开始新游戏→SC-013→营地 HUD（1560-04-01、清洲、贯 30）→结束月份（1560-05-01、贯 28）→清洲城镇页四条当地委托→任务页，`Player.log` 0 条 Exception/LogError/NullReference。
 - 画布层序已统一：`Assets` 内 `CanvasOverlayOrder` 零命中，`CanvasLayerOrder` 是唯一页面序来源。
 - 独立复审 `t_122d4d5b` 判 **PASS**，C1–C6 全过。
-- 仍未闭合：M00 用户最终验收；M08 玩家手动经营路线与经济可持续性；M08B 用户规则选择；M09 真实硬件窗口拖动。PR #4 当前提交 `74f7579` 同时包含 55/100 年 PlayMode 用例，`1/1` 通过且独立复审 ACCEPT；逐次断言每次正式月结成功并恰好前进一个自然月。测试使用生产按钮回调，不证明实体输入、玩家手动经营或用户验收。M09 自动化测试与报告见 PR #6，PlayMode 3/3、EditMode 2301/2301 通过，独立复审 ACCEPT；使用真实 FoundationScene UI 模块接收虚拟 Mouse 事件，不证明物理输入。2026-11-23 主控两次 Computer Use 拖动未观察到位移，实体鼠标、松手停留与底层控件未误触仍待用户验收。`main` 的 `Assets/Tests/PlayMode` 仍为空；其余 MINOR 见 §6。
+- 仍未闭合：M00 用户最终验收；M08 玩家手动经营路线与经济可持续性；M08B 方案 B 已由用户选择（第二农庄岗位、40 人供给目标），实现、1000 种子模拟与粮食崩溃率门槛确认仍未闭合；M09 真实硬件窗口拖动。PR #4 当前提交 `74f7579` 同时包含 55/100 年 PlayMode 用例，`1/1` 通过且独立复审 ACCEPT；逐次断言每次正式月结成功并恰好前进一个自然月。测试使用生产按钮回调，不证明实体输入、玩家手动经营或用户验收。M09 自动化测试与报告见 PR #6，PlayMode 3/3、EditMode 2301/2301 通过，独立复审 ACCEPT；使用真实 FoundationScene UI 模块接收虚拟 Mouse 事件，不证明物理输入。2026-11-23 主控两次 Computer Use 拖动未观察到位移，实体鼠标、松手停留与底层控件未误触仍待用户验收。`main` 的 `Assets/Tests/PlayMode` 仍为空；其余 MINOR 见 §6。
 - 2026-11-19 M08 实际试玩后，Unity Editor PID `49784`、项目路径 `C:\Users\panye\My project`、Unity `6000.6.6f1`、Pipeline 端口 `7801`；停止 Play Mode 后状态 `ready`、`compiling=false`，FoundationScene `isDirty=false`，实时 Console 错误/警告 0。累计 Console 的两条旧 CLI/评估命令错误不属于该路线。后续 Unity 工作开始前重新核对进程、`-projectPath` 与 Pipeline；已有实例时复用，不启动第二实例。
 - 证据边界。M01 与 M08C 子切片的验收都不代表 M00 或 M02–M08 整体验收。
 
@@ -442,7 +442,7 @@
 按依赖关系推进；等待用户试玩或决策期间，继续完成不依赖该答复的工作。开始 Unity 工作前先核对 Editor 进程的 `-projectPath` 和 `unity pipeline list`；本工程已有 Editor 时复用，只有确认无实例时才启动。
 
 1. **M00 用户验收**：按 PR #3 中的 Windows EXE 步骤试玩；所有页面、日期、资金、物资与委托内容符合预期后，由用户明确给出最终结论。未验收前不合并 `main` 或打 tag。
-2. **M08B 用户决策**：PR #5 的经济供给方案记录已通过独立文档复审，等待用户选择 A/B/C/D 及参数和模拟门槛。选定前不改经济代码；选定后完成代码、测试与模拟证据，再由主控复审。
+2. **M08B 方案 B 实施**：用户已选择第二农庄岗位与 40 人供给目标；OpenCode2 实现双农庄分配、结算、显示与存档兼容，并提交测试和 1000 种子模拟证据。粮食崩溃率门槛仍待用户确认；玩家手动经营路线另按 40 人连续 12 个月记录，自动策略不代替真人验收。
 3. **M08 玩家路线**：现有 `farm-managed-v1` FoundationScene 路线已真实触发并确认 55/100 年回顾，55 年存读档往返通过；PR #4 的 PlayMode 用例报告 1/1 通过。仍需可重放的玩家手动经营路线验证经济目标，自动策略证据不能替代。
 4. **M09 真实硬件窗口拖动（剩余验收）**：PlayMode 虚拟 Mouse 回归 3/3、EditMode 2301/2301 均通过，独立代码/报告复审 ACCEPT；这些结果不覆盖 OS 采集和实体鼠标。主控两次 Computer Use 合成拖动均未改变面板位置。请按 [PR #6](https://github.com/panyeung/EU4/pull/6) 的步骤用实体鼠标打开 FoundationScene 的 Debug 面板、拖动标题栏、检查松开后停留与底层控件未误触，再切换日期页、关闭面板并停止 Play Mode；确认场景未修改且 Console 无本次新增错误。观察记录见 `docs/reports/m09-debug-drag-fix-20261123.md`。
 5. `Assets/Tests/PlayMode` 在 `main` 中为空，PR #4 分支新增 M08 五十五周年与百年端到端测试。后续按里程碑补齐自动化覆盖，且与真实运行时证据分别报告。
