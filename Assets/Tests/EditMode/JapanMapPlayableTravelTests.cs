@@ -915,14 +915,10 @@ namespace SengokuChronicle.Tests.EditMode
             GameObject sessionCanvasObject = null;
             try
             {
+                // 先建的 Canvas 代表场景首个 Canvas，GameSession 放在后建的 Canvas 下。
                 Canvas firstCanvas = CreateCanvas(out firstCanvasObject);
                 Canvas sessionCanvas = CreateCanvas(out sessionCanvasObject);
                 Assert.That(firstCanvas, Is.Not.SameAs(sessionCanvas));
-                Assert.That(UnityEngine.Object.FindFirstObjectByType<Canvas>(),
-                    Is.SameAs(firstCanvas),
-                    "夹具前提：GameSession 所在 Canvas 必须排在场景首个 Canvas 之后");
-                Assert.That(UnityEngine.Object.FindFirstObjectByType<WorldMapController>(), Is.Null,
-                    "夹具前提：本用例只覆盖没有 WorldMapController 时的 Canvas 选择");
 
                 session.gameObject.transform.SetParent(sessionCanvas.transform, false);
 
@@ -935,6 +931,67 @@ namespace SengokuChronicle.Tests.EditMode
             }
             finally
             {
+                DestroyCanvas(sessionCanvasObject, session);
+                if (firstCanvasObject != null)
+                    UnityEngine.Object.DestroyImmediate(firstCanvasObject);
+            }
+        }
+
+        [TestCase(false)]
+        [TestCase(true)]
+        public void StartupEntries_LeaveOneMapEntryOnTheGameSessionCanvasWhateverTheOrder(
+            bool controllerStartFirst)
+        {
+            GameSession session = NewSession();
+            GameObject firstCanvasObject = null;
+            GameObject sessionCanvasObject = null;
+            GameObject controllerObject = null;
+            try
+            {
+                // 两个 Canvas：GameSession 挂在后建的 Canvas 下，WorldMapController 挂在
+                // 先建的 Canvas 下，两个启动入口的 Canvas 不同。
+                Canvas controllerCanvas = CreateCanvas(out firstCanvasObject);
+                Canvas sessionCanvas = CreateCanvas(out sessionCanvasObject);
+                Assert.That(controllerCanvas, Is.Not.SameAs(sessionCanvas));
+
+                session.gameObject.transform.SetParent(sessionCanvas.transform, false);
+                var bootstrap = session.gameObject.AddComponent<JapanMapSceneBootstrap>();
+
+                controllerObject = new GameObject("M2WorldMapRoot", typeof(RectTransform));
+                controllerObject.transform.SetParent(controllerCanvas.transform, false);
+                controllerObject.SetActive(false);
+                var controller = controllerObject.AddComponent<WorldMapController>();
+                SetPrivateField(controller, "gameSession", session);
+                controllerObject.SetActive(true);
+
+                MethodInfo bootstrapStart = typeof(JapanMapSceneBootstrap).GetMethod(
+                    "Start", BindingFlags.Instance | BindingFlags.NonPublic);
+                MethodInfo controllerStart = typeof(WorldMapController).GetMethod(
+                    "Start", BindingFlags.Instance | BindingFlags.NonPublic);
+                Assert.That(bootstrapStart, Is.Not.Null, "JapanMapSceneBootstrap.Start 必须存在");
+                Assert.That(controllerStart, Is.Not.Null, "WorldMapController.Start 必须存在");
+
+                if (controllerStartFirst)
+                {
+                    controllerStart.Invoke(controller, null);
+                    bootstrapStart.Invoke(bootstrap, null);
+                }
+                else
+                {
+                    bootstrapStart.Invoke(bootstrap, null);
+                    controllerStart.Invoke(controller, null);
+                }
+
+                AssertSingleMapEntry(sessionCanvas);
+                Assert.That(controllerCanvas.transform.Find(JapanMapSceneBootstrap.RootName), Is.Null,
+                    "WorldMapController 所在 Canvas 不得出现第二套地图根");
+                Assert.That(controllerCanvas.transform.Find(JapanMapSceneBootstrap.LauncherName),
+                    Is.Null, "WorldMapController 所在 Canvas 不得出现第二个入口按钮");
+            }
+            finally
+            {
+                if (controllerObject != null)
+                    UnityEngine.Object.DestroyImmediate(controllerObject);
                 DestroyCanvas(sessionCanvasObject, session);
                 if (firstCanvasObject != null)
                     UnityEngine.Object.DestroyImmediate(firstCanvasObject);
@@ -1175,6 +1232,39 @@ namespace SengokuChronicle.Tests.EditMode
                 name, BindingFlags.NonPublic | BindingFlags.Static);
             Assert.That(field, Is.Not.Null, "Missing JapanMapFonts field: " + name);
             return (T)field.GetValue(null);
+        }
+
+        private static void AssertSingleMapEntry(Canvas canvas)
+        {
+            Assert.That(canvas, Is.Not.Null, "目标 Canvas 不能为空");
+            Assert.That(ChildCount(canvas.transform, JapanMapSceneBootstrap.RootName), Is.EqualTo(1),
+                "目标 Canvas 必须且只能有一套地图根");
+            Assert.That(ChildCount(canvas.transform, JapanMapSceneBootstrap.LauncherName),
+                Is.EqualTo(1), "目标 Canvas 必须且只能有一个入口按钮");
+            Transform root = canvas.transform.Find(JapanMapSceneBootstrap.RootName);
+            Assert.That(root.GetComponent<JapanMapScreen>(), Is.Not.Null);
+            Assert.That(canvas.GetComponentsInChildren<JapanMapScreen>(true).Length,
+                Is.EqualTo(1), "目标 Canvas 只能有一套地图界面");
+        }
+
+        private static int ChildCount(Transform parent, string childName)
+        {
+            int count = 0;
+            foreach (Transform child in parent)
+            {
+                if (child.name == childName)
+                    count++;
+            }
+
+            return count;
+        }
+
+        private static void SetPrivateField(object target, string name, object value)
+        {
+            FieldInfo field = target.GetType().GetField(name,
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(field, Is.Not.Null, "Missing field: " + name);
+            field.SetValue(target, value);
         }
 
         private static Canvas CreateCanvas(out GameObject canvasObject)

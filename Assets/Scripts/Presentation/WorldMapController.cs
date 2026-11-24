@@ -157,7 +157,7 @@ namespace SengokuChronicle.Presentation
         {
             if (gameSession == null)
                 gameSession = GetComponentInParent<GameSession>() ?? FindAnyObjectByType<GameSession>();
-            JapanMapSceneBootstrap.EnsureFor(gameSession, GetComponentInParent<Canvas>());
+            JapanMapSceneBootstrap.EnsureForSession(gameSession);
             if (worldClockPanel == null)
                 worldClockPanel = FindAnyObjectByType<WorldClockPanel>();
             BindButtonListeners(true);

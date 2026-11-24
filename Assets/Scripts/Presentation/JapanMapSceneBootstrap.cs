@@ -36,7 +36,17 @@ namespace SengokuChronicle.Presentation
             if (session == null)
                 return;
 
-            EnsureFor(session, ResolveTargetCanvas(session));
+            EnsureForSession(session);
+        }
+
+        /// <summary>
+        /// 地图入口的统一入口：先按 <see cref="ResolveTargetCanvas"/> 解析目标 Canvas，
+        /// 再幂等创建入口与地图根。本组件与 <see cref="WorldMapController"/> 的 Start
+        /// 都只调这里，两个启动顺序都会落在同一个 Canvas 上，不会各按自身 Canvas 建一套。
+        /// </summary>
+        public static JapanMapScreen EnsureForSession(GameSession session)
+        {
+            return EnsureFor(session, ResolveTargetCanvas(session));
         }
 
         /// <summary>
