@@ -6,6 +6,7 @@ using SengokuChronicle.Domain;
 using TMPro;
 using UnityEngine;
 using UnityEngine.Events;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 namespace SengokuChronicle.Presentation
@@ -44,6 +45,8 @@ namespace SengokuChronicle.Presentation
         private RectTransform _basemap;
         private RectTransform _lineLayer;
         private RectTransform _nodeLayer;
+        private Button[] _focusButtons = System.Array.Empty<Button>();
+        private Outline[] _focusOutlines = System.Array.Empty<Outline>();
         private Graphic _detail;
         private Graphic _feedbackText;
         private Button _confirmButton;
@@ -99,6 +102,7 @@ namespace SengokuChronicle.Presentation
             EnsureExplorer();
             RebuildAll();
             Canvas.ForceUpdateCanvases();
+            FocusInitialControl();
         }
 
         private void EnsureBuilt()
@@ -182,10 +186,16 @@ namespace SengokuChronicle.Presentation
 
         private void LateUpdate()
         {
+            // 键盘焦点提示只跟随 EventSystem 的选择，不改变旅行状态；
+            // 地图内容尚未布局时也要先刷新，避免方向键移动后没有可见反馈。
+            if (!IsOpen)
+                return;
+            RefreshFocusVisuals();
+
             // The map area changes size when the window is resized. Rebuild on the
             // first usable layout and whenever either dimension moves, so nodes and
             // route lines share the new adaptive grid instead of overlapping.
-            if (!IsOpen || _mapArea == null || _nodeLayer == null)
+            if (_mapArea == null || _nodeLayer == null)
                 return;
             Rect size = _mapArea.rect;
             if (size.width <= 1f || size.height <= 1f)
@@ -584,14 +594,19 @@ namespace SengokuChronicle.Presentation
             _catalogScroll.viewport = viewport;
             _catalogScroll.content = _catalogContent;
 
-            CreateButton(_root, "AllRoutesButton", "全部路线", new Vector2(0.31f, 0.82f),
-                new Vector2(0.40f, 0.87f), ShowAllRoutes, 12);
-            CreateButton(_root, "LandRoutesButton", "仅陆路", new Vector2(0.405f, 0.82f),
-                new Vector2(0.495f, 0.87f), ShowLandRoutes, 12);
-            CreateButton(_root, "SeaRoutesButton", "仅海路", new Vector2(0.50f, 0.82f),
-                new Vector2(0.59f, 0.87f), ShowSeaRoutes, 12);
-            CreateButton(_root, "CurrentButton", "定位当前地点", new Vector2(0.60f, 0.82f),
-                new Vector2(0.72f, 0.87f), SelectCurrent, 12);
+            Button allRoutesButton = CreateButton(_root, "AllRoutesButton", "全部路线",
+                new Vector2(0.31f, 0.82f), new Vector2(0.40f, 0.87f), ShowAllRoutes, 12);
+            Button landRoutesButton = CreateButton(_root, "LandRoutesButton", "仅陆路",
+                new Vector2(0.405f, 0.82f), new Vector2(0.495f, 0.87f), ShowLandRoutes, 12);
+            Button seaRoutesButton = CreateButton(_root, "SeaRoutesButton", "仅海路",
+                new Vector2(0.50f, 0.82f), new Vector2(0.59f, 0.87f), ShowSeaRoutes, 12);
+            Button currentButton = CreateButton(_root, "CurrentButton", "定位当前地点",
+                new Vector2(0.60f, 0.82f), new Vector2(0.72f, 0.87f), SelectCurrent, 12);
+            _focusButtons = new[] { allRoutesButton, landRoutesButton, seaRoutesButton, currentButton };
+            ConfigureFocusNavigation(_focusButtons);
+            _focusOutlines = new Outline[_focusButtons.Length];
+            for (int i = 0; i < _focusButtons.Length; i++)
+                _focusOutlines[i] = AddFocusOutline(_focusButtons[i]);
 
             _mapArea = CreatePanel("JapanMapArea", _root, new Vector2(0.31f, 0.36f),
                 new Vector2(0.985f, 0.81f), new Color(0.075f, 0.095f, 0.12f, 1f));
@@ -768,6 +783,67 @@ namespace SengokuChronicle.Presentation
             JapanMapFonts.SetEllipsis(text, true);
             JapanMapFonts.SetText(text, label);
             return button;
+        }
+
+        /// <summary>
+        /// 地图打开后把键盘焦点放到路线筛选行首项，方向键与 Enter 才有起点。
+        /// 没有 EventSystem（EditMode 夹具或非交互场景）时静默跳过。
+        /// </summary>
+        private void FocusInitialControl()
+        {
+            if (_focusButtons.Length == 0)
+                return;
+            EventSystem system = EventSystem.current;
+            if (system == null)
+                return;
+            system.SetSelectedGameObject(_focusButtons[0].gameObject);
+            RefreshFocusVisuals();
+        }
+
+        /// <summary>
+        /// 只让当前 EventSystem 选择显示金色描边，鼠标悬停与点击不受影响。
+        /// </summary>
+        private void RefreshFocusVisuals()
+        {
+            EventSystem system = EventSystem.current;
+            GameObject selected = system != null ? system.currentSelectedGameObject : null;
+            for (int i = 0; i < _focusOutlines.Length; i++)
+            {
+                if (_focusOutlines[i] == null || _focusButtons[i] == null)
+                    continue;
+                bool focused = selected == _focusButtons[i].gameObject;
+                if (_focusOutlines[i].enabled != focused)
+                    _focusOutlines[i].enabled = focused;
+            }
+        }
+
+        /// <summary>
+        /// 四个筛选/定位按钮共用一组显式导航：左/上移到前一项，右/下移到后一项，
+        /// 首尾成环。这样方向键始终在既有按钮间移动，不会跳进地图节点或目录行；
+        /// 地图节点没有新增方向键导航。
+        /// </summary>
+        private static void ConfigureFocusNavigation(Button[] buttons)
+        {
+            for (int i = 0; i < buttons.Length; i++)
+            {
+                var navigation = new Navigation { mode = Navigation.Mode.Explicit };
+                navigation.selectOnLeft = buttons[(i + buttons.Length - 1) % buttons.Length];
+                navigation.selectOnUp = navigation.selectOnLeft;
+                navigation.selectOnRight = buttons[(i + 1) % buttons.Length];
+                navigation.selectOnDown = navigation.selectOnRight;
+                buttons[i].navigation = navigation;
+            }
+        }
+
+        /// <summary>焦点描边用 Outline 效果，不改按钮底色与鼠标点击区域。</summary>
+        private static Outline AddFocusOutline(Button button)
+        {
+            var outline = button.gameObject.AddComponent<Outline>();
+            outline.effectColor = new Color(1f, 0.82f, 0.32f, 1f);
+            outline.effectDistance = new Vector2(2f, -2f);
+            outline.useGraphicAlpha = false;
+            outline.enabled = false;
+            return outline;
         }
 
         private static Graphic AddText(RectTransform rect, string name, int fontSize,

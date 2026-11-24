@@ -68,8 +68,10 @@ namespace SengokuChronicle.Tests.PlayMode
         private JapanMapViewportInput _input;
         private RectTransform _mapArea;
         private RectTransform _mapContent;
+        private RectTransform _lineLayer;
         private RectTransform _nodeLayer;
         private Mouse _mouse;
+        private Keyboard _keyboard;
 
         [UnityTest]
         public IEnumerator VirtualMouse_DragFromHubPastThreshold_PansWithoutSelectingOrPreviewing()
@@ -302,6 +304,87 @@ namespace SengokuChronicle.Tests.PlayMode
                 "滚轮缩放不得推进日期。");
         }
 
+        [UnityTest]
+        public IEnumerator VirtualKeyboard_ArrowsMoveFilterFocusAndEnterAppliesFilterAndLocate()
+        {
+            yield return LoadFoundationSceneAndOpenMap();
+            yield return AddVirtualKeyboard();
+
+            string startLocation = _session.CurrentLocation.Value;
+            GameDate startDate = _session.WorldClock.CurrentDate;
+            Assert.That(ConfirmTravelButton().interactable, Is.False,
+                "前置条件：打开地图时没有待确认行程。");
+
+            Button all = MapButton("AllRoutesButton");
+            Button land = MapButton("LandRoutesButton");
+            Button sea = MapButton("SeaRoutesButton");
+            Button current = MapButton("CurrentButton");
+
+            Assert.That(_eventSystem.currentSelectedGameObject, Is.EqualTo(all.gameObject),
+                "地图打开后没有设定可见的初始键盘焦点。");
+            AssertFocusOutline(all, true);
+            AssertFocusOutline(land, false);
+            AssertFocusOutline(sea, false);
+            AssertFocusOutline(current, false);
+
+            yield return TapKey(Key.RightArrow);
+            Assert.That(_eventSystem.currentSelectedGameObject, Is.EqualTo(land.gameObject),
+                "右方向键没有把焦点移到下一个筛选按钮。");
+            AssertFocusOutline(land, true);
+            AssertFocusOutline(all, false);
+
+            yield return TapKey(Key.DownArrow);
+            Assert.That(_eventSystem.currentSelectedGameObject, Is.EqualTo(sea.gameObject),
+                "下方向键没有在筛选按钮间移动焦点。");
+            AssertFocusOutline(sea, true);
+
+            yield return TapKey(Key.LeftArrow);
+            Assert.That(_eventSystem.currentSelectedGameObject, Is.EqualTo(land.gameObject),
+                "左方向键没有回到前一个筛选按钮。");
+
+            int landRouteCount = 0;
+            for (int i = 0; i < JapanTravelGraph.Routes.Count; i++)
+                if (JapanTravelGraph.Routes[i].Kind == JapanRouteKind.Land)
+                    landRouteCount++;
+
+            yield return TapKey(Key.Enter);
+            Assert.That(_screen.Explorer.RouteFilter, Is.EqualTo(JapanRouteKind.Land),
+                "Enter 没有激活仅陆路筛选。");
+            Assert.That(_lineLayer.childCount, Is.EqualTo(landRouteCount),
+                "仅陆路筛选后的可见连线数错误。");
+            Assert.That(_eventSystem.currentSelectedGameObject, Is.EqualTo(land.gameObject),
+                "Enter 激活筛选后焦点不得丢失。");
+            Assert.That(_session.CurrentLocation.Value, Is.EqualTo(startLocation),
+                "键盘筛选不得改变当前位置。");
+            Assert.That(_session.WorldClock.CurrentDate, Is.EqualTo(startDate),
+                "键盘筛选不得推进日期。");
+            Assert.That(ConfirmTravelButton().interactable, Is.False,
+                "键盘筛选不得产生旅行预览。");
+
+            yield return TapKey(Key.LeftArrow);
+            yield return TapKey(Key.LeftArrow);
+            Assert.That(_eventSystem.currentSelectedGameObject, Is.EqualTo(current.gameObject),
+                "首项左移没有回绕到定位按钮。");
+            AssertFocusOutline(current, true);
+            AssertFocusOutline(land, false);
+
+            // 先选中可达的冈崎产生旅行预览，再用 Enter 定位当前地点；否则
+            // “定位”与“本来就没选中别处”无法区分。
+            Assert.That(_screen.SelectHub(OkazakiHubId), Is.True);
+            Assert.That(ConfirmTravelButton().interactable, Is.True,
+                "前置条件：选中可达枢纽应产生预览，才能证明 Enter 真的执行了定位。");
+
+            yield return TapKey(Key.Enter);
+            Assert.That(_screen.SelectedHubId, Is.EqualTo(startLocation),
+                "Enter 没有激活定位当前地点。");
+            Assert.That(ConfirmTravelButton().interactable, Is.False,
+                "定位当前地点后不得保留旅行预览。");
+            Assert.That(_session.CurrentLocation.Value, Is.EqualTo(startLocation),
+                "键盘定位不得改变当前位置。");
+            Assert.That(_session.WorldClock.CurrentDate, Is.EqualTo(startDate),
+                "键盘定位不得推进日期。");
+        }
+
         private IEnumerator LoadFoundationSceneAndOpenMap()
         {
             AsyncOperation load = SceneManager.LoadSceneAsync(SceneName, LoadSceneMode.Single);
@@ -349,10 +432,14 @@ namespace SengokuChronicle.Tests.PlayMode
                 "画布应有 CanvasScaler。");
 
             _mapContent = (RectTransform)_mapArea.Find(MapContentName);
+            _lineLayer = _mapContent != null
+                ? (RectTransform)_mapContent.Find("RouteLines")
+                : null;
             _nodeLayer = _mapContent != null
                 ? (RectTransform)_mapContent.Find(NodeLayerName)
                 : null;
             Assert.That(_mapContent, Is.Not.Null, "地图视口必须有直接子级 MapContent。");
+            Assert.That(_lineLayer, Is.Not.Null, "MapContent 下必须有 RouteLines 路线层。");
             Assert.That(_nodeLayer, Is.Not.Null, "MapContent 下必须有 HubNodes 节点层。");
             Assert.That(_nodeLayer.childCount, Is.GreaterThan(0), "地图节点尚未生成。");
 
@@ -374,6 +461,43 @@ namespace SengokuChronicle.Tests.PlayMode
             _mouse.MakeCurrent();
             Assert.That(Mouse.current, Is.SameAs(_mouse));
             yield return null;
+        }
+
+        private IEnumerator AddVirtualKeyboard()
+        {
+            _keyboard = InputSystem.AddDevice<Keyboard>("JapanMapVirtualKeyboard");
+            _keyboard.MakeCurrent();
+            Assert.That(Keyboard.current, Is.SameAs(_keyboard));
+            yield return null;
+        }
+
+        /// <summary>
+        /// 通过真实 Input System 设备送一次按键：按下帧让 UI 模块派发导航/提交，
+        /// 松开帧把值清零，避免重复触发。不是直接调用 Selectable 方法。
+        /// </summary>
+        private IEnumerator TapKey(Key key)
+        {
+            Press(_keyboard[key], queueEventOnly: true);
+            yield return null;
+            Release(_keyboard[key], queueEventOnly: true);
+            yield return WaitFrames(2);
+        }
+
+        private Button MapButton(string name)
+        {
+            Transform node = _screen.transform.Find(name);
+            Assert.That(node, Is.Not.Null, "缺少地图按钮 " + name);
+            var button = node.GetComponent<Button>();
+            Assert.That(button, Is.Not.Null, name + " 必须是按钮");
+            return button;
+        }
+
+        private static void AssertFocusOutline(Button button, bool expected)
+        {
+            var outline = button.GetComponent<Outline>();
+            Assert.That(outline, Is.Not.Null, button.name + " 缺少键盘焦点描边");
+            Assert.That(outline.enabled, Is.EqualTo(expected),
+                button.name + " 的键盘焦点描边状态错误");
         }
 
         private IEnumerator MovePointerTo(Vector2 screenPoint)

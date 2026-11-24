@@ -535,6 +535,48 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
+        public void RouteFilterButtons_ShareExplicitRingNavigationAndFocusOutline()
+        {
+            RequireViewportStructure();
+
+            Button all = MapButton("AllRoutesButton");
+            Button land = MapButton("LandRoutesButton");
+            Button sea = MapButton("SeaRoutesButton");
+            Button current = MapButton("CurrentButton");
+            Button[] buttons = { all, land, sea, current };
+
+            for (int i = 0; i < buttons.Length; i++)
+            {
+                Assert.That(buttons[i].navigation.mode, Is.EqualTo(Navigation.Mode.Explicit),
+                    buttons[i].name + " 必须使用显式导航，方向键不能跳进地图节点或目录行");
+                Assert.That(buttons[i].navigation.selectOnRight,
+                    Is.SameAs(buttons[(i + 1) % buttons.Length]),
+                    buttons[i].name + " 的右方向键目标错误");
+                Assert.That(buttons[i].navigation.selectOnDown,
+                    Is.SameAs(buttons[(i + 1) % buttons.Length]),
+                    buttons[i].name + " 的下方向键目标错误");
+                Assert.That(buttons[i].navigation.selectOnLeft,
+                    Is.SameAs(buttons[(i + buttons.Length - 1) % buttons.Length]),
+                    buttons[i].name + " 的左方向键目标错误");
+                Assert.That(buttons[i].navigation.selectOnUp,
+                    Is.SameAs(buttons[(i + buttons.Length - 1) % buttons.Length]),
+                    buttons[i].name + " 的上方向键目标错误");
+
+                var outline = buttons[i].GetComponent<Outline>();
+                Assert.That(outline, Is.Not.Null, buttons[i].name + " 缺少键盘焦点描边");
+                Assert.That(outline.effectColor.a, Is.GreaterThan(0.5f),
+                    buttons[i].name + " 的焦点描边必须可见");
+                Assert.That(outline.enabled, Is.False,
+                    "未选中时不得显示焦点描边");
+            }
+
+            Assert.That(all.navigation.selectOnLeft, Is.SameAs(current),
+                "首项左移必须回绕到最后一项");
+            Assert.That(current.navigation.selectOnRight, Is.SameAs(all),
+                "末项右移必须回绕到首项");
+        }
+
+        [Test]
         public void FirstOpenFitsTheWholeMapAtOneX()
         {
             RequireViewportStructure();
@@ -736,6 +778,15 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That((Vector2)_mapContent.localPosition, Is.EqualTo(position),
                 "选择枢纽不得重置已拖动的平移");
             Assert.That(_nodeLayer.childCount, Is.EqualTo(JapanTravelGraph.Hubs.Count));
+        }
+
+        private Button MapButton(string name)
+        {
+            var rect = (RectTransform)_rootRect.Find(name);
+            Assert.That(rect, Is.Not.Null, "缺少地图按钮 " + name);
+            var button = rect.GetComponent<Button>();
+            Assert.That(button, Is.Not.Null, name + " 必须是可聚焦按钮");
+            return button;
         }
 
         private void RequireViewportStructure()
