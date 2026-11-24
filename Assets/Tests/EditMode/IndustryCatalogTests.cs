@@ -15,11 +15,12 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(IndustryCatalog.All.Count, Is.EqualTo(2));
             Assert.That(IndustryCatalog.All[0].Id, Is.EqualTo(IndustryCatalog.FarmId));
             Assert.That(IndustryCatalog.All[1].Id, Is.EqualTo(IndustryCatalog.TradingHouseId));
+            Assert.That(IndustryCatalog.TotalPosts, Is.EqualTo(3));
 
             Assert.That(IndustryCatalog.TryGet(IndustryCatalog.FarmId, out IndustryDefinition farm), Is.True);
             Assert.That(farm.DisplayName, Is.EqualTo("农庄"));
             Assert.That(farm.WorkUnitsRequired, Is.EqualTo(3));
-            Assert.That(farm.CapacityPosts, Is.EqualTo(1));
+            Assert.That(farm.CapacityPosts, Is.EqualTo(2));
             Assert.That(farm.UpkeepFunds, Is.EqualTo(0));
             Assert.That(farm.UpkeepSupplies, Is.EqualTo(1));
             Assert.That(farm.OutputFunds, Is.EqualTo(2));
@@ -49,7 +50,7 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
-        public void CreateInitial_UsesApprovedOpeningResourcesAndVacantSlots()
+        public void CreateInitial_UsesApprovedOpeningResourcesAndVacantPosts()
         {
             IndustryState state = IndustryState.CreateInitial(Start);
 
@@ -58,11 +59,16 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(state.Resources.Intelligence, Is.EqualTo(0));
             Assert.That(state.LastSettledMonthIndex,
                 Is.EqualTo(IndustryCalendar.MonthIndex(new GameDate(1560, 3, 1))));
-            Assert.That(state.Assignments.Count, Is.EqualTo(2));
+            Assert.That(state.Assignments.Count, Is.EqualTo(3));
             Assert.That(state.Assignments[0].IndustryId, Is.EqualTo(IndustryCatalog.FarmId));
+            Assert.That(state.Assignments[0].PostIndex, Is.Zero);
             Assert.That(state.Assignments[0].PersonId.IsEmpty, Is.True);
-            Assert.That(state.Assignments[1].IndustryId, Is.EqualTo(IndustryCatalog.TradingHouseId));
+            Assert.That(state.Assignments[1].IndustryId, Is.EqualTo(IndustryCatalog.FarmId));
+            Assert.That(state.Assignments[1].PostIndex, Is.EqualTo(1));
             Assert.That(state.Assignments[1].PersonId.IsEmpty, Is.True);
+            Assert.That(state.Assignments[2].IndustryId, Is.EqualTo(IndustryCatalog.TradingHouseId));
+            Assert.That(state.Assignments[2].PostIndex, Is.Zero);
+            Assert.That(state.Assignments[2].PersonId.IsEmpty, Is.True);
             Assert.That(state.TryGetAssignee(IndustryCatalog.FarmId, out PersonId farmAssignee), Is.True);
             Assert.That(farmAssignee.IsEmpty, Is.True);
         }

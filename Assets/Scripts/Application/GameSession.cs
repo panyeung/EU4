@@ -1319,31 +1319,10 @@ namespace SengokuChronicle.Application
         {
             EnsureSuccession();
             EnsureIndustryState();
-            if (IsTacticalOperative(personId))
-            {
-                LastIndustryMessage = "该人物正在执行潜入密令：请先完成或撤退，再任命产业职务。";
-                return new IndustryAssignmentResult(false, IndustryAssignmentOutcome.Blocked,
-                    LastIndustryMessage, default, default);
-            }
-            if (!CanEditIndustryAssignments)
-            {
-                LastIndustryMessage = string.IsNullOrEmpty(IndustryBlockReason)
-                    ? "当前不能调整产业任命。"
-                    : IndustryBlockReason;
-                return new IndustryAssignmentResult(false, IndustryAssignmentOutcome.Blocked,
-                    LastIndustryMessage, default, default);
-            }
+            if (TryGetIndustryAssignmentBlock(personId, out IndustryAssignmentResult blocked))
+                return blocked;
 
-            IndustryAssignmentResult result;
-            if (_commission.Stage == ShadowEscortStage.InProgress &&
-                _commission.AssigneeId == personId)
-            {
-                LastIndustryMessage = "该人物正在执行家族委托：请等待委托结算，再任命产业职务。";
-                return new IndustryAssignmentResult(false, IndustryAssignmentOutcome.Blocked,
-                    LastIndustryMessage, default, default);
-            }
-
-            result = IndustryService.TryAssign(_industryState, _succession,
+            IndustryAssignmentResult result = IndustryService.TryAssign(_industryState, _succession,
                 CurrentGameDate, industryId, personId);
             LastIndustryMessage = result.Message;
             if (result.Succeeded)
@@ -1351,7 +1330,55 @@ namespace SengokuChronicle.Application
             return result;
         }
 
-        /// <summary>Clears one industry post and releases its 3-unit reservation.</summary>
+        /// <summary>
+        /// Assigns or atomically replaces the holder of one explicit post. The farm owns
+        /// posts 0 and 1; the single-post trading house keeps post 0.
+        /// </summary>
+        public IndustryAssignmentResult TryAssignIndustry(string industryId, int postIndex,
+            PersonId personId)
+        {
+            EnsureSuccession();
+            EnsureIndustryState();
+            if (TryGetIndustryAssignmentBlock(personId, out IndustryAssignmentResult blocked))
+                return blocked;
+
+            IndustryAssignmentResult result = IndustryService.TryAssign(_industryState, _succession,
+                CurrentGameDate, industryId, postIndex, personId);
+            LastIndustryMessage = result.Message;
+            if (result.Succeeded)
+                SessionStateChanged?.Invoke();
+            return result;
+        }
+
+        /// <summary>
+        /// True when the command must be refused before the domain sees it, with the
+        /// player-facing reason already recorded in <see cref="LastIndustryMessage"/>.
+        /// </summary>
+        private bool TryGetIndustryAssignmentBlock(PersonId personId,
+            out IndustryAssignmentResult blocked)
+        {
+            blocked = default;
+            string message = null;
+            if (IsTacticalOperative(personId))
+                message = "该人物正在执行潜入密令：请先完成或撤退，再任命产业职务。";
+            else if (!CanEditIndustryAssignments)
+                message = string.IsNullOrEmpty(IndustryBlockReason)
+                    ? "当前不能调整产业任命。"
+                    : IndustryBlockReason;
+            else if (_commission.Stage == ShadowEscortStage.InProgress &&
+                     _commission.AssigneeId == personId)
+                message = "该人物正在执行家族委托：请等待委托结算，再任命产业职务。";
+
+            if (message == null)
+                return false;
+
+            LastIndustryMessage = message;
+            blocked = new IndustryAssignmentResult(false, IndustryAssignmentOutcome.Blocked,
+                message, default, default);
+            return true;
+        }
+
+        /// <summary>Releases one staffed post (the highest-index one), keeping the 3-unit reservation free.</summary>
         public IndustryAssignmentResult TryUnassignIndustry(string industryId)
         {
             EnsureSuccession();
@@ -1367,6 +1394,28 @@ namespace SengokuChronicle.Application
 
             IndustryAssignmentResult result = IndustryService.TryUnassign(_industryState, _succession,
                 CurrentGameDate, industryId);
+            LastIndustryMessage = result.Message;
+            if (result.Succeeded)
+                SessionStateChanged?.Invoke();
+            return result;
+        }
+
+        /// <summary>Releases the explicit post without touching the industry's other posts.</summary>
+        public IndustryAssignmentResult TryUnassignIndustry(string industryId, int postIndex)
+        {
+            EnsureSuccession();
+            EnsureIndustryState();
+            if (!CanEditIndustryAssignments)
+            {
+                LastIndustryMessage = string.IsNullOrEmpty(IndustryBlockReason)
+                    ? "当前不能调整产业任命。"
+                    : IndustryBlockReason;
+                return new IndustryAssignmentResult(false, IndustryAssignmentOutcome.Blocked,
+                    LastIndustryMessage, default, default);
+            }
+
+            IndustryAssignmentResult result = IndustryService.TryUnassign(_industryState, _succession,
+                CurrentGameDate, industryId, postIndex);
             LastIndustryMessage = result.Message;
             if (result.Succeeded)
                 SessionStateChanged?.Invoke();
@@ -1913,7 +1962,8 @@ namespace SengokuChronicle.Application
             {
                 if (i > 0)
                     builder.Append('；');
-                builder.Append(IndustryService.IndustryName(vacated[i].IndustryId)).Append('/')
+                builder.Append(IndustryService.PostName(vacated[i].IndustryId, vacated[i].PostIndex))
+                    .Append('/')
                     .Append(IndustryService.PersonName(Succession, vacated[i].PreviousAssignee))
                     .Append("（").Append(vacated[i].Reason).Append('）');
             }
@@ -1931,7 +1981,8 @@ namespace SengokuChronicle.Application
             {
                 if (assignment.PersonId.IsEmpty)
                     continue;
-                builder.Append(IndustryService.IndustryName(assignment.IndustryId)).Append("仍由")
+                builder.Append(IndustryService.PostName(assignment.IndustryId, assignment.PostIndex))
+                    .Append("仍由")
                     .Append(IndustryService.PersonName(Succession, assignment.PersonId))
                     .Append("负责。");
             }

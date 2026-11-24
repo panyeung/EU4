@@ -129,6 +129,7 @@ namespace SengokuChronicle.Persistence
                 legacy.saveFormatVersion == 14 ||
                 legacy.saveFormatVersion == 15 ||
                 legacy.saveFormatVersion == 16 ||
+                legacy.saveFormatVersion == 17 ||
                 legacy.saveFormatVersion == SaveDataValidator.CurrentVersion)
             {
                 int version = legacy.saveFormatVersion;
@@ -745,18 +746,35 @@ namespace SengokuChronicle.Persistence
             return result.Succeeded;
         }
 
-        private static int ExpectedRulesVersion(int version) =>
-            version >= 15 ? SaveData.CurrentRulesVersion : 7;
+        private static int ExpectedRulesVersion(int version)
+        {
+            if (version >= SaveDataValidator.CurrentVersion)
+                return SaveData.CurrentRulesVersion;
+            // v15-v17 all shipped the M08B rules contract 8; the farm gained its second
+            // post only with the v18 schema, which is why rules 9 starts at v18.
+            return version >= 15 ? 8 : 7;
+        }
 
         /// <summary>
-        /// Completes every pre-v17 migration path. The market block is derived once from
-        /// the already-migrated clone (its industry stock and living roster), then the final
-        /// shape is validated. A current-version payload keeps its own market block.
+        /// Completes every pre-v18 migration path. The market block is derived once from
+        /// the already-migrated clone (its industry stock and living roster) only for
+        /// pre-v17 sources, which never owned it. A v17 payload keeps its own market block
+        /// and gains the vacant second farm post; then the final shape is validated.
         /// </summary>
         private static SaveOperationResult FinishMigration(SaveData current, int sourceVersion)
         {
-            if (sourceVersion < SaveDataValidator.CurrentVersion)
+            if (sourceVersion < 17)
                 current.market = MarketSaveData.CreateMigrated(current);
+            if (sourceVersion < SaveDataValidator.CurrentVersion)
+            {
+                if (!IndustryStateSaveData.TryMigrateSinglePostSlots(current.industry,
+                        out IndustryStateSaveData migratedSlots, out string slotError))
+                {
+                    return SaveOperationResult.Failure(SaveErrorCode.InvalidData,
+                        "v" + sourceVersion + " 存档产业槽位无法迁移： " + slotError);
+                }
+                current.industry = migratedSlots;
+            }
             return SaveDataValidator.Validate(current);
         }
 

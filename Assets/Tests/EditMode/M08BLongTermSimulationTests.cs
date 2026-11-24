@@ -456,6 +456,40 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
+        public void CheckpointRatiosExcludeUnreachedSeedsWhileOverallUsesEverySeed()
+        {
+            int[] years = { 10 };
+            M08BSeedResult collapsed = SyntheticSeed(1, 10, true, 1, 100);
+            collapsed.FamineCollapse = true;
+            collapsed.Checkpoints[0].FamineCollapse = true;
+            var seeds = new List<M08BSeedResult>
+            {
+                collapsed,
+                SyntheticSeed(2, 10, true, 2, 200),
+                SyntheticSeed(3, 10, true, 3, 300),
+                SyntheticSeed(4, 10, true, 4, 400),
+                UnreachedSeed(5, 30)
+            };
+
+            string json = M08BLongTermSimulationRunner.BuildSummaryJson(seeds, 1, 5, 100, years);
+
+            StringAssert.Contains("\"reached\":4", json);
+            StringAssert.Contains("\"notReached\":1", json);
+            StringAssert.Contains(
+                "\"famineCollapse\":{\"numerator\":1,\"denominator\":4,\"permille\":250}", json,
+                "a checkpoint ratio must divide by the seeds that reached that checkpoint only");
+            StringAssert.Contains(
+                "\"famineCollapse\":{\"numerator\":1,\"denominator\":5,\"permille\":200}", json,
+                "an overall ratio must divide by every seed in the range");
+            StringAssert.Contains("\"checkpointRatio\":", json);
+            StringAssert.Contains("\"overallRatio\":", json);
+            StringAssert.Contains(
+                "checkpoint ratios use only the seeds that reached that checkpoint", json);
+            StringAssert.Contains("excluded from both numerator and denominator", json);
+            StringAssert.Contains("overall ratios use every seed row in the range", json);
+        }
+
+        [Test]
         public void CsvAndJsonSerializationIsStableAndRoundTrips()
         {
             int[] years = { 1 };
@@ -957,6 +991,103 @@ namespace SengokuChronicle.Tests.EditMode
             StringAssert.Contains("reused=0 ran=2", File.ReadAllText(logPath));
             StringAssert.Contains("companion summary is missing", File.ReadAllText(logPath));
             Assert.That(File.Exists(seedsPath), Is.True);
+        }
+
+        [Test]
+        public void BatchProvenanceIsFrozenOnceAndUsedByReuseChecksAndArtifacts()
+        {
+            int[] years = { 1 };
+            string root = Path.Combine(_root, "frozen-batch");
+            Directory.CreateDirectory(root);
+            string frozenSourceSha = new string('c', 64);
+            string frozenRuleInputSha = new string('d', 64);
+            object frozen = FrozenProvenance(frozenSourceSha, frozenRuleInputSha, 3);
+
+            RunBatchWithFrozenProvenance(1, 1, 1, root, years,
+                M08BIndustryPolicy.Unmanaged, frozen);
+
+            string summaryPath = Path.Combine(root, "summary-1-1-1y.json");
+            string logPath = Path.Combine(root, "batch-1-1-1y.log");
+            string summary = File.ReadAllText(summaryPath);
+            string log = File.ReadAllText(logPath);
+            StringAssert.Contains("\"sourceSha256\":\"" + frozenSourceSha + "\"", summary);
+            StringAssert.Contains("\"ruleInputSha256\":\"" + frozenRuleInputSha + "\"", summary);
+            StringAssert.Contains("\"ruleInputFileCount\":3", summary);
+            StringAssert.Contains("sourceSha256=" + frozenSourceSha, log);
+            StringAssert.Contains("ruleInputSha256=" + frozenRuleInputSha, log);
+
+            // The disk has moved past the state this batch started from; its artifacts must not.
+            string currentSourceSha = M08BLongTermSimulationRunner.ComputeSourceSha256();
+            Assert.That(currentSourceSha, Has.Length.EqualTo(64));
+            Assert.That(currentSourceSha, Is.Not.EqualTo(frozenSourceSha));
+            Assert.That(summary, Does.Not.Contain(currentSourceSha));
+            Assert.That(log, Does.Not.Contain(currentSourceSha));
+
+            // The frozen snapshot is exactly what reuse validation compares against.
+            RunBatchWithFrozenProvenance(1, 1, 1, root, years,
+                M08BIndustryPolicy.Unmanaged, frozen);
+            StringAssert.Contains("reused=1 ran=0", File.ReadAllText(logPath));
+
+            // A snapshot captured from the live disk rejects those rows, so the existing
+            // provenance validation still rejects a mismatched summary.
+            M08BLongTermSimulationRunner.RunBatch(1, 1, 1, root, years,
+                M08BIndustryPolicy.Unmanaged);
+            string rejectedLog = File.ReadAllText(logPath);
+            StringAssert.Contains("reused=0 ran=1", rejectedLog);
+            StringAssert.Contains("sourceSha256 does not match", rejectedLog);
+        }
+
+        [Test]
+        public void SummaryWriteKeepsTheFrozenProvenanceAfterARuleInputChangesOnDisk()
+        {
+            int[] years = { 10 };
+            string root = Path.Combine(_root, "frozen-summary-inputs");
+            const string rulePath = "Assets/Scripts/Domain/MarketSettlement.cs";
+            WriteFile(root, rulePath, "// rule body before the batch started");
+            var paths = new[] { rulePath };
+            string before = M08BLongTermSimulationRunner.ComputeRuleInputSha256(root, paths);
+            Assert.That(before, Has.Length.EqualTo(64));
+
+            object frozen = FrozenProvenance(new string('e', 64), before, paths.Length);
+            var seeds = new[] { SyntheticSeed(1, 10, true, 1, 100) };
+            string first = BuildSummaryWithFrozenProvenance(seeds, 1, 1, 100, years,
+                M08BIndustryPolicy.Unmanaged, frozen);
+
+            // A rule input changes on disk while the batch's snapshot stays fixed.
+            WriteFile(root, rulePath, "// rule body after the batch started");
+            string after = M08BLongTermSimulationRunner.ComputeRuleInputSha256(root, paths);
+            Assert.That(after, Is.Not.EqualTo(before),
+                "the test must observe a real rule-input change");
+
+            string second = BuildSummaryWithFrozenProvenance(seeds, 1, 1, 100, years,
+                M08BIndustryPolicy.Unmanaged, frozen);
+            Assert.That(second, Is.EqualTo(first),
+                "writing the summary must use the frozen snapshot, not the current disk bytes");
+            StringAssert.Contains("\"ruleInputSha256\":\"" + before + "\"", second);
+            Assert.That(second, Does.Not.Contain(after));
+        }
+
+        [Test]
+        public void BatchProvenanceCannotBeForgedThroughThePublicApi()
+        {
+            Type provenanceType = BatchProvenanceType;
+            Assert.That(provenanceType.IsPublic, Is.False,
+                "the provenance snapshot must stay internal to the runner assembly");
+            Assert.That(provenanceType.GetConstructors(BindingFlags.Public |
+                    BindingFlags.Instance), Is.Empty,
+                "no public constructor may let a caller invent source or rule hashes");
+
+            foreach (string methodName in new[] { "RunBatch", "BuildSummaryJson" })
+            {
+                foreach (MethodInfo method in typeof(M08BLongTermSimulationRunner)
+                             .GetMethods(BindingFlags.Public | BindingFlags.Static)
+                             .Where(item => item.Name == methodName))
+                {
+                    Assert.That(method.GetParameters().Any(parameter =>
+                            parameter.ParameterType == provenanceType), Is.False,
+                        methodName + " must never accept a caller-supplied provenance snapshot");
+                }
+            }
         }
 
         [Test]
@@ -1830,6 +1961,167 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
+        public void FarmManagedV1LeavesTheSecondFarmPostVacant()
+        {
+            var holder = new GameObject("M08BFarmPolicySecondPostTest");
+            try
+            {
+                GameSession session = holder.AddComponent<GameSession>();
+                session.InitNewGame(7UL);
+                var appointments = new List<string>();
+
+                Assert.That(M08BLongTermSimulationRunner.TryApplyFarmManagement(session,
+                    appointments, out _, out string detail), Is.True, detail);
+
+                Assert.That(appointments.Count, Is.EqualTo(1));
+                Assert.That(session.Industry.Slot(IndustryCatalog.FarmId, 0).AssigneeId.IsEmpty,
+                    Is.False);
+                Assert.That(session.Industry.Slot(IndustryCatalog.FarmId, 1).AssigneeId.IsEmpty,
+                    Is.True,
+                    "the accepted farm-managed-v1 baseline fills only the first farm post");
+                Assert.That(M08BLongTermSimulationRunner.TryApplyFarmManagement(session,
+                    appointments, out bool vacantAgain, out _), Is.False);
+                Assert.That(vacantAgain, Is.False);
+            }
+            finally
+            {
+                Object.DestroyImmediate(holder);
+            }
+        }
+
+        [Test]
+        public void DualFarmV1_FillsBothFarmPostsThroughThePublicCommand()
+        {
+            var holder = new GameObject("M08BDualFarmPolicyTest");
+            try
+            {
+                GameSession session = holder.AddComponent<GameSession>();
+                session.InitNewGame(7UL);
+                string randomBefore = JsonUtility.ToJson(session.CaptureSave().randomState);
+                var appointments = new List<string>();
+
+                bool appointed = M08BLongTermSimulationRunner.TryApplyDualFarmManagement(session,
+                    appointments, out bool farmWasVacant, out string detail);
+
+                Assert.That(appointed, Is.True, detail);
+                Assert.That(farmWasVacant, Is.True);
+                Assert.That(appointments, Has.Count.EqualTo(2),
+                    "a fresh family must be able to staff both farm posts");
+                Assert.That(appointments[0], Does.StartWith("farm#0="));
+                Assert.That(appointments[1], Does.StartWith("farm#1="));
+                PersonId first = session.Industry.Slot(IndustryCatalog.FarmId, 0).AssigneeId;
+                PersonId second = session.Industry.Slot(IndustryCatalog.FarmId, 1).AssigneeId;
+                Assert.That(first.IsEmpty, Is.False);
+                Assert.That(second.IsEmpty, Is.False);
+                Assert.That(first, Is.Not.EqualTo(second));
+                Assert.That(session.Industry.Slot(IndustryCatalog.TradingHouseId).AssigneeId.IsEmpty,
+                    Is.True, "dual-farm-v1 leaves the trading house vacant for comparability");
+                Assert.That(JsonUtility.ToJson(session.CaptureSave().randomState),
+                    Is.EqualTo(randomBefore),
+                    "the industry policy must not read or advance the random streams");
+
+                Assert.That(M08BLongTermSimulationRunner.TryApplyDualFarmManagement(session,
+                    appointments, out bool vacantAgain, out _), Is.False);
+                Assert.That(vacantAgain, Is.False);
+                Assert.That(appointments, Has.Count.EqualTo(2),
+                    "occupied posts are never replaced by the policy");
+            }
+            finally
+            {
+                Object.DestroyImmediate(holder);
+            }
+        }
+
+        [Test]
+        public void DualFarmV1RunIsDeterministicAndLabeled()
+        {
+            int[] years = { 1 };
+            M08BSeedResult first = M08BLongTermSimulationRunner.RunSeed(7UL, 1, years,
+                M08BIndustryPolicy.DualFarmV1);
+            M08BSeedResult repeat = M08BLongTermSimulationRunner.RunSeed(7UL, 1, years,
+                M08BIndustryPolicy.DualFarmV1);
+
+            Assert.That(first.PolicyId,
+                Is.EqualTo(M08BLongTermSimulationRunner.DualFarmV1PolicyId));
+            Assert.That(first.FarmAppointments, Is.GreaterThanOrEqualTo(2));
+            Assert.That(first.FarmVacancies, Is.GreaterThanOrEqualTo(1));
+            Assert.That(first.IndustryDecisions.All(decision =>
+                    decision.StartsWith("farm#", StringComparison.Ordinal)), Is.True);
+            Assert.That(M08BLongTermSimulationRunner.SerializeSeedsCsv(new[] { repeat }, years),
+                Is.EqualTo(M08BLongTermSimulationRunner.SerializeSeedsCsv(new[] { first }, years)),
+                "the same seed and policy must serialize byte-identically");
+            Assert.That(repeat.IndustryDecisions, Is.EqualTo(first.IndustryDecisions));
+        }
+
+        [Test]
+        public void DualFarmV1PolicyIdRoundTripsAndOwnsItsOwnArtifactDirectory()
+        {
+            Assert.That(M08BLongTermSimulationRunner.TryParsePolicyId("dual-farm-v1",
+                out M08BIndustryPolicy policy), Is.True);
+            Assert.That(policy, Is.EqualTo(M08BIndustryPolicy.DualFarmV1));
+            Assert.That(M08BLongTermSimulationRunner.PolicyIdOf(policy),
+                Is.EqualTo("dual-farm-v1"));
+            Assert.That(M08BLongTermSimulationRunner.TryParsePolicyId("farm-managed-v1",
+                out M08BIndustryPolicy baseline), Is.True);
+            Assert.That(baseline, Is.EqualTo(M08BIndustryPolicy.FarmManagedV1),
+                "the accepted baseline policy keeps its identity");
+            Assert.That(M08BLongTermSimulationRunner.PolicyOutputRoot(
+                    M08BIndustryPolicy.DualFarmV1), Does.EndWith("dual-farm-v1"));
+        }
+
+        [Test]
+        public void IndustryPolicyDescriptionsArePerPolicyAndMutuallyExclusive()
+        {
+            string unmanaged = M08BLongTermSimulationRunner.DescribeIndustryPolicy(
+                M08BIndustryPolicy.Unmanaged);
+            string farmManaged = M08BLongTermSimulationRunner.DescribeIndustryPolicy(
+                M08BIndustryPolicy.FarmManagedV1);
+            string dualFarm = M08BLongTermSimulationRunner.DescribeIndustryPolicy(
+                M08BIndustryPolicy.DualFarmV1);
+
+            Assert.That(unmanaged, Does.Contain("never appoints an industry"));
+            Assert.That(farmManaged, Does.Contain("fills only Farm post 0"));
+            Assert.That(dualFarm, Does.Contain("every vacant Farm post"));
+            Assert.That(unmanaged, Does.StartWith(
+                M08BLongTermSimulationRunner.UnmanagedPolicyId));
+            Assert.That(farmManaged, Does.StartWith(
+                M08BLongTermSimulationRunner.FarmManagedV1PolicyId));
+            Assert.That(dualFarm, Does.StartWith(
+                M08BLongTermSimulationRunner.DualFarmV1PolicyId));
+            Assert.That(unmanaged, Does.Not.Contain("fills only Farm post 0"));
+            Assert.That(unmanaged, Does.Not.Contain("every vacant Farm post"));
+            Assert.That(farmManaged, Does.Not.Contain("every vacant Farm post"));
+            Assert.That(farmManaged, Does.Not.Contain("never appoints an industry"));
+            Assert.That(dualFarm, Does.Not.Contain("fills only Farm post 0"));
+            Assert.That(dualFarm, Does.Not.Contain("never appoints an industry"));
+            Assert.That(new[] { unmanaged, farmManaged, dualFarm }.Distinct().Count(),
+                Is.EqualTo(3), "each policy must own its own description");
+
+            // A summary describes the policy that actually produced it and never borrows
+            // another policy's wording, so two artifacts cannot be read as the same rule.
+            var seeds = new List<M08BSeedResult> { SyntheticSeed(1, 10, true, 1, 100) };
+            int[] years = { 10 };
+            foreach (M08BIndustryPolicy policy in Enum.GetValues(typeof(M08BIndustryPolicy)))
+            {
+                string own = M08BLongTermSimulationRunner.DescribeIndustryPolicy(policy);
+                string json = M08BLongTermSimulationRunner.BuildSummaryJson(seeds, 1, 1, 100, years,
+                    policy);
+                StringAssert.Contains("\"policy\":\"" +
+                    M08BLongTermSimulationRunner.PolicyIdOf(policy) + "\"", json);
+                StringAssert.Contains("\"industryPolicy\":\"" + own + "\"", json,
+                    "the summary must describe " + policy);
+                foreach (M08BIndustryPolicy other in Enum.GetValues(typeof(M08BIndustryPolicy)))
+                {
+                    if (other == policy)
+                        continue;
+                    Assert.That(json, Does.Not.Contain(
+                        M08BLongTermSimulationRunner.DescribeIndustryPolicy(other)),
+                        "the " + policy + " summary must not describe " + other);
+                }
+            }
+        }
+
+        [Test]
         public void FarmManagedRunAppointsTheFarmWhileTheUnmanagedRunStaysVacant()
         {
             int[] years = { 1 };
@@ -2059,6 +2351,62 @@ namespace SengokuChronicle.Tests.EditMode
             return count;
         }
 
+        /// <summary>
+        /// The frozen provenance type stays internal to the runner assembly, so the tests reach
+        /// it by reflection instead of widening the production API for forgery.
+        /// </summary>
+        private static Type BatchProvenanceType =>
+            typeof(M08BLongTermSimulationRunner).Assembly.GetType(
+                "SengokuChronicle.Editor.M08BBatchProvenance", throwOnError: true);
+
+        /// <summary>Builds a snapshot through the internal constructor to inject fixed hashes.</summary>
+        private static object FrozenProvenance(string sourceSha256, string ruleInputSha256,
+            int ruleInputFileCount)
+        {
+            ConstructorInfo constructor = BatchProvenanceType.GetConstructor(
+                BindingFlags.Instance | BindingFlags.NonPublic, null,
+                new[] { typeof(string), typeof(string), typeof(int) }, null);
+            Assert.That(constructor, Is.Not.Null,
+                "the frozen snapshot must stay constructible through its internal constructor");
+            return constructor.Invoke(new object[]
+            {
+                sourceSha256, ruleInputSha256, ruleInputFileCount
+            });
+        }
+
+        /// <summary>Runs the private batch overload with an injected frozen snapshot.</summary>
+        private static IReadOnlyList<M08BSeedResult> RunBatchWithFrozenProvenance(int firstSeed,
+            int count, int years, string outputRoot, IReadOnlyList<int> checkpointYears,
+            M08BIndustryPolicy policy, object provenance)
+        {
+            MethodInfo method = typeof(M08BLongTermSimulationRunner)
+                .GetMethods(BindingFlags.Static | BindingFlags.NonPublic)
+                .Single(item => item.Name == nameof(M08BLongTermSimulationRunner.RunBatch) &&
+                                item.GetParameters().Length == 7);
+            return (IReadOnlyList<M08BSeedResult>)method.Invoke(null,
+                new object[]
+                {
+                    firstSeed, count, years, outputRoot, checkpointYears, policy, provenance
+                });
+        }
+
+        /// <summary>Builds the summary through the private overload with a frozen snapshot.</summary>
+        private static string BuildSummaryWithFrozenProvenance(IReadOnlyList<M08BSeedResult> seeds,
+            int firstSeed, int count, int years, IReadOnlyList<int> checkpointYears,
+            M08BIndustryPolicy policy, object provenance)
+        {
+            MethodInfo method = typeof(M08BLongTermSimulationRunner)
+                .GetMethods(BindingFlags.Static | BindingFlags.NonPublic)
+                .Single(item =>
+                    item.Name == nameof(M08BLongTermSimulationRunner.BuildSummaryJson) &&
+                    item.GetParameters().Length == 7);
+            return (string)method.Invoke(null,
+                new object[]
+                {
+                    seeds, firstSeed, count, years, checkpointYears, policy, provenance
+                });
+        }
+
         private static M08BSeedResult SyntheticSeed(ulong seed, int year, bool alive,
             int livingMembers, int wealth)
         {
@@ -2088,6 +2436,35 @@ namespace SengokuChronicle.Tests.EditMode
                 Wealth = wealth,
                 EventCount = 2,
                 EventsPer1000Months = 16
+            });
+            result.Checkpoints.Add(new M08BCheckpointResult
+            {
+                Year = 25,
+                MonthsRequired = 300,
+                Reached = false
+            });
+            return result;
+        }
+
+        /// <summary>
+        /// A stopped seed that reached no checkpoint: every checkpoint row stays unreached, so a
+        /// summary must exclude it from checkpoint ratios while still counting it overall.
+        /// </summary>
+        private static M08BSeedResult UnreachedSeed(ulong seed, int monthsSimulated)
+        {
+            var result = new M08BSeedResult
+            {
+                Seed = seed,
+                SeedHex = "0x" + seed.ToString("X16"),
+                Termination = M08BTerminationReason.Extinction,
+                MonthsSimulated = monthsSimulated,
+                FinalFamilyExtinct = true
+            };
+            result.Checkpoints.Add(new M08BCheckpointResult
+            {
+                Year = 10,
+                MonthsRequired = 120,
+                Reached = false
             });
             result.Checkpoints.Add(new M08BCheckpointResult
             {

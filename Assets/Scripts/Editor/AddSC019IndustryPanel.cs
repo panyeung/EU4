@@ -34,7 +34,7 @@ namespace SengokuChronicle.Editor
         public const string ReportScrollbarName = "IndustryReportScrollbar";
         public const string CloseButtonName = "IndustryCloseButton";
         public const string FarmRowName = "IndustryRowFarm";
-        public const string FarmNameTextName = "FarmRowNameText";
+        public const string FarmNameTextName = IndustryPanel.FarmRowNameChildName;
         public const string FarmStatusTextName = "FarmRowStatusText";
         public const string FarmDetailTextName = "FarmRowDetailText";
         public const string FarmAssigneeTextName = "FarmRowAssigneeText";
@@ -694,7 +694,7 @@ namespace SengokuChronicle.Editor
                 GameObject farmRow = CreateRow(scene, panelRect, FarmRowName, FarmRowY);
                 CreateRowControls(scene, farmRow.transform, font, FarmNameTextName, FarmStatusTextName,
                     FarmDetailTextName, FarmAssigneeTextName, FarmUnassignButtonName,
-                    FarmCandidateContainerName, "农庄（等级 1・1 个职位・3/4 工时）");
+                    FarmCandidateContainerName, IndustryPanel.FarmRowLabel);
 
                 GameObject tradingRow = CreateRow(scene, panelRect, TradingRowName, TradingRowY);
                 CreateRowControls(scene, tradingRow.transform, font, TradingNameTextName,

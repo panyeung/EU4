@@ -15,7 +15,7 @@ namespace SengokuChronicle.Persistence
         public const int CurrentGameSchemaVersion = SaveDataValidator.CurrentVersion;
 
         /// <summary>Rules contract version shared by capture, validation and migration.</summary>
-        public const int CurrentRulesVersion = 8;
+        public const int CurrentRulesVersion = 9;
 
         /// <summary>
         /// Fallback event-content version used only when no catalog is loaded. The
@@ -157,7 +157,8 @@ namespace SengokuChronicle.Persistence
 
     /// <summary>
     /// Versioned SC-019 industry snapshot: the three resources, the last settled
-    /// month and exactly two stable slots. Runtime reports are not persisted.
+    /// month and one stable row per post (farm two, trading house one). Runtime
+    /// reports are not persisted.
     /// </summary>
     [Serializable]
     public sealed class IndustryStateSaveData
@@ -171,13 +172,16 @@ namespace SengokuChronicle.Persistence
         /// <summary>Opening state for a new game or a migrated legacy save.</summary>
         public static IndustryStateSaveData CreateInitial(GameDate date)
         {
-            var slots = new IndustrySlotSaveEntry[IndustryCatalog.All.Count];
-            for (int i = 0; i < slots.Length; i++)
-                slots[i] = new IndustrySlotSaveEntry
-                {
-                    industryId = IndustryCatalog.All[i].Id,
-                    assignedPersonId = string.Empty
-                };
+            var slots = new IndustrySlotSaveEntry[IndustryCatalog.TotalPosts];
+            int index = 0;
+            foreach (IndustryDefinition definition in IndustryCatalog.All)
+                for (int post = 0; post < definition.CapacityPosts; post++)
+                    slots[index++] = new IndustrySlotSaveEntry
+                    {
+                        industryId = definition.Id,
+                        postIndex = post,
+                        assignedPersonId = string.Empty
+                    };
 
             return new IndustryStateSaveData
             {
@@ -187,6 +191,93 @@ namespace SengokuChronicle.Persistence
                 lastSettledMonthIndex = IndustryCalendar.MonthIndex(date) - 1,
                 slots = slots
             };
+        }
+
+        /// <summary>
+        /// v17-to-v18 conversion: the old snapshot stored one row per industry. The farm's
+        /// second post is added vacant and every legacy assignee keeps its original post.
+        /// No resource, month, assignee or history is invented.
+        /// </summary>
+        public static bool TryMigrateSinglePostSlots(IndustryStateSaveData legacy,
+            out IndustryStateSaveData migrated, out string error)
+        {
+            migrated = null;
+            error = string.Empty;
+            if (legacy == null)
+            {
+                error = "存档缺少产业状态（industry）。";
+                return false;
+            }
+            if (legacy.slots == null)
+            {
+                error = "v17 存档缺少产业槽位。";
+                return false;
+            }
+            if (legacy.slots.Length == IndustryCatalog.TotalPosts)
+            {
+                // A payload already carrying the post-aware v18 shape is accepted unchanged
+                // instead of being rewritten: it invents no post or assignee, and the final
+                // validator still proves every row. A real v17 file never had this shape.
+                migrated = legacy.Clone();
+                return true;
+            }
+            if (legacy.slots.Length != IndustryCatalog.All.Count)
+            {
+                error = "v17 存档产业槽位必须恰好包含两个产业。";
+                return false;
+            }
+
+            var migratedSlots = new IndustrySlotSaveEntry[IndustryCatalog.TotalPosts];
+            int index = 0;
+            foreach (IndustryDefinition definition in IndustryCatalog.All)
+                for (int post = 0; post < definition.CapacityPosts; post++)
+                    migratedSlots[index++] = new IndustrySlotSaveEntry
+                    {
+                        industryId = definition.Id,
+                        postIndex = post,
+                        assignedPersonId = string.Empty
+                    };
+
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            foreach (IndustrySlotSaveEntry slot in legacy.slots)
+            {
+                if (slot == null || string.IsNullOrWhiteSpace(slot.industryId) ||
+                    !IndustryCatalog.TryGet(slot.industryId, out _))
+                {
+                    error = "v17 存档产业槽位包含未知产业 ID。";
+                    return false;
+                }
+                if (!seen.Add(slot.industryId))
+                {
+                    error = "v17 存档产业槽位产业 ID 重复。";
+                    return false;
+                }
+
+                for (int i = 0; i < migratedSlots.Length; i++)
+                {
+                    if (!string.Equals(migratedSlots[i].industryId, slot.industryId,
+                            StringComparison.Ordinal) || migratedSlots[i].postIndex != 0)
+                        continue;
+                    migratedSlots[i].assignedPersonId = slot.assignedPersonId;
+                    break;
+                }
+            }
+
+            if (seen.Count != IndustryCatalog.All.Count)
+            {
+                error = "v17 存档产业槽位缺少产业。";
+                return false;
+            }
+
+            migrated = new IndustryStateSaveData
+            {
+                funds = legacy.funds,
+                supplies = legacy.supplies,
+                intelligence = legacy.intelligence,
+                lastSettledMonthIndex = legacy.lastSettledMonthIndex,
+                slots = migratedSlots
+            };
+            return true;
         }
 
         public static IndustryStateSaveData Capture(IndustryState state)
@@ -201,6 +292,7 @@ namespace SengokuChronicle.Persistence
                 slots[i] = new IndustrySlotSaveEntry
                 {
                     industryId = assignment.IndustryId,
+                    postIndex = assignment.PostIndex,
                     assignedPersonId = assignment.PersonId.IsEmpty ? string.Empty : assignment.PersonId.Value
                 };
             }
@@ -231,6 +323,7 @@ namespace SengokuChronicle.Persistence
                 clone.slots[i] = entry == null ? null : new IndustrySlotSaveEntry
                 {
                     industryId = entry.industryId,
+                    postIndex = entry.postIndex,
                     assignedPersonId = entry.assignedPersonId
                 };
             }
@@ -248,8 +341,8 @@ namespace SengokuChronicle.Persistence
                 return Invalid("存档产业情报超出范围 0..999999。");
             if (lastSettledMonthIndex != IndustryCalendar.MonthIndex(date) - 1)
                 return Invalid("存档产业已结算月份与日期不一致。");
-            if (slots == null || slots.Length != IndustryCatalog.All.Count)
-                return Invalid("存档产业槽位必须恰好包含两个产业。");
+            if (slots == null || slots.Length != IndustryCatalog.TotalPosts)
+                return Invalid("存档产业槽位必须恰好包含全部产业岗位（农庄两个、商馆一个）。");
             if (succession == null || succession.persons == null || succession.members == null)
                 return Invalid("存档产业缺少继承人物名册。");
 
@@ -266,22 +359,27 @@ namespace SengokuChronicle.Persistence
                     members.Add(memberId);
             }
 
-            var seenIndustries = new HashSet<string>(StringComparer.Ordinal);
+            var seenPosts = new HashSet<string>(StringComparer.Ordinal);
             var seenPersons = new HashSet<PersonId>();
-            string previousIndustryId = null;
+            int previousIndustryIndex = -1;
+            int previousPostIndex = -1;
             foreach (IndustrySlotSaveEntry slot in slots)
             {
                 if (slot == null)
                     return Invalid("存档产业槽位为空。");
                 if (string.IsNullOrWhiteSpace(slot.industryId) ||
-                    !IndustryCatalog.TryGet(slot.industryId, out _))
+                    !IndustryCatalog.TryGet(slot.industryId, out IndustryDefinition definition))
                     return Invalid("存档产业槽位包含未知产业 ID。");
-                if (!seenIndustries.Add(slot.industryId))
-                    return Invalid("存档产业槽位产业 ID 重复。");
-                if (previousIndustryId != null &&
-                    string.CompareOrdinal(previousIndustryId, slot.industryId) > 0)
+                if (slot.postIndex < 0 || slot.postIndex >= definition.CapacityPosts)
+                    return Invalid("存档产业岗位序号超出范围。");
+                if (!seenPosts.Add(slot.industryId + "#" + slot.postIndex))
+                    return Invalid("存档产业岗位重复。");
+                int industryIndex = IndustryIndex(slot.industryId);
+                if (industryIndex < previousIndustryIndex ||
+                    (industryIndex == previousIndustryIndex && slot.postIndex <= previousPostIndex))
                     return Invalid("存档产业槽位顺序不稳定。");
-                previousIndustryId = slot.industryId;
+                previousIndustryIndex = industryIndex;
+                previousPostIndex = slot.postIndex;
 
                 if (string.IsNullOrWhiteSpace(slot.assignedPersonId))
                     continue;
@@ -301,6 +399,15 @@ namespace SengokuChronicle.Persistence
             }
 
             return SaveOperationResult.Success();
+        }
+
+        /// <summary>Zero-based catalog position, used only to check stable row order.</summary>
+        private static int IndustryIndex(string industryId)
+        {
+            for (int i = 0; i < IndustryCatalog.All.Count; i++)
+                if (string.Equals(IndustryCatalog.All[i].Id, industryId, StringComparison.Ordinal))
+                    return i;
+            return -1;
         }
 
         /// <summary>Rebuilds a validated runtime state; the caller must not assign it on failure.</summary>
@@ -330,7 +437,7 @@ namespace SengokuChronicle.Persistence
             restored.TrySetLastSettledMonthIndex(data.lastSettledMonthIndex, out _);
             foreach (IndustrySlotSaveEntry slot in data.slots)
             {
-                if (!restored.TrySetAssignee(slot.industryId,
+                if (!restored.TrySetAssignee(slot.industryId, slot.postIndex,
                         string.IsNullOrWhiteSpace(slot.assignedPersonId)
                             ? default
                             : new PersonId(slot.assignedPersonId), out error))
@@ -350,6 +457,7 @@ namespace SengokuChronicle.Persistence
     public sealed class IndustrySlotSaveEntry
     {
         public string industryId;
+        public int postIndex;
         public string assignedPersonId;
     }
 

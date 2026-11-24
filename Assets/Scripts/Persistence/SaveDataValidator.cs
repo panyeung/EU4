@@ -10,7 +10,7 @@ namespace SengokuChronicle.Persistence
     /// </summary>
     public static class SaveDataValidator
     {
-        public const int CurrentVersion = 17;
+        public const int CurrentVersion = 18;
 
         public static SaveOperationResult Validate(SaveData data)
         {
@@ -451,6 +451,7 @@ namespace SengokuChronicle.Persistence
                 probe.saveFormatVersion != 14 &&
                 probe.saveFormatVersion != 15 &&
                 probe.saveFormatVersion != 16 &&
+                probe.saveFormatVersion != 17 &&
                 probe.saveFormatVersion != CurrentVersion)
                 return SaveOperationResult.Failure(
                     SaveErrorCode.UnsupportedVersion,
@@ -508,7 +509,7 @@ namespace SengokuChronicle.Persistence
                 return Invalid("旧版存档包含 M08 家族纪元状态（campaign）；迁移不会静默替换该数据。");
             // v17 introduced the market block. A pre-v17 file that already carries one
             // cannot own it, so migration must refuse instead of overwriting the data.
-            if (probe.saveFormatVersion >= 2 && probe.saveFormatVersion < CurrentVersion &&
+            if (probe.saveFormatVersion >= 2 && probe.saveFormatVersion < 17 &&
                 HasRootProperty(json, "market"))
                 return Invalid("旧版存档包含 M08B 市场状态（market）；迁移不会静默替换该数据。");
 
@@ -600,7 +601,7 @@ namespace SengokuChronicle.Persistence
                     (!string.IsNullOrEmpty(json) && !HasNonNullRootProperty(json, "campaign")))
                     return Invalid("存档缺少 M08 家族纪元状态（campaign）。");
             }
-            if (probe.saveFormatVersion >= CurrentVersion)
+            if (probe.saveFormatVersion >= 17)
             {
                 if (probe.market == null ||
                     (!string.IsNullOrEmpty(json) && !HasNonNullRootProperty(json, "market")))

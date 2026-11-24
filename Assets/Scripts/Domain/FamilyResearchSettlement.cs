@@ -119,7 +119,8 @@ namespace SengokuChronicle.Domain
                 {
                     if (assignment.PersonId.IsEmpty || assignment.PersonId != personId)
                         continue;
-                    reason = "已担任产业「" + IndustryService.IndustryName(assignment.IndustryId) +
+                    reason = "已担任产业「" +
+                             IndustryService.PostName(assignment.IndustryId, assignment.PostIndex) +
                              "」负责人，不能同时进行家族研究。";
                     return false;
                 }

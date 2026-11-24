@@ -5,14 +5,15 @@ using SengokuChronicle.Domain;
 
 namespace SengokuChronicle.Application
 {
-    /// <summary>Read-only view of one industry slot for the uGUI panel.</summary>
+    /// <summary>Read-only view of one industry post for the uGUI panel.</summary>
     public readonly struct IndustrySlotView
     {
-        public IndustrySlotView(string industryId, string displayName, PersonId assigneeId,
-            string assigneeName, int workUnitsRequired, int workUnitsRemaining,
-            IndustryLineStatus status, string statusReason)
+        public IndustrySlotView(string industryId, int postIndex, string displayName,
+            PersonId assigneeId, string assigneeName, int workUnitsRequired,
+            int workUnitsRemaining, IndustryLineStatus status, string statusReason)
         {
             IndustryId = industryId ?? string.Empty;
+            PostIndex = postIndex < 0 ? 0 : postIndex;
             DisplayName = displayName ?? string.Empty;
             AssigneeId = assigneeId;
             AssigneeName = assigneeName ?? string.Empty;
@@ -23,6 +24,8 @@ namespace SengokuChronicle.Application
         }
 
         public string IndustryId { get; }
+        /// <summary>Post within the industry; the two-post farm reports 0 and 1.</summary>
+        public int PostIndex { get; }
         public string DisplayName { get; }
         public PersonId AssigneeId { get; }
         public string AssigneeName { get; }
@@ -105,12 +108,35 @@ namespace SengokuChronicle.Application
             ? Market.MaterialsPriceIndexPermille
             : MarketState.BaselinePriceIndexPermille;
 
-        public IndustrySlotView Slot(string industryId)
+        public IndustrySlotView Slot(string industryId) => Slot(industryId, 0);
+
+        public IndustrySlotView Slot(string industryId, int postIndex)
         {
             for (int i = 0; i < Slots.Count; i++)
-                if (string.Equals(Slots[i].IndustryId, industryId, StringComparison.Ordinal))
+                if (Slots[i].PostIndex == postIndex &&
+                    string.Equals(Slots[i].IndustryId, industryId, StringComparison.Ordinal))
                     return Slots[i];
             return default;
+        }
+
+        /// <summary>Every post of one industry in post order.</summary>
+        public IReadOnlyList<IndustrySlotView> PostsOf(string industryId)
+        {
+            var posts = new List<IndustrySlotView>(2);
+            for (int i = 0; i < Slots.Count; i++)
+                if (string.Equals(Slots[i].IndustryId, industryId, StringComparison.Ordinal))
+                    posts.Add(Slots[i]);
+            return posts.AsReadOnly();
+        }
+
+        /// <summary>First post without an assignee, or -1 when every post is filled.</summary>
+        public int FirstVacantPost(string industryId)
+        {
+            int postCount = IndustryState.PostCount(industryId);
+            for (int post = 0; post < postCount; post++)
+                if (Slot(industryId, post).AssigneeId.IsEmpty)
+                    return post;
+            return -1;
         }
 
         public static IndustryView Build(IndustryState state, SuccessionState succession,
@@ -118,7 +144,7 @@ namespace SengokuChronicle.Application
             bool canEdit, string blockReason, string lastMessage, MarketState market,
             MarketMonthReport lastMarketReport)
         {
-            var slots = new List<IndustrySlotView>(IndustryCatalog.All.Count);
+            var slots = new List<IndustrySlotView>(IndustryCatalog.TotalPosts);
             if (state != null)
             {
                 // The preview runs the same pure planner the month turn runs, so a slot
@@ -126,49 +152,53 @@ namespace SengokuChronicle.Application
                 IndustryMonthReport predicted = PredictMonth(state, succession, date, market, lastReport);
                 foreach (IndustryDefinition definition in IndustryCatalog.All)
                 {
-                    state.TryGetAssignee(definition.Id, out PersonId assignee);
-                    string name = assignee.IsEmpty
-                        ? string.Empty
-                        : IndustryService.PersonName(succession, assignee);
-                    IndustryLineStatus status;
-                    string reason;
-                    if (assignee.IsEmpty)
+                    for (int post = 0; post < definition.CapacityPosts; post++)
                     {
-                        status = IndustryLineStatus.Vacant;
-                        reason = "空缺：无人负责，本月无产出";
-                    }
-                    else if (TryGetLine(predicted, definition.Id, out IndustryLineResult predictedLine))
-                    {
-                        status = predictedLine.Status;
-                        reason = predictedLine.Reason;
-                    }
-                    else if (!IndustryService.CanWork(succession, assignee, date, out string invalidReason))
-                    {
-                        status = IndustryLineStatus.InvalidAssignment;
-                        reason = "负责人失效：" + invalidReason;
-                    }
-                    else if (!definition.MaintainsFromOutput &&
-                             (state.Resources.Funds < definition.UpkeepFunds ||
-                              state.Resources.Supplies < definition.UpkeepSupplies))
-                    {
-                        status = IndustryLineStatus.Stalled;
-                        reason = "资源不足：缺 " +
-                                 Math.Max(0, definition.UpkeepFunds - state.Resources.Funds)
-                                     .ToString(CultureInfo.InvariantCulture) + " 资金、" +
-                                 Math.Max(0, definition.UpkeepSupplies - state.Resources.Supplies)
-                                     .ToString(CultureInfo.InvariantCulture) + " 物资，本月停产";
-                    }
-                    else
-                    {
-                        status = IndustryLineStatus.Operated;
-                        reason = "运作中";
-                    }
+                        string postName = IndustryService.PostName(definition.Id, post);
+                        state.TryGetAssignee(definition.Id, post, out PersonId assignee);
+                        string name = assignee.IsEmpty
+                            ? string.Empty
+                            : IndustryService.PersonName(succession, assignee);
+                        IndustryLineStatus status;
+                        string reason;
+                        if (assignee.IsEmpty)
+                        {
+                            status = IndustryLineStatus.Vacant;
+                            reason = "空缺：无人负责，本月无产出";
+                        }
+                        else if (TryGetLine(predicted, definition.Id, post, out IndustryLineResult predictedLine))
+                        {
+                            status = predictedLine.Status;
+                            reason = predictedLine.Reason;
+                        }
+                        else if (!IndustryService.CanWork(succession, assignee, date, out string invalidReason))
+                        {
+                            status = IndustryLineStatus.InvalidAssignment;
+                            reason = "负责人失效：" + invalidReason;
+                        }
+                        else if (!definition.MaintainsFromOutput &&
+                                 (state.Resources.Funds < definition.UpkeepFunds ||
+                                  state.Resources.Supplies < definition.UpkeepSupplies))
+                        {
+                            status = IndustryLineStatus.Stalled;
+                            reason = "资源不足：缺 " +
+                                     Math.Max(0, definition.UpkeepFunds - state.Resources.Funds)
+                                         .ToString(CultureInfo.InvariantCulture) + " 资金、" +
+                                     Math.Max(0, definition.UpkeepSupplies - state.Resources.Supplies)
+                                         .ToString(CultureInfo.InvariantCulture) + " 物资，本月停产";
+                        }
+                        else
+                        {
+                            status = IndustryLineStatus.Operated;
+                            reason = "运作中";
+                        }
 
-                    int remaining = assignee.IsEmpty
-                        ? IndustryService.MonthlyWorkUnits
-                        : IndustryService.RemainingWorkUnits(succession, state, assignee, date);
-                    slots.Add(new IndustrySlotView(definition.Id, definition.DisplayName, assignee, name,
-                        definition.WorkUnitsRequired, remaining, status, reason));
+                        int remaining = assignee.IsEmpty
+                            ? IndustryService.MonthlyWorkUnits
+                            : IndustryService.RemainingWorkUnits(succession, state, assignee, date);
+                        slots.Add(new IndustrySlotView(definition.Id, post, postName, assignee, name,
+                            definition.WorkUnitsRequired, remaining, status, reason));
+                    }
                 }
             }
 
@@ -205,14 +235,15 @@ namespace SengokuChronicle.Application
             return result.Succeeded ? result.Report : null;
         }
 
-        private static bool TryGetLine(IndustryMonthReport report, string industryId,
+        private static bool TryGetLine(IndustryMonthReport report, string industryId, int postIndex,
             out IndustryLineResult line)
         {
             if (report != null)
             {
                 for (int i = 0; i < report.Lines.Count; i++)
                 {
-                    if (string.Equals(report.Lines[i].IndustryId, industryId,
+                    if (report.Lines[i].PostIndex == postIndex &&
+                        string.Equals(report.Lines[i].IndustryId, industryId,
                             StringComparison.Ordinal))
                     {
                         line = report.Lines[i];

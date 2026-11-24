@@ -126,9 +126,9 @@ namespace SengokuChronicle.Tests.EditMode
                 Assert.That(spouseId.IsEmpty, Is.False);
 
                 SaveData save = fixture.Session.CaptureSave();
-                Assert.That(save.saveFormatVersion, Is.EqualTo(17),
-                    "M08A reuses the existing person/life/kinship fields; M08B adds market");
-                Assert.That(SaveDataValidator.CurrentVersion, Is.EqualTo(17));
+                Assert.That(save.saveFormatVersion, Is.EqualTo(18),
+                    "M08B keeps the market block; the second farm post moves the schema to v18");
+                Assert.That(SaveDataValidator.CurrentVersion, Is.EqualTo(18));
                 string rngBefore = RngSignature(fixture.Session);
 
                 Assert.That(fixture.Session.TryApplySave(save).Succeeded, Is.True,

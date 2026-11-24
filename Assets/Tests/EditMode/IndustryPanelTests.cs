@@ -75,7 +75,12 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(panel.ResourceLine, Does.Contain("情报 0"));
             Assert.That(panel.FarmStatus, Does.Contain("空缺"));
             Assert.That(panel.TradingStatus, Does.Contain("空缺"));
-            Assert.That(panel.FarmAssignee, Is.EqualTo("负责人：空缺"));
+            Assert.That(panel.FarmAssignee, Is.EqualTo("一号 空缺｜二号 空缺"),
+                "the farm row names both of its posts");
+            Assert.That(panel.FarmRowTitle, Is.EqualTo("农庄（等级 1・2 个职位・3/4 工时）"),
+                "the authored row title follows the catalog's two posts");
+            Assert.That(Find(AddSC019IndustryPanel.TradingNameTextName).GetComponent<Text>().text,
+                Does.Contain("1 个职位"), "the trading house keeps its single post");
             Assert.That(panel.ReportLine, Does.StartWith("本月尚未结算。"));
             Assert.That(panel.ReportLine, Does.Contain("粮食连续短缺 0 个月"),
                 "a zero consecutive shortage is a real state and stays visible");
@@ -218,11 +223,12 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
-        public void IndustryPanel_CandidateButtonsAssignAndReplace()
+        public void IndustryPanel_FarmCandidatesFillBothPostsThenLeaveNoCandidates()
         {
             IndustryPanel panel = Panel();
             panel.Open();
             Assert.That(panel.CanConfirmSelection, Is.True);
+            Assert.That(panel.FarmPostCount, Is.EqualTo(2));
             Assert.That(panel.ConfirmInteractable, Is.False,
                 "未选中候选前无法确认");
             Assert.That(panel.FarmCandidateLabel(0), Does.Contain("剩余 4/4"));
@@ -238,20 +244,22 @@ namespace SengokuChronicle.Tests.EditMode
                 "候选列表标出待确认的选择");
             string pendingName = pendingLabel.Substring(2, pendingLabel.IndexOf("（") - 2);
             Assert.That(panel.PreviewLine, Does.Contain("已选择：" + pendingName + " → "));
+            Assert.That(panel.PreviewLine, Does.Contain("农庄（一号）"),
+                "the preview names the post the vacancy fills");
             Assert.That(panel.PreviewLine, Does.Contain("待确认"));
             Assert.That(panel.PreviewLine, Does.Contain("每月规则："),
                 "预览暴露所选职位的后果");
-            Assert.That(_session.Industry.Slot(IndustryCatalog.FarmId).AssigneeId.IsEmpty, Is.True,
-                "确认之前候选选中只是预演");
+            Assert.That(_session.Industry.Slot(IndustryCatalog.FarmId, 0).AssigneeId.IsEmpty,
+                Is.True, "确认之前候选选中只是预演");
             string firstAssignee = panel.PendingPersonId.Value;
 
             panel.ClickConfirm();
             panel.Refresh();
-            Assert.That(panel.FarmAssignee, Does.Contain("3/4 已用"));
-            Assert.That(panel.FarmAssignee, Does.Contain("1 可用"));
+            Assert.That(panel.FarmAssignee, Does.Contain("一号 " + pendingName + "（剩1）"));
+            Assert.That(panel.FarmAssignee, Does.Contain("二号 空缺"));
             Assert.That(panel.FarmCandidateCount, Is.EqualTo(5),
-                "the assigned person is no longer a candidate for that post");
-            Assert.That(_session.Industry.Slot(IndustryCatalog.FarmId).AssigneeId.Value,
+                "the assigned person is no longer a candidate for either post");
+            Assert.That(_session.Industry.Slot(IndustryCatalog.FarmId, 0).AssigneeId.Value,
                 Is.EqualTo(firstAssignee));
             Assert.That(panel.ConfirmVisible, Is.False);
             Assert.That(panel.ConfirmInteractable, Is.False);
@@ -263,21 +271,61 @@ namespace SengokuChronicle.Tests.EditMode
 
             panel.ClickFarmCandidate(0);
             panel.Refresh();
-            string replacementLabel = panel.FarmCandidateLabel(0);
-            Assert.That(replacementLabel, Does.StartWith("▶ "));
-            string replacementName = replacementLabel.Substring(2, replacementLabel.IndexOf("（") - 2);
-            Assert.That(panel.PreviewLine, Does.Contain("已选择：" + replacementName + " → "));
-            Assert.That(panel.PreviewLine, Does.Contain("替换现任"),
-                "替换预览标出当前任职者");
-            Assert.That(panel.ConfirmInteractable, Is.True);
-            Assert.That(_session.Industry.Slot(IndustryCatalog.FarmId).AssigneeId.Value,
-                Is.EqualTo(firstAssignee), "替换选择不得提前提交");
+            string secondLabel = panel.FarmCandidateLabel(0);
+            Assert.That(secondLabel, Does.StartWith("▶ "));
+            Assert.That(panel.PreviewLine, Does.Contain("农庄（二号）"),
+                "the second appointment targets the remaining vacant post");
+            Assert.That(panel.PreviewLine, Does.Contain("岗位空缺"));
             panel.ClickConfirm();
             panel.Refresh();
-            Assert.That(_session.Industry.Slot(IndustryCatalog.FarmId).AssigneeId.Value,
-                Is.Not.EqualTo(firstAssignee));
-            Assert.That(panel.TradingCandidateCount, Is.EqualTo(5),
-                "the replaced person's reservation is released");
+
+            Assert.That(_session.Industry.Slot(IndustryCatalog.FarmId, 0).AssigneeId.Value,
+                Is.EqualTo(firstAssignee), "filling the second post must not evict the first");
+            Assert.That(_session.Industry.Slot(IndustryCatalog.FarmId, 1).AssigneeId.IsEmpty,
+                Is.False);
+            Assert.That(panel.FarmAssignee, Does.Not.Contain("空缺"));
+            Assert.That(panel.FarmCandidateCount, Is.Zero,
+                "a filled two-post farm offers no candidate that would have to evict someone");
+            Assert.That(panel.TradingCandidateCount, Is.EqualTo(4),
+                "both farm assignees keep their single industry post");
+        }
+
+        [Test]
+        public void IndustryPanel_FarmUnassignReleasesOnePostPerClick()
+        {
+            IndustryPanel panel = Panel();
+            panel.Open();
+            panel.ClickFarmCandidate(0);
+            panel.ClickConfirm();
+            panel.ClickFarmCandidate(0);
+            panel.ClickConfirm();
+            panel.Refresh();
+
+            PersonId first = _session.Industry.Slot(IndustryCatalog.FarmId, 0).AssigneeId;
+            PersonId second = _session.Industry.Slot(IndustryCatalog.FarmId, 1).AssigneeId;
+            Assert.That(first.IsEmpty, Is.False);
+            Assert.That(second.IsEmpty, Is.False);
+            Assert.That(panel.FarmUnassignInteractable, Is.True);
+            Assert.That(panel.FarmCandidateCount, Is.Zero);
+
+            panel.ClickFarmUnassign();
+            panel.Refresh();
+
+            Assert.That(_session.Industry.Slot(IndustryCatalog.FarmId, 0).AssigneeId,
+                Is.EqualTo(first), "the first release frees the highest-index staffed post");
+            Assert.That(_session.Industry.Slot(IndustryCatalog.FarmId, 1).AssigneeId.IsEmpty,
+                Is.True);
+            Assert.That(panel.FarmAssignee, Does.Contain("二号 空缺"));
+            Assert.That(panel.FarmCandidateCount, Is.EqualTo(5),
+                "the released person and the unassigned adults are selectable again");
+
+            panel.ClickFarmUnassign();
+            panel.Refresh();
+
+            Assert.That(_session.Industry.Slot(IndustryCatalog.FarmId, 0).AssigneeId.IsEmpty,
+                Is.True);
+            Assert.That(panel.FarmUnassignInteractable, Is.False);
+            Assert.That(panel.FarmAssignee, Is.EqualTo("一号 空缺｜二号 空缺"));
         }
 
         [Test]
@@ -539,7 +587,7 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(_session.Industry.Slot(IndustryCatalog.FarmId).AssigneeId.IsEmpty, Is.True);
             Assert.That(panel.MessageVisible, Is.True);
             Assert.That(panel.MessageLine, Does.Contain("已移除失效产业任命"));
-            Assert.That(panel.FarmAssignee, Is.EqualTo("负责人：空缺"));
+            Assert.That(panel.FarmAssignee, Is.EqualTo("一号 空缺｜二号 空缺"));
         }
 
         [Test]
