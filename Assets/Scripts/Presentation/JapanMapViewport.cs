@@ -13,6 +13,14 @@ namespace SengokuChronicle.Presentation
     /// 大于视口的轴不得露出视口内部空白。
     /// </para>
     /// <para>
+    /// 空间前提：<c>mapContent</c> 必须是 <c>viewport</c> 的直接子级，且
+    /// <c>localRotation</c> 为单位旋转（未旋转）。这样视口局部坐标与内容
+    /// 局部坐标只差平移与统一缩放，屏幕到内容的换算才成立。非直接子级或
+    /// 旋转内容会在 <see cref="Bind"/> 时抛出 <see cref="ArgumentException"/>。
+    /// 视口自身可以处在任意层级或带旋转，屏幕坐标由 RectTransformUtility
+    /// 先换算到视口局部坐标。
+    /// </para>
+    /// <para>
     /// 本切片不处理 uGUI 拖动阈值、节点点击或 Input System 事件；屏幕集成
     /// 层负责把指针事件换算成 <see cref="ZoomAt"/> 与 <see cref="PanBy"/> 的参数。
     /// 视口尺寸变化后调用 <see cref="Refresh"/> 即可按当前尺寸重新适配，
@@ -26,6 +34,7 @@ namespace SengokuChronicle.Presentation
 
         private const float ZoomStep = 1.2f;
         private const float Epsilon = 0.0001f;
+        private const float RotationTolerance = 0.01f;
 
         private RectTransform _viewport;
         private RectTransform _mapContent;
@@ -39,9 +48,10 @@ namespace SengokuChronicle.Presentation
         public bool IsBound => _viewport != null && _mapContent != null;
 
         /// <summary>
-        /// 绑定遮罩视口与地图内容。内容的当前矩形是固定的地图几何尺寸，
-        /// 之后视口尺寸只决定裁切与适配，不再改变该尺寸。
-        /// 绑定会复位到 1x 全境并居中。
+        /// 绑定遮罩视口与地图内容。内容必须是视口的直接子级，且不得旋转
+        /// （localRotation 为单位旋转）；否则抛出 <see cref="ArgumentException"/>。
+        /// 内容的当前矩形是固定的地图几何尺寸，之后视口尺寸只决定裁切与适配，
+        /// 不再改变该尺寸。绑定会复位到 1x 全境并居中。
         /// </summary>
         public void Bind(RectTransform viewport, RectTransform mapContent)
         {
@@ -49,6 +59,14 @@ namespace SengokuChronicle.Presentation
                 throw new ArgumentNullException(nameof(viewport));
             if (mapContent == null)
                 throw new ArgumentNullException(nameof(mapContent));
+            if (mapContent.parent != viewport)
+                throw new ArgumentException(
+                    "地图内容必须是视口的直接子级，否则视口局部坐标与内容局部坐标不一致。",
+                    nameof(mapContent));
+            if (Quaternion.Angle(mapContent.localRotation, Quaternion.identity) > RotationTolerance)
+                throw new ArgumentException(
+                    "地图内容不得旋转；本组件只支持与视口轴对齐的内容。",
+                    nameof(mapContent));
 
             Vector2 contentSize = mapContent.rect.size;
             if (contentSize.x <= Epsilon || contentSize.y <= Epsilon)

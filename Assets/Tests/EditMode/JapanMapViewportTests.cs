@@ -1,3 +1,4 @@
+using System;
 using NUnit.Framework;
 using SengokuChronicle.Presentation;
 using UnityEditor.SceneManagement;
@@ -9,6 +10,7 @@ namespace SengokuChronicle.Tests.EditMode
     /// <summary>
     /// 日本全境地图视口的纯几何回归：绑定、全境复位、指针锚定缩放、
     /// 1x–6x 倍率限制、四边夹取、窄视口轴居中、非 1:1 画布换算与视口尺寸变更。
+    /// 同时锁定绑定边界：地图内容必须是视口的直接子级且未旋转。
     /// 夹具只创建矩形与 Canvas，不加载底图、坐标数据、场景或预制体；
     /// 不覆盖 uGUI 按下拖动阈值与节点点击防误选，那些留给屏幕集成测试。
     /// </summary>
@@ -64,6 +66,38 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(_content.localPosition.x, Is.EqualTo(0f).Within(Tolerance));
             Assert.That(_content.localPosition.y, Is.EqualTo(0f).Within(Tolerance));
             Assert.That(_controller.Zoom, Is.EqualTo(1f).Within(1e-5f));
+        }
+
+        [Test]
+        public void BindRejectsMapContentThatIsNotADirectChild()
+        {
+            _viewport = CreateRect("Viewport", _canvas.transform, new Vector2(800f, 600f));
+            RectTransform holder = CreateRect("MapContentHolder", _viewport, new Vector2(800f, 600f));
+            _content = CreateRect("MapContent", holder, new Vector2(1600f, 1200f));
+            var controller = new JapanMapViewport();
+
+            ArgumentException error = Assert.Throws<ArgumentException>(
+                () => controller.Bind(_viewport, _content));
+
+            Assert.That(error.ParamName, Is.EqualTo("mapContent"));
+            Assert.That(controller.IsBound, Is.False,
+                "校验失败时不能留下半绑定状态。");
+        }
+
+        [Test]
+        public void BindRejectsRotatedMapContent()
+        {
+            _viewport = CreateRect("Viewport", _canvas.transform, new Vector2(800f, 600f));
+            _content = CreateRect("MapContent", _viewport, new Vector2(1600f, 1200f));
+            _content.localRotation = Quaternion.Euler(0f, 0f, 90f);
+            var controller = new JapanMapViewport();
+
+            ArgumentException error = Assert.Throws<ArgumentException>(
+                () => controller.Bind(_viewport, _content));
+
+            Assert.That(error.ParamName, Is.EqualTo("mapContent"));
+            Assert.That(controller.IsBound, Is.False,
+                "旋转内容会让视口局部坐标与内容局部坐标不一致，必须拒绝绑定。");
         }
 
         [Test]
@@ -260,25 +294,23 @@ namespace SengokuChronicle.Tests.EditMode
 
         private JapanMapViewport Build(Vector2 viewportSize, Vector2 contentSize)
         {
-            GameObject viewportObject = Create("Viewport", _canvas.transform);
-            _viewport = (RectTransform)viewportObject.transform;
-            _viewport.anchorMin = _viewport.anchorMax = new Vector2(0.5f, 0.5f);
-            _viewport.pivot = new Vector2(0.5f, 0.5f);
-            _viewport.sizeDelta = viewportSize;
-            _viewport.anchoredPosition = Vector2.zero;
-            _viewport.localPosition = Vector3.zero;
-
-            GameObject contentObject = Create("MapContent", _viewport);
-            _content = (RectTransform)contentObject.transform;
-            _content.anchorMin = _content.anchorMax = new Vector2(0.5f, 0.5f);
-            _content.pivot = new Vector2(0.5f, 0.5f);
-            _content.sizeDelta = contentSize;
-            _content.anchoredPosition = Vector2.zero;
-            _content.localPosition = Vector3.zero;
+            _viewport = CreateRect("Viewport", _canvas.transform, viewportSize);
+            _content = CreateRect("MapContent", _viewport, contentSize);
 
             _controller = new JapanMapViewport();
             _controller.Bind(_viewport, _content);
             return _controller;
+        }
+
+        private RectTransform CreateRect(string name, Transform parent, Vector2 size)
+        {
+            var rect = (RectTransform)Create(name, parent).transform;
+            rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0.5f);
+            rect.pivot = new Vector2(0.5f, 0.5f);
+            rect.sizeDelta = size;
+            rect.anchoredPosition = Vector2.zero;
+            rect.localPosition = Vector3.zero;
+            return rect;
         }
 
         private Vector2 ScreenPointFor(Vector2 viewportLocal)
