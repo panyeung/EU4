@@ -431,6 +431,7 @@
 - 画布层序已统一：`Assets` 内 `CanvasOverlayOrder` 零命中，`CanvasLayerOrder` 是唯一页面序来源。
 - 独立复审 `t_122d4d5b` 判 **PASS**，C1–C6 全过。
 - 仍未闭合：M00 用户最终验收；M08 玩家手动经营路线与经济可持续性；M08B 用户规则选择；M09 真实硬件窗口拖动。PR #4 当前提交 `74f7579` 同时包含 55/100 年 PlayMode 用例，`1/1` 通过且独立复审 ACCEPT；逐次断言每次正式月结成功并恰好前进一个自然月。测试使用生产按钮回调，不证明实体输入、玩家手动经营或用户验收。M09 自动化测试与报告见 PR #6，PlayMode 3/3、EditMode 2301/2301 通过，独立复审 ACCEPT；使用真实 FoundationScene UI 模块接收虚拟 Mouse 事件，不证明物理输入。2026-11-23 主控第三次 Computer Use 拖动仍未观察到面板位移；追踪证明 Computer Use 输入事件到达 Input System 与 EventSystem，但按下和终点位置同帧、未触发 `BeginDrag`，不能据此判断 Windows 原始输入链或实体鼠标结果。实体鼠标、松手停留与底层控件未误触仍待用户验收。`main` 的 `Assets/Tests/PlayMode` 仍为空；其余 MINOR 见 §6。
+- 2026-11-24 修正 Canvas 双启动入口：`JapanMapSceneBootstrap.Start` 与 `WorldMapController.Start` 统一调用 `EnsureForSession`，目标 Canvas 顺序为 GameSession、WorldMapController、场景首个 Canvas。提交 `2bc3b56d96533bd53224a7bac363987b5e1def48` 已推送至 `origin/docs/orca-project-workflow`。新增 EditMode 用例反射调用两个真实 `Start`，覆盖双 Canvas 与两种调用顺序；旧路径红灯 2/2，修正后 `JapanMapPlayableTravelTests` 68/68 通过，独立只读复审 ACCEPT。结果副本 `Logs/verify/20261123-pr3-canvas-selection/TestResults.xml`：MD5 `e2bb562af29a5c5ed2746ca74d2143bc`，SHA-256 `C98D8412F7E423E948E2673B4AE1FE4649ABE36F29E3A7829CB8F16083472B68`。Editor PID `95724`、Pipeline `7804` 收尾为 ready/stopped/compiling=false，`FoundationScene isDirty=false`；新增 Console error 为 0，新增 4 条 warn 是已知 TMP 后备字体警告，累计 1 条 error 为此前误调 CLI 的旧记录。该 EditMode 结果不代表 FoundationScene Play Mode 或用户试玩验收。
 - 2026-11-19 M08 实际试玩后，Unity Editor PID `49784`、项目路径 `C:\Users\panye\My project`、Unity `6000.6.6f1`、Pipeline 端口 `7801`；停止 Play Mode 后状态 `ready`、`compiling=false`，FoundationScene `isDirty=false`，实时 Console 错误/警告 0。累计 Console 的两条旧 CLI/评估命令错误不属于该路线。后续 Unity 工作开始前重新核对进程、`-projectPath` 与 Pipeline；已有实例时复用，不启动第二实例。
 - 证据边界。M01 与 M08C 子切片的验收都不代表 M00 或 M02–M08 整体验收。
 
@@ -447,6 +448,7 @@
 5. `Assets/Tests/PlayMode` 在 `main` 中为空，PR #4 分支新增 M08 五十五周年与百年端到端测试。后续按里程碑补齐自动化覆盖，且与真实运行时证据分别报告。
 6. `Assets/Logs/` 与 `Assets/Logs.meta` 当前均不存在；剩余 MINOR 清理仅包括 `Assets/Scenes/` 的 stray `TestResults_*.xml` 与隔离槽目录，按授权范围处理。
 7. 画布层序已统一为 `CanvasLayerOrder`，后续任何新面板都必须按这套共享序插入并让 `CanvasLayerOrderTests` 覆盖，不要再引入第二套顺序表。
+8. **日本全境地图用户试玩**：PR #3 已包含 Canvas 修正的 `2bc3b56`、68/68 EditMode 结果及独立复审 ACCEPT。按 PR #3 的步骤验证正常 SC-013 路线预览、取消与确认、筛选、实体鼠标滚轮、键盘焦点、目标设备中文显示和关闭；试玩未完成前不得记为通过。
 
 ---
 

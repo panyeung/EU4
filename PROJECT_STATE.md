@@ -1,6 +1,6 @@
 # 项目状态
 
-更新时间：2026-11-23（UTC）
+更新时间：2026-11-24（UTC）
 状态：IN PROGRESS
 
 本文件记录当前工作状态。设计目标、里程碑和测试口径以 [checkpoint.md](checkpoint.md) 为准。界面与美术规则以 [ui设计规划.md](ui设计规划.md) 为准。
@@ -10,8 +10,8 @@
 - 仓库：`https://github.com/panyeung/EU4.git`。
 - `main` 与 `origin/main` 同步。游戏代码基线为 `2bca9d1`。之后的主线提交只更新文档。本文件最初在 `feature/project-state-docs` 独立工作树编写；该文档分支已合入 `main`，不代表当前分支状态。
 - Unity 版本：`6000.6.6f1`，URP 2D，Windows。
-- 当前主工作树：`C:\Users\panye\My project`，分支 `docs/orca-project-workflow`，跟踪 `origin/docs/orca-project-workflow`；`main` 与 `origin/main` 同步在 `65a021d`，游戏代码基线仍为 `2bca9d1`。本工作树当前唯一未提交改动为用户修改的 `AGENTS.md`；该集成分支相对 `main` 的已提交差异包含日本全境地图、场景接线、存档迁移、地图/城镇 UI、测试与验收文档，详见 PR #3。
-- 本次状态核对（2026-11-23 21:54 UTC）：主工作树未运行 Unity Editor。PID `54508` / Pipeline `7800` 对应 `m08-55-success-evidence`，PID `68216` / Pipeline `7801` 对应 `m08-100-year-review`；两实例 `editor_status` 均为 `ready`、`playMode=stopped`、`compiling=false`。本次未核查这两个实例的 Console 与 FoundationScene `isDirty`。2026-11-19 主工作树 PID `49784` 的 Play Mode 结果属于历史记录，详见 checkpoint §4。任何 Unity 操作前重查进程、`-projectPath` 与 `unity pipeline list`；已有实例时复用，不得启动第二实例，也不得据此启动 batchmode。
+- 当前主工作树：`C:\Users\panye\My project`，分支 `docs/orca-project-workflow`，跟踪 `origin/docs/orca-project-workflow`；HEAD 与远端为 `2bc3b56`，`main` 与 `origin/main` 同步在 `65a021d`，游戏代码基线仍为 `2bca9d1`。当前未提交改动为用户修改的 `AGENTS.md`，以及本轮对 `PROJECT_STATE.md`、`checkpoint.md` 的状态同步；该集成分支相对 `main` 的已提交差异包含日本全境地图、场景接线、存档迁移、地图/城镇 UI、测试与验收文档，详见 PR #3。
+- 本次状态核对（2026-11-24 00:21 UTC）：主工作树 Unity Editor PID `95724`，`-projectPath` 为 `C:\Users\panye\My project`，Pipeline `7804`，`editor_status=ready`、`playMode=stopped`、`compiling=false`，当前场景 `FoundationScene` 未保存更改。Canvas 启动入口 EditMode 运行后 `groundTruth.compilationFailed=false`，新增 error 为 0，4 条新增 warn 均为已知 TMP 后备字体警告；累计 1 条 error 是此前误调 `unity command list` 的历史记录。任何 Unity 操作前重查进程、`-projectPath` 与 `unity pipeline list`；已有实例时复用，不得启动第二实例，也不得据此启动 batchmode。
 
 ## 当前阶段
 
@@ -34,6 +34,7 @@
 | Windows Player 构建与冒烟 | 构建成功，报告记 0 错误。冒烟日志无 Exception、LogError、NullReference | 详见 `Logs/verify/v1-demo-build/20261118-r2-demo-build.md`。来源为 `2bca9d1` |
 | Windows Player M00 试玩预验收 | 2026-11-19 本机 EXE 从标题页走到清洲护送委托详情；日期、资金、物资与事件反馈符合试玩步骤 | 详见 `docs/reports/v1-m00-unity-playtest-20261119.md`。Computer Use 输入属主控预验收；日志含 URP 后处理 Shader 警告，不等于用户最终验收 |
 | M08 五十五周年与百年 PlayMode | 合并在同一端到端用例，1/1 通过；逐次断言月结成功和自然月日期变化，覆盖 660/1200 次成功月结、两次回顾与隔离存读档；独立复审 ACCEPT | PR #4 当前提交 `74f7579`；自动按钮回调测试不等于实体输入或用户最终验收 |
+| 日本地图双启动入口 Canvas 修正 | `2bc3b56` 统一两个 `Start` 的 Canvas 解析入口；EditMode `JapanMapPlayableTravelTests` 68/68 通过，独立只读复审 ACCEPT | 结果副本 `Logs/verify/20261123-pr3-canvas-selection/TestResults.xml`，MD5 `e2bb562af29a5c5ed2746ca74d2143bc`，SHA-256 `C98D8412F7E423E948E2673B4AE1FE4649ABE36F29E3A7829CB8F16083472B68`。自动测试不等于 FoundationScene Play Mode 或用户试玩验收 |
 | 用户验收 | 未完成 | 只有用户试玩后才能闭合 |
 
 Git 忽略 `Logs/` 与 `Builds/`。这些日志和 exe 目前只在本机工作区。GitHub 分支克隆不包含它们。交付演示时，确认用户能访问此工作区，或另行提供构建包。
@@ -47,6 +48,7 @@ Git 忽略 `Logs/` 与 `Builds/`。这些日志和 exe 目前只在本机工作�
 3. M09 窗口拖动：2026-11-23 主控第三次 Computer Use 拖动仍未观察到面板位移；追踪日志记录了 Computer Use 产生的 Mouse InputEvent 与 EventSystem 派发，按下和终点位置同帧，`pressPosition == position`，未触发 `BeginDrag`，面板未移动且切到事件页签。该证据不证明 Windows 原始输入链，也不能推断实体鼠标失败。PlayMode 虚拟 Mouse 回归 3/3、EditMode 全量 2301/2301 通过，代码/报告既有复审 ACCEPT；它们不替代实体输入验收。M09 Editor 于 23:33 UTC 为 `ready`、`playMode=stopped`、`compiling=false`，FoundationScene `isDirty=false`。追踪日志为 `Logs/verify/m09-input-trace/trace-20261123-132122.log`，SHA-256 `2846BF02668BA0170ED0CF6C2EB23B2D0AA52706724927962AC94083A473EF81`。实体鼠标拖动、松开后停留及底层控件未误触仍待用户验收。详见 [M09 拖动验证报告](https://github.com/panyeung/EU4/blob/panyeung/m09-debug-drag-fix/docs/reports/m09-debug-drag-fix-20261123.md) 与 [PR #6](https://github.com/panyeung/EU4/pull/6)。
 4. M08B 经济方向仍待用户在 PR #5 选择 A/B/C/D，并确认方案参数与 1000 种子粮食崩溃率目标。独立文档复审已 ACCEPT；不表示规则获批或代码已实现。
 5. `main` 中 `Assets/Tests/PlayMode` 仍为空；PR #4 分支新增 M08 阶段/百年端到端用例，PR #6 分支新增 M09 PlayMode 拖动用例，均尚未进入 `main`。运行时结果须按对应证据来源分别记录。
+6. PR #3 的日本全境地图用户试玩尚未完成。按 PR #3「日本全境地图用户试玩验收」步骤检查清洲到冈崎路线预览、取消/确认结果、筛选、实体鼠标滚轮、键盘焦点和目标设备中文显示；本次 68/68 EditMode 结果不替代此项验收。
 
 checkpoint 记录的 M08B D3 基线中，`unmanaged` 1000 种子均未到达 50 年或 100 年。这个结果是已接受的风险基线，不是长期生存通过。SC-021 与 SC-023 已集成进 `main`，但集成事实本身不代表所有相关运行时体验均已验收。
 
