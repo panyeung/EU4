@@ -610,11 +610,7 @@ namespace SengokuChronicle.Presentation
             _basemap = NewRect("Basemap", _mapContent,
                 new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
             var basemapImage = _basemap.gameObject.AddComponent<Image>();
-            Sprite basemapSprite = JapanMapBasemap.LoadSprite();
-            basemapImage.sprite = basemapSprite;
-            basemapImage.enabled = basemapSprite != null;
-            basemapImage.preserveAspect = true;
-            basemapImage.raycastTarget = false;
+            JapanMapBasemap.Apply(basemapImage, JapanMapBasemap.LoadSprite());
 
             _lineLayer = NewRect("RouteLines", _mapContent, Vector2.zero, Vector2.one);
             _nodeLayer = NewRect("HubNodes", _mapContent, Vector2.zero, Vector2.one);

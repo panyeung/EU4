@@ -141,6 +141,35 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
+        public void Basemap_MissingSpriteDisablesTheImageInsteadOfCoveringTheMap()
+        {
+            var probe = new GameObject("BasemapProbe", typeof(RectTransform), typeof(Image));
+            try
+            {
+                var image = probe.GetComponent<Image>();
+                image.enabled = true;
+
+                Assert.That(JapanMapBasemap.Apply(image, null), Is.False);
+                Assert.That(image.enabled, Is.False,
+                    "缺失底图时必须禁用 Image，不能用白色方块盖住地图。");
+                Assert.That(image.sprite, Is.Null);
+                Assert.That(image.raycastTarget, Is.False);
+
+                Sprite sprite = JapanMapBasemap.LoadSprite();
+                Assert.That(sprite, Is.Not.Null);
+                Assert.That(JapanMapBasemap.Apply(image, sprite), Is.True);
+                Assert.That(image.enabled, Is.True);
+                Assert.That(image.sprite, Is.SameAs(sprite));
+                Assert.That(image.preserveAspect, Is.True);
+                Assert.That(image.raycastTarget, Is.False);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(probe);
+            }
+        }
+
+        [Test]
         public void Basemap_KeepsItsContentRectWhenTheMapIsRebuilt()
         {
             var basemap = (RectTransform)_mapContent.Find("Basemap");

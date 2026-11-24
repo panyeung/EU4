@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace SengokuChronicle.Presentation
 {
@@ -29,6 +30,22 @@ namespace SengokuChronicle.Presentation
 
             Sprite[] sprites = Resources.LoadAll<Sprite>(ResourcePath);
             return sprites != null && sprites.Length > 0 ? sprites[0] : null;
+        }
+
+        /// <summary>
+        /// 把底图精灵装到 Image 上。精灵缺失时禁用 Image 并返回 false，防止未贴图的
+        /// 白色方块盖住地图与节点；成功时保持比例且不拦截射线。两态都可单独断言。
+        /// </summary>
+        public static bool Apply(Image image, Sprite sprite)
+        {
+            if (image == null)
+                return false;
+
+            image.sprite = sprite;
+            image.enabled = sprite != null;
+            image.preserveAspect = true;
+            image.raycastTarget = false;
+            return sprite != null;
         }
     }
 }
