@@ -14,6 +14,11 @@ namespace SengokuChronicle.Presentation
     /// Runtime uGUI screen over the authoritative JapanMapExplorer and GameSession.
     /// It owns no travel state: preview and confirmation go through GameSession, so
     /// the map, the M02 buttons and save data all read the same world state.
+    /// <para>
+    /// 地图区域是一个裁切视口，直接子级 <c>MapContent</c> 承载路线层与节点层。
+    /// 缩放与平移只改这一层 <see cref="JapanMapViewport"/> 变换；目录、筛选、
+    /// 详情和按钮保持固定尺寸。旅行、日期、存档和稳定 ID 的语义不变。
+    /// </para>
     /// </summary>
     public sealed class JapanMapScreen : MonoBehaviour
     {
@@ -32,6 +37,9 @@ namespace SengokuChronicle.Presentation
         private RectTransform _catalogContent;
         private ScrollRect _catalogScroll;
         private RectTransform _mapArea;
+        private RectTransform _mapContent;
+        private readonly JapanMapViewport _mapViewport = new JapanMapViewport();
+        private JapanMapViewportInput _mapInput;
         private Vector2 _lastMapSize;
         private RectTransform _lineLayer;
         private RectTransform _nodeLayer;
@@ -112,6 +120,17 @@ namespace SengokuChronicle.Presentation
                 Close();
             else
                 Open();
+        }
+
+        /// <summary>
+        /// 视口尺寸变化后重新适配全境。运行时由 <see cref="LateUpdate"/> 自动调用；
+        /// 尺寸已知但帧回调尚未运行时（例如 EditMode 回归）可显式调用。
+        /// </summary>
+        public void RefreshMapViewport()
+        {
+            if (!_built)
+                return;
+            RebuildMap();
         }
 
         public bool SelectHub(string hubId)
@@ -372,20 +391,22 @@ namespace SengokuChronicle.Presentation
 
         private void RebuildMap()
         {
-            if (_mapArea == null || _nodeLayer == null || _lineLayer == null)
+            if (_mapArea == null || _mapContent == null || _nodeLayer == null ||
+                _lineLayer == null)
                 return;
-            DestroyChildren(_nodeLayer);
-            DestroyChildren(_lineLayer);
 
             Rect size = _mapArea.rect;
             if (size.width <= 1f || size.height <= 1f)
                 return;
 
+            var extent = new Vector2(size.width, size.height);
+            EnsureViewport(extent);
+            DestroyChildren(_nodeLayer);
+            DestroyChildren(_lineLayer);
+
             IReadOnlyList<JapanMapHub> hubs = JapanTravelGraph.Hubs;
-            JapanMapLayoutResult layout =
-                JapanMapLayout.ComputeLayout(hubs, new Vector2(size.width, size.height));
+            JapanMapLayoutResult layout = JapanMapLayout.ComputeLayout(hubs, extent);
             Vector2[] nodePositions = layout.Positions;
-            _lastMapSize = new Vector2(size.width, size.height);
 
             IReadOnlyList<JapanMapRoute> routes = JapanTravelGraph.Routes;
             for (int i = 0; i < routes.Count; i++)
@@ -404,6 +425,27 @@ namespace SengokuChronicle.Presentation
 
             for (int i = 0; i < hubs.Count; i++)
                 CreateHubNode(hubs[i], nodePositions[i], layout.NodeSize);
+        }
+
+        /// <summary>
+        /// 视口尺寸决定全境几何。首次绑定或尺寸变化时把 mapContent 的矩形设为
+        /// 新的全境尺寸并回到 1x；尺寸不变时只按当前倍率刷新边界，因此选择枢纽
+        /// 重建节点不会重置玩家的缩放和平移。
+        /// </summary>
+        private void EnsureViewport(Vector2 extent)
+        {
+            _mapContent.sizeDelta = extent;
+            bool resized = !_mapViewport.IsBound ||
+                           Mathf.Abs(extent.x - _lastMapSize.x) > 0.5f ||
+                           Mathf.Abs(extent.y - _lastMapSize.y) > 0.5f;
+            if (resized)
+            {
+                _lastMapSize = extent;
+                _mapViewport.Bind(_mapArea, _mapContent);
+                return;
+            }
+
+            _mapViewport.Refresh();
         }
 
         private static Vector2 NodePosition(IReadOnlyList<JapanMapHub> hubs,
@@ -461,7 +503,7 @@ namespace SengokuChronicle.Presentation
             var button = nodeObject.GetComponent<Button>();
             button.targetGraphic = image;
             string hubId = hub.Id;
-            button.onClick.AddListener(() => SelectHub(hubId));
+            button.onClick.AddListener(() => SelectHubFromMap(hubId));
 
             Graphic label = JapanMapFonts.CreateText(rect, "Label", 11,
                 TextAlignmentOptions.Center);
@@ -548,8 +590,18 @@ namespace SengokuChronicle.Presentation
 
             _mapArea = CreatePanel("JapanMapArea", _root, new Vector2(0.31f, 0.36f),
                 new Vector2(0.985f, 0.81f), new Color(0.075f, 0.095f, 0.12f, 1f));
-            _lineLayer = NewRect("RouteLines", _mapArea, Vector2.zero, Vector2.one);
-            _nodeLayer = NewRect("HubNodes", _mapArea, Vector2.zero, Vector2.one);
+            // 地图区域是唯一裁切视口：缩放和平移只改 MapContent 的变换，
+            // 路线层与节点层都挂在它下面，共享同一套变换和裁切。
+            _mapArea.gameObject.AddComponent<RectMask2D>();
+            _mapInput = _mapArea.gameObject.AddComponent<JapanMapViewportInput>();
+            _mapInput.Bind(_mapViewport);
+
+            _mapContent = NewRect("MapContent", _mapArea,
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+            _mapContent.sizeDelta = Vector2.zero;
+
+            _lineLayer = NewRect("RouteLines", _mapContent, Vector2.zero, Vector2.one);
+            _nodeLayer = NewRect("HubNodes", _mapContent, Vector2.zero, Vector2.one);
             _lineLayer.SetAsFirstSibling();
             _nodeLayer.SetAsLastSibling();
 
@@ -603,6 +655,17 @@ namespace SengokuChronicle.Presentation
             if (!EnsureExplorer() || string.IsNullOrEmpty(_explorer.CurrentHubId))
                 return;
             SelectHub(_explorer.CurrentHubId);
+        }
+
+        /// <summary>
+        /// 地图节点的短按沿用原来的选择与旅行预览。拖动已经超过 uGUI 阈值时，
+        /// 这次抬起不得当成选点，避免拖完地图误选节点或弹出行程。
+        /// </summary>
+        private void SelectHubFromMap(string hubId)
+        {
+            if (_mapInput != null && _mapInput.IsDragging)
+                return;
+            SelectHub(hubId);
         }
 
         private void CancelPreview()

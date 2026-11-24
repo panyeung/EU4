@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using UnityEngine.EventSystems;
 
 namespace SengokuChronicle.Presentation
 {
@@ -229,6 +230,81 @@ namespace SengokuChronicle.Presentation
         {
             if (!IsBound)
                 throw new InvalidOperationException("JapanMapViewport 必须先 Bind 视口与地图内容。");
+        }
+    }
+
+    /// <summary>
+    /// 把裁切视口上的 uGUI 指针事件接到 <see cref="JapanMapViewport"/>。
+    /// <para>
+    /// 拖动只在指针移动超过 EventSystem 的拖动阈值后才会以 BeginDrag 到达这里，
+    /// 因此 <see cref="IsDragging"/> 为真代表这次按下已经变成拖动。uGUI 在超过
+    /// 阈值后会取消 pointerClick，节点按钮不会收到点击；屏幕再用这个状态拒绝
+    /// 误选，作为第二道防线。
+    /// </para>
+    /// <para>
+    /// 滚轮按指针位置缩放；拖动按上一帧到当前帧的真实屏幕起终点调用
+    /// <see cref="JapanMapViewport.PanBy"/>，保留透视相机的投影换算。
+    /// 本组件只操作已绑定的视口，不读取地图数据或旅行状态。
+    /// </para>
+    /// </summary>
+    public sealed class JapanMapViewportInput : MonoBehaviour,
+        IBeginDragHandler, IDragHandler, IEndDragHandler, IScrollHandler
+    {
+        private JapanMapViewport _viewport;
+        private Vector2 _lastScreenPosition;
+        private bool _dragging;
+
+        /// <summary>指针是否已经越过 uGUI 拖动阈值并处于拖动中。</summary>
+        public bool IsDragging => _dragging;
+
+        public void Bind(JapanMapViewport viewport)
+        {
+            _viewport = viewport;
+            _dragging = false;
+        }
+
+        public void OnBeginDrag(PointerEventData eventData)
+        {
+            if (!CanHandle(eventData))
+                return;
+            _dragging = true;
+            _lastScreenPosition = eventData.position;
+        }
+
+        public void OnDrag(PointerEventData eventData)
+        {
+            if (!CanHandle(eventData))
+                return;
+            if (!_dragging)
+            {
+                // 没有 BeginDrag 的调用方（例如单元测试直接驱动）也按一次拖动处理，
+                // 起点取当前点减去事件增量。
+                _dragging = true;
+                _lastScreenPosition = eventData.position - eventData.delta;
+            }
+
+            _viewport.PanBy(_lastScreenPosition, eventData.position);
+            _lastScreenPosition = eventData.position;
+        }
+
+        public void OnEndDrag(PointerEventData eventData)
+        {
+            _dragging = false;
+        }
+
+        public void OnScroll(PointerEventData eventData)
+        {
+            if (!CanHandle(eventData))
+                return;
+            float scroll = eventData.scrollDelta.y;
+            if (Mathf.Abs(scroll) <= 1e-4f)
+                return;
+            _viewport.ZoomAt(eventData.position, scroll);
+        }
+
+        private bool CanHandle(PointerEventData eventData)
+        {
+            return eventData != null && _viewport != null && _viewport.IsBound;
         }
     }
 }
