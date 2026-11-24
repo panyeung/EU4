@@ -57,7 +57,14 @@ bash scripts/copy-testresults.sh Logs/verify/<本轮目录>
 - 继承。切到「家族」页；首个合法 `SuccessionCandidate_*` 加 `SuccessionConfirmButton`；幼主时首个 `SuccessionRegent_*` 加确认；危机时 `SuccessionAcceptCrisisButton`；成年交权时确认。
 - 农庄补任。切到「家计」页；农庄空缺时触发首个 `IndustryCandidate_industry.farm_*` 加 `IndustryConfirmButton`，失败再试下一个。
 
-除此之外没有市场买卖、商馆任命、研究、教育、婚姻、任务或产业扩产操作。商馆 `industry.trading-house` 全程空缺。两轮产生的 33 条决策台账逐字节相同，SHA-256 都是 `4835e2e6717515058250f6f31b5619f0dfbaefdcd7702d5f38c46d17183c1648`：
+除此之外没有市场买卖、商馆任命、研究、教育、婚姻、任务或产业扩产操作。商馆 `industry.trading-house` 全程空缺。
+
+### 测试夹具边界
+
+- 唯一非按钮设置是保存槽重定向：用 `SaveSlotStore` 指向 `Path.GetTempPath()/m08-55-review-playmode-<guid>`，对标题界面与存读档面板调用公开的 `SetStore` 测试缝（源码注释为 Editor generator / test seam）。不写用户存档。
+- 场景由 `SceneManager.LoadSceneAsync("Assets/Scenes/FoundationScene.unity", Single)` 加载；组件与控件按类型或名称查找。
+- 不调用 `GameSession` 的写状态命令、调试跳日、`SetCampaignProgressForTest`、`Refresh`，也不直接改日期、家族、任命、确认旗标或随机状态。会话状态只读用于断言与日志。
+- 月结、事件、继承、农庄任命、回顾确认、存档与读档全部触发生产 `Button.onClick` 回调。两轮产生的 33 条决策台账逐字节相同，SHA-256 都是 `4835e2e6717515058250f6f31b5619f0dfbaefdcd7702d5f38c46d17183c1648`：
 
 ```
 diff -u Logs/verify/m08-100-20261123-1530/decision_ledger.txt \
