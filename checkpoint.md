@@ -465,5 +465,5 @@
 - HEAD 的 `Assets/Scenes/FoundationScene.unity` 已含 SC024 家训演示按钮、根节点与 `FamilyDoctrinePanel`；场景对象存在不等于本轮运行时或用户验收通过。
 - 测试工具收尾异常。PID 88424 的崩溃现场已被重启覆盖，现 `Logs/Editor.log` 与 `%LOCALAPPDATA%\Unity\Editor\Editor.log` 中 `IndexOutOfRange` 命中 0 次；崩溃经过只留在本节与 `Logs/recovery-20261118/` 的场景备份里，没有原始调用栈。`IPostBuildCleanup` 页脚仍会出现，属既有噪声。
 - `unmanaged` 基线 1000 个种子均未到达 50/100 年；`farm-managed-v1` 可完成部分 100 年路线，但记录仍有 803/1000 粮荒/崩溃和 801/1000 极端通胀。自动策略不代表玩家行为，风险基线不等于经济可持续通过。
-- M09 输入仍未完整验收。PR #6 的 PlayMode 虚拟 Mouse 回归只证明事件进入 `InputSystemUIInputModule` 后的 UI 行为；Computer Use 追踪证明其生成的 Mouse InputEvent 被 Input System 记录、EventSystem 派发到潜在拖动阶段，但按下与终点位置同帧使 `pressPosition == position`，未满足 uGUI 拖动阈值。该证据不证明 Windows 原始输入链，也不能判断实体鼠标结果。用户仍需验证标题栏拖动、松开后位置和底层控件未误触。此前坐标点击为 `actionUnsupported`，也不能证明实体键盘行为。
+- M09 实体鼠标验收已通过并随 PR #6 合并（见第 4 项）。历史 Computer Use 合成输入追踪只证明 Mouse InputEvent 被 Input System 记录并由 EventSystem 派发到潜在拖动阶段；按下与终点位置同帧导致 `pressPosition == position`，未满足 uGUI 拖动阈值。该追踪不能证明 Windows 原始输入链，也不能推翻用户报告的实体鼠标验收结果；此前坐标点击为 `actionUnsupported`，不构成实体键盘输入证据。日本全境地图的实体滚轮、键盘焦点与中文显示验收仍按第 8 项待办。
 - Pipeline 请求多次超时。30 秒客户端上限与 `run_tests` 600 秒超时都曾中断验证流程。
