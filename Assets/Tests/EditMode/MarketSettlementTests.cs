@@ -413,8 +413,9 @@ namespace SengokuChronicle.Tests.EditMode
 
             IndustrySettlementResult industry = IndustrySettlement.Plan(state, succession, Start);
             Assert.That(industry.Succeeded, Is.True, industry.Message);
-            Assert.That(industry.Report.Lines[1].Status, Is.EqualTo(IndustryLineStatus.Stalled));
-            Assert.That(industry.Report.Lines[1].RequiredSupplies, Is.EqualTo(2));
+            IndustryLineResult stalled = Line(industry.Report, IndustryCatalog.TradingHouseId);
+            Assert.That(stalled.Status, Is.EqualTo(IndustryLineStatus.Stalled));
+            Assert.That(stalled.RequiredSupplies, Is.EqualTo(2));
 
             MarketSettlementResult result = MarketSettlement.Plan(Market(10),
                 industry.NextState.Resources, succession, industry.Report, Start);
@@ -444,7 +445,8 @@ namespace SengokuChronicle.Tests.EditMode
             IndustryService.TryAssign(state, succession, Start, IndustryCatalog.TradingHouseId, Chie);
 
             IndustrySettlementResult industry = IndustrySettlement.Plan(state, succession, Start);
-            Assert.That(industry.Report.Lines[1].Status, Is.EqualTo(IndustryLineStatus.Stalled),
+            Assert.That(Line(industry.Report, IndustryCatalog.TradingHouseId).Status,
+                Is.EqualTo(IndustryLineStatus.Stalled),
                 "one unit cannot cover the trading house's two-unit input");
 
             MarketSettlementResult result = MarketSettlement.Plan(Market(10),
@@ -636,6 +638,17 @@ namespace SengokuChronicle.Tests.EditMode
             return new IndustryMonthReport(Start.Year, Start.Month, before, after,
                 lines.AsReadOnly(), Array.Empty<IndustryVacancy>(), false, lines.Count > 0,
                 true, "测试产业月结。");
+        }
+
+        private static IndustryLineResult Line(IndustryMonthReport report, string industryId,
+            int postIndex = 0)
+        {
+            foreach (IndustryLineResult line in report.Lines)
+                if (line.PostIndex == postIndex &&
+                    string.Equals(line.IndustryId, industryId, System.StringComparison.Ordinal))
+                    return line;
+            Assert.Fail("report has no line " + industryId + "#" + postIndex);
+            return default;
         }
     }
 }

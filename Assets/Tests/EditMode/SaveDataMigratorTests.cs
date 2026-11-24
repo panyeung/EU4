@@ -147,7 +147,7 @@ namespace SengokuChronicle.Tests.EditMode
             {
                 SaveData data = session.CaptureSave();
                 data.saveFormatVersion = 15;
-                data.rulesVersion = SaveData.CurrentRulesVersion;
+                data.rulesVersion = 8;
                 data.campaign = null;
                 data.market = null;
 
@@ -335,7 +335,7 @@ namespace SengokuChronicle.Tests.EditMode
                 // over silently.
                 SaveData carrying = session.CaptureSave();
                 carrying.saveFormatVersion = 15;
-                carrying.rulesVersion = SaveData.CurrentRulesVersion;
+                carrying.rulesVersion = 8;
                 carrying.market = null;
                 string carryingJson = RemoveRootProperty(JsonUtility.ToJson(carrying), "market");
                 SaveDataPresenceProbe carryingProbe =
@@ -919,7 +919,7 @@ namespace SengokuChronicle.Tests.EditMode
             {
                 SaveData legacy = session.CaptureSave();
                 legacy.saveFormatVersion = 15;
-                legacy.rulesVersion = SaveData.CurrentRulesVersion;
+                legacy.rulesVersion = 8;
                 legacy.campaign = null;
                 legacy.market = null;
                 legacy.familyStanding = null;
@@ -935,7 +935,7 @@ namespace SengokuChronicle.Tests.EditMode
                 // rejected by the migrator, matching the SaveSlotStore presence guard.
                 SaveData carrying = session.CaptureSave();
                 carrying.saveFormatVersion = 15;
-                carrying.rulesVersion = SaveData.CurrentRulesVersion;
+                carrying.rulesVersion = 8;
                 carrying.campaign = null;
                 carrying.market = null;
                 string json = RemoveRootProperty(JsonUtility.ToJson(carrying),
@@ -1381,13 +1381,12 @@ namespace SengokuChronicle.Tests.EditMode
             {
                 SaveData legacy = session.CaptureSave();
                 legacy.saveFormatVersion = 16;
-                legacy.rulesVersion = SaveData.CurrentRulesVersion;
+                legacy.rulesVersion = 8;
                 legacy.market = null;
                 int funds = legacy.industry.funds;
                 int supplies = legacy.industry.supplies;
                 int intelligence = legacy.industry.intelligence;
                 int settled = legacy.industry.lastSettledMonthIndex;
-                int rulesVersion = legacy.rulesVersion;
                 string successionJson = JsonUtility.ToJson(legacy.succession);
                 string commissionJson = JsonUtility.ToJson(legacy.commission);
                 string campaignJson = JsonUtility.ToJson(legacy.campaign);
@@ -1412,11 +1411,11 @@ namespace SengokuChronicle.Tests.EditMode
                 Assert.That(SaveDataMigrator.TryMigrate(legacy, null, out SaveData current,
                     out SaveOperationResult result), Is.True, result.Message);
 
-                Assert.That(SaveDataValidator.CurrentVersion, Is.EqualTo(17));
+                Assert.That(SaveDataValidator.CurrentVersion, Is.EqualTo(18));
                 Assert.That(current.saveFormatVersion,
                     Is.EqualTo(SaveDataValidator.CurrentVersion));
-                Assert.That(current.rulesVersion, Is.EqualTo(rulesVersion),
-                    "the v16 rulesVersion is preserved by the migration");
+                Assert.That(current.rulesVersion, Is.EqualTo(SaveData.CurrentRulesVersion),
+                    "migrating through v18 adopts the current rules contract");
                 Assert.That(current.market, Is.Not.Null);
                 Assert.That(current.market.foodInventory, Is.EqualTo(2),
                     "the six-person family's one-month food demand is carved out of supplies");
@@ -1479,6 +1478,68 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
+        public void V17ToV18Migration_AddsTheVacantSecondFarmPostAndKeepsTheMarket()
+        {
+            GameSession session = GameSession.NewGame();
+            try
+            {
+                Assert.That(session.TryAssignIndustry(IndustryCatalog.FarmId, 0,
+                    M2FixedScenario.HarunobuId).Succeeded, Is.True);
+                SaveData legacy = session.CaptureSave();
+                legacy.saveFormatVersion = 17;
+                legacy.rulesVersion = 8;
+                // A real v17 file stored exactly one row per industry and no postIndex.
+                string farmAssignee = legacy.industry.slots[0].assignedPersonId;
+                legacy.industry.slots = new[]
+                {
+                    new IndustrySlotSaveEntry
+                    {
+                        industryId = IndustryCatalog.FarmId,
+                        assignedPersonId = farmAssignee
+                    },
+                    new IndustrySlotSaveEntry
+                    {
+                        industryId = IndustryCatalog.TradingHouseId,
+                        assignedPersonId = string.Empty
+                    }
+                };
+                string marketJson = JsonUtility.ToJson(legacy.market);
+                int funds = legacy.industry.funds;
+                int supplies = legacy.industry.supplies;
+                int settled = legacy.industry.lastSettledMonthIndex;
+
+                Assert.That(SaveDataMigrator.TryMigrate(legacy, null, out SaveData current,
+                    out SaveOperationResult result), Is.True, result.Message);
+
+                Assert.That(current.saveFormatVersion, Is.EqualTo(18));
+                Assert.That(current.rulesVersion, Is.EqualTo(SaveData.CurrentRulesVersion));
+                Assert.That(current.industry.slots, Has.Length.EqualTo(3));
+                Assert.That(current.industry.slots[0].industryId, Is.EqualTo(IndustryCatalog.FarmId));
+                Assert.That(current.industry.slots[0].postIndex, Is.Zero);
+                Assert.That(current.industry.slots[0].assignedPersonId,
+                    Is.EqualTo(M2FixedScenario.HarunobuIdValue),
+                    "the existing farm assignee keeps the first post");
+                Assert.That(current.industry.slots[1].industryId, Is.EqualTo(IndustryCatalog.FarmId));
+                Assert.That(current.industry.slots[1].postIndex, Is.EqualTo(1));
+                Assert.That(current.industry.slots[1].assignedPersonId, Is.Empty,
+                    "the new second post arrives vacant instead of inventing an assignee");
+                Assert.That(current.industry.slots[2].industryId,
+                    Is.EqualTo(IndustryCatalog.TradingHouseId));
+                Assert.That(current.industry.slots[2].postIndex, Is.Zero);
+                Assert.That(current.industry.funds, Is.EqualTo(funds));
+                Assert.That(current.industry.supplies, Is.EqualTo(supplies),
+                    "v17 already owns the market, so no stock is moved again");
+                Assert.That(current.industry.lastSettledMonthIndex, Is.EqualTo(settled));
+                Assert.That(JsonUtility.ToJson(current.market), Is.EqualTo(marketJson),
+                    "the v17 market block is preserved byte for byte");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(session.gameObject);
+            }
+        }
+
+        [Test]
         public void V16ToV17Migration_WithLowSupplies_MovesOnlyTheExistingStock()
         {
             GameSession session = GameSession.NewGame();
@@ -1486,7 +1547,7 @@ namespace SengokuChronicle.Tests.EditMode
             {
                 SaveData legacy = session.CaptureSave();
                 legacy.saveFormatVersion = 16;
-                legacy.rulesVersion = SaveData.CurrentRulesVersion;
+                legacy.rulesVersion = 8;
                 legacy.market = null;
                 legacy.industry.supplies = 1;
 
@@ -1511,7 +1572,7 @@ namespace SengokuChronicle.Tests.EditMode
             {
                 SaveData data = session.CaptureSave();
                 data.saveFormatVersion = 16;
-                data.rulesVersion = SaveData.CurrentRulesVersion;
+                data.rulesVersion = 8;
                 string json = JsonUtility.ToJson(data);
                 Assert.That(json, Does.Contain("\"market\":"));
 

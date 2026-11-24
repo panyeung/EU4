@@ -16,7 +16,8 @@ namespace SengokuChronicle.Domain
             int grossOutputIntelligence, int netOutputFunds, int netOutputSupplies,
             int netOutputIntelligence, int appliedFundsDelta, int appliedSuppliesDelta,
             int appliedIntelligenceDelta, bool maintenanceRetainedFromOutput,
-            int grossOutputFood = 0, int materialsCostFunds = 0, int requiredSupplies = 0)
+            int grossOutputFood = 0, int materialsCostFunds = 0, int requiredSupplies = 0,
+            int postIndex = 0)
         {
             IndustryId = industryId ?? string.Empty;
             IndustryName = industryName ?? string.Empty;
@@ -39,6 +40,7 @@ namespace SengokuChronicle.Domain
             GrossOutputFood = grossOutputFood;
             MaterialsCostFunds = materialsCostFunds;
             RequiredSupplies = requiredSupplies;
+            PostIndex = postIndex;
         }
 
         public string IndustryId { get; }
@@ -69,6 +71,8 @@ namespace SengokuChronicle.Domain
         /// actual draw and is zero on a stalled line. Vacant and invalid lines require zero.
         /// </summary>
         public int RequiredSupplies { get; }
+        /// <summary>Post within the industry; the two-post farm reports 0 and 1 separately.</summary>
+        public int PostIndex { get; }
     }
 
     /// <summary>Immutable result of one month's industry settlement.</summary>
@@ -167,93 +171,104 @@ namespace SengokuChronicle.Domain
             int intelligence = before.Intelligence;
             bool anyStaffed = false;
             bool hasShortage = false;
-            var lines = new List<IndustryLineResult>(IndustryCatalog.All.Count);
+            var lines = new List<IndustryLineResult>(IndustryCatalog.TotalPosts);
 
             foreach (IndustryDefinition definition in IndustryCatalog.All)
             {
-                state.TryGetAssignee(definition.Id, out PersonId originalAssignee);
-                if (!originalAssignee.IsEmpty)
-                    anyStaffed = true;
-
-                if (originalAssignee.IsEmpty)
+                // Each post owns one production line, so two staffed farm posts harvest
+                // twice and charge their own upkeep. A vacant or invalid post stays its
+                // own reported line instead of hiding the other post's output.
+                for (int post = 0; post < definition.CapacityPosts; post++)
                 {
-                    lines.Add(VacantLine(definition));
-                    continue;
-                }
+                    string postName = IndustryService.PostName(definition.Id, post);
+                    state.TryGetAssignee(definition.Id, post, out PersonId originalAssignee);
+                    if (!originalAssignee.IsEmpty)
+                        anyStaffed = true;
 
-                string assigneeName = IndustryService.PersonName(succession, originalAssignee);
-                if (TryFindVacancy(vacated, definition.Id, out IndustryVacancy vacancy))
-                {
-                    lines.Add(new IndustryLineResult(definition.Id, definition.DisplayName,
-                        originalAssignee, assigneeName, IndustryLineStatus.InvalidAssignment,
-                        vacancy.Reason, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, false));
-                    continue;
-                }
-
-                if (definition.MaintainsFromOutput)
-                {
-                    int retained = Math.Min(definition.UpkeepSupplies, definition.OutputSupplies);
-                    int materialsCost = MaterialsCostFunds(retained, materialsPriceIndexPermille);
-                    long payableFunds = (long)funds + definition.OutputFunds - definition.UpkeepFunds;
-                    if (materialsCost > payableFunds)
+                    if (originalAssignee.IsEmpty)
                     {
-                        hasShortage = true;
-                        lines.Add(StalledLine(definition, originalAssignee, assigneeName,
-                            (int)(materialsCost - payableFunds), 0, materialsCost, retained));
+                        lines.Add(VacantLine(definition, postName, post));
                         continue;
                     }
 
-                    int netFunds = definition.OutputFunds - definition.UpkeepFunds - materialsCost;
-                    int netSupplies = definition.OutputSupplies - retained;
-                    int netIntelligence = definition.OutputIntelligence;
-                    int beforeFunds = funds;
-                    int beforeSupplies = supplies;
-                    int beforeIntelligence = intelligence;
-                    funds = Clamp(funds + (long)netFunds);
-                    supplies = Clamp(supplies + (long)netSupplies);
-                    intelligence = Clamp(intelligence + (long)netIntelligence);
-                    lines.Add(new IndustryLineResult(definition.Id, definition.DisplayName,
+                    string assigneeName = IndustryService.PersonName(succession, originalAssignee);
+                    if (TryFindVacancy(vacated, definition.Id, post, out IndustryVacancy vacancy))
+                    {
+                        lines.Add(new IndustryLineResult(definition.Id, postName,
+                            originalAssignee, assigneeName, IndustryLineStatus.InvalidAssignment,
+                            vacancy.Reason, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, false,
+                            0, 0, 0, post));
+                        continue;
+                    }
+
+                    if (definition.MaintainsFromOutput)
+                    {
+                        int retained = Math.Min(definition.UpkeepSupplies, definition.OutputSupplies);
+                        int materialsCost = MaterialsCostFunds(retained, materialsPriceIndexPermille);
+                        long payableFunds = (long)funds + definition.OutputFunds - definition.UpkeepFunds;
+                        if (materialsCost > payableFunds)
+                        {
+                            hasShortage = true;
+                            lines.Add(StalledLine(definition, postName, originalAssignee,
+                                assigneeName, (int)(materialsCost - payableFunds), 0, materialsCost,
+                                retained, post));
+                            continue;
+                        }
+
+                        int netFunds = definition.OutputFunds - definition.UpkeepFunds - materialsCost;
+                        int netSupplies = definition.OutputSupplies - retained;
+                        int netIntelligence = definition.OutputIntelligence;
+                        int beforeFunds = funds;
+                        int beforeSupplies = supplies;
+                        int beforeIntelligence = intelligence;
+                        funds = Clamp(funds + (long)netFunds);
+                        supplies = Clamp(supplies + (long)netSupplies);
+                        intelligence = Clamp(intelligence + (long)netIntelligence);
+                        lines.Add(new IndustryLineResult(definition.Id, postName,
+                            originalAssignee, assigneeName, IndustryLineStatus.Operated,
+                            "运作中", definition.UpkeepFunds, retained,
+                            definition.OutputFunds, definition.OutputSupplies,
+                            definition.OutputIntelligence, netFunds, netSupplies, netIntelligence,
+                            funds - beforeFunds, supplies - beforeSupplies,
+                            intelligence - beforeIntelligence, true, definition.OutputFood,
+                            materialsCost, retained, post));
+                        continue;
+                    }
+
+                    int lineMaterialsCost = MaterialsCostFunds(definition.UpkeepSupplies,
+                        materialsPriceIndexPermille);
+                    int requiredFunds = definition.UpkeepFunds + lineMaterialsCost;
+                    int missingFunds = Math.Max(0, requiredFunds - funds);
+                    int missingSupplies = Math.Max(0, definition.UpkeepSupplies - supplies);
+                    if (missingFunds > 0 || missingSupplies > 0)
+                    {
+                        hasShortage = true;
+                        lines.Add(StalledLine(definition, postName, originalAssignee,
+                            assigneeName, missingFunds, missingSupplies, lineMaterialsCost,
+                            definition.UpkeepSupplies, post));
+                        continue;
+                    }
+
+                    int lineFunds = funds;
+                    int lineSupplies = supplies;
+                    int lineIntelligence = intelligence;
+                    funds -= requiredFunds;
+                    supplies -= definition.UpkeepSupplies;
+                    funds = Clamp(funds + (long)definition.OutputFunds);
+                    supplies = Clamp(supplies + (long)definition.OutputSupplies);
+                    intelligence = Clamp(intelligence + (long)definition.OutputIntelligence);
+                    lines.Add(new IndustryLineResult(definition.Id, postName,
                         originalAssignee, assigneeName, IndustryLineStatus.Operated,
-                        "运作中", definition.UpkeepFunds, retained,
+                        "运作中", definition.UpkeepFunds, definition.UpkeepSupplies,
                         definition.OutputFunds, definition.OutputSupplies,
-                        definition.OutputIntelligence, netFunds, netSupplies, netIntelligence,
-                        funds - beforeFunds, supplies - beforeSupplies, intelligence - beforeIntelligence,
-                        true, definition.OutputFood, materialsCost, retained));
-                    continue;
+                        definition.OutputIntelligence,
+                        definition.OutputFunds - requiredFunds,
+                        definition.OutputSupplies - definition.UpkeepSupplies,
+                        definition.OutputIntelligence,
+                        funds - lineFunds, supplies - lineSupplies,
+                        intelligence - lineIntelligence, false, definition.OutputFood,
+                        lineMaterialsCost, definition.UpkeepSupplies, post));
                 }
-
-                int lineMaterialsCost = MaterialsCostFunds(definition.UpkeepSupplies,
-                    materialsPriceIndexPermille);
-                int requiredFunds = definition.UpkeepFunds + lineMaterialsCost;
-                int missingFunds = Math.Max(0, requiredFunds - funds);
-                int missingSupplies = Math.Max(0, definition.UpkeepSupplies - supplies);
-                if (missingFunds > 0 || missingSupplies > 0)
-                {
-                    hasShortage = true;
-                    lines.Add(StalledLine(definition, originalAssignee, assigneeName,
-                        missingFunds, missingSupplies, lineMaterialsCost,
-                        definition.UpkeepSupplies));
-                    continue;
-                }
-
-                int lineFunds = funds;
-                int lineSupplies = supplies;
-                int lineIntelligence = intelligence;
-                funds -= requiredFunds;
-                supplies -= definition.UpkeepSupplies;
-                funds = Clamp(funds + (long)definition.OutputFunds);
-                supplies = Clamp(supplies + (long)definition.OutputSupplies);
-                intelligence = Clamp(intelligence + (long)definition.OutputIntelligence);
-                lines.Add(new IndustryLineResult(definition.Id, definition.DisplayName,
-                    originalAssignee, assigneeName, IndustryLineStatus.Operated,
-                    "运作中", definition.UpkeepFunds, definition.UpkeepSupplies,
-                    definition.OutputFunds, definition.OutputSupplies,
-                    definition.OutputIntelligence,
-                    definition.OutputFunds - requiredFunds,
-                    definition.OutputSupplies - definition.UpkeepSupplies,
-                    definition.OutputIntelligence,
-                    funds - lineFunds, supplies - lineSupplies, intelligence - lineIntelligence,
-                    false, definition.OutputFood, lineMaterialsCost, definition.UpkeepSupplies));
             }
 
             IndustryResources.TryCreate(funds, supplies, intelligence,
@@ -271,23 +286,24 @@ namespace SengokuChronicle.Domain
                 "产业月结完成。", next, report);
         }
 
-        private static IndustryLineResult VacantLine(IndustryDefinition definition) =>
-            new IndustryLineResult(definition.Id, definition.DisplayName, default, string.Empty,
+        private static IndustryLineResult VacantLine(IndustryDefinition definition, string postName,
+            int postIndex) =>
+            new IndustryLineResult(definition.Id, postName, default, string.Empty,
                 IndustryLineStatus.Vacant, "空缺：无人负责，本月无产出",
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, false);
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, false, 0, 0, 0, postIndex);
 
-        private static IndustryLineResult StalledLine(IndustryDefinition definition, PersonId assignee,
-            string assigneeName, int missingFunds, int missingSupplies, int materialsCost,
-            int requiredSupplies)
+        private static IndustryLineResult StalledLine(IndustryDefinition definition, string postName,
+            PersonId assignee, string assigneeName, int missingFunds, int missingSupplies,
+            int materialsCost, int requiredSupplies, int postIndex)
         {
             string reason = "资源不足：缺 " + Number(missingFunds) + " 资金、" +
                             Number(missingSupplies) + " 物资";
             if (materialsCost > 0)
                 reason += "（其中材料成本 " + Number(materialsCost) + " 资金）";
             reason += "，本月停产";
-            return new IndustryLineResult(definition.Id, definition.DisplayName, assignee, assigneeName,
+            return new IndustryLineResult(definition.Id, postName, assignee, assigneeName,
                 IndustryLineStatus.Stalled, reason, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, false,
-                0, 0, requiredSupplies);
+                0, 0, requiredSupplies, postIndex);
         }
 
         /// <summary>Approved M08B input cost: ceil(units * base price 1 * index / 1000).</summary>
@@ -301,11 +317,12 @@ namespace SengokuChronicle.Domain
         }
 
         private static bool TryFindVacancy(IReadOnlyList<IndustryVacancy> vacated, string industryId,
-            out IndustryVacancy vacancy)
+            int postIndex, out IndustryVacancy vacancy)
         {
             for (int i = 0; i < vacated.Count; i++)
             {
-                if (string.Equals(vacated[i].IndustryId, industryId, StringComparison.Ordinal))
+                if (string.Equals(vacated[i].IndustryId, industryId, StringComparison.Ordinal) &&
+                    vacated[i].PostIndex == postIndex)
                 {
                     vacancy = vacated[i];
                     return true;

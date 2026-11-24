@@ -51,17 +51,17 @@ namespace SengokuChronicle.Tests.EditMode
         [Test]
         public void Replace_ReleasesOldReservationImmediately()
         {
-            _session.TryAssignIndustry(IndustryCatalog.FarmId, M2FixedScenario.HarunobuId);
+            _session.TryAssignIndustry(IndustryCatalog.TradingHouseId, M2FixedScenario.HarunobuId);
             IndustryAssignmentResult replaced = _session.TryAssignIndustry(
-                IndustryCatalog.FarmId, M2FixedScenario.ChieId);
+                IndustryCatalog.TradingHouseId, M2FixedScenario.ChieId);
 
             Assert.That(replaced.Succeeded, Is.True, replaced.Message);
             Assert.That(replaced.PreviousAssignee, Is.EqualTo(M2FixedScenario.HarunobuId));
-            Assert.That(_session.Industry.Slot(IndustryCatalog.FarmId).AssigneeName,
+            Assert.That(_session.Industry.Slot(IndustryCatalog.TradingHouseId).AssigneeName,
                 Is.EqualTo("明智 千恵"));
 
             IndustryAssignmentResult harunobuAgain = _session.TryAssignIndustry(
-                IndustryCatalog.TradingHouseId, M2FixedScenario.HarunobuId);
+                IndustryCatalog.FarmId, M2FixedScenario.HarunobuId);
             Assert.That(harunobuAgain.Succeeded, Is.True, "the old head got the 4-unit budget back");
         }
 

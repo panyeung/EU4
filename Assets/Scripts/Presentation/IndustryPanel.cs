@@ -46,6 +46,20 @@ namespace SengokuChronicle.Presentation
             "任命确认控件未绑定，本页暂不能选择候选人；请重新生成产业面板。";
 
         /// <summary>
+        /// Serialized child name of the farm row's title label. The scene updater uses the
+        /// same constant, so the runtime text and the authored text cannot drift.
+        /// </summary>
+        public const string FarmRowNameChildName = "FarmRowNameText";
+
+        /// <summary>
+        /// Farm row title derived from the catalog instead of a hand-written post count.
+        /// The level stays the authored one; the post count follows the rules.
+        /// </summary>
+        public static string FarmRowLabel =>
+            "农庄（等级 1・" + IndustryState.PostCount(IndustryCatalog.FarmId) + " 个职位・" +
+            IndustryService.PostWorkUnits + "/" + IndustryService.MonthlyWorkUnits + " 工时）";
+
+        /// <summary>
         /// 原始状态带在面板停止回显全文之前能容纳的行数。
         /// 生成器据此推导带区高度。
         /// </summary>
@@ -118,6 +132,21 @@ namespace SengokuChronicle.Presentation
         public int CandidateCount => _farmCandidates.Count + _tradingCandidates.Count;
         public int FarmCandidateCount => _farmCandidates.Count;
         public int TradingCandidateCount => _tradingCandidates.Count;
+        /// <summary>Farm post count exposed to tests and diagnostics; the farm owns two.</summary>
+        public int FarmPostCount => IndustryState.PostCount(IndustryCatalog.FarmId);
+        public bool FarmUnassignInteractable =>
+            farmUnassignButton != null && farmUnassignButton.interactable;
+        /// <summary>Authored farm row title as the player reads it, after the post-count refresh.</summary>
+        public string FarmRowTitle
+        {
+            get
+            {
+                Text nameText = rowFarm != null
+                    ? rowFarm.transform.Find(FarmRowNameChildName)?.GetComponent<Text>()
+                    : null;
+                return nameText != null ? nameText.text : string.Empty;
+            }
+        }
 
         public string FarmDetail => farmDetailText != null ? farmDetailText.text : string.Empty;
         public bool FarmDetailVisible => farmDetailText != null && farmDetailText.gameObject.activeSelf;
@@ -303,11 +332,10 @@ namespace SengokuChronicle.Presentation
             if (HasPendingAssignment && !CanStillAssign(view, _pendingIndustryId, _pendingPersonId))
                 ClearPending();
 
-            RefreshRow(IndustryCatalog.FarmId, view, rowFarm, farmStatusText, farmDetailText,
-                farmAssigneeText, farmUnassignButton, farmCandidateContainer);
             RefreshRow(IndustryCatalog.TradingHouseId, view, rowTradingHouse, tradingStatusText,
                 tradingDetailText, tradingAssigneeText, tradingUnassignButton,
                 tradingCandidateContainer);
+            RefreshFarmRow(view);
             RebuildCandidateLayout();
 
             // 报告标签横向换行，滚动内容增高到完整携带文字的高度，
@@ -535,6 +563,93 @@ namespace SengokuChronicle.Presentation
         }
 
         /// <summary>
+        /// The farm owns two posts. Both are shown on the one authored farm row, because
+        /// the scene holds one row per industry: a compact per-post status line and a
+        /// per-post assignee line, one shared candidate list that fills the first vacant
+        /// post, and one release button that frees the highest-index staffed post.
+        /// </summary>
+        private void RefreshFarmRow(IndustryView view)
+        {
+            if (rowFarm == null)
+                return;
+            IndustryDefinition definition = IndustryCatalog.TryGet(IndustryCatalog.FarmId,
+                out IndustryDefinition found)
+                ? found
+                : default;
+            rowFarm.SetActive(true);
+
+            IReadOnlyList<IndustrySlotView> posts = view.PostsOf(IndustryCatalog.FarmId);
+            Text nameText = rowFarm.transform.Find(FarmRowNameChildName)?.GetComponent<Text>();
+            if (nameText != null)
+                nameText.text = FarmRowLabel;
+            farmStatusText.text = BuildPostStatusLine(posts);
+            RefreshDetail(farmDetailText, definition);
+            farmAssigneeText.text = BuildPostAssigneeLine(posts);
+            bool anyStaffed = false;
+            for (int i = 0; i < posts.Count; i++)
+                if (!posts[i].AssigneeId.IsEmpty)
+                    anyStaffed = true;
+            farmUnassignButton.interactable = anyStaffed && view.CanEditAssignments;
+            BuildCandidates(IndustryCatalog.FarmId, view, farmCandidateContainer);
+            RebuildLayout(farmCandidateContainer);
+        }
+
+        private static string BuildPostStatusLine(IReadOnlyList<IndustrySlotView> posts)
+        {
+            if (posts.Count == 0)
+                return string.Empty;
+            string line = string.Empty;
+            for (int i = 0; i < posts.Count; i++)
+            {
+                if (i > 0)
+                    line += "；";
+                line += PostLabel(posts[i].PostIndex) + "：" + ShortStatus(posts[i].Status);
+            }
+            return line;
+        }
+
+        private static string BuildPostAssigneeLine(IReadOnlyList<IndustrySlotView> posts)
+        {
+            if (posts.Count == 0)
+                return "负责人：空缺";
+            string line = string.Empty;
+            for (int i = 0; i < posts.Count; i++)
+            {
+                if (i > 0)
+                    line += "｜";
+                IndustrySlotView slot = posts[i];
+                line += PostLabel(slot.PostIndex) + " ";
+                line += slot.AssigneeId.IsEmpty
+                    ? "空缺"
+                    : slot.AssigneeName + "（剩" + slot.WorkUnitsRemaining + "）";
+            }
+            return line;
+        }
+
+        private static string PostLabel(int postIndex)
+        {
+            switch (postIndex)
+            {
+                case 0: return "一号";
+                case 1: return "二号";
+                case 2: return "三号";
+                default: return (postIndex + 1).ToString(System.Globalization.CultureInfo.InvariantCulture) + "号";
+            }
+        }
+
+        private static string ShortStatus(IndustryLineStatus status)
+        {
+            switch (status)
+            {
+                case IndustryLineStatus.Operated: return "运作中";
+                case IndustryLineStatus.Vacant: return "空缺";
+                case IndustryLineStatus.Stalled: return "停产";
+                case IndustryLineStatus.InvalidAssignment: return "任命失效";
+                default: return "未知";
+            }
+        }
+
+        /// <summary>
         /// 一个产业原始的月度投入与产出，取自只读图鉴规则。
         /// 图鉴未定义的字段（地点）保持隐藏而不是编造，
         /// 缺少定义时整行隐藏。
@@ -577,6 +692,11 @@ namespace SengokuChronicle.Presentation
         private void BuildCandidates(string industryId, IndustryView view, Transform container)
         {
             if (candidateTemplate == null || container == null || !view.CanEditAssignments)
+                return;
+            // A multi-post industry only lists candidates while a post is actually vacant:
+            // filling a filled industry would have to evict someone silently.
+            if (IndustryState.PostCount(industryId) > 1 &&
+                view.FirstVacantPost(industryId) < 0)
                 return;
 
             bool canSelect = CanConfirmSelection;
@@ -733,6 +853,11 @@ namespace SengokuChronicle.Presentation
         {
             if (!view.CanEditAssignments || !IndustryCatalog.TryGet(industryId, out _))
                 return false;
+            // A multi-post industry needs a vacant post for the pending selection; the
+            // single-post trading house keeps its historical replace-on-confirm behavior.
+            if (IndustryState.PostCount(industryId) > 1 &&
+                view.FirstVacantPost(industryId) < 0)
+                return false;
             SuccessionState succession = gameSession.Succession;
             GameDate date = gameSession.WorldClock != null
                 ? gameSession.WorldClock.CurrentDate
@@ -771,13 +896,18 @@ namespace SengokuChronicle.Presentation
                     remaining = slot.WorkUnitsRemaining;
 
             int after = remaining - IndustryService.PostWorkUnits;
-            IndustrySlotView target = view.Slot(_pendingIndustryId);
+            int postIndex = IndustryState.PostCount(_pendingIndustryId) > 1
+                ? view.FirstVacantPost(_pendingIndustryId)
+                : 0;
+            if (postIndex < 0)
+                return string.Empty;
+            IndustrySlotView target = view.Slot(_pendingIndustryId, postIndex);
             string holder = target.AssigneeId.IsEmpty
-                ? "职位空缺"
+                ? "岗位空缺"
                 : "替换现任 " + target.AssigneeName;
 
             return "已选择：" + IndustryService.PersonName(succession, _pendingPersonId) +
-                   " → " + definition.DisplayName + "（待确认）｜" + holder +
+                   " → " + target.DisplayName + "（待确认）｜" + holder +
                    "｜占用工时 " + IndustryService.PostWorkUnits + "/" +
                    IndustryService.MonthlyWorkUnits + "，剩余 " + after + "\n" +
                    "每月规则：" + BuildDetailLine(definition) + "。";

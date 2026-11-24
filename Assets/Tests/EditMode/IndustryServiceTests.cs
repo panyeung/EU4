@@ -102,19 +102,19 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
-        public void Assign_ReplacesOccupantAtomicallyAndFreesOldReservation()
+        public void Assign_ReplacesSinglePostOccupantAtomicallyAndFreesOldReservation()
         {
             SuccessionState succession = Succession();
             IndustryState state = IndustryState.CreateInitial(Start);
-            IndustryService.TryAssign(state, succession, Start, IndustryCatalog.FarmId, Harunobu);
+            IndustryService.TryAssign(state, succession, Start, IndustryCatalog.TradingHouseId, Harunobu);
 
             IndustryAssignmentResult replaced = IndustryService.TryAssign(state, succession, Start,
-                IndustryCatalog.FarmId, Chie);
+                IndustryCatalog.TradingHouseId, Chie);
 
             Assert.That(replaced.Succeeded, Is.True, replaced.Message);
             Assert.That(replaced.PreviousAssignee, Is.EqualTo(Harunobu));
             Assert.That(replaced.CurrentAssignee, Is.EqualTo(Chie));
-            Assert.That(state.TryGetAssignee(IndustryCatalog.FarmId, out PersonId current), Is.True);
+            Assert.That(state.TryGetAssignee(IndustryCatalog.TradingHouseId, out PersonId current), Is.True);
             Assert.That(current, Is.EqualTo(Chie));
             Assert.That(IndustryService.RemainingWorkUnits(succession, state, Harunobu, Start), Is.EqualTo(4));
             Assert.That(IndustryService.RemainingWorkUnits(succession, state, Chie, Start), Is.EqualTo(1));

@@ -79,7 +79,7 @@ namespace SengokuChronicle.Tests.EditMode
 
             SaveData data = _session.CaptureSave();
 
-            Assert.That(data.saveFormatVersion, Is.EqualTo(17));
+            Assert.That(data.saveFormatVersion, Is.EqualTo(SaveDataValidator.CurrentVersion));
             Assert.That(data.market, Is.Not.Null);
             Assert.That(data.market.foodInventory, Is.EqualTo(before.FoodInventory));
             Assert.That(data.market.foodPriceIndexPermille,

@@ -44,9 +44,20 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(migrated.industry.supplies, Is.EqualTo(12));
             Assert.That(migrated.industry.lastSettledMonthIndex,
                 Is.EqualTo(IndustryCalendar.MonthIndex(new GameDate(1560, 3, 1))));
+            Assert.That(migrated.industry.slots.Length, Is.EqualTo(3),
+                "the farm's two posts plus the trading house post are persisted separately");
+            Assert.That(migrated.industry.slots[0].industryId, Is.EqualTo(IndustryCatalog.FarmId));
+            Assert.That(migrated.industry.slots[0].postIndex, Is.Zero);
             Assert.That(migrated.industry.slots[0].assignedPersonId,
                 Is.EqualTo(M2FixedScenario.HarunobuIdValue));
-            Assert.That(migrated.industry.slots[1].assignedPersonId,
+            Assert.That(migrated.industry.slots[1].industryId, Is.EqualTo(IndustryCatalog.FarmId));
+            Assert.That(migrated.industry.slots[1].postIndex, Is.EqualTo(1));
+            Assert.That(migrated.industry.slots[1].assignedPersonId, Is.Empty,
+                "the second farm post round-trips as vacant");
+            Assert.That(migrated.industry.slots[2].industryId,
+                Is.EqualTo(IndustryCatalog.TradingHouseId));
+            Assert.That(migrated.industry.slots[2].postIndex, Is.Zero);
+            Assert.That(migrated.industry.slots[2].assignedPersonId,
                 Is.EqualTo(M2FixedScenario.ChieIdValue));
         }
 
@@ -225,8 +236,10 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(current.industry.supplies, Is.EqualTo(10),
                 "two food units are carved out of the legacy stock");
             Assert.That(current.industry.intelligence, Is.Zero);
+            Assert.That(current.industry.slots.Length, Is.EqualTo(3));
             Assert.That(current.industry.slots[0].assignedPersonId, Is.Empty);
             Assert.That(current.industry.slots[1].assignedPersonId, Is.Empty);
+            Assert.That(current.industry.slots[2].assignedPersonId, Is.Empty);
             Assert.That(current.chronicle.Length, Is.EqualTo(chronicle));
         }
 

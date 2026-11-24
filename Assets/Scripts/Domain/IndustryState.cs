@@ -70,23 +70,28 @@ namespace SengokuChronicle.Domain
             Intelligence.ToString(System.Globalization.CultureInfo.InvariantCulture);
     }
 
-    /// <summary>One industry slot assignment; an empty person ID means the post is vacant.</summary>
+    /// <summary>
+    /// One industry post assignment. An industry owns <see cref="IndustryDefinition.CapacityPosts"/>
+    /// consecutive posts; an empty person ID means that post is vacant.
+    /// </summary>
     public readonly struct IndustryAssignment
     {
-        public IndustryAssignment(string industryId, PersonId personId)
+        public IndustryAssignment(string industryId, int postIndex, PersonId personId)
         {
             IndustryId = industryId ?? string.Empty;
+            PostIndex = postIndex < 0 ? 0 : postIndex;
             PersonId = personId;
         }
 
         public string IndustryId { get; }
+        public int PostIndex { get; }
         public PersonId PersonId { get; }
     }
 
     /// <summary>
-    /// Mutable SC-019 industry state: resources, the last settled month and the two
-    /// fixed slots. All slot mutation is validated here; person eligibility belongs
-    /// to <see cref="IndustryService"/>.
+    /// Mutable SC-019 industry state: resources, the last settled month and every fixed
+    /// post (the farm owns two, the trading house one). All slot mutation is validated
+    /// here; person eligibility belongs to <see cref="IndustryService"/>.
     /// </summary>
     public sealed class IndustryState
     {
@@ -98,16 +103,18 @@ namespace SengokuChronicle.Domain
         {
             _resources = resources;
             _lastSettledMonthIndex = lastSettledMonthIndex;
-            _assignments = new IndustryAssignment[IndustryCatalog.All.Count];
-            for (int i = 0; i < _assignments.Length; i++)
-                _assignments[i] = new IndustryAssignment(IndustryCatalog.All[i].Id, default);
+            _assignments = new IndustryAssignment[IndustryCatalog.TotalPosts];
+            int index = 0;
+            foreach (IndustryDefinition definition in IndustryCatalog.All)
+                for (int post = 0; post < definition.CapacityPosts; post++)
+                    _assignments[index++] = new IndustryAssignment(definition.Id, post, default);
         }
 
         public IndustryResources Resources => _resources;
         public int LastSettledMonthIndex => _lastSettledMonthIndex;
         public IReadOnlyList<IndustryAssignment> Assignments => Array.AsReadOnly(_assignments);
 
-        /// <summary>New game: 30 funds, 12 supplies, 0 intelligence, both posts vacant.</summary>
+        /// <summary>New game: 30 funds, 12 supplies, 0 intelligence, every post vacant.</summary>
         public static IndustryState CreateInitial(GameDate date) =>
             CreateInitial(date, null);
 
@@ -133,9 +140,19 @@ namespace SengokuChronicle.Domain
             return clone;
         }
 
-        public bool TryGetAssignee(string industryId, out PersonId personId)
+        /// <summary>Post count of a known industry; zero for an unknown ID.</summary>
+        public static int PostCount(string industryId) =>
+            IndustryCatalog.TryGet(industryId, out IndustryDefinition definition)
+                ? definition.CapacityPosts
+                : 0;
+
+        /// <summary>First post's assignee, the historical single-post accessor.</summary>
+        public bool TryGetAssignee(string industryId, out PersonId personId) =>
+            TryGetAssignee(industryId, 0, out personId);
+
+        public bool TryGetAssignee(string industryId, int postIndex, out PersonId personId)
         {
-            int index = IndexOf(industryId);
+            int index = IndexOf(industryId, postIndex);
             if (index < 0)
             {
                 personId = default;
@@ -146,22 +163,45 @@ namespace SengokuChronicle.Domain
             return true;
         }
 
-        public bool TrySetAssignee(string industryId, PersonId personId, out string error)
+        /// <summary>Addresses the first post; multi-post industries set every post separately.</summary>
+        public bool TrySetAssignee(string industryId, PersonId personId, out string error) =>
+            TrySetAssignee(industryId, 0, personId, out error);
+
+        public bool TrySetAssignee(string industryId, int postIndex, PersonId personId,
+            out string error)
         {
-            int index = IndexOf(industryId);
+            int index = IndexOf(industryId, postIndex);
             if (index < 0)
+            {
+                error = "未知产业或岗位：" + (industryId ?? "(null)") + "#" + postIndex + "。";
+                return false;
+            }
+
+            _assignments[index] = new IndustryAssignment(_assignments[index].IndustryId, postIndex,
+                personId);
+            error = string.Empty;
+            return true;
+        }
+
+        /// <summary>Clears one post; the single-argument form clears every post of the industry.</summary>
+        public bool TryClearAssignee(string industryId, int postIndex, out string error) =>
+            TrySetAssignee(industryId, postIndex, default, out error);
+
+        public bool TryClearAssignee(string industryId, out string error)
+        {
+            int postCount = PostCount(industryId);
+            if (postCount <= 0)
             {
                 error = "未知产业：" + (industryId ?? "(null)") + "。";
                 return false;
             }
 
-            _assignments[index] = new IndustryAssignment(_assignments[index].IndustryId, personId);
+            for (int post = 0; post < postCount; post++)
+                _assignments[IndexOf(industryId, post)] =
+                    new IndustryAssignment(industryId, post, default);
             error = string.Empty;
             return true;
         }
-
-        public bool TryClearAssignee(string industryId, out string error) =>
-            TrySetAssignee(industryId, default, out error);
 
         public bool TrySetResources(IndustryResources resources, out string error)
         {
@@ -183,12 +223,13 @@ namespace SengokuChronicle.Domain
             return true;
         }
 
-        private int IndexOf(string industryId)
+        private int IndexOf(string industryId, int postIndex)
         {
-            if (string.IsNullOrEmpty(industryId))
+            if (string.IsNullOrEmpty(industryId) || postIndex < 0)
                 return -1;
             for (int i = 0; i < _assignments.Length; i++)
-                if (string.Equals(_assignments[i].IndustryId, industryId, StringComparison.Ordinal))
+                if (_assignments[i].PostIndex == postIndex &&
+                    string.Equals(_assignments[i].IndustryId, industryId, StringComparison.Ordinal))
                     return i;
             return -1;
         }

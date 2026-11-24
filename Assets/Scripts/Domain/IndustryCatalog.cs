@@ -26,6 +26,7 @@ namespace SengokuChronicle.Domain
         public string Id { get; }
         public string DisplayName { get; }
         public int WorkUnitsRequired { get; }
+        /// <summary>Assignable posts; the farm owns two, the trading house one (M08B option B).</summary>
         public int CapacityPosts { get; }
         public int UpkeepFunds { get; }
         public int UpkeepSupplies { get; }
@@ -41,6 +42,9 @@ namespace SengokuChronicle.Domain
     /// <summary>
     /// The two approved SC-019 industries, ordered by stable ordinal ID:
     /// <c>industry.farm</c> then <c>industry.trading-house</c>.
+    /// M08B option B (2026-11-19 approved) gives the farm a second post: each staffed
+    /// post keeps the single-farm rules and harvests 4 food, so two staffed posts reach
+    /// the 8-unit, 40-person supply target. Capacity is a rule, never a population cap.
     /// </summary>
     public static class IndustryCatalog
     {
@@ -49,7 +53,7 @@ namespace SengokuChronicle.Domain
 
         private static readonly IndustryDefinition[] Definitions =
         {
-            new IndustryDefinition(FarmId, "农庄", 3, 1, 0, 1, 2, 4, 0, true, 4),
+            new IndustryDefinition(FarmId, "农庄", 3, 2, 0, 1, 2, 4, 0, true, 4),
             new IndustryDefinition(TradingHouseId, "商馆", 3, 1, 6, 2, 9, 0, 1, false)
         };
 
@@ -57,6 +61,18 @@ namespace SengokuChronicle.Domain
             Array.AsReadOnly(Definitions);
 
         public static IReadOnlyList<IndustryDefinition> All => ReadOnlyDefinitions;
+
+        /// <summary>Total assignable posts across every industry: farm two, trading house one.</summary>
+        public static int TotalPosts
+        {
+            get
+            {
+                int total = 0;
+                for (int i = 0; i < Definitions.Length; i++)
+                    total += Definitions[i].CapacityPosts;
+                return total;
+            }
+        }
 
         public static bool TryGet(string industryId, out IndustryDefinition definition)
         {

@@ -46,7 +46,16 @@ namespace SengokuChronicle.Editor
         /// Farm through the public session command, choosing the living family member with the
         /// lowest ordinal <see cref="PersonId.Value"/> that the real rules accept.
         /// </summary>
-        FarmManagedV1 = 1
+        FarmManagedV1 = 1,
+
+        /// <summary>
+        /// Deterministic simulation-only comparison for the approved second farm post: at a
+        /// management-stable point it fills both farm posts (post 0 first) through the public
+        /// session command, using the same lowest-ordinal legal candidate order as
+        /// <see cref="FarmManagedV1"/>. Trading House stays vacant, so the only difference from
+        /// the baseline is the second farm post.
+        /// </summary>
+        DualFarmV1 = 2
     }
 
     /// <summary>One GDD 14.2 checkpoint. Unreached checkpoints keep <see cref="Reached"/> false.</summary>
@@ -149,8 +158,9 @@ namespace SengokuChronicle.Editor
         /// <summary>Successful Farm appointments the active policy made during the run.</summary>
         public int FarmAppointments;
         /// <summary>
-        /// Management-stable points where the policy found the Farm post vacant, whether or not
-        /// a candidate was accepted. It is the opportunity count behind <see cref="FarmAppointments"/>.
+        /// Management-stable points where the policy found at least one Farm post vacant,
+        /// whether or not a candidate was accepted. It is the opportunity count behind
+        /// <see cref="FarmAppointments"/>.
         /// </summary>
         public int FarmVacancies;
         /// <summary>Farm assignee at the final state, or empty when the post ended vacant.</summary>
@@ -179,7 +189,8 @@ namespace SengokuChronicle.Editor
     /// month transaction a player uses. The only automated policies are the approved stable
     /// option-ID event resolver, the approved simulation-only succession policy (designated
     /// heir, else lowest stable PersonId, with a stable-ID regent), and the optional
-    /// simulation-only <see cref="M08BIndustryPolicy.FarmManagedV1"/> comparison policy;
+    /// simulation-only <see cref="M08BIndustryPolicy.FarmManagedV1"/> and
+    /// <see cref="M08BIndustryPolicy.DualFarmV1"/> comparison policies;
     /// extinction, a crisis adoption the player alone may accept, and every other pause keep
     /// their own explicit stop category and are never discarded.
     /// </summary>
@@ -205,6 +216,8 @@ namespace SengokuChronicle.Editor
         public const string UnmanagedPolicyId = "unmanaged";
         /// <summary>Policy ID of the simulation-only vacant-Farm comparison.</summary>
         public const string FarmManagedV1PolicyId = "farm-managed-v1";
+        /// <summary>Policy ID of the simulation-only two-farm-post comparison (M08B option B).</summary>
+        public const string DualFarmV1PolicyId = "dual-farm-v1";
 
         /// <summary>
         /// Directories swept into the rule-input manifest, in dependency order. They hold the
@@ -283,8 +296,15 @@ namespace SengokuChronicle.Editor
             Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 
         /// <summary>Stable artifact and provenance label for one policy.</summary>
-        public static string PolicyIdOf(M08BIndustryPolicy policy) =>
-            policy == M08BIndustryPolicy.FarmManagedV1 ? FarmManagedV1PolicyId : UnmanagedPolicyId;
+        public static string PolicyIdOf(M08BIndustryPolicy policy)
+        {
+            switch (policy)
+            {
+                case M08BIndustryPolicy.FarmManagedV1: return FarmManagedV1PolicyId;
+                case M08BIndustryPolicy.DualFarmV1: return DualFarmV1PolicyId;
+                default: return UnmanagedPolicyId;
+            }
+        }
 
         /// <summary>True only for a documented policy ID.</summary>
         public static bool TryParsePolicyId(string policyId, out M08BIndustryPolicy policy)
@@ -292,6 +312,11 @@ namespace SengokuChronicle.Editor
             if (string.Equals(policyId, FarmManagedV1PolicyId, StringComparison.Ordinal))
             {
                 policy = M08BIndustryPolicy.FarmManagedV1;
+                return true;
+            }
+            if (string.Equals(policyId, DualFarmV1PolicyId, StringComparison.Ordinal))
+            {
+                policy = M08BIndustryPolicy.DualFarmV1;
                 return true;
             }
             if (string.Equals(policyId, UnmanagedPolicyId, StringComparison.Ordinal))
@@ -686,6 +711,8 @@ namespace SengokuChronicle.Editor
                 // baseline stays byte-identical.
                 if (policy == M08BIndustryPolicy.FarmManagedV1)
                     ApplyFarmManagement(session, result);
+                else if (policy == M08BIndustryPolicy.DualFarmV1)
+                    ApplyDualFarmManagement(session, result);
 
                 if (!session.TryAdvanceToNextMonth())
                 {
@@ -1073,6 +1100,94 @@ namespace SengokuChronicle.Editor
                 out bool farmWasVacant, out _);
             if (appointed)
                 result.FarmAppointments++;
+            if (farmWasVacant)
+                result.FarmVacancies++;
+        }
+
+        /// <summary>
+        /// dual-farm-v1: the approved option-B comparison. At a management-stable point it
+        /// fills every vacant farm post in post order through the public session command,
+        /// trying the same living family members in ordinal <see cref="PersonId.Value"/> order
+        /// as farm-managed-v1. Occupied posts are never replaced, the Trading House is never
+        /// touched, and no random state is read or advanced.
+        /// </summary>
+        /// <param name="appointments">
+        /// Receives one <c>farm#&lt;post&gt;=&lt;personId&gt;</c> entry per accepted appointment.
+        /// </param>
+        /// <param name="farmWasVacant">
+        /// True when at least one farm post was vacant when the policy inspected the industry.
+        /// </param>
+        /// <returns>True only when this call appointed at least one person.</returns>
+        public static bool TryApplyDualFarmManagement(GameSession session,
+            IList<string> appointments, out bool farmWasVacant, out string detail)
+        {
+            farmWasVacant = false;
+            detail = string.Empty;
+            if (session == null)
+            {
+                detail = "session is null";
+                return false;
+            }
+            if (!session.CanEditIndustryAssignments)
+            {
+                detail = "not a management-stable point: " + session.IndustryBlockReason;
+                return false;
+            }
+
+            int postCount = IndustryState.PostCount(IndustryCatalog.FarmId);
+            if (postCount <= 0)
+            {
+                detail = "the catalog has no " + IndustryCatalog.FarmId + " post";
+                return false;
+            }
+
+            List<PersonId> candidates = LivingFamilyMembersByOrdinalId(session.Succession);
+            int assigned = 0;
+            string lastRefusal = string.Empty;
+            for (int post = 0; post < postCount; post++)
+            {
+                if (!session.Industry.Slot(IndustryCatalog.FarmId, post).AssigneeId.IsEmpty)
+                    continue;
+
+                farmWasVacant = true;
+                foreach (PersonId candidate in candidates)
+                {
+                    IndustryAssignmentResult assignment =
+                        session.TryAssignIndustry(IndustryCatalog.FarmId, post, candidate);
+                    if (!assignment.Succeeded)
+                    {
+                        lastRefusal = assignment.Outcome + ": " + assignment.Message;
+                        continue;
+                    }
+
+                    appointments?.Add("farm#" + post.ToString(CultureInfo.InvariantCulture) +
+                                      "=" + (candidate.Value ?? string.Empty));
+                    detail = "Farm post " + post + " assigned to " + (candidate.Value ?? string.Empty);
+                    assigned++;
+                    break;
+                }
+            }
+
+            if (assigned == 0 && farmWasVacant)
+                detail = "Farm posts left vacant: no living family member was accepted" +
+                    (string.IsNullOrEmpty(lastRefusal) ? string.Empty : " (" + lastRefusal + ")");
+            else if (assigned == 0)
+                detail = "Farm posts keep their valid assignees";
+            return assigned > 0;
+        }
+
+        /// <summary>
+        /// Adapter that applies dual-farm-v1 to one seed row. Both appointments and vacancy
+        /// opportunities are counted per stable point, so the comparison against
+        /// farm-managed-v1 reports how often the second post was actually available.
+        /// </summary>
+        private static void ApplyDualFarmManagement(GameSession session, M08BSeedResult result)
+        {
+            int decisionsBefore = result.IndustryDecisions.Count;
+            bool appointed = TryApplyDualFarmManagement(session, result.IndustryDecisions,
+                out bool farmWasVacant, out _);
+            if (appointed)
+                result.FarmAppointments += result.IndustryDecisions.Count - decisionsBefore;
             if (farmWasVacant)
                 result.FarmVacancies++;
         }

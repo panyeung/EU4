@@ -1830,6 +1830,115 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         [Test]
+        public void FarmManagedV1LeavesTheSecondFarmPostVacant()
+        {
+            var holder = new GameObject("M08BFarmPolicySecondPostTest");
+            try
+            {
+                GameSession session = holder.AddComponent<GameSession>();
+                session.InitNewGame(7UL);
+                var appointments = new List<string>();
+
+                Assert.That(M08BLongTermSimulationRunner.TryApplyFarmManagement(session,
+                    appointments, out _, out string detail), Is.True, detail);
+
+                Assert.That(appointments.Count, Is.EqualTo(1));
+                Assert.That(session.Industry.Slot(IndustryCatalog.FarmId, 0).AssigneeId.IsEmpty,
+                    Is.False);
+                Assert.That(session.Industry.Slot(IndustryCatalog.FarmId, 1).AssigneeId.IsEmpty,
+                    Is.True,
+                    "the accepted farm-managed-v1 baseline fills only the first farm post");
+                Assert.That(M08BLongTermSimulationRunner.TryApplyFarmManagement(session,
+                    appointments, out bool vacantAgain, out _), Is.False);
+                Assert.That(vacantAgain, Is.False);
+            }
+            finally
+            {
+                Object.DestroyImmediate(holder);
+            }
+        }
+
+        [Test]
+        public void DualFarmV1_FillsBothFarmPostsThroughThePublicCommand()
+        {
+            var holder = new GameObject("M08BDualFarmPolicyTest");
+            try
+            {
+                GameSession session = holder.AddComponent<GameSession>();
+                session.InitNewGame(7UL);
+                string randomBefore = JsonUtility.ToJson(session.CaptureSave().randomState);
+                var appointments = new List<string>();
+
+                bool appointed = M08BLongTermSimulationRunner.TryApplyDualFarmManagement(session,
+                    appointments, out bool farmWasVacant, out string detail);
+
+                Assert.That(appointed, Is.True, detail);
+                Assert.That(farmWasVacant, Is.True);
+                Assert.That(appointments, Has.Count.EqualTo(2),
+                    "a fresh family must be able to staff both farm posts");
+                Assert.That(appointments[0], Does.StartWith("farm#0="));
+                Assert.That(appointments[1], Does.StartWith("farm#1="));
+                PersonId first = session.Industry.Slot(IndustryCatalog.FarmId, 0).AssigneeId;
+                PersonId second = session.Industry.Slot(IndustryCatalog.FarmId, 1).AssigneeId;
+                Assert.That(first.IsEmpty, Is.False);
+                Assert.That(second.IsEmpty, Is.False);
+                Assert.That(first, Is.Not.EqualTo(second));
+                Assert.That(session.Industry.Slot(IndustryCatalog.TradingHouseId).AssigneeId.IsEmpty,
+                    Is.True, "dual-farm-v1 leaves the trading house vacant for comparability");
+                Assert.That(JsonUtility.ToJson(session.CaptureSave().randomState),
+                    Is.EqualTo(randomBefore),
+                    "the industry policy must not read or advance the random streams");
+
+                Assert.That(M08BLongTermSimulationRunner.TryApplyDualFarmManagement(session,
+                    appointments, out bool vacantAgain, out _), Is.False);
+                Assert.That(vacantAgain, Is.False);
+                Assert.That(appointments, Has.Count.EqualTo(2),
+                    "occupied posts are never replaced by the policy");
+            }
+            finally
+            {
+                Object.DestroyImmediate(holder);
+            }
+        }
+
+        [Test]
+        public void DualFarmV1RunIsDeterministicAndLabeled()
+        {
+            int[] years = { 1 };
+            M08BSeedResult first = M08BLongTermSimulationRunner.RunSeed(7UL, 1, years,
+                M08BIndustryPolicy.DualFarmV1);
+            M08BSeedResult repeat = M08BLongTermSimulationRunner.RunSeed(7UL, 1, years,
+                M08BIndustryPolicy.DualFarmV1);
+
+            Assert.That(first.PolicyId,
+                Is.EqualTo(M08BLongTermSimulationRunner.DualFarmV1PolicyId));
+            Assert.That(first.FarmAppointments, Is.GreaterThanOrEqualTo(2));
+            Assert.That(first.FarmVacancies, Is.GreaterThanOrEqualTo(1));
+            Assert.That(first.IndustryDecisions.All(decision =>
+                    decision.StartsWith("farm#", StringComparison.Ordinal)), Is.True);
+            Assert.That(M08BLongTermSimulationRunner.SerializeSeedsCsv(new[] { repeat }, years),
+                Is.EqualTo(M08BLongTermSimulationRunner.SerializeSeedsCsv(new[] { first }, years)),
+                "the same seed and policy must serialize byte-identically");
+            Assert.That(repeat.IndustryDecisions, Is.EqualTo(first.IndustryDecisions));
+        }
+
+        [Test]
+        public void DualFarmV1PolicyIdRoundTripsAndOwnsItsOwnArtifactDirectory()
+        {
+            Assert.That(M08BLongTermSimulationRunner.TryParsePolicyId("dual-farm-v1",
+                out M08BIndustryPolicy policy), Is.True);
+            Assert.That(policy, Is.EqualTo(M08BIndustryPolicy.DualFarmV1));
+            Assert.That(M08BLongTermSimulationRunner.PolicyIdOf(policy),
+                Is.EqualTo("dual-farm-v1"));
+            Assert.That(M08BLongTermSimulationRunner.TryParsePolicyId("farm-managed-v1",
+                out M08BIndustryPolicy baseline), Is.True);
+            Assert.That(baseline, Is.EqualTo(M08BIndustryPolicy.FarmManagedV1),
+                "the accepted baseline policy keeps its identity");
+            Assert.That(M08BLongTermSimulationRunner.PolicyOutputRoot(
+                    M08BIndustryPolicy.DualFarmV1), Does.EndWith("dual-farm-v1"));
+        }
+
+        [Test]
         public void FarmManagedRunAppointsTheFarmWhileTheUnmanagedRunStaysVacant()
         {
             int[] years = { 1 };

@@ -49,19 +49,25 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(result.Report.AnyStaffed, Is.True);
             Assert.That(result.Report.Changed, Is.True);
             Assert.That(result.Report.HasShortage, Is.False);
-            Assert.That(result.Report.Lines.Count, Is.EqualTo(2));
+            Assert.That(result.Report.Lines.Count, Is.EqualTo(3),
+                "two farm posts and one trading house post each report their own line");
+            IndustryLineResult farm = Line(result.Report, IndustryCatalog.FarmId, 0);
             Assert.That(result.Report.Lines[0].IndustryId, Is.EqualTo(IndustryCatalog.FarmId));
-            Assert.That(result.Report.Lines[0].NetOutputFunds, Is.EqualTo(1));
-            Assert.That(result.Report.Lines[0].GrossOutputFood, Is.EqualTo(4));
-            Assert.That(result.Report.Lines[0].RequiredSupplies, Is.EqualTo(1),
+            Assert.That(result.Report.Lines[1].IndustryId, Is.EqualTo(IndustryCatalog.FarmId),
+                "the vacant second farm post keeps its own reported line");
+            Assert.That(result.Report.Lines[1].Status, Is.EqualTo(IndustryLineStatus.Vacant));
+            Assert.That(result.Report.Lines[1].PostIndex, Is.EqualTo(1));
+            Assert.That(farm.NetOutputFunds, Is.EqualTo(1));
+            Assert.That(farm.GrossOutputFood, Is.EqualTo(4));
+            Assert.That(farm.RequiredSupplies, Is.EqualTo(1),
                 "the farm still requires its one self-retained input unit");
-            Assert.That(result.Report.Lines[0].NetOutputSupplies, Is.EqualTo(3));
-            Assert.That(result.Report.Lines[1].IndustryId, Is.EqualTo(IndustryCatalog.TradingHouseId));
-            Assert.That(result.Report.Lines[1].NetOutputFunds, Is.EqualTo(1));
-            Assert.That(result.Report.Lines[1].MaterialsCostFunds, Is.EqualTo(2));
-            Assert.That(result.Report.Lines[1].RequiredSupplies, Is.EqualTo(2));
-            Assert.That(result.Report.Lines[1].NetOutputSupplies, Is.EqualTo(-2));
-            Assert.That(result.Report.Lines[1].NetOutputIntelligence, Is.EqualTo(1));
+            Assert.That(farm.NetOutputSupplies, Is.EqualTo(3));
+            IndustryLineResult trading = Line(result.Report, IndustryCatalog.TradingHouseId);
+            Assert.That(trading.NetOutputFunds, Is.EqualTo(1));
+            Assert.That(trading.MaterialsCostFunds, Is.EqualTo(2));
+            Assert.That(trading.RequiredSupplies, Is.EqualTo(2));
+            Assert.That(trading.NetOutputSupplies, Is.EqualTo(-2));
+            Assert.That(trading.NetOutputIntelligence, Is.EqualTo(1));
             Assert.That(result.Report.Summary, Does.Contain("30"));
             Assert.That(result.Report.Summary, Does.Contain("32"));
             Assert.That(result.Report.Summary, Does.Contain("13"));
@@ -75,7 +81,7 @@ namespace SengokuChronicle.Tests.EditMode
             IndustryService.TryAssign(state, succession, Start, IndustryCatalog.FarmId, Harunobu);
 
             IndustrySettlementResult result = Plan(state, succession);
-            IndustryLineResult farm = result.Report.Lines[0];
+            IndustryLineResult farm = Line(result.Report, IndustryCatalog.FarmId, 0);
 
             Assert.That(farm.Status, Is.EqualTo(IndustryLineStatus.Operated));
             Assert.That(farm.GrossOutputSupplies, Is.EqualTo(4));
@@ -102,7 +108,7 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(result.NextState.Resources.Supplies, Is.EqualTo(3));
             Assert.That(result.NextState.Resources.Intelligence, Is.Zero);
             Assert.That(result.Report.HasShortage, Is.False);
-            Assert.That(result.Report.Lines[0].GrossOutputFood, Is.EqualTo(4));
+            Assert.That(Line(result.Report, IndustryCatalog.FarmId, 0).GrossOutputFood, Is.EqualTo(4));
         }
 
         [Test]
@@ -113,7 +119,7 @@ namespace SengokuChronicle.Tests.EditMode
             IndustryService.TryAssign(state, succession, Start, IndustryCatalog.TradingHouseId, Chie);
 
             IndustrySettlementResult result = Plan(state, succession);
-            IndustryLineResult trading = result.Report.Lines[1];
+            IndustryLineResult trading = Line(result.Report, IndustryCatalog.TradingHouseId);
 
             Assert.That(trading.Status, Is.EqualTo(IndustryLineStatus.Stalled));
             Assert.That(trading.Reason, Does.Contain("3").And.Contain("资金"));
@@ -138,7 +144,8 @@ namespace SengokuChronicle.Tests.EditMode
 
             IndustrySettlementResult result = Plan(state, succession);
 
-            Assert.That(result.Report.Lines[1].Status, Is.EqualTo(IndustryLineStatus.Stalled));
+            Assert.That(Line(result.Report, IndustryCatalog.TradingHouseId).Status,
+                Is.EqualTo(IndustryLineStatus.Stalled));
             Assert.That(result.NextState.Resources.Funds, Is.EqualTo(100));
             Assert.That(result.NextState.Resources.Supplies, Is.EqualTo(1));
             Assert.That(result.NextState.Resources.Funds, Is.GreaterThanOrEqualTo(0));
@@ -156,8 +163,9 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(result.Report.AnyStaffed, Is.False);
             Assert.That(result.Report.Changed, Is.False);
             Assert.That(result.Report.HasShortage, Is.False);
-            Assert.That(result.Report.Lines[0].Status, Is.EqualTo(IndustryLineStatus.Vacant));
-            Assert.That(result.Report.Lines[1].Status, Is.EqualTo(IndustryLineStatus.Vacant));
+            Assert.That(result.Report.Lines.Count, Is.EqualTo(3));
+            for (int i = 0; i < result.Report.Lines.Count; i++)
+                Assert.That(result.Report.Lines[i].Status, Is.EqualTo(IndustryLineStatus.Vacant));
             Assert.That(result.NextState.Resources, Is.EqualTo(state.Resources));
             Assert.That(result.Report.Summary, Is.EqualTo("本月无产业运作。"));
         }
@@ -174,7 +182,8 @@ namespace SengokuChronicle.Tests.EditMode
 
             IndustrySettlementResult result = Plan(state, succession);
 
-            Assert.That(result.Report.Lines[1].Status, Is.EqualTo(IndustryLineStatus.Operated));
+            Assert.That(Line(result.Report, IndustryCatalog.TradingHouseId).Status,
+                Is.EqualTo(IndustryLineStatus.Operated));
             Assert.That(result.NextState.Resources.Funds, Is.EqualTo(9));
             Assert.That(result.NextState.Resources.Supplies, Is.EqualTo(13));
             Assert.That(result.NextState.Resources.Intelligence, Is.EqualTo(1));
@@ -192,9 +201,10 @@ namespace SengokuChronicle.Tests.EditMode
             IndustrySettlementResult result = Plan(state, succession);
 
             Assert.That(result.Report.Vacated.Count, Is.EqualTo(1));
-            Assert.That(result.Report.Lines[0].Status, Is.EqualTo(IndustryLineStatus.InvalidAssignment));
-            Assert.That(result.Report.Lines[0].AssigneeName, Is.EqualTo("明智 晴信"));
-            Assert.That(result.Report.Lines[0].Reason, Does.Contain("退休"));
+            IndustryLineResult invalid = Line(result.Report, IndustryCatalog.FarmId, 0);
+            Assert.That(invalid.Status, Is.EqualTo(IndustryLineStatus.InvalidAssignment));
+            Assert.That(invalid.AssigneeName, Is.EqualTo("明智 晴信"));
+            Assert.That(invalid.Reason, Does.Contain("退休"));
             Assert.That(result.NextState.Resources.Funds, Is.EqualTo(30));
             Assert.That(result.NextState.Resources.Supplies, Is.EqualTo(12));
             Assert.That(result.NextState.TryGetAssignee(IndustryCatalog.FarmId, out PersonId assignee), Is.True);
@@ -265,7 +275,7 @@ namespace SengokuChronicle.Tests.EditMode
             IndustryService.TryAssign(state, succession, Start, IndustryCatalog.FarmId, Harunobu);
 
             IndustrySettlementResult result = Plan(state, succession);
-            IndustryLineResult farm = result.Report.Lines[0];
+            IndustryLineResult farm = Line(result.Report, IndustryCatalog.FarmId, 0);
 
             Assert.That(farm.NetOutputSupplies, Is.EqualTo(3));
             Assert.That(farm.AppliedSuppliesDelta, Is.Zero);
@@ -286,9 +296,11 @@ namespace SengokuChronicle.Tests.EditMode
 
             Assert.That(result.NextState.Resources.Funds, Is.EqualTo(999999));
             Assert.That(result.NextState.Resources.Intelligence, Is.EqualTo(999999));
-            Assert.That(result.Report.Lines[0].AppliedFundsDelta, Is.EqualTo(1));
-            Assert.That(result.Report.Lines[1].NetOutputFunds, Is.EqualTo(1));
-            Assert.That(result.Report.Lines[1].AppliedFundsDelta, Is.Zero,
+            Assert.That(Line(result.Report, IndustryCatalog.FarmId, 0).AppliedFundsDelta,
+                Is.EqualTo(1));
+            IndustryLineResult trading = Line(result.Report, IndustryCatalog.TradingHouseId);
+            Assert.That(trading.NetOutputFunds, Is.EqualTo(1));
+            Assert.That(trading.AppliedFundsDelta, Is.Zero,
                 "the trading house pays upkeep then refills to the cap, so its actual net change is zero");
         }
 
@@ -314,7 +326,7 @@ namespace SengokuChronicle.Tests.EditMode
             IndustryService.TryAssign(state, succession, Start, IndustryCatalog.TradingHouseId, Chie);
 
             IndustrySettlementResult result = PlanWithIndex(state, succession, 1500);
-            IndustryLineResult trading = result.Report.Lines[1];
+            IndustryLineResult trading = Line(result.Report, IndustryCatalog.TradingHouseId);
 
             Assert.That(trading.Status, Is.EqualTo(IndustryLineStatus.Operated));
             Assert.That(trading.MaterialsCostFunds, Is.EqualTo(3),
@@ -333,7 +345,7 @@ namespace SengokuChronicle.Tests.EditMode
             IndustryService.TryAssign(state, succession, Start, IndustryCatalog.TradingHouseId, Chie);
 
             IndustrySettlementResult result = PlanWithIndex(state, succession, 1500);
-            IndustryLineResult trading = result.Report.Lines[1];
+            IndustryLineResult trading = Line(result.Report, IndustryCatalog.TradingHouseId);
 
             Assert.That(trading.Status, Is.EqualTo(IndustryLineStatus.Stalled),
                 "6 upkeep + 3 material cost needs 9 funds");
@@ -352,7 +364,7 @@ namespace SengokuChronicle.Tests.EditMode
             IndustryService.TryAssign(state, succession, Start, IndustryCatalog.FarmId, Harunobu);
 
             IndustrySettlementResult result = PlanWithIndex(state, succession, 5000);
-            IndustryLineResult farm = result.Report.Lines[0];
+            IndustryLineResult farm = Line(result.Report, IndustryCatalog.FarmId, 0);
 
             Assert.That(farm.Status, Is.EqualTo(IndustryLineStatus.Stalled),
                 "ceil(1 * 5000 / 1000) = 5 funds exceeds the 2-fund harvest");
@@ -370,7 +382,7 @@ namespace SengokuChronicle.Tests.EditMode
             IndustryService.TryAssign(state, succession, Start, IndustryCatalog.FarmId, Harunobu);
 
             IndustrySettlementResult result = PlanWithIndex(state, succession, 2000);
-            IndustryLineResult farm = result.Report.Lines[0];
+            IndustryLineResult farm = Line(result.Report, IndustryCatalog.FarmId, 0);
 
             Assert.That(farm.Status, Is.EqualTo(IndustryLineStatus.Operated));
             Assert.That(farm.MaterialsCostFunds, Is.EqualTo(2));
@@ -388,9 +400,10 @@ namespace SengokuChronicle.Tests.EditMode
 
             IndustrySettlementResult result = Plan(state, succession);
 
-            Assert.That(result.Report.Lines[0].Status, Is.EqualTo(IndustryLineStatus.Vacant));
-            Assert.That(result.Report.Lines[0].GrossOutputFood, Is.Zero);
-            Assert.That(result.Report.Lines[0].RequiredSupplies, Is.Zero);
+            IndustryLineResult vacantFarm = Line(result.Report, IndustryCatalog.FarmId, 0);
+            Assert.That(vacantFarm.Status, Is.EqualTo(IndustryLineStatus.Vacant));
+            Assert.That(vacantFarm.GrossOutputFood, Is.Zero);
+            Assert.That(vacantFarm.RequiredSupplies, Is.Zero);
         }
 
         [Test]
@@ -404,6 +417,17 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(result.Succeeded, Is.False);
             Assert.That(result.Outcome, Is.EqualTo(IndustrySettlementOutcome.InvalidState));
             Assert.That(result.NextState.Resources.Funds, Is.EqualTo(30));
+        }
+
+        private static IndustryLineResult Line(IndustryMonthReport report, string industryId,
+            int postIndex = 0)
+        {
+            foreach (IndustryLineResult line in report.Lines)
+                if (line.PostIndex == postIndex &&
+                    string.Equals(line.IndustryId, industryId, System.StringComparison.Ordinal))
+                    return line;
+            Assert.Fail("report has no line " + industryId + "#" + postIndex);
+            return default;
         }
 
         private static IndustrySettlementResult PlanWithIndex(IndustryState state,
