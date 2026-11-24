@@ -184,6 +184,35 @@ namespace SengokuChronicle.Editor
     }
 
     /// <summary>
+    /// Provenance of the rule inputs a batch ran against, frozen once
+    /// <see cref="M08BLongTermSimulationRunner.CaptureBatchProvenance"/> reads the disk at batch
+    /// start. Every reuse decision and every artifact of that batch must use this one snapshot:
+    /// re-reading the source when the summary is written would stamp rows produced by an older
+    /// assembly with the hashes of a newer, not yet compiled source. The type is internal and
+    /// only <see cref="M08BLongTermSimulationRunner.CaptureBatchProvenance"/> constructs it, so a
+    /// public caller can never hand the runner hashes it did not observe itself.
+    /// </summary>
+    internal sealed class M08BBatchProvenance
+    {
+        internal M08BBatchProvenance(string sourceSha256, string ruleInputSha256,
+            int ruleInputFileCount)
+        {
+            SourceSha256 = sourceSha256 ?? string.Empty;
+            RuleInputSha256 = ruleInputSha256 ?? string.Empty;
+            RuleInputFileCount = ruleInputFileCount;
+        }
+
+        /// <summary>SHA-256 of the runner source at batch start.</summary>
+        public string SourceSha256 { get; }
+
+        /// <summary>SHA-256 of the whole rule-input dependency set at batch start.</summary>
+        public string RuleInputSha256 { get; }
+
+        /// <summary>Number of rule-input files in the snapshot's manifest.</summary>
+        public int RuleInputFileCount { get; }
+    }
+
+    /// <summary>
     /// Real-rule long-term simulation for GDD 14.2. Every seed starts a fresh SC-013
     /// <see cref="GameSession"/> through the public new-game entry and advances the same
     /// month transaction a player uses. The only automated policies are the approved stable
@@ -303,6 +332,51 @@ namespace SengokuChronicle.Editor
                 case M08BIndustryPolicy.FarmManagedV1: return FarmManagedV1PolicyId;
                 case M08BIndustryPolicy.DualFarmV1: return DualFarmV1PolicyId;
                 default: return UnmanagedPolicyId;
+            }
+        }
+
+        /// <summary>
+        /// Artifact description of one industry policy, written for a reader of a single summary
+        /// file. Each policy owns a self-contained text that names only its own behaviour, so a
+        /// run can never be described with another policy's rule. The texts are mutually
+        /// exclusive by construction and are asserted as such.
+        /// </summary>
+        public static string DescribeIndustryPolicy(M08BIndustryPolicy policy)
+        {
+            switch (policy)
+            {
+                case M08BIndustryPolicy.FarmManagedV1:
+                    return "farm-managed-v1 is a simulation-only comparison policy, not player " +
+                        "behaviour and not a survival threshold: at each management-stable point " +
+                        "after pending events and any succession decision are resolved, it fills " +
+                        "only Farm post 0 and only while that post is vacant, through " +
+                        "GameSession.TryAssignIndustry, by trying living family members in " +
+                        "ordinal PersonId order until one real-rule appointment succeeds. Post 0 " +
+                        "stays vacant when no member qualifies, the second Farm post is never " +
+                        "appointed, and the Trading House stays vacant; an occupied post is " +
+                        "never replaced or unassigned, and the policy consumes no random state. " +
+                        "farmVacancyStablePoints counts stable points where Farm post 0 was " +
+                        "vacant and farmAppointments the accepted appointments.";
+                case M08BIndustryPolicy.DualFarmV1:
+                    return "dual-farm-v1 is a simulation-only comparison policy, not player " +
+                        "behaviour and not a survival threshold: at each management-stable point " +
+                        "after pending events and any succession decision are resolved, it fills " +
+                        "every vacant Farm post in post order, post 0 first, through " +
+                        "GameSession.TryAssignIndustry, by trying living family members in " +
+                        "ordinal PersonId order until one real-rule appointment succeeds. Each " +
+                        "post stays vacant when no member qualifies, the Trading House stays " +
+                        "vacant, an occupied post is never replaced or unassigned, and the " +
+                        "policy consumes no random state. farmVacancyStablePoints counts stable " +
+                        "points where at least one Farm post was vacant and farmAppointments the " +
+                        "accepted appointments, at most one per post per stable point.";
+                default:
+                    return "unmanaged is the accepted baseline and never appoints an industry: " +
+                        "at each management-stable point the harness does nothing, so both Farm " +
+                        "posts and the Trading House stay vacant unless a real session rule " +
+                        "fills them. It never inspects, appoints, replaces or unassigns a post, " +
+                        "and it consumes no random state. farmAppointments and " +
+                        "farmVacancyStablePoints stay at zero because no harness policy action " +
+                        "recorded an appointment or a vacancy opportunity.";
             }
         }
 
@@ -470,6 +544,21 @@ namespace SengokuChronicle.Editor
         /// </summary>
         public static string ComputeRuleInputSha256() =>
             TryComputeRuleInputProvenance(out string sha256, out _) ? sha256 : string.Empty;
+
+        /// <summary>
+        /// Reads the runner-source and rule-input hashes once, producing the snapshot one batch
+        /// must reuse for every reuse decision, CSV/summary write and batch-log line. A batch
+        /// calls this before it reuses or runs any seed, so a source edit that lands while the
+        /// batch is running cannot relabel rows produced by the previous assembly. Private on
+        /// purpose: the public entries capture their own snapshot, so no caller can inject hashes
+        /// it did not observe. The EditMode tests reach the seam by reflection.
+        /// </summary>
+        private static M08BBatchProvenance CaptureBatchProvenance()
+        {
+            TryComputeRuleInputProvenance(out string ruleInputSha256, out int ruleInputFileCount);
+            return new M08BBatchProvenance(ComputeSourceSha256(), ruleInputSha256,
+                ruleInputFileCount);
+        }
 
         /// <summary>
         /// Hash plus file count of the real project manifest, or empty values when the manifest
@@ -1327,11 +1416,27 @@ namespace SengokuChronicle.Editor
                 M08BIndustryPolicy.Unmanaged);
 
         /// <summary>
-        /// Runs a resumable seed range for one policy. Rows may only be reused from artifacts
-        /// whose companion summary proves the same policy, so the two policies stay separate.
+        /// Runs a resumable seed range for one policy. The runner captures the batch provenance
+        /// before it reuses or runs any seed, so the reuse check, every periodic artifact write
+        /// and the final summary/log describe the assembly that produced the rows. Rows may only
+        /// be reused from artifacts whose companion summary proves the same policy, so the two
+        /// policies stay separate.
         /// </summary>
         public static IReadOnlyList<M08BSeedResult> RunBatch(int firstSeed, int count, int years,
-            string outputRoot, IReadOnlyList<int> checkpointYears, M08BIndustryPolicy policy)
+            string outputRoot, IReadOnlyList<int> checkpointYears, M08BIndustryPolicy policy) =>
+            RunBatch(firstSeed, count, years, outputRoot, checkpointYears, policy,
+                CaptureBatchProvenance());
+
+        /// <summary>
+        /// Private seam: runs a resumable seed range against one already frozen snapshot. Only
+        /// <see cref="CaptureBatchProvenance"/> produces such a snapshot and no public entry
+        /// accepts one, so callers cannot supply hashes the runner did not observe; the EditMode
+        /// tests reach this overload by reflection to prove a batch keeps the hashes it started
+        /// with after the source changes on disk.
+        /// </summary>
+        private static IReadOnlyList<M08BSeedResult> RunBatch(int firstSeed, int count, int years,
+            string outputRoot, IReadOnlyList<int> checkpointYears, M08BIndustryPolicy policy,
+            M08BBatchProvenance provenance)
         {
             if (firstSeed < 0)
                 throw new ArgumentOutOfRangeException(nameof(firstSeed));
@@ -1342,6 +1447,12 @@ namespace SengokuChronicle.Editor
             if ((long)firstSeed + count - 1 > uint.MaxValue)
                 throw new ArgumentOutOfRangeException(nameof(count), "seed range exceeds uint range.");
 
+            // The public entry froze the snapshot before this call, so the reuse check, every
+            // artifact write and the final log below describe the assembly that produced the
+            // rows even if the source changes while the batch runs. A null snapshot is only
+            // reachable from inside this type and is captured here before anything is reused or
+            // run.
+            M08BBatchProvenance frozenProvenance = provenance ?? CaptureBatchProvenance();
             List<int> checkpoints = NormalizeCheckpointYears(checkpointYears);
             string root = ResolveArtifactRoot(outputRoot, policy);
             Directory.CreateDirectory(root);
@@ -1353,8 +1464,8 @@ namespace SengokuChronicle.Editor
 
             var bySeed = new Dictionary<ulong, M08BSeedResult>();
             string loadWarning = string.Empty;
-            TryLoadRange(root, seedsPath, firstSeed, count, years, checkpoints, policy, bySeed,
-                out loadWarning);
+            TryLoadRange(root, seedsPath, firstSeed, count, years, checkpoints, policy,
+                frozenProvenance, bySeed, out loadWarning);
 
             int reused = bySeed.Count;
             int ran = 0;
@@ -1394,17 +1505,17 @@ namespace SengokuChronicle.Editor
 
                 if (ran % 10 == 0)
                     WriteArtifacts(seedsPath, checkpointsPath, summaryPath, bySeed.Values,
-                        firstSeed, count, years, checkpoints, policy);
+                        firstSeed, count, years, checkpoints, policy, frozenProvenance);
             }
 
             List<M08BSeedResult> ordered = bySeed.Values.OrderBy(item => item.Seed).ToList();
             WriteArtifacts(seedsPath, checkpointsPath, summaryPath, ordered,
-                firstSeed, count, years, checkpoints, policy);
+                firstSeed, count, years, checkpoints, policy, frozenProvenance);
 
             stopwatch.Stop();
             WriteBatchLog(logPath, firstSeed, count, years, reused, ran, startedTicks,
                 stopwatch.ElapsedMilliseconds, ordered, runDetails.ToString(), loadWarning,
-                seedsPath, checkpointsPath, summaryPath, policy);
+                seedsPath, checkpointsPath, summaryPath, policy, frozenProvenance);
 
             return ordered.AsReadOnly();
         }
@@ -1899,31 +2010,36 @@ namespace SengokuChronicle.Editor
 
         private static void WriteArtifacts(string seedsPath, string checkpointsPath, string summaryPath,
             IEnumerable<M08BSeedResult> seeds, int firstSeed, int count, int years,
-            IReadOnlyList<int> checkpointYears, M08BIndustryPolicy policy)
+            IReadOnlyList<int> checkpointYears, M08BIndustryPolicy policy,
+            M08BBatchProvenance provenance)
         {
             List<M08BSeedResult> ordered = seeds.OrderBy(item => item.Seed).ToList();
             File.WriteAllText(seedsPath, SerializeSeedsCsv(ordered, checkpointYears), Utf8NoBom);
             File.WriteAllText(checkpointsPath,
                 SerializeCheckpointsCsv(ordered, checkpointYears), Utf8NoBom);
             File.WriteAllText(summaryPath,
-                BuildSummaryJson(ordered, firstSeed, count, years, checkpointYears, policy), Utf8NoBom);
+                BuildSummaryJson(ordered, firstSeed, count, years, checkpointYears, policy,
+                    provenance), Utf8NoBom);
         }
 
         private static readonly UTF8Encoding Utf8NoBom = new UTF8Encoding(false);
 
         /// <summary>
         /// Reuses a completed CSV row range only when its companion summary proves the same
-        /// runner source, normalized schema and rule version, and a compatible range and
-        /// checkpoint set. Any doubt rejects the file instead of trusting a stale artifact.
+        /// frozen batch provenance (runner source and rule-input hashes captured before this
+        /// batch reused or ran any seed), normalized schema and rule version, and a compatible
+        /// range and checkpoint set. Any doubt rejects the file instead of trusting a stale
+        /// artifact.
         /// </summary>
         private static void TryLoadRange(string root, string seedsPath, int firstSeed, int count,
             int years, IReadOnlyList<int> checkpointYears, M08BIndustryPolicy policy,
-            Dictionary<ulong, M08BSeedResult> bySeed, out string warning)
+            M08BBatchProvenance provenance, Dictionary<ulong, M08BSeedResult> bySeed,
+            out string warning)
         {
             var warnings = new List<string>();
             List<int> checkpoints = NormalizeCheckpointYears(checkpointYears);
-            string sourceSha = ComputeSourceSha256();
-            string ruleInputSha = ComputeRuleInputSha256();
+            string sourceSha = provenance.SourceSha256;
+            string ruleInputSha = provenance.RuleInputSha256;
             string policyId = PolicyIdOf(policy);
             if (File.Exists(seedsPath))
             {
@@ -2278,7 +2394,8 @@ namespace SengokuChronicle.Editor
         private static void WriteBatchLog(string path, int firstSeed, int count, int years,
             int reused, int ran, long startedTicks, long totalMilliseconds,
             IReadOnlyList<M08BSeedResult> seeds, string runDetails, string warning,
-            string seedsPath, string checkpointsPath, string summaryPath, M08BIndustryPolicy policy)
+            string seedsPath, string checkpointsPath, string summaryPath, M08BIndustryPolicy policy,
+            M08BBatchProvenance provenance)
         {
             var log = new StringBuilder(8192);
             log.AppendLine("M08B LONG-TERM SIMULATION BATCH LOG");
@@ -2288,11 +2405,10 @@ namespace SengokuChronicle.Editor
             log.AppendLine("range: firstSeed=" + firstSeed.ToString(CultureInfo.InvariantCulture) +
                 " count=" + count.ToString(CultureInfo.InvariantCulture) +
                 " years=" + years.ToString(CultureInfo.InvariantCulture));
-            log.AppendLine("sourceSha256=" + ComputeSourceSha256());
-            TryComputeRuleInputProvenance(out string ruleInputSha256, out int ruleInputFileCount);
-            log.AppendLine("ruleInputSha256=" + ruleInputSha256);
+            log.AppendLine("sourceSha256=" + provenance.SourceSha256);
+            log.AppendLine("ruleInputSha256=" + provenance.RuleInputSha256);
             log.AppendLine("ruleInputFileCount=" +
-                ruleInputFileCount.ToString(CultureInfo.InvariantCulture));
+                provenance.RuleInputFileCount.ToString(CultureInfo.InvariantCulture));
             log.AppendLine("schema=" + NormalizedSchema + " ruleVersion=" + RuleVersion);
             log.AppendLine("policy=" + PolicyIdOf(policy));
             log.AppendLine("reused=" + reused.ToString(CultureInfo.InvariantCulture) +
@@ -2799,47 +2915,6 @@ namespace SengokuChronicle.Editor
         // ---- normalized summary JSON ----------------------------------------------------
 
         /// <summary>
-        /// Self-description of the policy that produced the file. Each run names only its own
-        /// policy, so a dual-farm artifact can never carry a single-farm description and an
-        /// unmanaged artifact can never claim appointments happened.
-        /// </summary>
-        private static string IndustryPolicyDefinition(M08BIndustryPolicy policy)
-        {
-            switch (policy)
-            {
-                case M08BIndustryPolicy.FarmManagedV1:
-                    return "farm-managed-v1 is a simulation-only comparison policy, not player " +
-                           "behaviour and not a survival threshold. At each management-stable " +
-                           "point after pending events and succession are resolved it fills the " +
-                           "vacant first Farm post only and leaves any second Farm post vacant, " +
-                           "through GameSession.TryAssignIndustry by trying living family " +
-                           "members in ordinal PersonId order until one real-rule appointment " +
-                           "succeeds; a post stays vacant when nobody qualifies. Trading House " +
-                           "stays vacant, an occupied post is never replaced or unassigned, and " +
-                           "the policy consumes no random state. farmVacancyStablePoints is the " +
-                           "opportunity count and farmAppointments the accepted appointments " +
-                           "behind it";
-                case M08BIndustryPolicy.DualFarmV1:
-                    return "dual-farm-v1 is a simulation-only comparison policy, not player " +
-                           "behaviour and not a survival threshold. At each management-stable " +
-                           "point after pending events and succession are resolved it fills " +
-                           "every vacant Farm post in post order, so a two-post Farm can hold " +
-                           "two appointed members and each post settles its own line, through " +
-                           "GameSession.TryAssignIndustry by trying living family members in " +
-                           "ordinal PersonId order until one real-rule appointment succeeds; a " +
-                           "post stays vacant when nobody qualifies. Trading House stays vacant, " +
-                           "an occupied post is never replaced or unassigned, and the policy " +
-                           "consumes no random state. farmVacancyStablePoints is the opportunity " +
-                           "count and farmAppointments the accepted appointments behind it";
-                default:
-                    return "unmanaged is the accepted baseline: the harness makes no industry " +
-                           "appointment at all, so every Farm post and the Trading House stay " +
-                           "vacant unless a real session rule fills them. No seed under this " +
-                           "policy counts as managed play";
-            }
-        }
-
-        /// <summary>
         /// Deterministic summary over the completed seed rows. Every ratio prints its
         /// numerator and denominator; wall-clock timing stays in the batch log so the same
         /// range always produces the same bytes.
@@ -2850,13 +2925,28 @@ namespace SengokuChronicle.Editor
                 M08BIndustryPolicy.Unmanaged);
 
         /// <summary>
-        /// Deterministic summary over the completed seed rows for one policy. Every ratio prints
-        /// its numerator and denominator; wall-clock timing stays in the batch log so the same
-        /// range always produces the same bytes.
+        /// Deterministic summary over the completed seed rows for one policy. The runner captures
+        /// the provenance once here, so a standalone summary describes the disk it is written
+        /// from. Every ratio prints its numerator and denominator; wall-clock timing stays in the
+        /// batch log so the same range always produces the same bytes.
         /// </summary>
         public static string BuildSummaryJson(IReadOnlyList<M08BSeedResult> seeds, int firstSeed,
-            int count, int years, IReadOnlyList<int> checkpointYears, M08BIndustryPolicy policy)
+            int count, int years, IReadOnlyList<int> checkpointYears, M08BIndustryPolicy policy) =>
+            BuildSummaryJson(seeds, firstSeed, count, years, checkpointYears, policy,
+                CaptureBatchProvenance());
+
+        /// <summary>
+        /// Private seam: stamps the summary with an already frozen snapshot. Only this type mints
+        /// snapshots and no public entry accepts one, so a caller cannot swap the provenance. A
+        /// batch passes the snapshot it captured before running seeds, so writing the summary
+        /// never re-reads the disk; the EditMode tests reach this overload by reflection to prove
+        /// a source change does not drift the summary hashes.
+        /// </summary>
+        private static string BuildSummaryJson(IReadOnlyList<M08BSeedResult> seeds, int firstSeed,
+            int count, int years, IReadOnlyList<int> checkpointYears, M08BIndustryPolicy policy,
+            M08BBatchProvenance provenance)
         {
+            M08BBatchProvenance frozenProvenance = provenance ?? CaptureBatchProvenance();
             List<int> yearsList = NormalizeCheckpointYears(checkpointYears);
             List<M08BSeedResult> ordered = seeds == null
                 ? new List<M08BSeedResult>()
@@ -2867,11 +2957,11 @@ namespace SengokuChronicle.Editor
             JsonProperty(json, 2, "schema", NormalizedSchema, true);
             JsonProperty(json, 2, "ruleVersion", RuleVersion, true);
             JsonProperty(json, 2, "policy", PolicyIdOf(policy), true);
-            JsonProperty(json, 2, "sourceSha256", ComputeSourceSha256(), true);
-            TryComputeRuleInputProvenance(out string ruleInputSha256, out int ruleInputFileCount);
-            JsonProperty(json, 2, "ruleInputSha256", ruleInputSha256, true);
+            JsonProperty(json, 2, "sourceSha256", frozenProvenance.SourceSha256, true);
+            JsonProperty(json, 2, "ruleInputSha256", frozenProvenance.RuleInputSha256, true);
             json.Append("  \"ruleInputFileCount\":")
-                .Append(ruleInputFileCount.ToString(CultureInfo.InvariantCulture)).Append(",\n");
+                .Append(frozenProvenance.RuleInputFileCount.ToString(CultureInfo.InvariantCulture))
+                .Append(",\n");
             json.Append("  \"range\": {");
             json.Append("\"firstSeed\":").Append(firstSeed.ToString(CultureInfo.InvariantCulture));
             json.Append(",\"count\":").Append(count.ToString(CultureInfo.InvariantCulture));
@@ -2916,9 +3006,14 @@ namespace SengokuChronicle.Editor
             JsonProperty(json, 4, "successionPolicy",
                 "approved simulation-only policy: prefer the valid designated heir, otherwise the eligible candidate with the lowest stable PersonId; pick the regent by the same stable-ID rule and complete a due regency through the public session command. A crisis adoption is never accepted, so a family with no lawful candidate keeps the PendingSuccession stop",
                 true);
-            JsonProperty(json, 4, "industryPolicy", IndustryPolicyDefinition(policy), true);
-            JsonProperty(json, 4, "checkpoints",
-                "per-checkpoint ratios and distributions use only the seeds that reached that checkpoint (reached); notReached seeds stopped earlier and stay out of the checkpoint denominator, so a checkpoint ratio such as 0/N is conditional on the seeds that survived that far and must never be read as a whole-range result. The seed-level overall ratios in this file always use every seed in the range",
+            JsonProperty(json, 4, "industryPolicy",
+                DescribeIndustryPolicy(policy),
+                true);
+            JsonProperty(json, 4, "checkpointRatio",
+                "checkpoint ratios use only the seeds that reached that checkpoint: the denominator is that checkpoint's reached count, and the seeds counted in notReached are excluded from both numerator and denominator. An empty reached sample reports denominator 0 and permille 0 rather than a misleading value",
+                true);
+            JsonProperty(json, 4, "overallRatio",
+                "overall ratios use every seed row in the range as the denominator, seedCount, so a seed that stopped before any checkpoint still counts. The population-scoped ratios heirGapAtStop and familyRelationshipAnomalySeeds are the documented exceptions and print their own matched denominator",
                 true);
             JsonProperty(json, 4, "progressionDeadlock",
                 "world progression stopped by an unresolved blocking event that still prevents the calendar advancing. A rule-required pending succession keeps its own stop category and is not a deadlock. A three-refusal advance stall is reported separately as Timeout, and an escaped harness exception as SimulatorFault",
