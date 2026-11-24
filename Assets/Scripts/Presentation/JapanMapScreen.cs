@@ -405,7 +405,9 @@ namespace SengokuChronicle.Presentation
             DestroyChildren(_lineLayer);
 
             IReadOnlyList<JapanMapHub> hubs = JapanTravelGraph.Hubs;
-            JapanMapLayoutResult layout = JapanMapLayout.ComputeLayout(hubs, extent);
+            // 落点由 GeoNames 锚点的经纬度投影决定；MapX/MapY 只保留给
+            // JapanMapLayout 的兼容路径，不再决定这个屏幕的节点位置。
+            JapanMapLayoutResult layout = JapanMapGeoLayout.ComputeLayout(hubs, extent);
             Vector2[] nodePositions = layout.Positions;
 
             IReadOnlyList<JapanMapRoute> routes = JapanTravelGraph.Routes;

@@ -18,12 +18,35 @@ namespace SengokuChronicle.Presentation
         public Vector2 NodeSize { get; }
     }
 
+    /// <summary>One resolved grid: cell counts plus the node-size cap for those cells.</summary>
+    internal readonly struct JapanMapGrid
+    {
+        public JapanMapGrid(int columns, int rows, float nodeWidth, float nodeHeight)
+        {
+            Columns = columns;
+            Rows = rows;
+            NodeWidth = nodeWidth;
+            NodeHeight = nodeHeight;
+        }
+
+        public int Columns { get; }
+        public int Rows { get; }
+        public float NodeWidth { get; }
+        public float NodeHeight { get; }
+    }
+
     /// <summary>
     /// Deterministic, collision-free placement for the discrete map nodes. The
     /// normalized hub coordinates choose a preferred grid cell; a nearest-free
     /// search resolves the dense Kinai/Tokai clusters without changing hub IDs or
     /// route endpoints. The grid grows or shrinks with the map area so a narrow
     /// canvas or runtime resize cannot make two 74x28 nodes overlap.
+    /// <para>
+    /// <see cref="JapanMapHub.MapX"/>/<see cref="JapanMapHub.MapY"/> remain the
+    /// compatibility coordinates of this layout. The geographic layout in
+    /// <see cref="JapanMapGeoLayout"/> reuses the same grid, node sizes and
+    /// collision rules but seeds each preferred cell from a GeoNames anchor.
+    /// </para>
     /// </summary>
     public static class JapanMapLayout
     {
@@ -58,6 +81,22 @@ namespace SengokuChronicle.Presentation
                     new Vector2(NodeWidth, NodeHeight));
 
             int count = hubs.Count;
+            var preferred = new Vector2[count];
+            for (int i = 0; i < count; i++)
+                preferred[i] = new Vector2(hubs[i].MapX, hubs[i].MapY);
+
+            JapanMapGrid grid = ResolveGrid(count, width, height);
+            return new JapanMapLayoutResult(
+                PlaceNodes(grid, width, height, preferred, IdentityOrder(count)),
+                ResolveNodeSize(grid, width, height));
+        }
+
+        /// <summary>
+        /// Chooses the grid for the given area. A 1x1 or smaller area never reaches
+        /// this method; callers return the documented degenerate result first.
+        /// </summary>
+        internal static JapanMapGrid ResolveGrid(int count, float width, float height)
+        {
             int maxColumns = Mathf.Max(1, Mathf.FloorToInt((width + 0.01f) / NodeWidth));
             int maxRows = Mathf.Max(1, Mathf.FloorToInt((height + 0.01f) / NodeHeight));
             int columns = Mathf.Min(Columns, maxColumns);
@@ -118,19 +157,46 @@ namespace SengokuChronicle.Presentation
                     "地图布局容量不足：需要 " + count + " 个位置，但只有 " +
                     columns * rows + " 个网格单元。");
 
+            return new JapanMapGrid(columns, rows, nodeWidth, nodeHeight);
+        }
+
+        /// <summary>Node size cap: never larger than a cell, never larger than 74x28.</summary>
+        internal static Vector2 ResolveNodeSize(JapanMapGrid grid, float width, float height) =>
+            new Vector2(
+                Mathf.Min(grid.NodeWidth, width / grid.Columns),
+                Mathf.Min(grid.NodeHeight, height / grid.Rows));
+
+        internal static int[] IdentityOrder(int count)
+        {
+            var order = new int[count];
+            for (int i = 0; i < count; i++)
+                order[i] = i;
+            return order;
+        }
+
+        /// <summary>
+        /// Places one node per grid cell. <paramref name="preferred"/> holds
+        /// normalized preferred cells with y growing south; <paramref name="order"/>
+        /// is the claim order, so callers can make the result independent of the
+        /// hub list order. Every index gets its own in-bounds cell center.
+        /// </summary>
+        internal static Vector2[] PlaceNodes(JapanMapGrid grid, float width, float height,
+            Vector2[] preferred, int[] order)
+        {
+            int columns = grid.Columns;
+            int rows = grid.Rows;
             float cellWidth = width / columns;
             float cellHeight = height / rows;
-            nodeWidth = Mathf.Min(nodeWidth, cellWidth);
-            nodeHeight = Mathf.Min(nodeHeight, cellHeight);
-            var positions = new Vector2[count];
+            var positions = new Vector2[preferred.Length];
             var occupied = new bool[columns, rows];
 
-            for (int i = 0; i < count; i++)
+            for (int step = 0; step < order.Length; step++)
             {
+                int index = order[step];
                 int preferredColumn = Mathf.Clamp(
-                    Mathf.RoundToInt(hubs[i].MapX * (columns - 1)), 0, columns - 1);
+                    Mathf.RoundToInt(preferred[index].x * (columns - 1)), 0, columns - 1);
                 int preferredRow = Mathf.Clamp(
-                    Mathf.RoundToInt(hubs[i].MapY * (rows - 1)), 0, rows - 1);
+                    Mathf.RoundToInt(preferred[index].y * (rows - 1)), 0, rows - 1);
 
                 int bestColumn = -1;
                 int bestRow = -1;
@@ -156,12 +222,12 @@ namespace SengokuChronicle.Presentation
                 // Capacity is guaranteed above, so every hub gets its own cell.
                 occupied[bestColumn, bestRow] = true;
 
-                positions[i] = new Vector2(
+                positions[index] = new Vector2(
                     -width * 0.5f + (bestColumn + 0.5f) * cellWidth,
                     height * 0.5f - (bestRow + 0.5f) * cellHeight);
             }
 
-            return new JapanMapLayoutResult(positions, new Vector2(nodeWidth, nodeHeight));
+            return positions;
         }
 
         /// <summary>Position-only compatibility wrapper for existing callers.</summary>

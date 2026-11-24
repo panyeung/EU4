@@ -11,6 +11,14 @@ namespace SengokuChronicle.Application
     /// </summary>
     public static class JapanMapText
     {
+        /// <summary>
+        /// 地图锚点的应用内署名与许可链接。GeoNames 数据按原样提供且不保证精度，
+        /// 因此文案明确写成区域近似代表点，不称城市中心或精确历史地点。
+        /// </summary>
+        public const string GeoAttributionNote =
+            "区域锚点：GeoNames JP dump（WGS84 十进制度，CC BY 4.0）" +
+            " https://www.geonames.org/export/ ；坐标为区域近似代表点，非城市中心或精确历史地点。";
+
         public static string BuildHeader(JapanMapExplorer explorer)
         {
             if (explorer == null)
@@ -113,10 +121,11 @@ namespace SengokuChronicle.Application
                         out JapanProvince province))
                 {
                     return "旧国：" + province.Name + "\n" +
-                           "该旧国暂时没有旅行枢纽；旧国本身不是可访问地点。";
+                           "该旧国暂时没有旅行枢纽；旧国本身不是可访问地点。\n\n" +
+                           GeoAttributionNote;
                 }
 
-                return "尚未选择旅行地点。";
+                return "尚未选择旅行地点。\n\n" + GeoAttributionNote;
             }
 
             var builder = new StringBuilder();
@@ -147,6 +156,7 @@ namespace SengokuChronicle.Application
             }
 
             builder.Append("\n旧国条目只作目录，不把省份本身当成可访问地点。");
+            builder.Append("\n\n").Append(GeoAttributionNote);
             return builder.ToString();
         }
 
