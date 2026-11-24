@@ -1,6 +1,6 @@
 # 《影之一族》checkpoint 与设计规划
 
-更新时间 2026-11-23。游戏代码基线为 `2bca9d1`；之后 `main` 只追加文档变更。
+更新时间 2026-11-24。游戏代码基线为 `2bca9d1`；之后 `main` 只追加文档变更。
 本文记录设计规划、checkpoint、里程碑证据与下一步。当前 ref、Editor 和任务卡快照见 [PROJECT_STATE.md](PROJECT_STATE.md)。UI 与美术资产见 [ui设计规划.md](ui设计规划.md)。代理协作规则见 [AGENTS.md](AGENTS.md)。
 
 规则：新 checkpoint 只往第 4 节表格加一行，长过程记录留在 `Logs/`，不要往本文追加叙述段。
@@ -332,6 +332,7 @@
 
 | 日期 | ID | 内容 | 状态 | 证据 |
 |---|---|---|---|---|
+| 2026-11-24 | M2 地图 | 主控 FoundationScene Play Mode 全国地图预验收：清洲→冈崎取消不改状态；确认后 1560-04-03/冈崎，筛选与目录滚动可用；关闭覆盖层后旧地图页仍留“当前位置：清洲”，切到家族内务再返回才刷新。预验收 RETURN，按根因修复并回归 | 修复处理中 | 根因两条：`WorldMapController` 整句缓存地点提示；`GameSession.ConfirmTravel` 仅在 NPC 需求成长等副作用成立时才发 `SessionStateChanged`。修复 `696af80` 已推 `origin/docs/orca-project-workflow`；回归红灯 5 例 2 过 3 败→绿灯 5/5，全量 2306/2306，Play Mode 复验关闭后即显示冈崎。证据 `Logs/verify/20261124-m2-overlay-close-refresh/`（XML SHA256 红灯 `c56f17dc…`、绿灯 `ee068b8e…`、全量 `2ea52b4b…`）。用户最终验收未完成 |
 | 2026-11-20 | M09 | Debug 综合测试面板入口预验：从标题页打开面板并确认日期为 `1560-04-01`；停止 Play Mode 后场景 `isDirty=false`，Console 无新增错误或警告 | 进行中 | 仅证明面板可见与退出状态正常；标题栏实体鼠标拖动、底层控件未误触仍待验证。详见 `PROJECT_STATE.md` §未完成工作第 3 项及 PR #3 的 M09 用户硬件输入验收步骤 |
 | 2026-11-19 | M00 | v1 Windows 演示技术签核 ACCEPT；`t_39a5b047` RETURN 所要求的文档状态修订已获独立只读复审 ACCEPT | 进行中 | Player 构建与冒烟：`Logs/verify/v1-demo-build/20261118-r2-demo-build.md`（`2bca9d1`）；EditMode 2214/2214、Validator PASS、核心循环及隔离存读档：`Logs/verify/20261118-integration/20261118-1348-core-loop.md`（`c291dd3`）；`c291dd3..2bca9d1` 仅注释修订。用户最终验收仍待完成 |
 | 2026-11-19 | M08 | 全量验证归档复审 ACCEPT；FoundationScene Play Mode 真实跨过 55/100 周年并自动显示回顾，确认后继续；M08 仍未闭合 | 进行中 | `docs/reports/v1-m08-55-review-user-acceptance-20261119.md` 记录 `farm-managed-v1` 正常月结路线、两次实际 UI 及 55 年后隔离存读档。百年终态粮荒 53 月、极端通胀 41 月、粮食 0、资金 317；不能据此宣称经济可持续或用户验收 |
@@ -432,6 +433,7 @@
 - 独立复审 `t_122d4d5b` 判 **PASS**，C1–C6 全过。
 - 仍未闭合：M00 用户最终验收；M08 玩家手动经营路线与经济可持续性；M08B 用户规则选择；M09 真实硬件窗口拖动。PR #4 当前提交 `74f7579` 同时包含 55/100 年 PlayMode 用例，`1/1` 通过且独立复审 ACCEPT；逐次断言每次正式月结成功并恰好前进一个自然月。测试使用生产按钮回调，不证明实体输入、玩家手动经营或用户验收。M09 自动化测试与报告见 PR #6，PlayMode 3/3、EditMode 2301/2301 通过，独立复审 ACCEPT；使用真实 FoundationScene UI 模块接收虚拟 Mouse 事件，不证明物理输入。2026-11-23 主控第三次 Computer Use 拖动仍未观察到面板位移；追踪证明 Computer Use 输入事件到达 Input System 与 EventSystem，但按下和终点位置同帧、未触发 `BeginDrag`，不能据此判断 Windows 原始输入链或实体鼠标结果。实体鼠标、松手停留与底层控件未误触仍待用户验收。`main` 的 `Assets/Tests/PlayMode` 仍为空；其余 MINOR 见 §6。
 - 2026-11-24 修正 Canvas 双启动入口：`JapanMapSceneBootstrap.Start` 与 `WorldMapController.Start` 统一调用 `EnsureForSession`，目标 Canvas 顺序为 GameSession、WorldMapController、场景首个 Canvas。提交 `2bc3b56d96533bd53224a7bac363987b5e1def48` 已推送至 `origin/docs/orca-project-workflow`。新增 EditMode 用例反射调用两个真实 `Start`，覆盖双 Canvas 与两种调用顺序；旧路径红灯 2/2，修正后 `JapanMapPlayableTravelTests` 68/68 通过，独立只读复审 ACCEPT。结果副本 `Logs/verify/20261123-pr3-canvas-selection/TestResults.xml`：MD5 `e2bb562af29a5c5ed2746ca74d2143bc`，SHA-256 `C98D8412F7E423E948E2673B4AE1FE4649ABE36F29E3A7829CB8F16083472B68`。Editor PID `95724`、Pipeline `7804` 收尾为 ready/stopped/compiling=false，`FoundationScene isDirty=false`；新增 Console error 为 0，新增 4 条 warn 是已知 TMP 后备字体警告，累计 1 条 error 为此前误调 CLI 的旧记录。该 EditMode 结果不代表 FoundationScene Play Mode 或用户试玩验收。
+- 2026-11-24 修正关闭全国地图后旧地图页仍显示旧地点（提交 `696af809edb1eccb87331fb9a8b5a9178b18e337`，已推 `origin/docs/orca-project-workflow`）。主控预验收在 FoundationScene Play Mode 观察到：清洲→冈崎取消不改变日期与地点；确认后日期 `1560-04-03`、当前位置冈崎，路线筛选与目录滚动可用；点关闭后旧地图页仍显示“当前位置：清洲”，切到家族内务再切回“地图与出行”才刷新。修复：`WorldMapController` 的位置提示行改为按 GameSession 当前地点派生；`GameSession.ConfirmTravel` 成功后必定发布一次 `SessionStateChanged`，不再依赖 NPC 需求成长等偶然副作用；`JapanMapScreen.DestroyChildren` 沿用既有 PlayMode/EditMode 分支以支持 EditMode 回归。新增 `Assets/Tests/EditMode/JapanMapOverlayRefreshTests.cs` 5 例。证据：红灯（生产修复临时 stash）5 例 2 过 3 败，其中 SC-010 标准样例旅行通知期望 1 实际 0；绿灯 5/5；全量 EditMode 2306/2306；最终代码 Play Mode 复验关闭后旧地图页即显示冈崎与 `1560-04-03`。Play Mode 操作经 VerifyUi 调用真实 `onClick` 处理器，不是实体鼠标/键盘输入，也未截图。Editor PID `95724`、Pipeline `7804`，收尾 ready/stopped、`compilationFailed=false`、`FoundationScene isDirty=false`。TestResults.xml SHA-256 红灯 `c56f17dcddc95324f0001cd5fb31a0708af63417af567f6287228b6ef7398732`、绿灯 `ee068b8eadab94ec4551b4d2bc7f317e3b03607764deea0e04d0c8c714279fe3`、全量 `2ea52b4bcf94b43944844fb12c88c162cf210d930506502f516498bfa6e963bd`；记录见 `Logs/verify/20261124-m2-overlay-close-refresh/README.md`。该修复不替代用户试玩验收。
 - 2026-11-19 M08 实际试玩后，Unity Editor PID `49784`、项目路径 `C:\Users\panye\My project`、Unity `6000.6.6f1`、Pipeline 端口 `7801`；停止 Play Mode 后状态 `ready`、`compiling=false`，FoundationScene `isDirty=false`，实时 Console 错误/警告 0。累计 Console 的两条旧 CLI/评估命令错误不属于该路线。后续 Unity 工作开始前重新核对进程、`-projectPath` 与 Pipeline；已有实例时复用，不启动第二实例。
 - 证据边界。M01 与 M08C 子切片的验收都不代表 M00 或 M02–M08 整体验收。
 
@@ -448,7 +450,7 @@
 5. `Assets/Tests/PlayMode` 在 `main` 中为空，PR #4 分支新增 M08 五十五周年与百年端到端测试。后续按里程碑补齐自动化覆盖，且与真实运行时证据分别报告。
 6. `Assets/Logs/` 与 `Assets/Logs.meta` 当前均不存在；剩余 MINOR 清理仅包括 `Assets/Scenes/` 的 stray `TestResults_*.xml` 与隔离槽目录，按授权范围处理。
 7. 画布层序已统一为 `CanvasLayerOrder`，后续任何新面板都必须按这套共享序插入并让 `CanvasLayerOrderTests` 覆盖，不要再引入第二套顺序表。
-8. **日本全境地图用户试玩**：PR #3 已包含 Canvas 修正的 `2bc3b56`、68/68 EditMode 结果及独立复审 ACCEPT。按 PR #3 的步骤验证正常 SC-013 路线预览、取消与确认、筛选、实体鼠标滚轮、键盘焦点、目标设备中文显示和关闭；试玩未完成前不得记为通过。
+8. **日本全境地图用户试玩**：PR #3 已包含 Canvas 修正的 `2bc3b56`（独立只读复审 ACCEPT）、关闭刷新修复的 `696af80`（本轮红灯→绿灯→全量→Play Mode 复验通过，尚未单独派发独立复审），以及 68/68 与 5/5 EditMode 结果。主控预验收已于 2026-11-23/24 观察到取消不改状态、确认后 `1560-04-03`/冈崎、筛选与目录滚动可用；关闭覆盖层时旧地图页暂留“清洲”的缺陷已按根因修复并复验。仍须按 PR #3 步骤用实体鼠标滚轮、键盘焦点、目标设备中文显示和关闭后即时刷新完成用户验收；试玩未完成前不得记为通过。
 
 ---
 
