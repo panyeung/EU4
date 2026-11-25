@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEditor;
@@ -130,8 +130,8 @@ namespace SengokuChronicle.Editor
 
         // Original generated UI art (docs/ART_ASSET_WORKFLOW.md). The atlases are
         // sliced in the importer metadata; sub-sprites are addressed by name.
-        private const string IconsAtlasPath = "Assets/Resources/Generated/ui_icons_atlas.png";
-        private const string IndigoAtlasPath = "Assets/Resources/Generated/indigo_pattern_tile.png";
+        private const string IconsAtlasPath = "Assets/Art/Resources/UI/ui_icons_atlas.png";
+        private const string IndigoAtlasPath = "Assets/Art/Resources/UI/indigo_pattern_tile.png";
         private const string IndigoSpriteName = "indigo_pattern_tile_0";
 
         /// <summary>Loads one named sub-sprite of a generated atlas (null-safe).</summary>
@@ -814,12 +814,12 @@ namespace SengokuChronicle.Editor
                 if (parchment == null || portraitSprite == null || sealSprite == null ||
                     travelSprite == null)
                     throw new InvalidOperationException(
-                        "Missing original generated M02 art under Assets/Resources/Generated. " +
+                        "Missing original generated M02 art under Assets/Art/Resources. " +
                         "Refresh the project first.");
                 if (indigo == null ||
                     pageIcons.Any(icon => icon == null))
                     throw new InvalidOperationException(
-                        "Missing generated UI art under Assets/Resources/Generated. " +
+                        "Missing generated UI art under Assets/Art/Resources. " +
                         "Refresh the project first.");
 
                 if (existingRoot != null)

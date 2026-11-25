@@ -16,7 +16,7 @@ namespace SengokuChronicle.Tests.EditMode
     /// </summary>
     public sealed class JapanMapBasemapTests
     {
-        private const string BasemapPath = "Resources/Generated/japan_geographic_basemap.png";
+        private const string BasemapPath = "Art/Resources/Maps/japan_geographic_basemap.png";
 
         private const string ApprovedSha256 =
             "328b29af9b61490eb5dd25bff6439bfbb2afdabb022e2451dc8d3afd1b80f127";

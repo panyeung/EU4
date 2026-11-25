@@ -1257,7 +1257,7 @@ namespace SengokuChronicle.Tests.EditMode
             Sprite generated = SengokuUiArt.WorldMapIllustration;
             if (generated == null)
                 Assert.Ignore(
-                    "Resources/Generated/world_map_illustration is not imported yet; " +
+                    "Maps/world_map_illustration is not imported yet; " +
                     "the map page keeps its reference-art fallback until it is.");
 
             GameObject host = Create("CanvasHost", typeof(RectTransform));

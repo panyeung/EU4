@@ -13,7 +13,7 @@ namespace SengokuChronicle.Presentation
     public static class JapanMapBasemap
     {
         /// <summary>Resources 下的底图主资源路径（不含扩展名）。</summary>
-        public const string ResourcePath = "Generated/japan_geographic_basemap";
+        public const string ResourcePath = "Maps/japan_geographic_basemap";
 
         /// <summary>底图以 Multiple Sprite 导入，唯一子精灵名带 <c>_0</c> 后缀。</summary>
         public const string SpriteResourceName = ResourcePath + "_0";
