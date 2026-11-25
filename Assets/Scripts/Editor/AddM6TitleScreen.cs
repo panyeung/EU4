@@ -59,9 +59,9 @@ namespace SengokuChronicle.Editor
         /// <see cref="SengokuUiArt.Icon"/> and the button paper from
         /// <see cref="SengokuUiArt.Parchment"/>.
         /// </summary>
-        public const string SealAssetPath = "Assets/Art/UI/ReferenceArt/seal.png";
+        public const string SealAssetPath = "Assets/Art/UI/seal.png";
 
-        private const string IndigoPatternAssetPath = "Assets/Resources/Generated/indigo_pattern_tile.png";
+        private const string IndigoPatternAssetPath = "Assets/Art/Resources/UI/indigo_pattern_tile.png";
         private const string IndigoPatternSpriteName = "indigo_pattern_tile_0";
 
         private const string MapRootName = "M2WorldMapRoot";

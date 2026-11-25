@@ -225,19 +225,7 @@ namespace SengokuChronicle.Presentation
 
         private static string CategoryName(ChronicleCategory category)
         {
-            switch (category)
-            {
-                case ChronicleCategory.Event: return "事件";
-                case ChronicleCategory.Relationship: return "关系";
-                case ChronicleCategory.Mission: return "任务";
-                case ChronicleCategory.Succession: return "继承";
-                case ChronicleCategory.Industry: return "产业";
-                case ChronicleCategory.Education: return "教育";
-                case ChronicleCategory.Research: return "研究";
-                case ChronicleCategory.FamilyFormation: return "家族关系";
-                case ChronicleCategory.NaturalDeath: return "人物离世";
-                default: return category.ToString();
-            }
+            return ChronicleCategoryLabels.Name(category);
         }
 
         private static string CategoryDetail(FamilyChronicleEntry entry)

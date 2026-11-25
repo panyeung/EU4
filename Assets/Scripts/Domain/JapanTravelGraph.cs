@@ -447,6 +447,13 @@ namespace SengokuChronicle.Domain
                 issues.Add("热田与那古野不得新增直达路线。");
 
             CheckReachability(hubIds, issues);
+
+            // 经纬度锚点表与旅行图分开维护，但同属一张地图契约：每个枢纽必须有
+            // 唯一合法锚点，否则地理布局无法按 ID 取点。
+            IReadOnlyList<string> anchorIssues = JapanGeoAnchors.Validate();
+            for (int i = 0; i < anchorIssues.Count; i++)
+                issues.Add(anchorIssues[i]);
+
             return issues;
         }
 

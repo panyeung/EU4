@@ -51,10 +51,12 @@ namespace SengokuChronicle.Presentation
         [SerializeField] private Text ninjutsuValueText;
         [SerializeField] private Text martialValueText;
         [SerializeField] private Text scholarshipValueText;
+        [SerializeField] private Text managementValueText;
         [SerializeField] private Text socialValueText;
         [SerializeField] private Image ninjutsuFill;
         [SerializeField] private Image martialFill;
         [SerializeField] private Image scholarshipFill;
+        [SerializeField] private Image managementFill;
         [SerializeField] private Image socialFill;
         [SerializeField] private GameObject[] relationRoots;
         [SerializeField] private Text[] relationNameTexts;
@@ -109,8 +111,10 @@ namespace SengokuChronicle.Presentation
             creedChipText != null && ambitionChipText != null &&
             traitSummaryText != null && ninjutsuValueText != null &&
             martialValueText != null && scholarshipValueText != null &&
-            socialValueText != null && ninjutsuFill != null && martialFill != null &&
-            scholarshipFill != null && socialFill != null && relationRoots != null &&
+            managementValueText != null && socialValueText != null &&
+            ninjutsuFill != null && martialFill != null &&
+            scholarshipFill != null && managementFill != null && socialFill != null &&
+            relationRoots != null &&
             relationRoots.Length == 3 && relationNameTexts != null &&
             relationNameTexts.Length == 3 && relationDetailTexts != null &&
             relationDetailTexts.Length == 3 && profileBody != null && relationsBody != null &&
@@ -134,7 +138,8 @@ namespace SengokuChronicle.Presentation
         public string TraitLine => traitSummaryText != null ? traitSummaryText.text : string.Empty;
         public string StatLine => ninjutsuValueText != null
             ? ninjutsuValueText.text + "/" + martialValueText.text + "/" +
-              scholarshipValueText.text + "/" + socialValueText.text
+              scholarshipValueText.text + "/" + managementValueText.text + "/" +
+              socialValueText.text
             : string.Empty;
         public string RelationLine =>
             relationNameTexts != null && relationNameTexts.Length > 0 && relationNameTexts[0] != null
@@ -207,7 +212,7 @@ namespace SengokuChronicle.Presentation
             RenderSchedule(selected);
             RenderTravel(selected);
             RenderInspector(session, selectedId);
-            RenderHistory(session, selectedId);
+            RenderHistory(session != null ? session.ChronicleEntries : null, selectedId);
             SetTab(_tab);
         }
 
@@ -366,6 +371,8 @@ namespace SengokuChronicle.Presentation
             SetStat(martialValueText, martialFill, hasValues ? values.MartialArts : 0, hasValues);
             SetStat(scholarshipValueText, scholarshipFill,
                 hasValues ? values.Scholarship : 0, hasValues);
+            SetStat(managementValueText, managementFill,
+                hasValues ? values.Management : 0, hasValues);
             SetStat(socialValueText, socialFill, hasValues ? values.Social : 0, hasValues);
         }
 
@@ -648,34 +655,44 @@ namespace SengokuChronicle.Presentation
             inspectorHintText.text = builder.ToString();
         }
 
-        private void RenderHistory(GameSession session, PersonId selectedId)
+        /// <summary>
+        /// 用显式记录列表渲染选中人物最近的编年行。<see cref="Render"/> 也走这一条路径；
+        /// 方法公开是为了让测试不必持有编年账本即可覆盖九类、同名过滤与六条上限。
+        /// 显示名仍来自已绑定的 <see cref="gameSession"/> 名册，调用方须先绑定会话。
+        /// </summary>
+        public void RenderHistory(IReadOnlyList<FamilyChronicleEntry> entries, PersonId selectedId)
         {
             if (historyText == null)
                 return;
-            if (session == null || session.ChronicleEntries == null ||
-                session.ChronicleEntries.Count == 0)
+            if (entries == null || entries.Count == 0)
             {
                 historyText.text = "家族编年史尚无记录。";
                 return;
             }
 
-            string name = PersonName(session, selectedId);
+            string name = PersonName(gameSession, selectedId);
             var builder = new StringBuilder(320);
-            IReadOnlyList<FamilyChronicleEntry> entries = session.ChronicleEntries;
             int shown = 0;
             for (int i = entries.Count - 1; i >= 0 && shown < 6; i--)
             {
                 FamilyChronicleEntry entry = entries[i];
+                // 教育记录只按稳定 ID 归属：同名他人的教育记录不得出现在此人经历中。
+                // 其它类别保留既有的姓名回退，让通用事件仍能出现。
                 bool related = string.Equals(entry.SubjectId, selectedId.Value,
                                    StringComparison.Ordinal) ||
-                               (!string.IsNullOrEmpty(name) &&
+                               (entry.Category != ChronicleCategory.Education &&
+                                !string.IsNullOrEmpty(name) &&
                                 ((entry.Title != null && entry.Title.Contains(name)) ||
                                  (entry.Summary != null && entry.Summary.Contains(name))));
                 if (!related)
                     continue;
                 if (builder.Length > 0)
                     builder.Append('\n');
-                builder.Append(entry.Year).Append('年').Append(entry.Month).Append("月　")
+                // 已批准计划要求每条记录以类别标签开头；教育行额外加纯文本符号 ◆。
+                if (entry.Category == ChronicleCategory.Education)
+                    builder.Append('◆');
+                builder.Append('【').Append(ChronicleCategoryLabels.Name(entry.Category)).Append('】')
+                    .Append(entry.Year).Append('年').Append(entry.Month).Append("月　")
                     .Append(entry.Title);
                 if (!string.IsNullOrWhiteSpace(entry.Summary))
                     builder.Append("\n　").Append(entry.Summary);

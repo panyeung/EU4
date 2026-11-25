@@ -8,7 +8,7 @@ namespace SengokuChronicle.Presentation
 {
     /// <summary>
     /// Runtime access to the original generated UI art delivered under
-    /// <c>Assets/Resources/Generated</c> (see docs/ART_ASSET_WORKFLOW.md): a 4x4 icon
+    /// <c>Assets/Art/Resources</c> (see <c>ui设计规划.md</c> §10): a 4x4 icon
     /// atlas, a 2x3 clan portrait atlas, the rainy-visitor event illustration, and the
     /// parchment/indigo surface tiles. Every load is cached and null-safe: when an
     /// asset is missing, callers keep their flat theme colours and pages still
@@ -17,15 +17,15 @@ namespace SengokuChronicle.Presentation
     /// </summary>
     public static class SengokuUiArt
     {
-        public const string IconsAtlasPath = "Generated/ui_icons_atlas";
-        public const string PortraitsAtlasPath = "Generated/clan_portraits_atlas";
-        public const string ParchmentPath = "Generated/parchment_tile";
-        public const string IndigoPatternPath = "Generated/indigo_pattern_tile";
-        public const string EventIllustrationPath = "Generated/event_rainy_visitor";
-        public const string WorldMapIllustrationPath = "Generated/world_map_illustration";
-        public const string KiyosuTownIllustrationPath = "Generated/town_kiyosu";
-        public const string AtsutaTownIllustrationPath = "Generated/town_atsuta";
-        public const string NagoyaTownIllustrationPath = "Generated/town_nagoya";
+        public const string IconsAtlasPath = "UI/ui_icons_atlas";
+        public const string PortraitsAtlasPath = "Characters/clan_portraits_atlas";
+        public const string ParchmentPath = "UI/parchment_tile";
+        public const string IndigoPatternPath = "UI/indigo_pattern_tile";
+        public const string EventIllustrationPath = "Events/event_rainy_visitor";
+        public const string WorldMapIllustrationPath = "Maps/world_map_illustration";
+        public const string KiyosuTownIllustrationPath = "Locations/town_kiyosu";
+        public const string AtsutaTownIllustrationPath = "Locations/town_atsuta";
+        public const string NagoyaTownIllustrationPath = "Locations/town_nagoya";
 
         // Sprite indices inside the generated 4x4 icon atlas (row-major, top-left
         // first). The names are the importer's stable ui_icons_atlas_N entries.

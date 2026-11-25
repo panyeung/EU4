@@ -15,7 +15,7 @@ namespace SengokuChronicle.Tests.EditMode
 {
     /// <summary>
     /// Focused EditMode coverage for the five original generated UI assets under
-    /// Assets/Resources/Generated (docs/ART_ASSET_WORKFLOW.md): the six-portrait
+    /// Assets/Art/Resources (ui设计规划.md §10): the six-portrait
     /// clan atlas, the sixteen-icon atlas, the rainy-visitor event illustration,
     /// and the parchment/indigo surface tiles. Asserts the importer configuration,
     /// the runtime loaders, the navigator's page integration, and the M02 scene
@@ -106,15 +106,15 @@ namespace SengokuChronicle.Tests.EditMode
         [Test]
         public void OriginalUiArt_MatchesTheRecordedNativePixelDimensions()
         {
-            AssertDimensions("Assets/Resources/Generated/clan_portraits_atlas.png", 1024, 1536);
-            AssertDimensions("Assets/Resources/Generated/ui_icons_atlas.png", 1312, 1199);
-            AssertDimensions("Assets/Resources/Generated/parchment_tile.png", 1254, 1254);
-            AssertDimensions("Assets/Resources/Generated/indigo_pattern_tile.png", 1254, 1254);
-            AssertDimensions("Assets/Resources/Generated/world_map_illustration.png", 1672, 941);
-            AssertDimensions("Assets/Resources/Generated/event_rainy_visitor.png", 1672, 941);
-            AssertDimensions("Assets/Resources/Generated/town_kiyosu.png", 1672, 941);
-            AssertDimensions("Assets/Resources/Generated/town_atsuta.png", 1672, 941);
-            AssertDimensions("Assets/Resources/Generated/town_nagoya.png", 1672, 941);
+            AssertDimensions("Assets/Art/Resources/Characters/clan_portraits_atlas.png", 1024, 1536);
+            AssertDimensions("Assets/Art/Resources/UI/ui_icons_atlas.png", 1312, 1199);
+            AssertDimensions("Assets/Art/Resources/UI/parchment_tile.png", 1254, 1254);
+            AssertDimensions("Assets/Art/Resources/UI/indigo_pattern_tile.png", 1254, 1254);
+            AssertDimensions("Assets/Art/Resources/Maps/world_map_illustration.png", 1672, 941);
+            AssertDimensions("Assets/Art/Resources/Events/event_rainy_visitor.png", 1672, 941);
+            AssertDimensions("Assets/Art/Resources/Locations/town_kiyosu.png", 1672, 941);
+            AssertDimensions("Assets/Art/Resources/Locations/town_atsuta.png", 1672, 941);
+            AssertDimensions("Assets/Art/Resources/Locations/town_nagoya.png", 1672, 941);
             AssertDimensions("Assets/Art/UI/start_screen_background.png", 1672, 941);
         }
 

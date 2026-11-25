@@ -3,6 +3,7 @@
   "rootNamespace": "SengokuChronicle.PlayModeTests",
   "references": [
     "SengokuChronicle.Application",
+    "SengokuChronicle.Domain",
     "SengokuChronicle.Presentation",
     "Unity.InputSystem",
     "Unity.InputSystem.TestFramework",
@@ -15,6 +16,7 @@
   "assemblyReferences": [],
   "assemblyDefinitionReferences": [
     "SengokuChronicle.Application",
+    "SengokuChronicle.Domain",
     "SengokuChronicle.Presentation",
     "Unity.InputSystem",
     "Unity.InputSystem.TestFramework",

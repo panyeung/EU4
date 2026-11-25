@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using NUnit.Framework;
@@ -1420,7 +1421,7 @@ namespace SengokuChronicle.Tests.EditMode
                 "the page must not fall back to placeholder text for a live roster");
 
             // Stats and resources come from the domain, never from concept-art numbers.
-            Assert.That(view.StatLine.Split('/').Length, Is.EqualTo(4));
+            Assert.That(view.StatLine.Split('/').Length, Is.EqualTo(5));
             IndustryResources resources = _session.Industry.Resources;
             string people = MarketSettlement.CountLivingFamilyMembers(_session.Succession)
                 .ToString(System.Globalization.CultureInfo.InvariantCulture);
@@ -2186,6 +2187,321 @@ namespace SengokuChronicle.Tests.EditMode
                 "M08 修复必须保留 M03 查看器的覆盖层座次");
             Assert.That(AddM08CampaignReviewPanel.Validate(_scene, out m08Error), Is.True,
                 m08Error);
+        }
+
+        [Test]
+        public void PageView_GrowthCardsShowFiveDomainValuesInOrderAndTrackTheDomain()
+        {
+            M2RosterRow head = _session.FamilyRoster.Single(row => row.IsHead);
+            SetGrowth(head.PersonId, CharacterGrowthValues.CreateClamped(1, 2, 3, 4, 5));
+
+            DailyActionPanel panel = Panel();
+            panel.Open();
+            CharacterDailyPageView view = View();
+
+            Assert.That(view.StatLine, Is.EqualTo("1/2/3/4/5"),
+                "五张卡必须按领域顺序 忍术/武艺/学问/经营/社交");
+            Assert.That(_session.Development.TryGetValues(head.PersonId,
+                out CharacterGrowthValues values), Is.True);
+            Assert.That(values.Management, Is.EqualTo(4),
+                "经营卡读取的是已持久化的领域值");
+            Assert.That(Find(AddM02DailyActionPanel.ManagementValueName)
+                .GetComponent<Text>().text, Is.EqualTo("4"));
+            Assert.That(Find(AddM02DailyActionPanel.ManagementFillName)
+                .GetComponent<Image>().fillAmount, Is.EqualTo(0.04f).Within(0.001f));
+        }
+
+        [Test]
+        public void PageView_GrowthCardsDistinguishAMissingRowFromARecordedZero()
+        {
+            M2RosterRow head = _session.FamilyRoster.Single(row => row.IsHead);
+            M2RosterRow other = _session.FamilyRoster.First(row => !row.IsHead);
+
+            RemoveGrowth(head.PersonId);
+            SetGrowth(other.PersonId, CharacterGrowthValues.CreateClamped(0, 0, 0, 0, 0));
+
+            DailyActionPanel panel = Panel();
+            panel.Open();
+            CharacterDailyPageView view = View();
+
+            panel.SelectPerson(head.PersonId);
+            Assert.That(view.StatLine, Is.EqualTo("—/—/—/—/—"),
+                "没有成长记录的人不显示已记录值");
+            Assert.That(Find(AddM02DailyActionPanel.ManagementFillName)
+                .GetComponent<Image>().fillAmount, Is.EqualTo(0f));
+
+            panel.SelectPerson(other.PersonId);
+            Assert.That(view.StatLine, Is.EqualTo("0/0/0/0/0"),
+                "已记录的 0 必须与缺少记录区分");
+            Assert.That(Find(AddM02DailyActionPanel.ManagementFillName)
+                .GetComponent<Image>().fillAmount, Is.EqualTo(0f));
+        }
+
+        [Test]
+        public void PageView_ManagementValueFollowsTheSelectedPerson()
+        {
+            M2RosterRow head = _session.FamilyRoster.Single(row => row.IsHead);
+            M2RosterRow other = _session.FamilyRoster.First(row => !row.IsHead);
+            SetGrowth(head.PersonId, CharacterGrowthValues.CreateClamped(1, 2, 3, 4, 5));
+            SetGrowth(other.PersonId, CharacterGrowthValues.CreateClamped(5, 4, 3, 2, 1));
+
+            DailyActionPanel panel = Panel();
+            panel.Open();
+            CharacterDailyPageView view = View();
+
+            panel.SelectPerson(head.PersonId);
+            Assert.That(view.StatLine, Is.EqualTo("1/2/3/4/5"));
+            panel.SelectPerson(other.PersonId);
+            Assert.That(view.StatLine, Is.EqualTo("5/4/3/2/1"),
+                "经营卡不得沿用上一位人物的值");
+        }
+
+        [Test]
+        public void PageView_HistoryLabelsEveryCategoryOnceFromTheSharedMap()
+        {
+            M2RosterRow head = _session.FamilyRoster.Single(row => row.IsHead);
+            string headId = head.PersonId.Value;
+            string headName = head.DisplayName;
+
+            FamilyChronicleEntry[] firstHalf =
+            {
+                ChronicleEntry(1, ChronicleCategory.Event, headId, "event.test", "事件标题", null),
+                ChronicleEntry(2, ChronicleCategory.Relationship, headId, "relation.test",
+                    "关系标题", null, 10, 20),
+                // 任务与研究记录的 SubjectId 是各自领域的 ID，因此它们靠既有的姓名回退
+                // 出现在人物经历里。
+                ChronicleEntry(3, ChronicleCategory.Mission,
+                    FamilyChronicleEntry.SupplyShortageMissionId, "mission.test",
+                    headName + " 的任务", null, 0, 0,
+                    (int)SupplyShortageStage.Accepted, (int)SupplyShortageStage.Investigated),
+                ChronicleEntry(4, ChronicleCategory.Succession, headId, "succession.test",
+                    "继承标题", null, 0, 0, 0, 0,
+                    (int)SuccessionPhase.None, (int)SuccessionPhase.AwaitingSuccessionChoice),
+                ChronicleEntry(5, ChronicleCategory.Industry, headId, "industry.test",
+                    "产业标题", "产业摘要", 1, 2),
+                ChronicleEntry(6, ChronicleCategory.Education, headId, "education.test",
+                    "教育标题", "教育摘要", 0, 5)
+            };
+            FamilyChronicleEntry[] secondHalf =
+            {
+                ChronicleEntry(7, ChronicleCategory.Research,
+                    FamilyResearchCatalog.SmokeMixingResearchId,
+                    FamilyResearchCatalog.SmokeMixingTechniqueId,
+                    headName + " 的研究", "研究摘要", 0, 1),
+                ChronicleEntry(8, ChronicleCategory.FamilyFormation, headId,
+                    FamilyChronicleEntry.BirthSourceId, "出生标题", "出生摘要"),
+                ChronicleEntry(9, ChronicleCategory.NaturalDeath, headId,
+                    FamilyChronicleEntry.NaturalDeathSourceId, "离世标题", "离世摘要")
+            };
+
+            DailyActionPanel panel = Panel();
+            panel.Open();
+            CharacterDailyPageView view = View();
+
+            view.RenderHistory(firstHalf, head.PersonId);
+            string first = view.HistoryTextLine;
+            AssertEveryHistoryRowHasLeadingLabel(first);
+            Assert.That(first, Does.StartWith("◆【教育】"),
+                "每条记录都以类别标签开头；教育行先加 ◆");
+            Assert.That(first, Does.Contain("1560年4月"),
+                "日期仍排在行首标签之后");
+            Assert.That(first, Does.Contain("【事件】"));
+            Assert.That(first, Does.Contain("【关系】"));
+            Assert.That(first, Does.Contain("【任务】"));
+            Assert.That(first, Does.Contain("【继承】"));
+            Assert.That(first, Does.Contain("【产业】"));
+
+            view.RenderHistory(secondHalf, head.PersonId);
+            string second = view.HistoryTextLine;
+            AssertEveryHistoryRowHasLeadingLabel(second);
+            Assert.That(second, Does.StartWith("【人物离世】"),
+                "非教育行以【类别】开头且不带 ◆");
+            Assert.That(second, Does.Contain("【研究】"));
+            Assert.That(second, Does.Contain("【家族关系】"),
+                "出生来源使用「家族关系」标签，不显示婚姻/收养");
+            Assert.That(second, Does.Not.Contain("婚姻"));
+            Assert.That(second, Does.Not.Contain("收养"));
+        }
+
+        [Test]
+        public void PageView_EducationRowsBelongToTheStableIdAndOtherRowsKeepTheNameFallback()
+        {
+            M2RosterRow head = _session.FamilyRoster.Single(row => row.IsHead);
+            M2RosterRow other = _session.FamilyRoster.First(row => !row.IsHead);
+            string headName = head.DisplayName;
+
+            FamilyChronicleEntry[] entries =
+            {
+                ChronicleEntry(1, ChronicleCategory.Education, other.PersonId.Value,
+                    "education.other", headName + " 的教育记录", "同名他人的教育"),
+                ChronicleEntry(2, ChronicleCategory.Event, "person.stranger",
+                    "event.generic", "关于" + headName + "的传言", null),
+                ChronicleEntry(3, ChronicleCategory.Education, head.PersonId.Value,
+                    "education.head", "本人的教育结算", "本人的教育摘要")
+            };
+
+            DailyActionPanel panel = Panel();
+            panel.Open();
+            CharacterDailyPageView view = View();
+            view.RenderHistory(entries, head.PersonId);
+
+            string text = view.HistoryTextLine;
+            Assert.That(text, Does.StartWith("◆【教育】"),
+                "此处最新一条是教育记录，标签必须在行首");
+            Assert.That(text, Does.Contain("本人的教育结算"));
+            Assert.That(text, Does.Not.Contain("同名他人的教育"),
+                "同名他人的教育记录不得按姓名混入");
+            Assert.That(text, Does.Contain("关于" + headName + "的传言"),
+                "通用事件仍按既有姓名回退出现");
+            Assert.That(text, Does.Contain("【教育】"));
+        }
+
+        [Test]
+        public void PageView_HistoryKeepsTheNewestSixRowsOnly()
+        {
+            M2RosterRow head = _session.FamilyRoster.Single(row => row.IsHead);
+            var entries = new List<FamilyChronicleEntry>();
+            for (int i = 1; i <= 7; i++)
+                entries.Add(ChronicleEntry(i, ChronicleCategory.Event, head.PersonId.Value,
+                    "event." + i, "记录" + i, null));
+
+            DailyActionPanel panel = Panel();
+            panel.Open();
+            CharacterDailyPageView view = View();
+            view.RenderHistory(entries, head.PersonId);
+
+            string text = view.HistoryTextLine;
+            Assert.That(text, Does.StartWith("【事件】"),
+                "最旧的可见记录同样以标签开头");
+            Assert.That(text, Does.Contain("记录7"));
+            Assert.That(text, Does.Not.Contain("记录1"),
+                "最旧的记录落在六条上限之外");
+            Assert.That(text.IndexOf("记录7", StringComparison.Ordinal),
+                Is.LessThan(text.IndexOf("记录6", StringComparison.Ordinal)),
+                "记录按新到旧渲染");
+        }
+
+        [Test]
+        public void PageView_HistoryEmptyStatesUseTheExistingWording()
+        {
+            M2RosterRow head = _session.FamilyRoster.Single(row => row.IsHead);
+            DailyActionPanel panel = Panel();
+            panel.Open();
+            CharacterDailyPageView view = View();
+
+            view.RenderHistory(Array.Empty<FamilyChronicleEntry>(), head.PersonId);
+            Assert.That(view.HistoryTextLine, Is.EqualTo("家族编年史尚无记录。"));
+
+            view.RenderHistory(new[]
+            {
+                ChronicleEntry(1, ChronicleCategory.Event, "person.stranger",
+                    "event.other", "无关记录", null)
+            }, head.PersonId);
+            Assert.That(view.HistoryTextLine,
+                Is.EqualTo(head.DisplayName + " 尚无编年史记录。"));
+        }
+
+        [Test]
+        public void PageView_GrowthCardsFitTheApprovedSingleRow()
+        {
+            RectTransform profile = (RectTransform)Find("M02ProfileBody").parent;
+            string[] labels = { "忍术", "武艺", "学问", "经营", "社交" };
+            float[] expectedX = { 12f, 94f, 176f, 258f, 340f };
+
+            for (int i = 0; i < labels.Length; i++)
+            {
+                RectTransform cell = (RectTransform)Find("M02StatCell_" + labels[i]);
+                Assert.That(cell, Is.Not.Null, labels[i]);
+                Assert.That(cell.rect.width, Is.EqualTo(78f).Within(0.5f), labels[i]);
+                Assert.That(cell.anchoredPosition.x, Is.EqualTo(expectedX[i]).Within(0.5f),
+                    labels[i] + " 必须保持批准的排布位置");
+
+                var corners = new Vector3[4];
+                cell.GetWorldCorners(corners);
+                float right = profile.InverseTransformPoint(corners[2]).x;
+                Assert.That(profile.rect.xMax - right, Is.GreaterThanOrEqualTo(12f),
+                    labels[i] + " 必须保留至少 12 像素的右边距");
+            }
+        }
+
+        [Test]
+        public void PageValidator_RejectsMissingOutOfBoundsAndOverlappingGrowthCards()
+        {
+            Assert.That(AddM02DailyActionPanel.Validate(_scene, out string initialError), Is.True,
+                initialError);
+
+            UnityEngine.Object.DestroyImmediate(
+                Find(AddM02DailyActionPanel.ManagementValueName).gameObject);
+            Assert.That(AddM02DailyActionPanel.Validate(_scene, out string missingError), Is.False,
+                "缺少经营数值节点时校验必须失败");
+            Assert.That(missingError, Is.Not.Empty);
+            Assert.That(AddM02DailyActionPanel.Update(_scene),
+                Is.EqualTo(AddM02DailyActionPanel.UpdateResult.Success));
+
+            RectTransform social = (RectTransform)Find("M02StatCell_社交");
+            social.anchoredPosition += new Vector2(100f, 0f);
+            Assert.That(AddM02DailyActionPanel.Validate(_scene, out string boundsError), Is.False,
+                "卡片越过右边距时校验必须失败");
+            Assert.That(boundsError, Is.Not.Empty);
+            Assert.That(AddM02DailyActionPanel.Update(_scene),
+                Is.EqualTo(AddM02DailyActionPanel.UpdateResult.Success));
+
+            RectTransform martial = (RectTransform)Find("M02StatCell_武艺");
+            martial.anchoredPosition = new Vector2(12f, martial.anchoredPosition.y);
+            Assert.That(AddM02DailyActionPanel.Validate(_scene, out string overlapError), Is.False,
+                "两张卡占用同一位置时校验必须失败");
+            Assert.That(overlapError, Is.Not.Empty);
+        }
+
+        /// <summary>
+        /// 已批准计划要求每条渲染记录都以类别标签开头；摘要续行以全角空格开头，跳过不查。
+        /// </summary>
+        private static void AssertEveryHistoryRowHasLeadingLabel(string text)
+        {
+            string[] lines = text.Split('\n');
+            int rows = 0;
+            foreach (string line in lines)
+            {
+                if (line.Length == 0 || line[0] == '\u3000')
+                    continue;
+                bool labelled = line.StartsWith("【", StringComparison.Ordinal) ||
+                                line.StartsWith("◆【", StringComparison.Ordinal);
+                Assert.That(labelled, Is.True,
+                    "每条编年记录都必须以类别标签开头：" + line);
+                rows++;
+            }
+            Assert.That(rows, Is.GreaterThan(0), "渲染出的经历必须包含记录");
+        }
+
+        private void SetGrowth(PersonId personId, CharacterGrowthValues values)
+        {
+            var field = typeof(CharacterDevelopmentState).GetField("_entries",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            var entries = (IDictionary)field.GetValue(_session.Development);
+            object entry = entries[personId];
+            Assert.That(entry, Is.Not.Null, "出厂名册为每名成员保留一条成长记录");
+            entry.GetType().GetField("Values").SetValue(entry, values);
+        }
+
+        private void RemoveGrowth(PersonId personId)
+        {
+            var field = typeof(CharacterDevelopmentState).GetField("_entries",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            var entries = (IDictionary)field.GetValue(_session.Development);
+            entries.Remove(personId);
+        }
+
+        private static FamilyChronicleEntry ChronicleEntry(int sequence, ChronicleCategory category,
+            string subjectId, string sourceId, string title, string summary,
+            int fromValue = 0, int toValue = 0, int fromStage = 0, int toStage = 0,
+            int fromPhase = 0, int toPhase = 0, string fromHeadId = null, string toHeadId = null)
+        {
+            Assert.That(FamilyChronicleEntry.TryCreate(sequence,
+                FamilyChronicleEntry.BuildEntryId(sequence), 1560, 4, category, subjectId,
+                sourceId, title, summary, fromValue, toValue, fromStage, toStage,
+                fromPhase, toPhase, fromHeadId, toHeadId,
+                out FamilyChronicleEntry entry, out string error), Is.True, error);
+            return entry;
         }
 
         private GameObject Create(string name, Transform parent, params Type[] components) =>

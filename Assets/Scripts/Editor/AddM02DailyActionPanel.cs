@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEditor;
@@ -75,6 +75,8 @@ namespace SengokuChronicle.Editor
         public const string MartialValueName = "M02StatMartialValueText";
         public const string ScholarshipValueName = "M02StatScholarshipValueText";
         public const string SocialValueName = "M02StatSocialValueText";
+        public const string ManagementValueName = "M02StatManagementValueText";
+        public const string ManagementFillName = "M02StatManagementFill";
         public const string NinjutsuFillName = "M02StatNinjutsuFill";
         public const string MartialFillName = "M02StatMartialFill";
         public const string ScholarshipFillName = "M02StatScholarshipFill";
@@ -130,8 +132,8 @@ namespace SengokuChronicle.Editor
 
         // Original generated UI art (docs/ART_ASSET_WORKFLOW.md). The atlases are
         // sliced in the importer metadata; sub-sprites are addressed by name.
-        private const string IconsAtlasPath = "Assets/Resources/Generated/ui_icons_atlas.png";
-        private const string IndigoAtlasPath = "Assets/Resources/Generated/indigo_pattern_tile.png";
+        private const string IconsAtlasPath = "Assets/Art/Resources/UI/ui_icons_atlas.png";
+        private const string IndigoAtlasPath = "Assets/Art/Resources/UI/indigo_pattern_tile.png";
         private const string IndigoSpriteName = "indigo_pattern_tile_0";
 
         /// <summary>Loads one named sub-sprite of a generated atlas (null-safe).</summary>
@@ -316,10 +318,12 @@ namespace SengokuChronicle.Editor
             Transform ninjutsu = Require(scene, NinjutsuValueName);
             Transform martial = Require(scene, MartialValueName);
             Transform scholarship = Require(scene, ScholarshipValueName);
+            Transform management = Require(scene, ManagementValueName);
             Transform social = Require(scene, SocialValueName);
             Transform ninjutsuFill = Require(scene, NinjutsuFillName);
             Transform martialFill = Require(scene, MartialFillName);
             Transform scholarshipFill = Require(scene, ScholarshipFillName);
+            Transform managementFill = Require(scene, ManagementFillName);
             Transform socialFill = Require(scene, SocialFillName);
             Transform actionSubtitle = Require(scene, ActionSubtitleName);
             Transform progressLabel = Require(scene, ProgressLabelName);
@@ -357,9 +361,11 @@ namespace SengokuChronicle.Editor
                 profileAge == null || profileIdentity == null || profileRole == null ||
                 profileLocation == null || profileStatus == null || creedChip == null ||
                 ambitionChip == null || traitSummary == null || ninjutsu == null ||
-                martial == null || scholarship == null || social == null ||
+                martial == null || scholarship == null || management == null ||
+                social == null ||
                 ninjutsuFill == null || martialFill == null || scholarshipFill == null ||
-                socialFill == null || actionSubtitle == null || progressLabel == null ||
+                managementFill == null || socialFill == null ||
+                actionSubtitle == null || progressLabel == null ||
                 progressFill == null || schedule == null || travelInfo == null ||
                 travelScene == null || travelCard == null || inspectorTitle == null ||
                 inspectorBadge == null || inspectorSubject == null || inspectorHint == null ||
@@ -632,6 +638,12 @@ namespace SengokuChronicle.Editor
             if (!Bound(pageView, "relationsEmptyText", relationsEmptyText))
                 return Invalid(out error,
                     "The CharacterDailyPageView relationsEmptyText reference is not bound.");
+            Text managementValueText = management.GetComponent<Text>();
+            Image managementFillImage = managementFill.GetComponent<Image>();
+            if (!Bound(pageView, "managementValueText", managementValueText) ||
+                !Bound(pageView, "managementFill", managementFillImage))
+                return Invalid(out error,
+                    "CharacterDailyPageView 的经营成长值引用未绑定。");
 
             if (!Bound(panel, "gameSession", sessions[0]) ||
                 !Bound(panel, "panelRoot", panelRoot.gameObject) ||
@@ -732,12 +744,50 @@ namespace SengokuChronicle.Editor
             {
                 portraitRect, profileName as RectTransform, ninjutsuFill as RectTransform,
                 martialFill as RectTransform, scholarshipFill as RectTransform,
-                socialFill as RectTransform
+                managementFill as RectTransform, socialFill as RectTransform
             };
             foreach (RectTransform child in profileChildren)
                 if (child != null && !Contained(child, profileRect))
                     return Invalid(out error,
                         "An M02 profile control lies outside the profile panel.");
+
+            // 五张成长卡同排在 M02ProfileBody 内：必须留在 440 宽的档案面板里、保留可见右边距，
+            // 互不重叠，也不与关系标题和三张关系卡相交。
+            Transform relationHeader = Require(scene, "M02RelationHeader");
+            RectTransform[] statCells =
+            {
+                Require(scene, "M02StatCell_忍术") as RectTransform,
+                Require(scene, "M02StatCell_武艺") as RectTransform,
+                Require(scene, "M02StatCell_学问") as RectTransform,
+                Require(scene, "M02StatCell_经营") as RectTransform,
+                Require(scene, "M02StatCell_社交") as RectTransform
+            };
+            if (relationHeader == null || statCells.Any(cell => cell == null))
+                return Invalid(out error,
+                    "五张成长卡或关系标题缺失。");
+            foreach (RectTransform cell in statCells)
+            {
+                if (!Contained(cell, profileRect))
+                    return Invalid(out error,
+                        "有成长卡超出人物档案面板。");
+                var corners = new Vector3[4];
+                cell.GetWorldCorners(corners);
+                float cellRight = profileRect.InverseTransformPoint(corners[2]).x;
+                if (profileRect.rect.xMax - cellRight < 12f)
+                    return Invalid(out error,
+                        "成长卡整排的右边距不得小于 12 像素。");
+                if (Overlaps(cell, (RectTransform)relationHeader, profileRect))
+                    return Invalid(out error,
+                        "有成长卡与关系标题重叠。");
+                for (int i = 0; i < relationRoots.Length; i++)
+                    if (Overlaps(cell, (RectTransform)relationRoots[i], profileRect))
+                        return Invalid(out error,
+                            "有成长卡与关系卡重叠。");
+            }
+            for (int i = 0; i < statCells.Length; i++)
+                for (int j = i + 1; j < statCells.Length; j++)
+                    if (Overlaps(statCells[i], statCells[j], profileRect))
+                        return Invalid(out error, "成长卡之间互相重叠。");
 
             if (Overlaps((RectTransform)title, (RectTransform)summary, panelRect))
                 return Invalid(out error, "M02 overlap: title/summary.");
@@ -814,12 +864,12 @@ namespace SengokuChronicle.Editor
                 if (parchment == null || portraitSprite == null || sealSprite == null ||
                     travelSprite == null)
                     throw new InvalidOperationException(
-                        "Missing original generated M02 art under Assets/Resources/Generated. " +
+                        "Missing original generated M02 art under Assets/Art/Resources. " +
                         "Refresh the project first.");
                 if (indigo == null ||
                     pageIcons.Any(icon => icon == null))
                     throw new InvalidOperationException(
-                        "Missing generated UI art under Assets/Resources/Generated. " +
+                        "Missing generated UI art under Assets/Art/Resources. " +
                         "Refresh the project first.");
 
                 if (existingRoot != null)
@@ -1248,13 +1298,15 @@ namespace SengokuChronicle.Editor
 
             CreateSectionHeader(scene, bodyRect, font, "M02StatsHeader", "能力属性", 350f);
             CreateStat(scene, bodyRect, font, "忍术", NinjutsuValueName, NinjutsuFillName,
-                "忍", 12f, 374f);
+                "忍", 12f, 374f, 78f);
             CreateStat(scene, bodyRect, font, "武艺", MartialValueName, MartialFillName,
-                "武", 114f, 374f);
+                "武", 94f, 374f, 78f);
             CreateStat(scene, bodyRect, font, "学问", ScholarshipValueName,
-                ScholarshipFillName, "学", 216f, 374f);
+                ScholarshipFillName, "学", 176f, 374f, 78f);
+            CreateStat(scene, bodyRect, font, "经营", ManagementValueName,
+                ManagementFillName, "营", 258f, 374f, 78f);
             CreateStat(scene, bodyRect, font, "社交", SocialValueName, SocialFillName,
-                "交", 318f, 374f);
+                "交", 340f, 374f, 78f);
 
             CreateSectionHeader(scene, bodyRect, font, "M02RelationHeader", "关系网（主要关系）",
                 440f);
@@ -1316,28 +1368,28 @@ namespace SengokuChronicle.Editor
         }
 
         private static void CreateStat(Scene scene, Transform parent, Font font, string label,
-            string valueName, string fillName, string glyph, float x, float y)
+            string valueName, string fillName, string glyph, float x, float y, float width)
         {
             Image cell = CreateImage(scene, parent, "M02StatCell_" + label,
                 SengokuUiTheme.ParchmentLight);
             cell.raycastTarget = false;
-            PlaceTopLeft(cell.transform, new Vector2(x, y), new Vector2(98f, 58f));
+            PlaceTopLeft(cell.transform, new Vector2(x, y), new Vector2(width, 58f));
             AddBorder(scene, cell.rectTransform, "M02StatBorder_" + label,
                 SengokuUiTheme.PaperLine, 0f, 1f);
             Text icon = CreateText(scene, cell.transform, "M02StatIcon_" + label, font, glyph,
-                6f, 4f, 16f, 18f, 11, TextAnchor.MiddleCenter);
+                3f, 4f, 14f, 18f, 11, TextAnchor.MiddleCenter);
             icon.color = SengokuUiTheme.Vermilion;
             Text caption = CreateText(scene, cell.transform, "M02StatLabel_" + label, font,
-                label, 22f, 4f, 44f, 18f, 10, TextAnchor.MiddleLeft);
+                label, 18f, 4f, 28f, 18f, 10, TextAnchor.MiddleLeft);
             caption.color = SengokuUiTheme.InkSoft;
             Text value = CreateText(scene, cell.transform, valueName, font, "—",
-                66f, 4f, 26f, 18f, 12, TextAnchor.MiddleRight);
+                46f, 4f, 26f, 18f, 12, TextAnchor.MiddleRight);
             value.color = SengokuUiTheme.Ink;
             value.fontStyle = FontStyle.Bold;
             Image bar = CreateImage(scene, cell.transform, "M02StatBar_" + label,
                 new Color32(0xD3, 0xC2, 0xA4, 0xFF));
             bar.raycastTarget = false;
-            PlaceTopLeft(bar.transform, new Vector2(6f, 42f), new Vector2(86f, 6f));
+            PlaceTopLeft(bar.transform, new Vector2(3f, 42f), new Vector2(72f, 6f));
             Image fill = CreateImage(scene, bar.transform, fillName, SengokuUiTheme.Jade);
             fill.raycastTarget = false;
             fill.type = Image.Type.Filled;
@@ -1695,10 +1747,12 @@ namespace SengokuChronicle.Editor
             Set(serialized, "ninjutsuValueText", Find<Text>(scene, NinjutsuValueName));
             Set(serialized, "martialValueText", Find<Text>(scene, MartialValueName));
             Set(serialized, "scholarshipValueText", Find<Text>(scene, ScholarshipValueName));
+            Set(serialized, "managementValueText", Find<Text>(scene, ManagementValueName));
             Set(serialized, "socialValueText", Find<Text>(scene, SocialValueName));
             Set(serialized, "ninjutsuFill", Find<Image>(scene, NinjutsuFillName));
             Set(serialized, "martialFill", Find<Image>(scene, MartialFillName));
             Set(serialized, "scholarshipFill", Find<Image>(scene, ScholarshipFillName));
+            Set(serialized, "managementFill", Find<Image>(scene, ManagementFillName));
             Set(serialized, "socialFill", Find<Image>(scene, SocialFillName));
 
             var relationRoots = new UnityEngine.Object[3];

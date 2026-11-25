@@ -95,6 +95,7 @@ SC-021 场景集成（`5885315`）与 SC-023 演示接入（`115ffa7`）已进�
 - `docs/reports/v1-demo-package-20261118.md`：v1 Windows 演示包的运行步骤、试玩路线、缺口与回滚点。
 - `docs/reports/20261118-completion-report.md`：完成情况与逐条证据。
 - `ui设计规划.md`：UI 规则与美术资产登记。
+- `docs/maps/geonames-attribution.md`：37 个地图区域锚点的来源、许可、精度口径与逐点追溯。
 - `docs/console-基线归因表.md`：Console 里每一条 error 的归因。
 - `AGENTS.md`：代理协作规则，不属于设计文档。
 

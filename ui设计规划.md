@@ -1,6 +1,6 @@
 # 《影之一族》UI 设计规划
 
-更新时间 2026-11-17。本文是全部 UI 设计、视觉规则与美术资产规范的唯一入口。
+更新时间 2026-11-24。本文是全部 UI 设计、视觉规则与美术资产规范的唯一入口。
 游戏设计与 checkpoint 见 [checkpoint.md](checkpoint.md)。色板数值取自 `Assets/Scripts/Presentation/SengokuUiTheme.cs`，其余取值来自原 UI 路线图，代码未定义的项已标注。
 
 ---
@@ -198,7 +198,7 @@ M04 版式约束已由测试锁定。1280×600 下面板高 440、摘要条带�
 | 生成前 | 在功能简报记录目标原生像素、图集网格、显示区域。1280×720 只是逻辑画布。参考图只指导风格与构图，素材必须原创 |
 | 导入前 | 核验 PNG 原生尺寸与图集单元布局，不符先重生成或转换，禁止先放进 `Assets/` |
 | 登记 | 记录项目路径、用途、生成来源、许可、核验尺寸。文件用描述性名称如 `town_kiyosu.png` |
-| 存放 | 原始生成文件留在仓库外，精选成品进 `Assets/`。图集从 `Assets/Resources/Generated/` 加载并切片。标题底图在 `Assets/Art/UI/start_screen_background.png` |
+| 存放 | 原始生成文件留在仓库外，项目内美术统一进 `Assets/Art/`。运行时资产放 `Assets/Art/Resources/<类别>/`，`Resources.Load` 键相对 `Assets/Art/Resources/`；编辑器与场景直接引用的资产放 `Assets/Art/UI/`；项目内参考图只归档到 `Assets/Art/Reference/`，不进入任何 `Resources` 目录 |
 | 许可 | 生成素材记为本项目原创，不复制第三方或商业游戏资产。Unity UI 与内置字体遵适用许可 |
 | 禁止 | 不描摹商业游戏，不把文字按钮数据烘焙进图片，不把截屏或整页 mockup 当资产。Computer Use 截图检查后立即删除 |
 
@@ -206,21 +206,38 @@ M04 版式约束已由测试锁定。1280×600 下面板高 440、摘要条带�
 
 | 路径 | 尺寸 | 用途 |
 |---|---|---|
-| `Assets/Resources/Generated/clan_portraits_atlas.png` | 1024×1536 | 2×3 图集，六张肖像 |
-| `Assets/Resources/Generated/event_rainy_visitor.png` | 1672×941 | 雨夜信使事件插画 |
-| `Assets/Resources/Generated/indigo_pattern_tile.png` | 1254×1254 | 深靛金纹 |
-| `Assets/Resources/Generated/parchment_tile.png` | 1254×1254 | 低对比纸纹 |
-| `Assets/Resources/Generated/town_kiyosu.png` | 1672×941 | 清洲 |
-| `Assets/Resources/Generated/town_atsuta.png` | 1672×941 | 热田 |
-| `Assets/Resources/Generated/town_nagoya.png` | 1672×941 | 那古野 |
-| `Assets/Resources/Generated/ui_icons_atlas.png` | 1312×1199 | 4×4 图集，16 图标 |
-| `Assets/Resources/Generated/world_map_illustration.png` | 1672×941 | 无文字地区地图 |
+| `Assets/Art/Resources/Characters/clan_portraits_atlas.png` | 1024×1536 | 2×3 图集，六张肖像 |
+| `Assets/Art/Resources/Events/event_rainy_visitor.png` | 1672×941 | 雨夜信使事件插画 |
+| `Assets/Art/Resources/UI/indigo_pattern_tile.png` | 1254×1254 | 深靛金纹 |
+| `Assets/Art/Resources/UI/parchment_tile.png` | 1254×1254 | 低对比纸纹 |
+| `Assets/Art/Resources/Locations/town_kiyosu.png` | 1672×941 | 清洲 |
+| `Assets/Art/Resources/Locations/town_atsuta.png` | 1672×941 | 热田 |
+| `Assets/Art/Resources/Locations/town_nagoya.png` | 1672×941 | 那古野 |
+| `Assets/Art/Resources/UI/ui_icons_atlas.png` | 1312×1199 | 4×4 图集，16 图标 |
+| `Assets/Art/Resources/Maps/world_map_illustration.png` | 1672×941 | 无文字地区地图 |
+| `Assets/Art/Resources/Maps/japan_geographic_basemap.png` | 1824×2048 | 日本全境底图，`JapanMapBasemap` 加载 |
 | `Assets/Art/UI/start_screen_background.png` | 1672×941 | 标题底图，`M6TitleRoot` 使用 |
+| `Assets/Art/UI/seal.png` | 44×44 | 标题印章，`AddM6TitleScreen` 迁移夹具加载 |
+| `Assets/Welcome/2d-template.png` | 模板图 | Unity 2D 模板资源，不归入游戏美术，保持原位 |
 
 日本全境离散地图（t40 当前登记）：无新增 PNG、图集或分发字体文件。五畿七道目录、68 旧国、37 旅行枢纽、40 条路线与证据分类标签均为代码文本数据；`FoundationScene` 通过 `JapanMapSceneBootstrap` 在运行时创建“全国地图”入口，界面优先使用 uGUI 与 TextMeshPro。字体只从批准的 CJK 系统字体列表选择：TMP Settings 可用且创建成功时使用动态 TMP 字体，TMP Settings 缺失或创建失败时用 uGUI `Text`；没有批准字体时状态/警告字符串与 `Debug.LogWarning` 记录缺字并停止渲染文本；无字体时 UI 字符串本身也可能不可见，以 Console 警告为可审计提示。不遍历其他系统字体，不使用 TMP 默认字体或内置 `LegacyRuntime`/Arial 替代。实际字体覆盖、字形与许可仍待实机验收；史料来源、许可与阶段边界见 `docs/maps/japan-discrete-map-implementation.md`。
 
-历史参考裁片，非生产素材，待夹具不再引用后移除。
-`Assets/Art/UI/paper_grain.png` 512×512、`Assets/Art/UI/ReferenceArt/portrait_elder.png` 118×118、`portrait_main.png` 212×256、`portrait_master.png` 118×118、`portrait_youth.png` 115×115、`seal.png` 44×44、`travel_scene.png` 102×76、`Assets/Resources/ReferenceArt/map_illustration.png` 908×854，以及 `Assets/Resources/ReferenceArt/` 下同名四张肖像。
+项目内参考图统一归档在 `Assets/Art/Reference/`，只作风格与构图参考，不进入运行时，也不因归档规则删除。`Assets/Art/Reference/ArtUI/` 下 `paper_grain.png` 512×512、`portrait_elder.png` 118×118、`portrait_main.png` 212×256、`portrait_master.png` 118×118、`portrait_youth.png` 115×115、`travel_scene.png` 102×76；`Assets/Art/Reference/FromResources/`（原 `Assets/Resources/ReferenceArt` 的归档位置，刻意不叫 `Resources`，避免成为 Unity Resources 根）下 `map_illustration.png` 908×854 与同名四张肖像。四张肖像在两组目录中各有一份字节相同、`.meta` GUID 不同的文件，按归档规则保留两份，不去重。此前的“夹具不再引用后移除”说法由本归档规则取代。`seal.png` 44×44 由标题 updater 实际加载，按 UI 成品归入 `Assets/Art/UI/seal.png`。
+
+目录约定（2026-11-24 整理）。
+
+| 目录 | 内容 |
+|---|---|
+| `Assets/Art/Resources/Characters/` | 人物画像图集 |
+| `Assets/Art/Resources/Maps/` | 日本底图、地区地图 |
+| `Assets/Art/Resources/Locations/` | 清洲、热田、那古野地点图 |
+| `Assets/Art/Resources/UI/` | UI 图标与纹理图集 |
+| `Assets/Art/Resources/Events/` | 事件插画 |
+| `Assets/Art/UI/` | 标题底图、标题印章等直接资产 |
+| `Assets/Art/Reference/ArtUI/` | 原 `Assets/Art/UI` 中的参考图 |
+| `Assets/Art/Reference/FromResources/` | 原 `Assets/Resources/ReferenceArt` 中的参考图；目录名刻意不含 `Resources` |
+
+四季素材预留 `Assets/Art/Resources/Locations/Seasonal/<地点>/<Season>/`，`Season` 取 `Spring`、`Summer`、`Autumn`、`Winter`；本次既不生成四季图片，也不创建空占位目录。四季素材范围已由用户批准：覆盖全部 37 个地图枢纽、每枢纽四季，共 148 张；原画方案与命名约定另行起草并先经审阅，定案前不得缩减地点数。
 
 M02 实际画布尺寸。
 

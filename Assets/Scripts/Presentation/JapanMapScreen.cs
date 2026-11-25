@@ -6,6 +6,7 @@ using SengokuChronicle.Domain;
 using TMPro;
 using UnityEngine;
 using UnityEngine.Events;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 namespace SengokuChronicle.Presentation
@@ -14,6 +15,11 @@ namespace SengokuChronicle.Presentation
     /// Runtime uGUI screen over the authoritative JapanMapExplorer and GameSession.
     /// It owns no travel state: preview and confirmation go through GameSession, so
     /// the map, the M02 buttons and save data all read the same world state.
+    /// <para>
+    /// 地图区域是一个裁切视口，直接子级 <c>MapContent</c> 承载路线层与节点层。
+    /// 缩放与平移只改这一层 <see cref="JapanMapViewport"/> 变换；目录、筛选、
+    /// 详情和按钮保持固定尺寸。旅行、日期、存档和稳定 ID 的语义不变。
+    /// </para>
     /// </summary>
     public sealed class JapanMapScreen : MonoBehaviour
     {
@@ -32,9 +38,15 @@ namespace SengokuChronicle.Presentation
         private RectTransform _catalogContent;
         private ScrollRect _catalogScroll;
         private RectTransform _mapArea;
+        private RectTransform _mapContent;
+        private readonly JapanMapViewport _mapViewport = new JapanMapViewport();
+        private JapanMapViewportInput _mapInput;
         private Vector2 _lastMapSize;
+        private RectTransform _basemap;
         private RectTransform _lineLayer;
         private RectTransform _nodeLayer;
+        private Button[] _focusButtons = System.Array.Empty<Button>();
+        private Outline[] _focusOutlines = System.Array.Empty<Outline>();
         private Graphic _detail;
         private Graphic _feedbackText;
         private Button _confirmButton;
@@ -90,6 +102,7 @@ namespace SengokuChronicle.Presentation
             EnsureExplorer();
             RebuildAll();
             Canvas.ForceUpdateCanvases();
+            FocusInitialControl();
         }
 
         private void EnsureBuilt()
@@ -112,6 +125,17 @@ namespace SengokuChronicle.Presentation
                 Close();
             else
                 Open();
+        }
+
+        /// <summary>
+        /// 视口尺寸变化后重新适配全境。运行时由 <see cref="LateUpdate"/> 自动调用；
+        /// 尺寸已知但帧回调尚未运行时（例如 EditMode 回归）可显式调用。
+        /// </summary>
+        public void RefreshMapViewport()
+        {
+            if (!_built)
+                return;
+            RebuildMap();
         }
 
         public bool SelectHub(string hubId)
@@ -162,10 +186,16 @@ namespace SengokuChronicle.Presentation
 
         private void LateUpdate()
         {
+            // 键盘焦点提示只跟随 EventSystem 的选择，不改变旅行状态；
+            // 地图内容尚未布局时也要先刷新，避免方向键移动后没有可见反馈。
+            if (!IsOpen)
+                return;
+            RefreshFocusVisuals();
+
             // The map area changes size when the window is resized. Rebuild on the
             // first usable layout and whenever either dimension moves, so nodes and
             // route lines share the new adaptive grid instead of overlapping.
-            if (!IsOpen || _mapArea == null || _nodeLayer == null)
+            if (_mapArea == null || _nodeLayer == null)
                 return;
             Rect size = _mapArea.rect;
             if (size.width <= 1f || size.height <= 1f)
@@ -372,20 +402,26 @@ namespace SengokuChronicle.Presentation
 
         private void RebuildMap()
         {
-            if (_mapArea == null || _nodeLayer == null || _lineLayer == null)
+            if (_mapArea == null || _mapContent == null || _nodeLayer == null ||
+                _lineLayer == null)
                 return;
-            DestroyChildren(_nodeLayer);
-            DestroyChildren(_lineLayer);
 
             Rect size = _mapArea.rect;
             if (size.width <= 1f || size.height <= 1f)
                 return;
 
+            var extent = new Vector2(size.width, size.height);
+            EnsureViewport(extent);
+            if (_basemap != null)
+                _basemap.sizeDelta = JapanGeoProjection.FitMapSize(extent);
+            DestroyChildren(_nodeLayer);
+            DestroyChildren(_lineLayer);
+
             IReadOnlyList<JapanMapHub> hubs = JapanTravelGraph.Hubs;
-            JapanMapLayoutResult layout =
-                JapanMapLayout.ComputeLayout(hubs, new Vector2(size.width, size.height));
+            // 落点由 GeoNames 锚点的经纬度投影决定；MapX/MapY 只保留给
+            // JapanMapLayout 的兼容路径，不再决定这个屏幕的节点位置。
+            JapanMapLayoutResult layout = JapanMapGeoLayout.ComputeLayout(hubs, extent);
             Vector2[] nodePositions = layout.Positions;
-            _lastMapSize = new Vector2(size.width, size.height);
 
             IReadOnlyList<JapanMapRoute> routes = JapanTravelGraph.Routes;
             for (int i = 0; i < routes.Count; i++)
@@ -404,6 +440,27 @@ namespace SengokuChronicle.Presentation
 
             for (int i = 0; i < hubs.Count; i++)
                 CreateHubNode(hubs[i], nodePositions[i], layout.NodeSize);
+        }
+
+        /// <summary>
+        /// 视口尺寸决定全境几何。首次绑定或尺寸变化时把 mapContent 的矩形设为
+        /// 新的全境尺寸并回到 1x；尺寸不变时只按当前倍率刷新边界，因此选择枢纽
+        /// 重建节点不会重置玩家的缩放和平移。
+        /// </summary>
+        private void EnsureViewport(Vector2 extent)
+        {
+            _mapContent.sizeDelta = extent;
+            bool resized = !_mapViewport.IsBound ||
+                           Mathf.Abs(extent.x - _lastMapSize.x) > 0.5f ||
+                           Mathf.Abs(extent.y - _lastMapSize.y) > 0.5f;
+            if (resized)
+            {
+                _lastMapSize = extent;
+                _mapViewport.Bind(_mapArea, _mapContent);
+                return;
+            }
+
+            _mapViewport.Refresh();
         }
 
         private static Vector2 NodePosition(IReadOnlyList<JapanMapHub> hubs,
@@ -461,7 +518,7 @@ namespace SengokuChronicle.Presentation
             var button = nodeObject.GetComponent<Button>();
             button.targetGraphic = image;
             string hubId = hub.Id;
-            button.onClick.AddListener(() => SelectHub(hubId));
+            button.onClick.AddListener(() => SelectHubFromMap(hubId));
 
             Graphic label = JapanMapFonts.CreateText(rect, "Label", 11,
                 TextAlignmentOptions.Center);
@@ -537,20 +594,42 @@ namespace SengokuChronicle.Presentation
             _catalogScroll.viewport = viewport;
             _catalogScroll.content = _catalogContent;
 
-            CreateButton(_root, "AllRoutesButton", "全部路线", new Vector2(0.31f, 0.82f),
-                new Vector2(0.40f, 0.87f), ShowAllRoutes, 12);
-            CreateButton(_root, "LandRoutesButton", "仅陆路", new Vector2(0.405f, 0.82f),
-                new Vector2(0.495f, 0.87f), ShowLandRoutes, 12);
-            CreateButton(_root, "SeaRoutesButton", "仅海路", new Vector2(0.50f, 0.82f),
-                new Vector2(0.59f, 0.87f), ShowSeaRoutes, 12);
-            CreateButton(_root, "CurrentButton", "定位当前地点", new Vector2(0.60f, 0.82f),
-                new Vector2(0.72f, 0.87f), SelectCurrent, 12);
+            Button allRoutesButton = CreateButton(_root, "AllRoutesButton", "全部路线",
+                new Vector2(0.31f, 0.82f), new Vector2(0.40f, 0.87f), ShowAllRoutes, 12);
+            Button landRoutesButton = CreateButton(_root, "LandRoutesButton", "仅陆路",
+                new Vector2(0.405f, 0.82f), new Vector2(0.495f, 0.87f), ShowLandRoutes, 12);
+            Button seaRoutesButton = CreateButton(_root, "SeaRoutesButton", "仅海路",
+                new Vector2(0.50f, 0.82f), new Vector2(0.59f, 0.87f), ShowSeaRoutes, 12);
+            Button currentButton = CreateButton(_root, "CurrentButton", "定位当前地点",
+                new Vector2(0.60f, 0.82f), new Vector2(0.72f, 0.87f), SelectCurrent, 12);
+            _focusButtons = new[] { allRoutesButton, landRoutesButton, seaRoutesButton, currentButton };
+            ConfigureFocusNavigation(_focusButtons);
+            _focusOutlines = new Outline[_focusButtons.Length];
+            for (int i = 0; i < _focusButtons.Length; i++)
+                _focusOutlines[i] = AddFocusOutline(_focusButtons[i]);
 
             _mapArea = CreatePanel("JapanMapArea", _root, new Vector2(0.31f, 0.36f),
                 new Vector2(0.985f, 0.81f), new Color(0.075f, 0.095f, 0.12f, 1f));
-            _lineLayer = NewRect("RouteLines", _mapArea, Vector2.zero, Vector2.one);
-            _nodeLayer = NewRect("HubNodes", _mapArea, Vector2.zero, Vector2.one);
-            _lineLayer.SetAsFirstSibling();
+            // 地图区域是唯一裁切视口：缩放和平移只改 MapContent 的变换，
+            // 路线层与节点层都挂在它下面，共享同一套变换和裁切。
+            _mapArea.gameObject.AddComponent<RectMask2D>();
+            _mapInput = _mapArea.gameObject.AddComponent<JapanMapViewportInput>();
+            _mapInput.Bind(_mapViewport);
+
+            _mapContent = NewRect("MapContent", _mapArea,
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+            _mapContent.sizeDelta = Vector2.zero;
+
+            // 底图是 MapContent 的最底层，与路线、枢纽共用同一套缩放/平移变换；
+            // 矩形由 JapanGeoProjection.FitMapSize 决定，保持 1824×2048 原比例。
+            _basemap = NewRect("Basemap", _mapContent,
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+            var basemapImage = _basemap.gameObject.AddComponent<Image>();
+            JapanMapBasemap.Apply(basemapImage, JapanMapBasemap.LoadSprite());
+
+            _lineLayer = NewRect("RouteLines", _mapContent, Vector2.zero, Vector2.one);
+            _nodeLayer = NewRect("HubNodes", _mapContent, Vector2.zero, Vector2.one);
+            _basemap.SetAsFirstSibling();
             _nodeLayer.SetAsLastSibling();
 
             var detailPanel = CreatePanel("DetailPanel", _root, new Vector2(0.31f, 0.02f),
@@ -603,6 +682,17 @@ namespace SengokuChronicle.Presentation
             if (!EnsureExplorer() || string.IsNullOrEmpty(_explorer.CurrentHubId))
                 return;
             SelectHub(_explorer.CurrentHubId);
+        }
+
+        /// <summary>
+        /// 地图节点的短按沿用原来的选择与旅行预览。拖动已经超过 uGUI 阈值时，
+        /// 这次抬起不得当成选点，避免拖完地图误选节点或弹出行程。
+        /// </summary>
+        private void SelectHubFromMap(string hubId)
+        {
+            if (_mapInput != null && _mapInput.IsDragging)
+                return;
+            SelectHub(hubId);
         }
 
         private void CancelPreview()
@@ -693,6 +783,67 @@ namespace SengokuChronicle.Presentation
             JapanMapFonts.SetEllipsis(text, true);
             JapanMapFonts.SetText(text, label);
             return button;
+        }
+
+        /// <summary>
+        /// 地图打开后把键盘焦点放到路线筛选行首项，方向键与 Enter 才有起点。
+        /// 没有 EventSystem（EditMode 夹具或非交互场景）时静默跳过。
+        /// </summary>
+        private void FocusInitialControl()
+        {
+            if (_focusButtons.Length == 0)
+                return;
+            EventSystem system = EventSystem.current;
+            if (system == null)
+                return;
+            system.SetSelectedGameObject(_focusButtons[0].gameObject);
+            RefreshFocusVisuals();
+        }
+
+        /// <summary>
+        /// 只让当前 EventSystem 选择显示金色描边，鼠标悬停与点击不受影响。
+        /// </summary>
+        private void RefreshFocusVisuals()
+        {
+            EventSystem system = EventSystem.current;
+            GameObject selected = system != null ? system.currentSelectedGameObject : null;
+            for (int i = 0; i < _focusOutlines.Length; i++)
+            {
+                if (_focusOutlines[i] == null || _focusButtons[i] == null)
+                    continue;
+                bool focused = selected == _focusButtons[i].gameObject;
+                if (_focusOutlines[i].enabled != focused)
+                    _focusOutlines[i].enabled = focused;
+            }
+        }
+
+        /// <summary>
+        /// 四个筛选/定位按钮共用一组显式导航：左/上移到前一项，右/下移到后一项，
+        /// 首尾成环。这样方向键始终在既有按钮间移动，不会跳进地图节点或目录行；
+        /// 地图节点没有新增方向键导航。
+        /// </summary>
+        private static void ConfigureFocusNavigation(Button[] buttons)
+        {
+            for (int i = 0; i < buttons.Length; i++)
+            {
+                var navigation = new Navigation { mode = Navigation.Mode.Explicit };
+                navigation.selectOnLeft = buttons[(i + buttons.Length - 1) % buttons.Length];
+                navigation.selectOnUp = navigation.selectOnLeft;
+                navigation.selectOnRight = buttons[(i + 1) % buttons.Length];
+                navigation.selectOnDown = navigation.selectOnRight;
+                buttons[i].navigation = navigation;
+            }
+        }
+
+        /// <summary>焦点描边用 Outline 效果，不改按钮底色与鼠标点击区域。</summary>
+        private static Outline AddFocusOutline(Button button)
+        {
+            var outline = button.gameObject.AddComponent<Outline>();
+            outline.effectColor = new Color(1f, 0.82f, 0.32f, 1f);
+            outline.effectDistance = new Vector2(2f, -2f);
+            outline.useGraphicAlpha = false;
+            outline.enabled = false;
+            return outline;
         }
 
         private static Graphic AddText(RectTransform rect, string name, int fontSize,
