@@ -288,7 +288,7 @@ namespace SengokuChronicle.Persistence
                     // no elapsed time, review or historical event is manufactured.
                     current.campaign = CampaignProgressSaveData.CreateMigrated(current, true);
                 }
-                result = FinishMigration(current, version);
+                result = FinishMigration(current, version, legacy.rulesVersion);
                 if (!result.Succeeded)
                     current = null;
                 return result.Succeeded;
@@ -307,7 +307,7 @@ namespace SengokuChronicle.Persistence
                     legacy.succession, legacy.locationId);
                 current.npcAutonomy = NpcAutonomyStateSaveData.CreateInitial(legacy.succession);
                 PrepareMigratedSuccession(current, true);
-                result = FinishMigration(current, legacy.saveFormatVersion);
+                result = FinishMigration(current, legacy.saveFormatVersion, legacy.rulesVersion);
                 if (!result.Succeeded)
                     current = null;
                 return result.Succeeded;
@@ -356,7 +356,7 @@ namespace SengokuChronicle.Persistence
                     current.succession, current.locationId);
                 current.npcAutonomy = NpcAutonomyStateSaveData.CreateInitial(current.succession);
                 PrepareMigratedSuccession(current, true);
-                result = FinishMigration(current, legacy.saveFormatVersion);
+                result = FinishMigration(current, legacy.saveFormatVersion, legacy.rulesVersion);
                 if (!result.Succeeded)
                     current = null;
                 return result.Succeeded;
@@ -406,7 +406,7 @@ namespace SengokuChronicle.Persistence
                     current.succession, current.locationId);
                 current.npcAutonomy = NpcAutonomyStateSaveData.CreateInitial(current.succession);
                 PrepareMigratedSuccession(current, true);
-                result = FinishMigration(current, legacy.saveFormatVersion);
+                result = FinishMigration(current, legacy.saveFormatVersion, legacy.rulesVersion);
                 if (!result.Succeeded)
                     current = null;
                 return result.Succeeded;
@@ -448,7 +448,7 @@ namespace SengokuChronicle.Persistence
                     current.succession, current.locationId);
                 current.npcAutonomy = NpcAutonomyStateSaveData.CreateInitial(current.succession);
                 PrepareMigratedSuccession(current, true);
-                result = FinishMigration(current, legacy.saveFormatVersion);
+                result = FinishMigration(current, legacy.saveFormatVersion, legacy.rulesVersion);
                 if (!result.Succeeded)
                     current = null;
                 return result.Succeeded;
@@ -485,7 +485,7 @@ namespace SengokuChronicle.Persistence
                     current.succession, current.locationId);
                 current.npcAutonomy = NpcAutonomyStateSaveData.CreateInitial(current.succession);
                 PrepareMigratedSuccession(current, true);
-                result = FinishMigration(current, legacy.saveFormatVersion);
+                result = FinishMigration(current, legacy.saveFormatVersion, legacy.rulesVersion);
                 if (!result.Succeeded)
                     current = null;
                 return result.Succeeded;
@@ -523,7 +523,7 @@ namespace SengokuChronicle.Persistence
                     current.succession, current.locationId);
                 current.npcAutonomy = NpcAutonomyStateSaveData.CreateInitial(current.succession);
                 PrepareMigratedSuccession(current, true);
-                result = FinishMigration(current, legacy.saveFormatVersion);
+                result = FinishMigration(current, legacy.saveFormatVersion, legacy.rulesVersion);
                 if (!result.Succeeded)
                     current = null;
                 return result.Succeeded;
@@ -597,7 +597,7 @@ namespace SengokuChronicle.Persistence
                 // v3 owns a real succession block, so a known authored family identity can
                 // still prove the campaign origin. No review state is claimed.
                 PrepareMigratedSuccession(current, true);
-                result = FinishMigration(current, legacy.saveFormatVersion);
+                result = FinishMigration(current, legacy.saveFormatVersion, legacy.rulesVersion);
                 if (!result.Succeeded)
                     current = null;
                 return result.Succeeded;
@@ -681,7 +681,7 @@ namespace SengokuChronicle.Persistence
                 };
 
                 PrepareMigratedSuccession(current);
-                result = FinishMigration(current, legacy.saveFormatVersion);
+                result = FinishMigration(current, legacy.saveFormatVersion, legacy.rulesVersion);
                 if (!result.Succeeded)
                     current = null;
                 return result.Succeeded;
@@ -739,7 +739,7 @@ namespace SengokuChronicle.Persistence
             };
 
             PrepareMigratedSuccession(current);
-            result = FinishMigration(current, legacy.saveFormatVersion);
+            result = FinishMigration(current, legacy.saveFormatVersion, legacy.rulesVersion);
             if (!result.Succeeded)
                 current = null;
             return result.Succeeded;
@@ -752,12 +752,21 @@ namespace SengokuChronicle.Persistence
         /// Completes every pre-v17 migration path. The market block is derived once from
         /// the already-migrated clone (its industry stock and living roster), then the final
         /// shape is validated. A current-version payload keeps its own market block.
+        /// After the normal validator accepts, the national-map audit checks the current
+        /// location and any in-flight travel against the same graph the UI reads, without
+        /// replacing the existing failure messages. The pre-migration source versions are
+        /// passed through because the clone above already advertises v17/rules 8; otherwise
+        /// the retired-route window would wrongly apply to every old source.
         /// </summary>
-        private static SaveOperationResult FinishMigration(SaveData current, int sourceVersion)
+        private static SaveOperationResult FinishMigration(SaveData current, int sourceVersion,
+            int sourceRulesVersion)
         {
             if (sourceVersion < SaveDataValidator.CurrentVersion)
                 current.market = MarketSaveData.CreateMigrated(current);
-            return SaveDataValidator.Validate(current);
+            SaveOperationResult validation = SaveDataValidator.Validate(current);
+            if (!validation.Succeeded)
+                return validation;
+            return JapanMapSaveAudit.Validate(current, sourceVersion, sourceRulesVersion);
         }
 
         /// <summary>

@@ -2,13 +2,15 @@
 
 **状态：未完成（PARTIAL）。** `2bca9d1` 的 v1 Windows 演示包已构建并通过本卡范围内的 Player 冒烟，v1 最终验收仍待用户完成；这不是整项目完成的唯一条件。项目还需闭合 M08 战役回顾面板运行时打开与 M09 真机窗口拖动。`main` 的代码基线是 `2bca9d1`；后续提交只追加文档。SC-021 场景集成与 SC-023 演示接入现已在 `main`，不再列为未合入。
 
+状态时间说明：本报告记录截至 2026-11-18 的审计结论。用户于 2026-11-24 已报告 M00 演示试玩通过；此后状态以 `PROJECT_STATE.md` 与 `checkpoint.md` 为准。
+
 本版由收口卡 `t_080705e2` 写。上一版（`t_53b146b3`）的三条 MAJOR 已全部处置，处置结果见第 2 节。凡标「本卡亲跑」的是我这次实际执行的命令与读回值；标「上游卡汇报」的只是转述，未由我重跑。
 
 ---
 
 ## 1. 现在能做什么
 
-- **能构建**：`Builds/Demo-v1-2bca9d1-r2/`，源提交 `2bca9d1`（干净工作树），`Succeeded`、`totalErrors=0`、218 个文件 183,882,557 B。exe 667,136 B、`sha256 7c5b8f3e…188247d`，本卡亲跑 `sha256sum` 核对与构建卡汇报一致。唯一警告是 Pipeline 包自带的 `No RuntimePipelineConfig asset found`。
+- **能构建**：`Builds/ShadowClan-v1-demo-win64-2bca9d1-r2/`，源提交 `2bca9d1`（干净工作树），`Succeeded`、`totalErrors=0`、218 个文件 183,882,557 B。exe 667,136 B、`sha256 7c5b8f3e…188247d`，本卡亲跑 `sha256sum` 核对与构建卡汇报一致。唯一警告是 Pipeline 包自带的 `No RuntimePipelineConfig asset found`。
 - **能启动并玩通核心循环**：Player 冒烟（上游卡汇报，真实 SendInput 鼠标输入）走通标题 →「开始新游戏」→ SC-013 → 营地 HUD（1560-04-01、清洲、贯 30）→ 结束月份（1560-05-01、贯 28）→ 清洲城镇页四条当地委托 → 点开任务页；`Player.log` 0 条 Exception/LogError/NullReference。
 - **能存读档往返**：Editor Play Mode（上游卡汇报，隔离槽）1560-05-01 存档 → 推进一天 → 读档回 1560-05-01；SAVE-3 待决继承改选后读回「時姫」；SAVE-4 空槽返回「尚未找到存档。」且状态不变。真实存档槽 `sha256 1e61ed9c…` 与 mtime 全程未变。
 - **全量 EditMode 全绿**：`2214/2214` passed、`failed=0`、`skipped=0`（2026-11-18 13:22:34Z–13:24:40Z，源 `c291dd3`）。本卡亲读 XML。
@@ -51,7 +53,7 @@
 **我推断的**
 
 - 既然 `c291dd3..2bca9d1` 只改注释，那么 2214/2214 与 Validator PASS 对 `2bca9d1` 同样成立。这是推断，不是重跑；要坐实需要在新 Editor 上重跑一轮。
-- `Builds/Demo-v1-2bca9d1-r2/` 在 `.gitignore` 内（`git check-ignore` 命中 `/[Bb]uilds/`），因此它只是本地产物，不入库。
+- `Builds/ShadowClan-v1-demo-win64-2bca9d1-r2/` 在 `.gitignore` 内（`git check-ignore` 命中 `/[Bb]uilds/`），因此它只是本地产物，不入库。
 
 **没有验证的**
 
@@ -81,7 +83,7 @@
 
 ## 5. 下一步
 
-1. **v1 演示验收**：跑 `Builds/Demo-v1-2bca9d1-r2/Demo-v1-2bca9d1-r2.exe`，按第 1 节的路线走一遍。通过后才能标记 v1 阶段已验收；整项目仍需完成本节后续列出的工作。
+1. **v1 演示验收**：跑 `Builds/ShadowClan-v1-demo-win64-2bca9d1-r2/ShadowClan-v1-demo-win64-2bca9d1-r2.exe`，按第 1 节的路线走一遍。通过后才能标记 v1 阶段已验收；整项目仍需完成本节后续列出的工作。
 2. 验收通过后，由用户点头再打里程碑 tag；本卡没有合并、没有打 tag、没有 force-push。
 3. 补 M08 战役回顾面板的长周期演示路线。
 4. 在可交互桌面上复验 M09 窗口拖动。

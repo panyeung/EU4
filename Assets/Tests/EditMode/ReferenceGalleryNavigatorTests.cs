@@ -1896,9 +1896,43 @@ namespace SengokuChronicle.Tests.EditMode
             canvas.sizeDelta = new Vector2(1280, 720);
             typeof(ReferenceGalleryNavigator).GetMethod("LateUpdate",
                 System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).Invoke(navigator, null);
-            Assert.That(((RectTransform)header.transform).sizeDelta, Is.EqualTo(new Vector2(1280, 52)));
+            Assert.That(((RectTransform)header.transform).sizeDelta, Is.EqualTo(new Vector2(1280, 82)),
+                "1280 stays compact so the resource row clears the national map entry");
+            Assert.That(chips[4].anchoredPosition, Is.EqualTo(new Vector2(630, -44)));
+            Assert.That(navigator.MapReturnCount, Is.EqualTo(returnCount));
+
+            canvas.sizeDelta = new Vector2(1920, 1080);
+            typeof(ReferenceGalleryNavigator).GetMethod("LateUpdate",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).Invoke(navigator, null);
+            Assert.That(((RectTransform)header.transform).sizeDelta, Is.EqualTo(new Vector2(1920, 52)));
             Assert.That(chips[4].anchoredPosition, Is.EqualTo(new Vector2(1126, -8)), "wide layout is restored");
             Assert.That(navigator.MapReturnCount, Is.EqualTo(returnCount));
+        }
+
+        [Test]
+        public void HeaderResourceRow_NeverRunsUnderTheNationalMapEntry()
+        {
+            float[] widths = { 800f, 960f, 1108f, 1249f, 1280f, 1400f, 1440f, 1600f, 1920f };
+            foreach (float width in widths)
+            {
+                bool compact = width < ReferenceGalleryNavigator.HeaderCompactWidth;
+                float origin = ReferenceGalleryNavigator.ResolveHeaderChipOriginX(width, compact
+                    ? ReferenceGalleryNavigator.HeaderChipCompactOriginX
+                    : ReferenceGalleryNavigator.HeaderChipWideOriginX);
+                float rowRight = origin + ReferenceGalleryNavigator.HeaderChipRowWidth;
+                float launcherLeft = width - JapanMapSceneBootstrap.LauncherReservedWidth;
+                Assert.That(rowRight, Is.LessThanOrEqualTo(
+                        launcherLeft - ReferenceGalleryNavigator.HeaderChipRowGap + 0.01f),
+                    "resource row stays clear of the map entry at width " + width);
+                Assert.That(origin, Is.GreaterThanOrEqualTo(8f), "origin clamped at " + width);
+                Assert.That(rowRight, Is.LessThanOrEqualTo(width + 0.01f), "row inside canvas at " + width);
+            }
+
+            Assert.That(ReferenceGalleryNavigator.HeaderChipRowWidth, Is.EqualTo(572f));
+            Assert.That(ReferenceGalleryNavigator.HeaderCompactWidth, Is.EqualTo(1412f));
+            Assert.That(ReferenceGalleryNavigator.ResolveHeaderChipOriginX(1920f, 662f), Is.EqualTo(662f));
+            Assert.That(ReferenceGalleryNavigator.ResolveHeaderChipOriginX(1280f, 662f), Is.EqualTo(530f));
+            Assert.That(ReferenceGalleryNavigator.ResolveHeaderChipOriginX(900f, 166f), Is.EqualTo(150f));
         }
 
         private Text CreateTextChild(string name, Transform parent)

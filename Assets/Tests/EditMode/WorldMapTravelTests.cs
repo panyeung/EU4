@@ -17,16 +17,23 @@ namespace SengokuChronicle.Tests.EditMode
         {
             return GameSession.NewGame();
         }
-        // 1. Exactly three location IDs with Chinese names; no fourth.
+        // 1. The three M02 IDs stay first and unchanged; every graph hub is a valid location.
         [Test]
-        public void LocationId_HasExactlyThreeLocations()
+        public void LocationId_KeepsLegacyThreeAndAddsGraphHubs()
         {
             var all = LocationId.All;
-            Assert.That(all.Count, Is.EqualTo(3), "exactly 3 locations required");
-            var values = new List<string>();
-            foreach (var loc in all) values.Add(loc.Value);
-            Assert.That(values, Is.EquivalentTo(new[] { "owari.kiyosu", "owari.atsuta", "owari.nagoya" }),
-                "location set must be exactly these three, no additions or omissions");
+            Assert.That(all.Count, Is.EqualTo(JapanTravelGraph.Hubs.Count),
+                "all travel hubs must be addressable locations");
+            Assert.That(all[0].Value, Is.EqualTo("owari.kiyosu"));
+            Assert.That(all[1].Value, Is.EqualTo("owari.atsuta"));
+            Assert.That(all[2].Value, Is.EqualTo("owari.nagoya"));
+            foreach (var loc in all)
+            {
+                Assert.That(loc.IsValid, Is.True, loc.Value);
+                Assert.That(LocationId.TryParse(loc.Value, out var parsed), Is.True, loc.Value);
+                Assert.That(parsed.Value, Is.EqualTo(loc.Value));
+                Assert.That(JapanTravelGraph.TryGetHub(loc.Value, out _), Is.True, loc.Value);
+            }
             Assert.That(LocationId.Kiyosu, Is.Not.EqualTo(LocationId.Atsuta), "Kiyosu and Atsuta must differ");
             Assert.That(LocationId.Atsuta, Is.Not.EqualTo(LocationId.Nagoya), "Atsuta and Nagoya must differ");
             Assert.That(LocationId.Kiyosu, Is.Not.EqualTo(LocationId.Nagoya), "Kiyosu and Nagoya must differ");

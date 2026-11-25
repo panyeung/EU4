@@ -146,6 +146,9 @@ namespace SengokuChronicle.Presentation
         private bool _inTownMenu;
         private bool _sessionSubscribed;
         private string _feedback = "请选择目的地。";
+        // 地图空闲提示行点名当前位置：每次刷新按 GameSession 重新生成，
+        // 不缓存一句会被旅行改旧的文字。
+        private bool _feedbackFollowsLocation;
 
         private void Awake()
         {
@@ -157,6 +160,7 @@ namespace SengokuChronicle.Presentation
         {
             if (gameSession == null)
                 gameSession = GetComponentInParent<GameSession>() ?? FindAnyObjectByType<GameSession>();
+            JapanMapSceneBootstrap.EnsureForSession(gameSession);
             if (worldClockPanel == null)
                 worldClockPanel = FindAnyObjectByType<WorldClockPanel>();
             BindButtonListeners(true);
@@ -343,7 +347,7 @@ namespace SengokuChronicle.Presentation
             if (townMenuRoot != null)
                 townMenuRoot.SetActive(false);
             SetMapContentVisible(true);
-            SetFeedback($"返回地图，当前位置：{LocationId.GetChineseName(gameSession != null ? gameSession.CurrentLocation : default)}。请选择目的地。");
+            SetMapHint();
             RefreshAll();
             if (_selectedDestination.HasValue)
                 SelectDestination(_selectedDestination.Value);
@@ -478,7 +482,8 @@ namespace SengokuChronicle.Presentation
         {
             if (!_inTownMenu ||
                 gameSession == null ||
-                townNpcDialoguePanel == null)
+                townNpcDialoguePanel == null ||
+                !LocationCapabilities.CanUseNpc(gameSession.CurrentLocation))
                 return;
 
             townNpcDialoguePanel.BindWorldMapController(this);
@@ -506,6 +511,13 @@ namespace SengokuChronicle.Presentation
             if (gameSession == null || location != gameSession.CurrentLocation)
             {
                 SelectDestination(location);
+                return;
+            }
+
+            if (!LocationCapabilities.CanUseTownServices(location))
+            {
+                SetFeedback(LocationCapabilities.NonTownHubMessage);
+                RefreshAll();
                 return;
             }
 
@@ -562,9 +574,11 @@ namespace SengokuChronicle.Presentation
                 arrivalDateText.text = _preview.HasValue ? _preview.Value.EstimatedArrivalDate.ToString() : "—";
         }
 
-        /// <summary>镜像 _feedback 到 UI 文本。</summary>
+        /// <summary>镜像 _feedback 到 UI 文本；位置提示行按 GameSession 的当前地点重新生成。</summary>
         private void RefreshFeedback()
         {
+            if (_feedbackFollowsLocation)
+                _feedback = BuildMapHint();
             if (feedbackText != null)
                 feedbackText.text = _feedback;
         }
@@ -587,6 +601,18 @@ namespace SengokuChronicle.Presentation
         /// </summary>
         public void OpenTownMenu()
         {
+            if (gameSession != null &&
+                !LocationCapabilities.CanUseTownServices(gameSession.CurrentLocation))
+            {
+                _inTownMenu = false;
+                if (townMenuRoot != null)
+                    townMenuRoot.SetActive(false);
+                SetMapContentVisible(true);
+                SetFeedback(LocationCapabilities.NonTownHubMessage);
+                RefreshAll();
+                return;
+            }
+
             _inTownMenu = true;
             if (supplyShortageMissionPanel != null)
             {
@@ -868,6 +894,25 @@ namespace SengokuChronicle.Presentation
         }
 
         private void SetFeedback(string message)
+        {
+            _feedbackFollowsLocation = false;
+            ShowFeedback(message);
+        }
+
+        private void SetMapHint()
+        {
+            _feedbackFollowsLocation = true;
+            ShowFeedback(BuildMapHint());
+        }
+
+        private string BuildMapHint()
+        {
+            return gameSession != null
+                ? $"返回地图，当前位置：{LocationId.GetChineseName(gameSession.CurrentLocation)}。请选择目的地。"
+                : "请选择目的地。";
+        }
+
+        private void ShowFeedback(string message)
         {
             _feedback = message;
             if (feedbackText != null)

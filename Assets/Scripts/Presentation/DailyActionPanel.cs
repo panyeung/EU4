@@ -610,12 +610,20 @@ namespace SengokuChronicle.Presentation
             return false;
         }
 
-        private static string KnownDestinations(LocationId location)
+        private string KnownDestinations(LocationId location)
         {
             var destinations = new List<string>();
             foreach (LocationId destination in LocationId.All)
+            {
+                // The text must name exactly the destinations that have a visible
+                // travel button. The backend graph has more reachable hubs than the
+                // three frozen M02 buttons; listing those would advertise an entry
+                // the player cannot click.
+                if (TravelButton(destination) == null)
+                    continue;
                 if (WorldMapRules.TryGetTravelDays(location, destination, out _))
                     destinations.Add(LocationId.GetChineseName(destination));
+            }
             return destinations.Count == 0 ? "无直达路线" : string.Join("、", destinations);
         }
 
