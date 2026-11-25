@@ -35,6 +35,11 @@ namespace SengokuChronicle.Tests.EditMode
         };
 
         private string _root;
+        /// <summary>
+        /// 粮荒诊断写盘用例的目录，放在封存产物根的同级而非其内部，因为写入器拒绝任何落入
+        /// 封存树的路径。
+        /// </summary>
+        private string _famineRoot;
 
         [SetUp]
         public void SetUp()
@@ -42,6 +47,10 @@ namespace SengokuChronicle.Tests.EditMode
             _root = Path.Combine(M08BLongTermSimulationRunner.DefaultOutputRoot, "tests",
                 Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(_root);
+            _famineRoot = Path.Combine(
+                Path.GetDirectoryName(M08BLongTermSimulationRunner.DefaultOutputRoot),
+                "m08b-famine-diagnostics-tests", Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(_famineRoot);
         }
 
         [TearDown]
@@ -49,6 +58,8 @@ namespace SengokuChronicle.Tests.EditMode
         {
             if (Directory.Exists(_root))
                 Directory.Delete(_root, true);
+            if (Directory.Exists(_famineRoot))
+                Directory.Delete(_famineRoot, true);
         }
 
         [Test]
@@ -1016,20 +1027,19 @@ namespace SengokuChronicle.Tests.EditMode
             StringAssert.Contains("sourceSha256=" + frozenSourceSha, log);
             StringAssert.Contains("ruleInputSha256=" + frozenRuleInputSha, log);
 
-            // The disk has moved past the state this batch started from; its artifacts must not.
+            // 磁盘已经越过本批次开始时的状态；它的产物不能跟着变。
             string currentSourceSha = M08BLongTermSimulationRunner.ComputeSourceSha256();
             Assert.That(currentSourceSha, Has.Length.EqualTo(64));
             Assert.That(currentSourceSha, Is.Not.EqualTo(frozenSourceSha));
             Assert.That(summary, Does.Not.Contain(currentSourceSha));
             Assert.That(log, Does.Not.Contain(currentSourceSha));
 
-            // The frozen snapshot is exactly what reuse validation compares against.
+            // 复用校验比对的正是这份冻结快照。
             RunBatchWithFrozenProvenance(1, 1, 1, root, years,
                 M08BIndustryPolicy.Unmanaged, frozen);
             StringAssert.Contains("reused=1 ran=0", File.ReadAllText(logPath));
 
-            // A snapshot captured from the live disk rejects those rows, so the existing
-            // provenance validation still rejects a mismatched summary.
+            // 从实时磁盘抓取的快照会拒绝那些行，因此既有来源校验仍会拒绝不匹配的汇总。
             M08BLongTermSimulationRunner.RunBatch(1, 1, 1, root, years,
                 M08BIndustryPolicy.Unmanaged);
             string rejectedLog = File.ReadAllText(logPath);
@@ -1053,7 +1063,7 @@ namespace SengokuChronicle.Tests.EditMode
             string first = BuildSummaryWithFrozenProvenance(seeds, 1, 1, 100, years,
                 M08BIndustryPolicy.Unmanaged, frozen);
 
-            // A rule input changes on disk while the batch's snapshot stays fixed.
+            // 批次快照保持不变，而磁盘上的一份规则输入发生变化。
             WriteFile(root, rulePath, "// rule body after the batch started");
             string after = M08BLongTermSimulationRunner.ComputeRuleInputSha256(root, paths);
             Assert.That(after, Is.Not.EqualTo(before),
@@ -2097,8 +2107,8 @@ namespace SengokuChronicle.Tests.EditMode
             Assert.That(new[] { unmanaged, farmManaged, dualFarm }.Distinct().Count(),
                 Is.EqualTo(3), "each policy must own its own description");
 
-            // A summary describes the policy that actually produced it and never borrows
-            // another policy's wording, so two artifacts cannot be read as the same rule.
+            // 汇总描述真正产出它的策略，绝不借用另一策略的措辞，因此两份产物不会被读成同一条
+            // 规则。
             var seeds = new List<M08BSeedResult> { SyntheticSeed(1, 10, true, 1, 100) };
             int[] years = { 10 };
             foreach (M08BIndustryPolicy policy in Enum.GetValues(typeof(M08BIndustryPolicy)))
@@ -2283,6 +2293,470 @@ namespace SengokuChronicle.Tests.EditMode
                 "an explicitly supplied output root stays functional");
         }
 
+        [Test]
+        public void FamineDiagnosticRecordsEveryMonthWithBalancedFoodAndDemand()
+        {
+            M08BFaminePolicyTrace trace = M08BLongTermSimulationRunner.RunFamineDiagnosticSeed(
+                7UL, 1, M08BIndustryPolicy.FarmManagedV1);
+
+            Assert.That(trace.PolicyId,
+                Is.EqualTo(M08BLongTermSimulationRunner.FarmManagedV1PolicyId));
+            Assert.That(trace.Years, Is.EqualTo(1));
+            Assert.That(trace.Months.Count, Is.EqualTo(trace.MonthsSimulated),
+                "每个模拟月都必须记录一行");
+            Assert.That(trace.Months, Is.Not.Empty);
+            if (trace.Termination == M08BTerminationReason.Completed)
+                Assert.That(trace.Months, Has.Count.EqualTo(12), "存活满一年应为 12 个月");
+
+            int streak = 0;
+            for (int i = 0; i < trace.Months.Count; i++)
+            {
+                M08BFamineMonthRow row = trace.Months[i];
+                Assert.That(row.MonthNumber, Is.EqualTo(i + 1));
+                Assert.That(row.Seed, Is.EqualTo(7UL));
+                Assert.That(row.PolicyId,
+                    Is.EqualTo(M08BLongTermSimulationRunner.FarmManagedV1PolicyId));
+                Assert.That(row.Demand, Is.EqualTo(row.FoodPurchased + row.FoodUnmet),
+                    "需求等于家庭买到的加上买不到的");
+                Assert.That(row.ClosingFood,
+                    Is.EqualTo(row.OpeningFood + row.FoodProduced - row.FoodPurchased),
+                    "期末粮食必须与期初库存、收获和采购对平");
+                streak = row.FoodUnmet > 0 ? streak + 1 : 0;
+                Assert.That(row.ConsecutiveShortageMonths, Is.EqualTo(streak),
+                    "记录的连续短缺月数必须与市场自己的计数一致");
+                if (i + 1 < trace.Months.Count)
+                {
+                    Assert.That(trace.Months[i + 1].MonthIndex, Is.EqualTo(row.MonthIndex + 1),
+                        "被追踪的月份必须逐月衔接、没有空缺");
+                    Assert.That(trace.Months[i + 1].FoodPriceIndexBefore,
+                        Is.EqualTo(row.FoodPriceIndexAfter),
+                        "已结算的粮价指数就是下一个月的期初指数");
+                }
+            }
+        }
+
+        [Test]
+        public void FamineDiagnosticRecordsBothFarmPostsAndWhetherEachOperated()
+        {
+            M08BFaminePolicyTrace managed = M08BLongTermSimulationRunner.RunFamineDiagnosticSeed(
+                7UL, 1, M08BIndustryPolicy.FarmManagedV1);
+            M08BFaminePolicyTrace dual = M08BLongTermSimulationRunner.RunFamineDiagnosticSeed(
+                7UL, 1, M08BIndustryPolicy.DualFarmV1);
+
+            Assert.That(managed.Months, Is.Not.Empty);
+            Assert.That(managed.Months.All(row => row.FarmPost0Assignee.Length > 0), Is.True,
+                "farm-managed-v1 会派人上第一农庄岗位");
+            Assert.That(managed.Months.Any(row => row.FarmPost0Operated), Is.True,
+                "有人的农庄岗位至少有一个月实际运转");
+            Assert.That(managed.Months.All(row => row.FarmPost1Assignee.Length == 0), Is.True,
+                "farm-managed-v1 会让第二农庄岗位空缺");
+            Assert.That(managed.Months.All(row => !row.FarmPost1Operated), Is.True);
+
+            Assert.That(dual.Months, Is.Not.Empty);
+            Assert.That(dual.Months.All(row =>
+                    row.FarmPost0Assignee.Length > 0 && row.FarmPost1Assignee.Length > 0), Is.True,
+                "dual-farm-v1 会派人上两个农庄岗位");
+            Assert.That(dual.Months.Any(row => row.FarmPost0Operated && row.FarmPost1Operated),
+                Is.True, "两个有人的农庄岗位至少有一个月同时运转");
+            Assert.That(dual.Months.Sum(row => row.FoodProduced),
+                Is.GreaterThan(managed.Months.Sum(row => row.FoodProduced)),
+                "同一时间跨度内，第二个有人的岗位必须提高收获量");
+        }
+
+        [Test]
+        public void FamineDiagnosticSerializesPostStatusesInChinese()
+        {
+            M08BFaminePolicyTrace managed = M08BLongTermSimulationRunner.RunFamineDiagnosticSeed(
+                7UL, 1, M08BIndustryPolicy.FarmManagedV1);
+            M08BFaminePolicyTrace dual = M08BLongTermSimulationRunner.RunFamineDiagnosticSeed(
+                7UL, 1, M08BIndustryPolicy.DualFarmV1);
+            var allowed = new[]
+            {
+                M08BLongTermSimulationRunner.FaminePostAbsentStatus,
+                "运转", "空缺", "停滞", "指派无效"
+            };
+
+            Assert.That(managed.Months, Is.Not.Empty);
+            Assert.That(managed.Months.All(row =>
+                    row.FarmPost1Status == "空缺"), Is.True,
+                "farm-managed-v1 的第二农庄岗位在报告里存在但无人，状态必须是中文“空缺”");
+            Assert.That(managed.Months.All(row =>
+                    row.FarmPost1Status !=
+                    M08BLongTermSimulationRunner.FaminePostAbsentStatus), Is.True,
+                "报告里有该岗位时不得写成“无此岗位”");
+            Assert.That(managed.Months.Any(row => row.FarmPost0Status == "运转"), Is.True,
+                "有人的农庄岗位至少一个月以中文“运转”记录");
+            Assert.That(managed.Months.Concat(dual.Months).All(row =>
+                    allowed.Contains(row.FarmPost0Status) &&
+                    allowed.Contains(row.FarmPost1Status)), Is.True,
+                "诊断产物只写中文岗位状态，不写英文枚举名");
+
+            string csv = M08BLongTermSimulationRunner.SerializeFamineMonthsCsv(
+                new[] { managed, dual });
+            Assert.That(csv, Does.Not.Contain(",Absent,"),
+                "CSV 不得再出现英文的岗位缺失状态");
+            Assert.That(csv, Does.Not.Contain(",Operated,"),
+                "CSV 不得出现英文的岗位结算状态");
+            Assert.That(csv, Does.Contain("运转"), "CSV 必须包含中文状态值");
+        }
+
+        [Test]
+        public void FamineMilestonesMarkTheFirstUnmetMonthAndTheTwelfthConsecutiveMonth()
+        {
+            var rows = new List<M08BFamineMonthRow>();
+            for (int month = 1; month <= 16; month++)
+            {
+                bool shortMonth = month >= 3 && month <= 14;
+                rows.Add(new M08BFamineMonthRow
+                {
+                    MonthNumber = month,
+                    FoodUnmet = shortMonth ? 1 : 0,
+                    ConsecutiveShortageMonths = shortMonth ? month - 2 : 0
+                });
+            }
+
+            M08BLongTermSimulationRunner.MarkFamineMilestones(rows);
+
+            Assert.That(rows.Count(row => row.FirstFoodUnmet), Is.EqualTo(1),
+                "恰好一个月份是首个欠粮月");
+            Assert.That(rows[2].FirstFoodUnmet, Is.True, "第 3 个月是首个欠粮月");
+            Assert.That(rows.Count(row => row.ThresholdCrossed), Is.EqualTo(1),
+                "恰好一个月份跨过阈值");
+            Assert.That(rows[13].ThresholdCrossed, Is.True,
+                "第 14 个月承载连续第 12 个短缺月");
+            Assert.That(rows[12].ThresholdCrossed, Is.False);
+
+            M08BLongTermSimulationRunner.MarkFamineMilestones(rows);
+            Assert.That(rows[2].FirstFoodUnmet, Is.True, "重复标记不得移动首个欠粮月");
+            Assert.That(rows.Count(row => row.ThresholdCrossed), Is.EqualTo(1));
+
+            var neverShort = new List<M08BFamineMonthRow>
+            {
+                new M08BFamineMonthRow { MonthNumber = 1 },
+                new M08BFamineMonthRow { MonthNumber = 2 }
+            };
+            M08BLongTermSimulationRunner.MarkFamineMilestones(neverShort);
+            Assert.That(neverShort.Any(row => row.FirstFoodUnmet || row.ThresholdCrossed), Is.False,
+                "从未短缺的运行不标记任何里程碑");
+        }
+
+        [Test]
+        public void FamineDiagnosticIsDeterministicForTheSameSeedAndPolicy()
+        {
+            M08BFaminePolicyTrace first = M08BLongTermSimulationRunner.RunFamineDiagnosticSeed(
+                7UL, 1, M08BIndustryPolicy.DualFarmV1);
+            M08BFaminePolicyTrace repeat = M08BLongTermSimulationRunner.RunFamineDiagnosticSeed(
+                7UL, 1, M08BIndustryPolicy.DualFarmV1);
+
+            Assert.That(M08BLongTermSimulationRunner.SerializeFamineMonthsCsv(new[] { repeat }),
+                Is.EqualTo(M08BLongTermSimulationRunner.SerializeFamineMonthsCsv(new[] { first })),
+                "同一种子与策略必须序列化出逐字节相同的结果");
+        }
+
+        [Test]
+        public void FamineProbeNeverChangesTheSimulatedOutcome()
+        {
+            int[] checkpointYears = { 1 };
+            M08BSeedResult plain = M08BLongTermSimulationRunner.RunSeed(7UL, 1, checkpointYears,
+                M08BIndustryPolicy.FarmManagedV1);
+            var probe = new M08BFamineMonthlyProbe(7UL, M08BIndustryPolicy.FarmManagedV1);
+            M08BSeedResult observed = M08BLongTermSimulationRunner.RunSeed(7UL, 1, checkpointYears,
+                M08BIndustryPolicy.FarmManagedV1, probe);
+
+            Assert.That(M08BLongTermSimulationRunner.SerializeSeedsCsv(new[] { observed },
+                    checkpointYears),
+                Is.EqualTo(M08BLongTermSimulationRunner.SerializeSeedsCsv(new[] { plain },
+                    checkpointYears)),
+                "观察月份不得改变运行结果");
+            Assert.That(probe.Rows, Is.Not.Empty, "探针必须看到相同的月份");
+        }
+
+        [Test]
+        public void FamineDiagnosticWritesItsOwnArtifactsWithProvenanceAndNeverASealedName()
+        {
+            M08BFaminePolicyTrace managed = M08BLongTermSimulationRunner.RunFamineDiagnosticSeed(
+                7UL, 1, M08BIndustryPolicy.FarmManagedV1);
+            M08BFaminePolicyTrace dual = M08BLongTermSimulationRunner.RunFamineDiagnosticSeed(
+                7UL, 1, M08BIndustryPolicy.DualFarmV1);
+            const string command =
+                "unity command run_script --file Logs/probe.cs --entry Probe.Run";
+
+            string root = Path.Combine(_famineRoot, "famine");
+            IReadOnlyList<string> written = M08BLongTermSimulationRunner.WriteFamineDiagnostics(
+                root, new[] { dual, managed }, command);
+
+            Assert.That(written.Count, Is.EqualTo(2));
+            Assert.That(File.Exists(Path.Combine(root, "famine-months.csv")), Is.True);
+            string lockPath = Path.Combine(root,
+                M08BLongTermSimulationRunner.FamineLockFileName);
+            Assert.That(File.Exists(lockPath), Is.True, "锁哨兵必须持久保留");
+            Assert.DoesNotThrow(() =>
+            {
+                using (new FileStream(lockPath, FileMode.Open, FileAccess.ReadWrite,
+                           FileShare.None))
+                {
+                }
+            }, "写入返回后锁哨兵必须已释放并可被独占重开");
+            string summary = File.ReadAllText(Path.Combine(root, "famine-summary.json"));
+            StringAssert.Contains("\"schema\":\"m08b.famine-diagnostics/v1\"", summary);
+            StringAssert.Contains("\"command\":\"" + command + "\"", summary);
+            StringAssert.Contains("\"sourceSha256\":\"" +
+                M08BLongTermSimulationRunner.ComputeSourceSha256() + "\"", summary);
+            StringAssert.Contains("\"policyId\":\"dual-farm-v1\"", summary);
+            StringAssert.Contains("\"policyId\":\"farm-managed-v1\"", summary);
+
+            string csv = File.ReadAllText(Path.Combine(root, "famine-months.csv"));
+            Assert.That(csv.Split('\n').Length - 2,
+                Is.EqualTo(managed.Months.Count + dual.Months.Count),
+                "CSV 必须每个被追踪月份一行，且没有别的行");
+            Assert.That(Directory.EnumerateFiles(root).Select(Path.GetFileName)
+                    .All(name => !name.StartsWith("seeds-", StringComparison.Ordinal) &&
+                                 !name.StartsWith("checkpoints-", StringComparison.Ordinal) &&
+                                 !name.StartsWith("summary-", StringComparison.Ordinal) &&
+                                 !name.StartsWith("batch-", StringComparison.Ordinal)),
+                Is.True, "诊断绝不能写出封存工件名");
+
+            Assert.That(M08BLongTermSimulationRunner.FamineDiagnosticsRoot,
+                Does.EndWith("m08b-famine-diagnostics"));
+            string defaultRoot =
+                Path.GetFullPath(M08BLongTermSimulationRunner.DefaultOutputRoot);
+            string famineRoot =
+                Path.GetFullPath(M08BLongTermSimulationRunner.FamineDiagnosticsRoot);
+            Assert.That(famineRoot, Is.Not.EqualTo(defaultRoot));
+            Assert.That(famineRoot.StartsWith(
+                    defaultRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase),
+                Is.False, "默认粮荒诊断目录必须位于封存产物树之外");
+        }
+
+        [Test]
+        public void FamineProbeFailsInsteadOfDroppingAMonthWithoutSettledReports()
+        {
+            var holder = new GameObject("M08BFamineProbeMissingReportTest");
+            try
+            {
+                GameSession session = holder.AddComponent<GameSession>();
+                session.InitNewGame(7UL);
+                var probe = new M08BFamineMonthlyProbe(7UL, M08BIndustryPolicy.FarmManagedV1);
+
+                Assert.That(session.LastMarketReport, Is.Null,
+                    "从未结算过月份的会话没有可追踪的市场报告");
+                Assert.That(session.LastIndustryReport, Is.Null,
+                    "从未结算过月份的会话没有可追踪的产业报告");
+
+                var nullSession = Assert.Throws<InvalidOperationException>(
+                    () => probe.CaptureSettledMonth(null, 1));
+                StringAssert.Contains("null 会话", nullSession.Message);
+
+                var missingReport = Assert.Throws<InvalidOperationException>(
+                    () => probe.CaptureSettledMonth(session, 1));
+                StringAssert.Contains("LastMarketReport", missingReport.Message);
+                Assert.That(probe.Rows, Is.Empty,
+                    "缺少报告的月份必须直接失败，而不是留下更短的轨迹");
+            }
+            finally
+            {
+                Object.DestroyImmediate(holder);
+            }
+        }
+
+        [Test]
+        public void FamineDiagnosticRefusesToWriteATraceThatLostMonths()
+        {
+            M08BFaminePolicyTrace complete = M08BLongTermSimulationRunner.RunFamineDiagnosticSeed(
+                7UL, 1, M08BIndustryPolicy.FarmManagedV1);
+            Assert.That(complete.Months.Count, Is.EqualTo(complete.MonthsSimulated),
+                "运行本身必须每个模拟月保留一行");
+
+            var truncated = new M08BFaminePolicyTrace
+            {
+                Seed = complete.Seed,
+                SeedHex = complete.SeedHex,
+                PolicyId = complete.PolicyId,
+                Years = complete.Years,
+                Termination = complete.Termination,
+                MonthsSimulated = complete.MonthsSimulated + 1,
+                Months = new List<M08BFamineMonthRow>(complete.Months)
+            };
+            string root = Path.Combine(_famineRoot, "incomplete");
+
+            var failure = Assert.Throws<InvalidOperationException>(() =>
+                M08BLongTermSimulationRunner.WriteFamineDiagnostics(root, new[] { truncated },
+                    "unity command run_script --file probe.cs"));
+            StringAssert.Contains("个月份行", failure.Message);
+            Assert.That(Directory.Exists(root), Is.False,
+                "被拒绝的诊断不得创建输出目录");
+            Assert.That(File.Exists(Path.Combine(root, "famine-months.csv")), Is.False,
+                "丢失月份的轨迹绝不能产出看起来像完整的 CSV");
+            Assert.That(File.Exists(Path.Combine(root, "famine-summary.json")), Is.False);
+        }
+
+        [Test]
+        public void FamineDiagnosticRefusesSealedRootsAndExistingArtifactsWithoutTouchingThem()
+        {
+            M08BFaminePolicyTrace trace = M08BLongTermSimulationRunner.RunFamineDiagnosticSeed(
+                7UL, 1, M08BIndustryPolicy.FarmManagedV1);
+            const string command = "unity command run_script --file probe.cs";
+
+            Assert.Throws<ArgumentException>(() =>
+                M08BLongTermSimulationRunner.WriteFamineDiagnostics(
+                    M08BLongTermSimulationRunner.DefaultOutputRoot, new[] { trace }, command));
+            Assert.Throws<ArgumentException>(() =>
+                M08BLongTermSimulationRunner.WriteFamineDiagnostics(
+                    Path.Combine(M08BLongTermSimulationRunner.DefaultOutputRoot,
+                        "famine-diagnostics-rejected"),
+                    new[] { trace }, command));
+
+            string root = Path.Combine(_famineRoot, "existing");
+            Directory.CreateDirectory(root);
+            string csvPath = Path.Combine(root, "famine-months.csv");
+            string summaryPath = Path.Combine(root, "famine-summary.json");
+            const string oldCsv = "旧 CSV 内容\n";
+            const string oldSummary = "{\"旧\":true}\n";
+            File.WriteAllText(csvPath, oldCsv);
+            File.WriteAllText(summaryPath, oldSummary);
+
+            var failure = Assert.Throws<IOException>(() =>
+                M08BLongTermSimulationRunner.WriteFamineDiagnostics(
+                    root, new[] { trace }, command));
+            StringAssert.Contains("拒绝覆盖", failure.Message);
+            Assert.That(File.ReadAllText(csvPath), Is.EqualTo(oldCsv),
+                "拒绝写入时既有 CSV 内容必须原样保留");
+            Assert.That(File.ReadAllText(summaryPath), Is.EqualTo(oldSummary),
+                "拒绝写入时既有汇总内容必须原样保留");
+        }
+
+        [Test]
+        public void FamineDiagnosticRefusesToWriteWhenOnlyTheCsvAlreadyExists()
+        {
+            M08BFaminePolicyTrace trace = M08BLongTermSimulationRunner.RunFamineDiagnosticSeed(
+                7UL, 1, M08BIndustryPolicy.FarmManagedV1);
+            const string command = "unity command run_script --file probe.cs";
+            string root = Path.Combine(_famineRoot, "only-csv");
+            Directory.CreateDirectory(root);
+            string csvPath = Path.Combine(root, "famine-months.csv");
+            string summaryPath = Path.Combine(root, "famine-summary.json");
+            const string oldCsv = "旧 CSV 内容\n";
+            File.WriteAllText(csvPath, oldCsv);
+
+            var failure = Assert.Throws<IOException>(() =>
+                M08BLongTermSimulationRunner.WriteFamineDiagnostics(root, new[] { trace },
+                    command));
+            StringAssert.Contains("拒绝覆盖", failure.Message);
+            Assert.That(File.ReadAllText(csvPath), Is.EqualTo(oldCsv),
+                "既有 CSV 内容必须原样保留");
+            Assert.That(File.Exists(summaryPath), Is.False,
+                "被拒绝的调用不得补写另一半汇总");
+            Assert.That(Directory.EnumerateFiles(root).Select(Path.GetFileName),
+                Is.EquivalentTo(new[] { "famine-months.csv" }),
+                "被拒绝的调用不得留下其他文件");
+        }
+
+        [Test]
+        public void FamineDiagnosticRefusesToWriteWhenOnlyTheSummaryAlreadyExists()
+        {
+            M08BFaminePolicyTrace trace = M08BLongTermSimulationRunner.RunFamineDiagnosticSeed(
+                7UL, 1, M08BIndustryPolicy.FarmManagedV1);
+            const string command = "unity command run_script --file probe.cs";
+            string root = Path.Combine(_famineRoot, "only-summary");
+            Directory.CreateDirectory(root);
+            string csvPath = Path.Combine(root, "famine-months.csv");
+            string summaryPath = Path.Combine(root, "famine-summary.json");
+            const string oldSummary = "{\"旧\":true}\n";
+            File.WriteAllText(summaryPath, oldSummary);
+
+            var failure = Assert.Throws<IOException>(() =>
+                M08BLongTermSimulationRunner.WriteFamineDiagnostics(root, new[] { trace },
+                    command));
+            StringAssert.Contains("拒绝覆盖", failure.Message);
+            Assert.That(File.ReadAllText(summaryPath), Is.EqualTo(oldSummary),
+                "既有汇总内容必须原样保留");
+            Assert.That(File.Exists(csvPath), Is.False,
+                "被拒绝的调用不得补写另一半 CSV");
+            Assert.That(Directory.EnumerateFiles(root).Select(Path.GetFileName),
+                Is.EquivalentTo(new[] { "famine-summary.json" }),
+                "被拒绝的调用不得留下其他文件");
+        }
+
+        [Test]
+        public void FamineDiagnosticRefusesToWriteWhileAnotherWriterHoldsTheDirectoryLock()
+        {
+            M08BFaminePolicyTrace trace = M08BLongTermSimulationRunner.RunFamineDiagnosticSeed(
+                7UL, 1, M08BIndustryPolicy.FarmManagedV1);
+            const string command = "unity command run_script --file probe.cs";
+            string root = Path.Combine(_famineRoot, "locked");
+            Directory.CreateDirectory(root);
+            string lockPath = Path.Combine(root,
+                M08BLongTermSimulationRunner.FamineLockFileName);
+            string csvPath = Path.Combine(root, "famine-months.csv");
+            string summaryPath = Path.Combine(root, "famine-summary.json");
+            const string foreignLock = "另一个写入者持有\n";
+            using (var holder = new FileStream(lockPath, FileMode.CreateNew,
+                       FileAccess.ReadWrite, FileShare.None))
+            using (var writer = new StreamWriter(holder))
+            {
+                writer.Write(foreignLock);
+                writer.Flush();
+
+                var failure = Assert.Throws<IOException>(() =>
+                    M08BLongTermSimulationRunner.WriteFamineDiagnostics(root, new[] { trace },
+                        command));
+                StringAssert.Contains("锁", failure.Message);
+                Assert.That(File.Exists(lockPath), Is.True, "他人的锁哨兵不得被删除");
+                Assert.That(File.Exists(csvPath), Is.False, "未持锁的调用不得写出 CSV");
+                Assert.That(File.Exists(summaryPath), Is.False, "未持锁的调用不得写出汇总");
+                Assert.That(Directory.Exists(root), Is.True,
+                    "未持锁的调用不得删除他人仍在使用的目录");
+                Assert.That(Directory.EnumerateFiles(root).Select(Path.GetFileName),
+                    Is.EquivalentTo(new[] { M08BLongTermSimulationRunner.FamineLockFileName }),
+                    "未持锁的调用不得留下其他文件，也不得动他人的哨兵");
+            }
+
+            Assert.That(File.ReadAllText(lockPath), Is.EqualTo(foreignLock),
+                "他人的锁哨兵内容必须原样保留");
+            Assert.That(File.Exists(csvPath), Is.False, "未持锁的调用不得补写 CSV");
+            Assert.That(File.Exists(summaryPath), Is.False, "未持锁的调用不得补写汇总");
+        }
+
+        [Test]
+        public void FamineDiagnosticRemovesItsOwnCsvWhenTheSummaryCannotBeCreated()
+        {
+            M08BFaminePolicyTrace trace = M08BLongTermSimulationRunner.RunFamineDiagnosticSeed(
+                7UL, 1, M08BIndustryPolicy.FarmManagedV1);
+            const string command = "unity command run_script --file probe.cs";
+            string root = Path.Combine(_famineRoot, "blocked-summary");
+            string csvPath = Path.Combine(root, "famine-months.csv");
+            string summaryPath = Path.Combine(root, "famine-summary.json");
+            // 用同名目录占住汇总目标：CSV 已经写出之后，汇总的不覆盖创建会失败，正好检验清理。
+            Directory.CreateDirectory(summaryPath);
+
+            Exception failure = Assert.Catch<Exception>(() =>
+                M08BLongTermSimulationRunner.WriteFamineDiagnostics(root, new[] { trace },
+                    command));
+            Assert.That(failure is IOException || failure is UnauthorizedAccessException,
+                Is.True,
+                "占用汇总目标的同名目录必须让写入失败，而不是被静默跳过");
+
+            Assert.That(File.Exists(csvPath), Is.False,
+                "汇总创建失败时，本次调用已写出的 CSV 必须被清理");
+            Assert.That(Directory.Exists(summaryPath), Is.True,
+                "导致失败的既有目录必须保留");
+            Assert.That(Directory.EnumerateFileSystemEntries(root).Select(Path.GetFileName),
+                Is.EquivalentTo(new[]
+                {
+                    "famine-summary.json",
+                    M08BLongTermSimulationRunner.FamineLockFileName
+                }),
+                "失败后只剩调用前就存在的占位目录与持久锁哨兵，没有留下目标文件");
+        }
+
+        [Test]
+        public void FamineDiagnosticRejectsPoliciesItDoesNotCompare()
+        {
+            Assert.Throws<ArgumentOutOfRangeException>(() =>
+                M08BLongTermSimulationRunner.RunFamineDiagnosticSeed(7UL, 1,
+                    M08BIndustryPolicy.Unmanaged));
+        }
+
         private static PersonId FarmAssigneeOf(GameSession session) =>
             session.Industry.Slot(IndustryCatalog.FarmId).AssigneeId;
 
@@ -2352,14 +2826,14 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         /// <summary>
-        /// The frozen provenance type stays internal to the runner assembly, so the tests reach
-        /// it by reflection instead of widening the production API for forgery.
+        /// 冻结来源类型仍留在运行器程序集内部，因此测试通过反射触达它，而不是为伪造放宽生产
+        /// API。
         /// </summary>
         private static Type BatchProvenanceType =>
             typeof(M08BLongTermSimulationRunner).Assembly.GetType(
                 "SengokuChronicle.Editor.M08BBatchProvenance", throwOnError: true);
 
-        /// <summary>Builds a snapshot through the internal constructor to inject fixed hashes.</summary>
+        /// <summary>通过内部构造函数构造快照，以注入固定哈希。</summary>
         private static object FrozenProvenance(string sourceSha256, string ruleInputSha256,
             int ruleInputFileCount)
         {
@@ -2374,7 +2848,7 @@ namespace SengokuChronicle.Tests.EditMode
             });
         }
 
-        /// <summary>Runs the private batch overload with an injected frozen snapshot.</summary>
+        /// <summary>用注入的冻结快照运行私有批次重载。</summary>
         private static IReadOnlyList<M08BSeedResult> RunBatchWithFrozenProvenance(int firstSeed,
             int count, int years, string outputRoot, IReadOnlyList<int> checkpointYears,
             M08BIndustryPolicy policy, object provenance)
@@ -2390,7 +2864,7 @@ namespace SengokuChronicle.Tests.EditMode
                 });
         }
 
-        /// <summary>Builds the summary through the private overload with a frozen snapshot.</summary>
+        /// <summary>用冻结快照通过私有重载构造汇总。</summary>
         private static string BuildSummaryWithFrozenProvenance(IReadOnlyList<M08BSeedResult> seeds,
             int firstSeed, int count, int years, IReadOnlyList<int> checkpointYears,
             M08BIndustryPolicy policy, object provenance)
@@ -2447,8 +2921,8 @@ namespace SengokuChronicle.Tests.EditMode
         }
 
         /// <summary>
-        /// A stopped seed that reached no checkpoint: every checkpoint row stays unreached, so a
-        /// summary must exclude it from checkpoint ratios while still counting it overall.
+        /// 一个没有到达任何检查点就停止的种子：所有检查点行都保持未到达，因此汇总必须把它排除在
+        /// 检查点分母之外，但仍然计入整体分母。
         /// </summary>
         private static M08BSeedResult UnreachedSeed(ulong seed, int monthsSimulated)
         {
