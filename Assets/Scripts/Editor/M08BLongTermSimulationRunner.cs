@@ -49,11 +49,9 @@ namespace SengokuChronicle.Editor
         FarmManagedV1 = 1,
 
         /// <summary>
-        /// Deterministic simulation-only comparison for the approved second farm post: at a
-        /// management-stable point it fills both farm posts (post 0 first) through the public
-        /// session command, using the same lowest-ordinal legal candidate order as
-        /// <see cref="FarmManagedV1"/>. Trading House stays vacant, so the only difference from
-        /// the baseline is the second farm post.
+        /// 针对获批的第二农庄岗位的确定性模拟专用对比策略：在管理稳定点通过公开的会话命令
+        /// 填满两个农庄岗位（先岗位 0），候选次序与 <see cref="FarmManagedV1"/> 一样取序号最小
+        /// 的合法者。商行保持空缺，因此它与基线的唯一差别就是第二农庄岗位。
         /// </summary>
         DualFarmV1 = 2
     }
@@ -158,9 +156,8 @@ namespace SengokuChronicle.Editor
         /// <summary>Successful Farm appointments the active policy made during the run.</summary>
         public int FarmAppointments;
         /// <summary>
-        /// Management-stable points where the policy found at least one Farm post vacant,
-        /// whether or not a candidate was accepted. It is the opportunity count behind
-        /// <see cref="FarmAppointments"/>.
+        /// 策略发现至少一个农庄岗位空缺的管理稳定点，不论最终是否有人入选。它是
+        /// <see cref="FarmAppointments"/> 背后的机会计数。
         /// </summary>
         public int FarmVacancies;
         /// <summary>Farm assignee at the final state, or empty when the post ended vacant.</summary>
@@ -184,13 +181,242 @@ namespace SengokuChronicle.Editor
     }
 
     /// <summary>
-    /// Provenance of the rule inputs a batch ran against, frozen once
-    /// <see cref="M08BLongTermSimulationRunner.CaptureBatchProvenance"/> reads the disk at batch
-    /// start. Every reuse decision and every artifact of that batch must use this one snapshot:
-    /// re-reading the source when the summary is written would stamp rows produced by an older
-    /// assembly with the hashes of a newer, not yet compiled source. The type is internal and
-    /// only <see cref="M08BLongTermSimulationRunner.CaptureBatchProvenance"/> constructs it, so a
-    /// public caller can never hand the runner hashes it did not observe itself.
+    /// 只读粮荒诊断轨迹中的一个月份。每个字段都是真实月份事务已经算出并持久化的值，或是本次
+    /// 月份推进前管理稳定点上的开局快照，因此记录轨迹不会改变任何结果。
+    /// </summary>
+    public sealed class M08BFamineMonthRow
+    {
+        public ulong Seed;
+        /// <summary>本行所属策略；只追踪 farm-managed-v1 与 dual-farm-v1。</summary>
+        public string PolicyId = string.Empty;
+        /// <summary>本月在本次运行内从 1 开始的序号。</summary>
+        public int MonthNumber;
+        /// <summary>本行结算月份所在的公历年。</summary>
+        public int Year;
+        /// <summary>本行结算月份的公历月，1..12。</summary>
+        public int Month;
+        /// <summary>与市场结算共用的绝对月份索引。</summary>
+        public int MonthIndex;
+        /// <summary>计算本月家庭口粮时计入的在世家庭成员数。</summary>
+        public int HouseholdMembers;
+        /// <summary>本月家庭想要的口粮单位。</summary>
+        public int Demand;
+        /// <summary>月初、收获与采购之前的粮食库存。</summary>
+        public int OpeningFood;
+        public int OpeningFunds;
+        public int OpeningSupplies;
+        /// <summary>农庄岗位 0 上的稳定人物 id；岗位空缺时为空字符串。</summary>
+        public string FarmPost0Assignee = string.Empty;
+        /// <summary>
+        /// 农庄岗位 0 的结算状态文本：运转、空缺、停滞、指派无效；报告里没有该岗位时为
+        /// <see cref="M08BLongTermSimulationRunner.FaminePostAbsentStatus"/>。
+        /// </summary>
+        public string FarmPost0Status = string.Empty;
+        public bool FarmPost0Operated;
+        public string FarmPost1Assignee = string.Empty;
+        /// <summary>农庄岗位 1 的结算状态文本，取值与岗位 0 相同。</summary>
+        public string FarmPost1Status = string.Empty;
+        public bool FarmPost1Operated;
+        /// <summary>本月所有实际运转产线收获的粮食。</summary>
+        public int FoodProduced;
+        /// <summary>本月家庭实际从市场买到的粮食单位。</summary>
+        public int FoodPurchased;
+        public int FoodUnmet;
+        public int FoodPriceIndexBefore;
+        public int FoodPriceIndexAfter;
+        public int MaterialsPriceIndexBefore;
+        public int MaterialsPriceIndexAfter;
+        /// <summary>整个月份事务结束后的持久化粮食库存。</summary>
+        public int ClosingFood;
+        public int ClosingFunds;
+        public int ClosingSupplies;
+        /// <summary>本月结束后市场自身的连续粮荒月计数。</summary>
+        public int ConsecutiveShortageMonths;
+        /// <summary>本次运行中第一个 <see cref="FoodUnmet"/> 为正的月份为 true。</summary>
+        public bool FirstFoodUnmet;
+        /// <summary>
+        /// 本次运行中第一个连续粮荒月数达到
+        /// <see cref="M08BLongTermSimulationRunner.CollapseConsecutiveMonths"/> 的月份为 true。
+        /// </summary>
+        public bool ThresholdCrossed;
+    }
+
+    /// <summary>
+    /// 单一种子在单一策略下的结果：停止原因加上全部被追踪的月份。由
+    /// <see cref="M08BLongTermSimulationRunner.RunFamineDiagnosticSeed"/> 产出。
+    /// </summary>
+    public sealed class M08BFaminePolicyTrace
+    {
+        public ulong Seed;
+        public string SeedHex = string.Empty;
+        public string PolicyId = string.Empty;
+        public M08BTerminationReason Termination;
+        public string TerminationDetail = string.Empty;
+        /// <summary>请求的模拟年限。</summary>
+        public int Years;
+        public int MonthsSimulated;
+        public List<M08BFamineMonthRow> Months = new List<M08BFamineMonthRow>();
+
+        /// <summary>第一个口粮需求未被满足的月份；整次运行从未短缺时为 null。</summary>
+        public M08BFamineMonthRow FirstFoodUnmetMonth =>
+            Months.FirstOrDefault(row => row.FirstFoodUnmet);
+
+        /// <summary>跨过连续粮荒月数阈值的月份；从未跨过时为 null。</summary>
+        public M08BFamineMonthRow ThresholdCrossedMonth =>
+            Months.FirstOrDefault(row => row.ThresholdCrossed);
+    }
+
+    /// <summary>
+    /// 粮荒诊断的只读月度观察器。运行器在月份推进前管理稳定点调用
+    /// <see cref="CaptureOpening"/>，在月份提交后调用 <see cref="CaptureSettledMonth"/>，
+    /// 因此每一行把持久化开局余额与该月自己的结算报告配成一对。它从不写会话，也从不读取或
+    /// 推进随机流。
+    /// </summary>
+    public sealed class M08BFamineMonthlyProbe
+    {
+        private readonly ulong _seed;
+        private readonly string _policyId;
+        private readonly List<M08BFamineMonthRow> _rows = new List<M08BFamineMonthRow>();
+        private int _openingFood;
+        private int _openingFunds;
+        private int _openingSupplies;
+
+        public M08BFamineMonthlyProbe(ulong seed, M08BIndustryPolicy policy)
+        {
+            _seed = seed;
+            _policyId = M08BLongTermSimulationRunner.PolicyIdOf(policy);
+        }
+
+        public IReadOnlyList<M08BFamineMonthRow> Rows => _rows;
+
+        private string Describe() =>
+            "seed=" + _seed.ToString(CultureInfo.InvariantCulture) + " policy=" + _policyId;
+
+        /// <summary>策略执行完、月份推进前，快照持久化余额。</summary>
+        public void CaptureOpening(GameSession session)
+        {
+            if (session == null)
+            {
+                throw new InvalidOperationException(
+                    "粮荒诊断无法从 null 会话快照开局余额（" + Describe() + "）。");
+            }
+            MarketState market = session.Market;
+            IndustryView industry = session.Industry;
+            _openingFood = market != null ? market.FoodInventory : 0;
+            _openingFunds = industry != null ? industry.Resources.Funds : 0;
+            _openingSupplies = industry != null ? industry.Resources.Supplies : 0;
+        }
+
+        /// <summary>
+        /// 从月份事务自己的报告追加一行。已提交的月份总会留下两份报告，因此缺一份就说明本月无法
+        /// 描述：探针在这里直接失败，而不是不追加、返回一份看起来仍然完整的短轨迹。
+        /// </summary>
+        public void CaptureSettledMonth(GameSession session, int monthNumber)
+        {
+            if (session == null)
+            {
+                throw new InvalidOperationException(
+                    "粮荒诊断无法从 null 会话记录已结算的第 " +
+                    monthNumber.ToString(CultureInfo.InvariantCulture) + " 个月（" +
+                    Describe() + "）。");
+            }
+
+            MarketMonthReport market = session.LastMarketReport;
+            IndustryMonthReport industry = session.LastIndustryReport;
+            if (market == null || industry == null)
+            {
+                throw new InvalidOperationException(
+                    "粮荒诊断丢失了已结算的第 " +
+                    monthNumber.ToString(CultureInfo.InvariantCulture) + " 个月（" + Describe() +
+                    "）：LastMarketReport=" + (market == null ? "null" : "set") +
+                    "，LastIndustryReport=" + (industry == null ? "null" : "set") +
+                    "。缺少本月的轨迹会误报整次运行，因此诊断停止，而不是返回更少的行。");
+            }
+
+            if (_rows.Count + 1 != monthNumber)
+            {
+                throw new InvalidOperationException(
+                    "粮荒诊断必须按顺序记录月份（" + Describe() + "）：期望第 " +
+                    (_rows.Count + 1).ToString(CultureInfo.InvariantCulture) +
+                    " 行，实际到达的却是已结算的第 " +
+                    monthNumber.ToString(CultureInfo.InvariantCulture) + " 个月。");
+            }
+
+            IndustryLineResult firstPost = default;
+            IndustryLineResult secondPost = default;
+            bool hasFirstPost = false;
+            bool hasSecondPost = false;
+            for (int i = 0; i < industry.Lines.Count; i++)
+            {
+                IndustryLineResult line = industry.Lines[i];
+                if (!string.Equals(line.IndustryId, IndustryCatalog.FarmId, StringComparison.Ordinal))
+                    continue;
+                if (line.PostIndex <= 0)
+                {
+                    firstPost = line;
+                    hasFirstPost = true;
+                }
+                else if (line.PostIndex == 1)
+                {
+                    secondPost = line;
+                    hasSecondPost = true;
+                }
+            }
+
+            MarketState closed = market.After;
+            MarketState persisted = session.Market;
+            IndustryResources closing = session.Industry.Resources;
+            _rows.Add(new M08BFamineMonthRow
+            {
+                Seed = _seed,
+                PolicyId = _policyId,
+                MonthNumber = monthNumber,
+                Year = market.Year,
+                Month = market.Month,
+                MonthIndex = closed != null ? closed.LastSettledMonthIndex : 0,
+                HouseholdMembers = market.HouseholdMembers,
+                Demand = market.FoodDemand,
+                OpeningFood = _openingFood,
+                OpeningFunds = _openingFunds,
+                OpeningSupplies = _openingSupplies,
+                FarmPost0Assignee = hasFirstPost
+                    ? firstPost.AssigneeId.Value ?? string.Empty
+                    : string.Empty,
+                FarmPost0Status = hasFirstPost
+                    ? M08BLongTermSimulationRunner.FaminePostStatusText(firstPost.Status)
+                    : M08BLongTermSimulationRunner.FaminePostAbsentStatus,
+                FarmPost0Operated =
+                    hasFirstPost && firstPost.Status == IndustryLineStatus.Operated,
+                FarmPost1Assignee = hasSecondPost
+                    ? secondPost.AssigneeId.Value ?? string.Empty
+                    : string.Empty,
+                FarmPost1Status = hasSecondPost
+                    ? M08BLongTermSimulationRunner.FaminePostStatusText(secondPost.Status)
+                    : M08BLongTermSimulationRunner.FaminePostAbsentStatus,
+                FarmPost1Operated =
+                    hasSecondPost && secondPost.Status == IndustryLineStatus.Operated,
+                FoodProduced = market.FoodProduced,
+                FoodPurchased = market.FoodPurchased,
+                FoodUnmet = market.FoodUnmet,
+                FoodPriceIndexBefore = market.FoodPriceIndexBefore,
+                FoodPriceIndexAfter = market.FoodPriceIndexAfter,
+                MaterialsPriceIndexBefore = market.MaterialsPriceIndexBefore,
+                MaterialsPriceIndexAfter = market.MaterialsPriceIndexAfter,
+                ClosingFood = persisted != null ? persisted.FoodInventory : market.FoodInventoryAfter,
+                ClosingFunds = closing.Funds,
+                ClosingSupplies = closing.Supplies,
+                ConsecutiveShortageMonths = market.ConsecutiveFoodShortageMonths
+            });
+        }
+    }
+
+    /// <summary>
+    /// 一批运行所用规则输入的来源快照，在批次开始时由
+    /// <see cref="M08BLongTermSimulationRunner.CaptureBatchProvenance"/> 读取磁盘一次并冻结。
+    /// 该批次的每次复用判断与每份产物都必须使用这一份快照：写汇总时重新读源码，会把旧程序集
+    /// 产出的行盖上更新但尚未编译的源码哈希。该类型是内部的，且只由
+    /// <see cref="M08BLongTermSimulationRunner.CaptureBatchProvenance"/> 构造，因此公开调用者
+    /// 无法把运行器自己没观测到的哈希塞进来。
     /// </summary>
     internal sealed class M08BBatchProvenance
     {
@@ -202,13 +428,13 @@ namespace SengokuChronicle.Editor
             RuleInputFileCount = ruleInputFileCount;
         }
 
-        /// <summary>SHA-256 of the runner source at batch start.</summary>
+        /// <summary>批次开始时运行器源码的 SHA-256。</summary>
         public string SourceSha256 { get; }
 
-        /// <summary>SHA-256 of the whole rule-input dependency set at batch start.</summary>
+        /// <summary>批次开始时整套规则输入依赖的 SHA-256。</summary>
         public string RuleInputSha256 { get; }
 
-        /// <summary>Number of rule-input files in the snapshot's manifest.</summary>
+        /// <summary>快照清单中的规则输入文件数。</summary>
         public int RuleInputFileCount { get; }
     }
 
@@ -218,8 +444,8 @@ namespace SengokuChronicle.Editor
     /// month transaction a player uses. The only automated policies are the approved stable
     /// option-ID event resolver, the approved simulation-only succession policy (designated
     /// heir, else lowest stable PersonId, with a stable-ID regent), and the optional
-    /// simulation-only <see cref="M08BIndustryPolicy.FarmManagedV1"/> and
-    /// <see cref="M08BIndustryPolicy.DualFarmV1"/> comparison policies;
+    /// 模拟专用的 <see cref="M08BIndustryPolicy.FarmManagedV1"/> 与
+    /// <see cref="M08BIndustryPolicy.DualFarmV1"/> 两个对比策略；
     /// extinction, a crisis adoption the player alone may accept, and every other pause keep
     /// their own explicit stop category and are never discarded.
     /// </summary>
@@ -245,7 +471,7 @@ namespace SengokuChronicle.Editor
         public const string UnmanagedPolicyId = "unmanaged";
         /// <summary>Policy ID of the simulation-only vacant-Farm comparison.</summary>
         public const string FarmManagedV1PolicyId = "farm-managed-v1";
-        /// <summary>Policy ID of the simulation-only two-farm-post comparison (M08B option B).</summary>
+        /// <summary>模拟专用双农庄岗位对比策略的 Policy ID（M08B 方案 B）。</summary>
         public const string DualFarmV1PolicyId = "dual-farm-v1";
 
         /// <summary>
@@ -324,6 +550,21 @@ namespace SengokuChronicle.Editor
         private static string NormalizeRootPath(string root) =>
             Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 
+        /// <summary>
+        /// 判断 <paramref name="path"/> 是否落在封存的历史产物树内：等于
+        /// <see cref="DefaultOutputRoot"/>，或位于其任一子目录。比较沿用
+        /// <see cref="NormalizeRootPath"/> 的规范化结果，再做序数、不区分大小写的匹配，因此封存根的
+        /// 其他写法与任意后代路径都会被识别出来。
+        /// </summary>
+        private static bool IsSealedArtifactPath(string path)
+        {
+            if (IsLegacyOutputRoot(path))
+                return true;
+            string sealedRoot = NormalizeRootPath(DefaultOutputRoot) + Path.DirectorySeparatorChar;
+            return NormalizeRootPath(path).StartsWith(sealedRoot,
+                StringComparison.OrdinalIgnoreCase);
+        }
+
         /// <summary>Stable artifact and provenance label for one policy.</summary>
         public static string PolicyIdOf(M08BIndustryPolicy policy)
         {
@@ -336,10 +577,34 @@ namespace SengokuChronicle.Editor
         }
 
         /// <summary>
-        /// Artifact description of one industry policy, written for a reader of a single summary
-        /// file. Each policy owns a self-contained text that names only its own behaviour, so a
-        /// run can never be described with another policy's rule. The texts are mutually
-        /// exclusive by construction and are asserted as such.
+        /// 诊断产物里“报告中没有这个岗位”的状态文本。它与
+        /// <see cref="IndustryLineStatus.Vacant"/>（岗位存在但无人）是两件事，因此不能合并。
+        /// </summary>
+        public const string FaminePostAbsentStatus = "无此岗位";
+
+        /// <summary>
+        /// 把 <see cref="IndustryLineStatus"/> 映射为诊断产物里的中文状态文本。CSV 与汇总只出现这
+        /// 四个中文值或 <see cref="FaminePostAbsentStatus"/>；英文枚举名不进产物，免得冲突排查时
+        /// 还要在两种语言之间对照。
+        /// </summary>
+        public static string FaminePostStatusText(IndustryLineStatus status)
+        {
+            switch (status)
+            {
+                case IndustryLineStatus.Operated: return "运转";
+                case IndustryLineStatus.Vacant: return "空缺";
+                case IndustryLineStatus.Stalled: return "停滞";
+                case IndustryLineStatus.InvalidAssignment: return "指派无效";
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(status), status,
+                        "未知的岗位结算状态，无法写入中文诊断文本。");
+            }
+        }
+
+        /// <summary>
+        /// 一种产业策略在产物里的描述文字，面向只读一份汇总文件的读者。每个策略都有一段自足
+        /// 的文本，只描述自己的行为，因此一次运行不可能被写成另一策略的规则。这些文本在构造上
+        /// 互斥，并有断言保证。
         /// </summary>
         public static string DescribeIndustryPolicy(M08BIndustryPolicy policy)
         {
@@ -546,12 +811,10 @@ namespace SengokuChronicle.Editor
             TryComputeRuleInputProvenance(out string sha256, out _) ? sha256 : string.Empty;
 
         /// <summary>
-        /// Reads the runner-source and rule-input hashes once, producing the snapshot one batch
-        /// must reuse for every reuse decision, CSV/summary write and batch-log line. A batch
-        /// calls this before it reuses or runs any seed, so a source edit that lands while the
-        /// batch is running cannot relabel rows produced by the previous assembly. Private on
-        /// purpose: the public entries capture their own snapshot, so no caller can inject hashes
-        /// it did not observe. The EditMode tests reach the seam by reflection.
+        /// 只读取一次运行器源码与规则输入哈希，产出该批次在每次复用判断、CSV/汇总写入与批量
+        /// 日志行中都必须复用的快照。批次在复用或运行任何种子之前调用它，因此批次运行期间落地
+        /// 的源码改动无法把旧程序集产出的行重新贴签。它刻意保持私有：公开入口各自抓取自己的
+        /// 快照，调用者无法注入自己没观测到的哈希。EditMode 测试通过反射触达这个接缝。
         /// </summary>
         private static M08BBatchProvenance CaptureBatchProvenance()
         {
@@ -662,7 +925,7 @@ namespace SengokuChronicle.Editor
         /// real runs still exercise the checkpoint path.
         /// </summary>
         public static M08BSeedResult RunSeed(ulong seed, int years, IReadOnlyList<int> checkpointYears,
-            M08BIndustryPolicy policy)
+            M08BIndustryPolicy policy, M08BFamineMonthlyProbe famineProbe = null)
         {
             Scene scene = EditorSceneManager.NewPreviewScene();
             try
@@ -671,7 +934,7 @@ namespace SengokuChronicle.Editor
                 SceneManager.MoveGameObjectToScene(holder, scene);
                 GameSession session = holder.AddComponent<GameSession>();
                 session.InitNewGame(seed);
-                return RunExistingSession(session, seed, years, checkpointYears, policy);
+                return RunExistingSession(session, seed, years, checkpointYears, policy, famineProbe);
             }
             finally
             {
@@ -692,7 +955,8 @@ namespace SengokuChronicle.Editor
             RunExistingSession(session, seed, years, checkpointYears, M08BIndustryPolicy.Unmanaged);
 
         public static M08BSeedResult RunExistingSession(GameSession session, ulong seed, int years,
-            IReadOnlyList<int> checkpointYears, M08BIndustryPolicy policy)
+            IReadOnlyList<int> checkpointYears, M08BIndustryPolicy policy,
+            M08BFamineMonthlyProbe famineProbe = null)
         {
             if (session == null)
                 throw new ArgumentNullException(nameof(session));
@@ -803,6 +1067,9 @@ namespace SengokuChronicle.Editor
                 else if (policy == M08BIndustryPolicy.DualFarmV1)
                     ApplyDualFarmManagement(session, result);
 
+                // 只读粮荒诊断接缝：管理稳定点是事务提交前最后一个能观察到本月开局余额的时刻。
+                famineProbe?.CaptureOpening(session);
+
                 if (!session.TryAdvanceToNextMonth())
                 {
                     MonthTurnOutcome outcome = session.LastMonthTurnOutcome;
@@ -852,6 +1119,7 @@ namespace SengokuChronicle.Editor
                 consecutiveBlocked = 0;
                 result.MonthsSimulated++;
                 UpdateMonthlyMetrics(session, result, ref currentFamineRun, ref currentStallRun);
+                famineProbe?.CaptureSettledMonth(session, result.MonthsSimulated);
                 CaptureDueCheckpoints(session, result, currentFamineRun, currentStallRun);
             }
 
@@ -1194,19 +1462,18 @@ namespace SengokuChronicle.Editor
         }
 
         /// <summary>
-        /// dual-farm-v1: the approved option-B comparison. At a management-stable point it
-        /// fills every vacant farm post in post order through the public session command,
-        /// trying the same living family members in ordinal <see cref="PersonId.Value"/> order
-        /// as farm-managed-v1. Occupied posts are never replaced, the Trading House is never
-        /// touched, and no random state is read or advanced.
+        /// dual-farm-v1：获批的 option-B 对比策略。它在管理稳定点按岗位次序通过公开的会话命令
+        /// 填满每个空缺的农庄岗位，候选在世家庭成员按 <see cref="PersonId.Value"/> 的序数次序
+        /// 尝试，与 farm-managed-v1 相同。已有人的岗位从不替换，商行从不触碰，也不读取或推进
+        /// 任何随机状态。
         /// </summary>
         /// <param name="appointments">
-        /// Receives one <c>farm#&lt;post&gt;=&lt;personId&gt;</c> entry per accepted appointment.
+        /// 每次被接受的任命向这里追加一条 <c>farm#&lt;post&gt;=&lt;personId&gt;</c>。
         /// </param>
         /// <param name="farmWasVacant">
-        /// True when at least one farm post was vacant when the policy inspected the industry.
+        /// 策略检查产业时至少有一个农庄岗位空缺则为 true。
         /// </param>
-        /// <returns>True only when this call appointed at least one person.</returns>
+        /// <returns>只有本次调用至少任命了一人时才为 true。</returns>
         public static bool TryApplyDualFarmManagement(GameSession session,
             IList<string> appointments, out bool farmWasVacant, out string detail)
         {
@@ -1266,9 +1533,8 @@ namespace SengokuChronicle.Editor
         }
 
         /// <summary>
-        /// Adapter that applies dual-farm-v1 to one seed row. Both appointments and vacancy
-        /// opportunities are counted per stable point, so the comparison against
-        /// farm-managed-v1 reports how often the second post was actually available.
+        /// 把 dual-farm-v1 应用到一行种子结果的适配器。任命数与空缺机会都按管理稳定点计数，
+        /// 因此与 farm-managed-v1 的对比能说明第二岗位实际可用的频率。
         /// </summary>
         private static void ApplyDualFarmManagement(GameSession session, M08BSeedResult result)
         {
@@ -1319,6 +1585,464 @@ namespace SengokuChronicle.Editor
                 return true;
             }
             return false;
+        }
+
+        /// <summary>
+        /// 单一种子在单一对比策略下的只读月度粮荒诊断。它和批量运行器一样，在同一个临时预览
+        /// 场景里跑真实的月份事务，记录每个已结算月份本来就算出的值。它不写产物、不碰存档、不改
+        /// 规则，且只允许 farm-managed-v1 与 dual-farm-v1，因此轨迹始终描述获批的对比。
+        /// </summary>
+        public static M08BFaminePolicyTrace RunFamineDiagnosticSeed(ulong seed, int years,
+            M08BIndustryPolicy policy)
+        {
+            if (policy != M08BIndustryPolicy.FarmManagedV1 &&
+                policy != M08BIndustryPolicy.DualFarmV1)
+            {
+                throw new ArgumentOutOfRangeException(nameof(policy),
+                    "粮荒诊断只追踪 farm-managed-v1 与 dual-farm-v1。");
+            }
+
+            var probe = new M08BFamineMonthlyProbe(seed, policy);
+            M08BSeedResult run = RunSeed(seed, years, Array.Empty<int>(), policy, probe);
+            var trace = new M08BFaminePolicyTrace
+            {
+                Seed = run.Seed,
+                SeedHex = run.SeedHex,
+                PolicyId = run.PolicyId,
+                Years = years,
+                Termination = run.Termination,
+                TerminationDetail = run.TerminationDetail ?? string.Empty,
+                MonthsSimulated = run.MonthsSimulated,
+                Months = new List<M08BFamineMonthRow>(probe.Rows)
+            };
+            EnsureFamineTraceComplete(trace);
+            MarkFamineMilestones(trace.Months);
+            return trace;
+        }
+
+        /// <summary>
+        /// 拒绝月份行与本次运行模拟月数不一致、或行号不是 <c>1..n</c> 的轨迹。这种轨迹序列化
+        /// 之后会像一份完整运行，实际却缺月，因此诊断把它当作硬错误：运行器返回轨迹前调用它，
+        /// 写入器也在创建任何一个文件之前调用它。
+        /// </summary>
+        public static void EnsureFamineTraceComplete(M08BFaminePolicyTrace trace)
+        {
+            if (trace == null)
+                throw new ArgumentNullException(nameof(trace));
+            string label = "种子 " + trace.Seed.ToString(CultureInfo.InvariantCulture) + " " +
+                (trace.PolicyId ?? "<无策略>");
+            if (trace.Months == null)
+            {
+                throw new InvalidOperationException(
+                    label + " 的粮荒轨迹没有月份列表，无法描述本次运行模拟的 " +
+                    trace.MonthsSimulated.ToString(CultureInfo.InvariantCulture) + " 个月。");
+            }
+            if (trace.Months.Count != trace.MonthsSimulated)
+            {
+                throw new InvalidOperationException(
+                    label + " 的粮荒轨迹有 " +
+                    trace.Months.Count.ToString(CultureInfo.InvariantCulture) +
+                    " 个月份行，但本次运行模拟了 " +
+                    trace.MonthsSimulated.ToString(CultureInfo.InvariantCulture) +
+                    " 个月；诊断绝不能把一次短运行报告成完整运行。");
+            }
+            for (int i = 0; i < trace.Months.Count; i++)
+            {
+                M08BFamineMonthRow row = trace.Months[i];
+                if (row == null || row.MonthNumber != i + 1)
+                {
+                    throw new InvalidOperationException(
+                        label + " 的粮荒轨迹编号不是 1.." +
+                        trace.Months.Count.ToString(CultureInfo.InvariantCulture) +
+                        "：第 " + (i + 1).ToString(CultureInfo.InvariantCulture) +
+                        " 行携带的月份是 " +
+                        (row == null ? "<空行>" : row.MonthNumber.ToString(
+                            CultureInfo.InvariantCulture)) + "。");
+                }
+            }
+        }
+
+        /// <summary>
+        /// 对一份轨迹做纯里程碑映射，公开方式与 <see cref="ClassifyStop"/> 相同：标记第一个
+        /// <see cref="M08BFamineMonthRow.FoodUnmet"/> 为正的月份，以及第一个连续粮荒月数达到
+        /// <see cref="CollapseConsecutiveMonths"/> 的月份。其余行都会被清除标记，因此重复调用
+        /// 不会改变结果。
+        /// </summary>
+        public static void MarkFamineMilestones(IReadOnlyList<M08BFamineMonthRow> rows)
+        {
+            if (rows == null)
+                return;
+            bool unmetSeen = false;
+            bool thresholdSeen = false;
+            for (int i = 0; i < rows.Count; i++)
+            {
+                M08BFamineMonthRow row = rows[i];
+                if (row == null)
+                    continue;
+                row.FirstFoodUnmet = false;
+                row.ThresholdCrossed = false;
+                if (!unmetSeen && row.FoodUnmet > 0)
+                {
+                    row.FirstFoodUnmet = true;
+                    unmetSeen = true;
+                }
+                if (!thresholdSeen && row.ConsecutiveShortageMonths >= CollapseConsecutiveMonths)
+                {
+                    row.ThresholdCrossed = true;
+                    thresholdSeen = true;
+                }
+            }
+        }
+
+        /// <summary>
+        /// 粮荒诊断目录，与封存的历史根同级而不是其子目录，因此诊断始终写在封存树之外，
+        /// 不可能覆盖封存的 seeds、checkpoints、summary 或批量日志文件。
+        /// </summary>
+        public const string FamineDiagnosticsRelativeDirectory =
+            "Logs/verify/m08b-famine-diagnostics";
+
+        public static string FamineDiagnosticsRoot =>
+            Path.GetFullPath(Path.Combine(UnityEngine.Application.dataPath, "..",
+                FamineDiagnosticsRelativeDirectory));
+
+        private static readonly string[] FamineMonthColumns =
+        {
+            "seed", "policyId", "monthNumber", "year", "month", "monthIndex",
+            "householdMembers", "demand",
+            "openingFood", "openingFunds", "openingSupplies",
+            "farmPost0Assignee", "farmPost0Status", "farmPost0Operated",
+            "farmPost1Assignee", "farmPost1Status", "farmPost1Operated",
+            "foodProduced", "foodPurchased", "foodUnmet",
+            "foodPriceBefore", "foodPriceAfter", "materialsPriceBefore", "materialsPriceAfter",
+            "closingFood", "closingFunds", "closingSupplies", "consecutiveShortageMonths",
+            "firstFoodUnmet", "thresholdCrossed"
+        };
+
+        /// <summary>
+        /// 按种子、再按策略 id 排序的确定性月份 CSV。同一种子与策略的两次运行序列化后逐字节
+        /// 相同，粮荒对比才可复审。
+        /// </summary>
+        public static string SerializeFamineMonthsCsv(IReadOnlyList<M08BFaminePolicyTrace> traces)
+        {
+            var csv = new StringBuilder(16384);
+            csv.Append(string.Join(",", FamineMonthColumns)).Append('\n');
+            foreach (M08BFaminePolicyTrace trace in OrderedFamineTraces(traces))
+            {
+                foreach (M08BFamineMonthRow row in trace.Months)
+                {
+                    var fields = new List<string>(FamineMonthColumns.Length)
+                    {
+                        row.Seed.ToString(CultureInfo.InvariantCulture),
+                        row.PolicyId ?? string.Empty,
+                        row.MonthNumber.ToString(CultureInfo.InvariantCulture),
+                        row.Year.ToString(CultureInfo.InvariantCulture),
+                        row.Month.ToString(CultureInfo.InvariantCulture),
+                        row.MonthIndex.ToString(CultureInfo.InvariantCulture),
+                        row.HouseholdMembers.ToString(CultureInfo.InvariantCulture),
+                        row.Demand.ToString(CultureInfo.InvariantCulture),
+                        row.OpeningFood.ToString(CultureInfo.InvariantCulture),
+                        row.OpeningFunds.ToString(CultureInfo.InvariantCulture),
+                        row.OpeningSupplies.ToString(CultureInfo.InvariantCulture),
+                        row.FarmPost0Assignee ?? string.Empty,
+                        row.FarmPost0Status ?? string.Empty,
+                        Bool(row.FarmPost0Operated),
+                        row.FarmPost1Assignee ?? string.Empty,
+                        row.FarmPost1Status ?? string.Empty,
+                        Bool(row.FarmPost1Operated),
+                        row.FoodProduced.ToString(CultureInfo.InvariantCulture),
+                        row.FoodPurchased.ToString(CultureInfo.InvariantCulture),
+                        row.FoodUnmet.ToString(CultureInfo.InvariantCulture),
+                        row.FoodPriceIndexBefore.ToString(CultureInfo.InvariantCulture),
+                        row.FoodPriceIndexAfter.ToString(CultureInfo.InvariantCulture),
+                        row.MaterialsPriceIndexBefore.ToString(CultureInfo.InvariantCulture),
+                        row.MaterialsPriceIndexAfter.ToString(CultureInfo.InvariantCulture),
+                        row.ClosingFood.ToString(CultureInfo.InvariantCulture),
+                        row.ClosingFunds.ToString(CultureInfo.InvariantCulture),
+                        row.ClosingSupplies.ToString(CultureInfo.InvariantCulture),
+                        row.ConsecutiveShortageMonths.ToString(CultureInfo.InvariantCulture),
+                        Bool(row.FirstFoodUnmet),
+                        Bool(row.ThresholdCrossed)
+                    };
+                    for (int i = 0; i < fields.Count; i++)
+                    {
+                        if (i > 0)
+                            csv.Append(',');
+                        csv.Append(EscapeCsv(fields[i]));
+                    }
+                    csv.Append('\n');
+                }
+            }
+            return csv.ToString();
+        }
+
+        /// <summary>
+        /// 汇总全部轨迹，并写入固定输入、规则版本以及源码与规则输入哈希，便于读者判断这些
+        /// 月份由哪份代码产出。
+        /// </summary>
+        public static string BuildFamineSummaryJson(IReadOnlyList<M08BFaminePolicyTrace> traces,
+            string command)
+        {
+            List<M08BFaminePolicyTrace> ordered = OrderedFamineTraces(traces);
+            TryComputeRuleInputProvenance(out string ruleInputSha256, out int ruleInputFileCount);
+            var json = new StringBuilder(8192);
+            json.Append("{\n");
+            JsonProperty(json, 2, "schema", "m08b.famine-diagnostics/v1", true);
+            JsonProperty(json, 2, "ruleVersion", RuleVersion, true);
+            JsonProperty(json, 2, "sourceSha256", ComputeSourceSha256(), true);
+            JsonProperty(json, 2, "ruleInputSha256", ruleInputSha256 ?? string.Empty, true);
+            JsonProperty(json, 2, "command", command ?? string.Empty, true);
+            JsonIndent(json, 2);
+            json.Append("\"ruleInputFileCount\":").Append(ruleInputFileCount).Append(",\n");
+            JsonIndent(json, 2);
+            json.Append("\"famineThresholdMonths\":").Append(CollapseConsecutiveMonths).Append(",\n");
+            JsonIndent(json, 2);
+            json.Append("\"monthRowCount\":").Append(ordered.Sum(item => item.Months.Count))
+                .Append(",\n");
+            JsonIndent(json, 2);
+            json.Append("\"traces\":[");
+            for (int i = 0; i < ordered.Count; i++)
+            {
+                if (i > 0)
+                    json.Append(',');
+                json.Append('\n');
+                AppendFamineTrace(json, ordered[i]);
+            }
+            json.Append('\n').Append("  ]\n}\n");
+            return json.ToString();
+        }
+
+        private static void AppendFamineTrace(StringBuilder json, M08BFaminePolicyTrace trace)
+        {
+            M08BFamineMonthRow firstUnmet = trace.FirstFoodUnmetMonth;
+            M08BFamineMonthRow threshold = trace.ThresholdCrossedMonth;
+            json.Append("    {\n");
+            JsonIndent(json, 6);
+            json.Append("\"seed\":").Append(trace.Seed).Append(",\n");
+            JsonProperty(json, 6, "seedHex", trace.SeedHex ?? FormatSeedHex(trace.Seed), true);
+            JsonProperty(json, 6, "policyId", trace.PolicyId ?? string.Empty, true);
+            JsonProperty(json, 6, "termination", trace.Termination.ToString(), true);
+            JsonProperty(json, 6, "terminationDetail", trace.TerminationDetail ?? string.Empty, true);
+            JsonIndent(json, 6);
+            json.Append("\"years\":").Append(trace.Years).Append(",\n");
+            JsonIndent(json, 6);
+            json.Append("\"monthsSimulated\":").Append(trace.MonthsSimulated).Append(",\n");
+            JsonIndent(json, 6);
+            json.Append("\"unmetMonths\":")
+                .Append(trace.Months.Count(row => row.FoodUnmet > 0)).Append(",\n");
+            JsonIndent(json, 6);
+            json.Append("\"totalDemand\":")
+                .Append(trace.Months.Sum(row => row.Demand)).Append(",\n");
+            JsonIndent(json, 6);
+            json.Append("\"totalFoodProduced\":")
+                .Append(trace.Months.Sum(row => row.FoodProduced)).Append(",\n");
+            JsonIndent(json, 6);
+            json.Append("\"totalFoodPurchased\":")
+                .Append(trace.Months.Sum(row => row.FoodPurchased)).Append(",\n");
+            JsonIndent(json, 6);
+            json.Append("\"totalFoodUnmet\":")
+                .Append(trace.Months.Sum(row => row.FoodUnmet)).Append(",\n");
+            JsonIndent(json, 6);
+            json.Append("\"maxConsecutiveShortageMonths\":")
+                .Append(trace.Months.Count == 0
+                    ? 0
+                    : trace.Months.Max(row => row.ConsecutiveShortageMonths)).Append(",\n");
+            JsonIndent(json, 6);
+            json.Append("\"farmPost0OperatedMonths\":")
+                .Append(trace.Months.Count(row => row.FarmPost0Operated)).Append(",\n");
+            JsonIndent(json, 6);
+            json.Append("\"farmPost1OperatedMonths\":")
+                .Append(trace.Months.Count(row => row.FarmPost1Operated)).Append(",\n");
+            json.Append("      \"firstFoodUnmet\":");
+            AppendFamineMilestone(json, firstUnmet);
+            json.Append(",\n      \"thresholdCrossed\":");
+            AppendFamineMilestone(json, threshold);
+            json.Append("\n    }");
+        }
+
+        private static void AppendFamineMilestone(StringBuilder json, M08BFamineMonthRow row)
+        {
+            if (row == null)
+            {
+                json.Append("null");
+                return;
+            }
+            json.Append("{\"monthNumber\":").Append(row.MonthNumber)
+                .Append(",\"year\":").Append(row.Year)
+                .Append(",\"month\":").Append(row.Month)
+                .Append(",\"foodUnmet\":").Append(row.FoodUnmet)
+                .Append(",\"demand\":").Append(row.Demand)
+                .Append(",\"foodProduced\":").Append(row.FoodProduced)
+                .Append(",\"foodPurchased\":").Append(row.FoodPurchased)
+                .Append(",\"openingFood\":").Append(row.OpeningFood)
+                .Append(",\"closingFood\":").Append(row.ClosingFood)
+                .Append(",\"foodPriceAfter\":").Append(row.FoodPriceIndexAfter)
+                .Append('}');
+        }
+
+        /// <summary>目标目录内用来串行化同目录写入的持久锁哨兵文件名。</summary>
+        public const string FamineLockFileName = ".famine-diagnostics.lock";
+
+        /// <summary>
+        /// 把粮荒 CSV 与汇总写入 <paramref name="root"/>；root 为空时写入
+        /// <see cref="FamineDiagnosticsRoot"/>。封存的历史产物树及其任何子目录都被拒绝，判断
+        /// 复用 <see cref="IsLegacyOutputRoot"/> 与 <see cref="NormalizeRootPath"/>。所有轨迹先经
+        /// <see cref="EnsureFamineTraceComplete"/> 检查，两份内容也在创建目录之前序列化好。
+        /// <para>
+        /// 每个目标文件都用不覆盖的创建策略（<see cref="FileMode.CreateNew"/>）写出，因此无论目标
+        /// 是在预检时已存在，还是在预检之后才并发出现，本次调用都不会截断或改写它，只会失败。
+        /// </para>
+        /// <para>
+        /// 同目录写入靠目标目录内的持久锁哨兵 <see cref="FamineLockFileName"/> 串行化：哨兵
+        /// 首次用 <see cref="FileMode.CreateNew"/> 创建，之后用 <see cref="FileMode.Open"/> 以
+        /// <see cref="FileShare.None"/> 独占打开，并一直持有到本次调用的写入或回滚结束。活跃
+        /// 句柄会立即拒绝其他调用；句柄关闭后顺序调用可再次重开，因此结束时只释放句柄，绝不
+        /// 按路径删除哨兵，也就没有“释放后再删除”的替换窗口。锁被占用时立即失败，且不删除
+        /// 他人的文件或目录；只有拿到锁的调用才会在持锁期间删除自己创建的目标文件，哨兵与
+        /// 目标目录保留，既有文件及其原内容保持不变。进程崩溃时句柄由系统关闭，残留的哨兵
+        /// 不会阻塞后续调用。
+        /// </para>
+        /// <para>
+        /// 这把锁只协调使用本 API 的写入者。非协作的外部进程改写目标文件不在锁契约内，失败
+        /// 回滚只按路径删除本调用成功创建的文件，也不声称能识别这种外部替换。
+        /// </para>
+        /// <para>
+        /// 两个文件不是原子事务：成功返回时两份都已写出，失败时不留本次创建的半套文件，但进程在
+        /// 两次写入之间崩溃仍可能只剩其中一份。
+        /// </para>
+        /// </summary>
+        public static IReadOnlyList<string> WriteFamineDiagnostics(string root,
+            IReadOnlyList<M08BFaminePolicyTrace> traces, string command)
+        {
+            List<M08BFaminePolicyTrace> ordered = OrderedFamineTraces(traces);
+            for (int i = 0; i < ordered.Count; i++)
+                EnsureFamineTraceComplete(ordered[i]);
+            string destination = string.IsNullOrWhiteSpace(root)
+                ? FamineDiagnosticsRoot
+                : Path.GetFullPath(root);
+            if (IsSealedArtifactPath(destination))
+            {
+                throw new ArgumentException(
+                    "拒绝把粮荒诊断写入封存的历史产物树 " + DefaultOutputRoot + " 及其子目录：" +
+                    destination, nameof(root));
+            }
+
+            string csvPath = Path.Combine(destination, "famine-months.csv");
+            string summaryPath = Path.Combine(destination, "famine-summary.json");
+            if (File.Exists(csvPath) || File.Exists(summaryPath))
+            {
+                throw new IOException(
+                    "拒绝覆盖已存在的粮荒诊断目标：" + csvPath + " 或 " + summaryPath +
+                    "；请先移除旧文件或改用其他目录。");
+            }
+
+            string csv = SerializeFamineMonthsCsv(ordered);
+            string summary = BuildFamineSummaryJson(ordered, command);
+            Directory.CreateDirectory(destination);
+
+            string lockPath = Path.Combine(destination, FamineLockFileName);
+            FileStream writeLock = AcquireFamineWriteLock(lockPath);
+            var created = new List<string>(2);
+            bool written = false;
+            try
+            {
+                WriteNewTextFile(csvPath, csv, created);
+                WriteNewTextFile(summaryPath, summary, created);
+                written = true;
+                return new[] { csvPath, summaryPath };
+            }
+            finally
+            {
+                if (!written)
+                {
+                    for (int i = 0; i < created.Count; i++)
+                        TryDeleteCreatedFile(created[i]);
+                }
+                writeLock.Dispose();
+            }
+        }
+
+        /// <summary>
+        /// 独占打开目标目录的锁哨兵：哨兵不存在时用 <see cref="FileMode.CreateNew"/> 创建，
+        /// 已存在时用 <see cref="FileMode.Open"/> 打开；两种情况都带
+        /// <see cref="FileShare.None"/>。哨兵正被其他写入者握有时立即失败，本次调用既不删除
+        /// 他人的文件，也不删除哨兵。
+        /// </summary>
+        private static FileStream AcquireFamineWriteLock(string lockPath)
+        {
+            try
+            {
+                try
+                {
+                    return new FileStream(lockPath, FileMode.CreateNew, FileAccess.ReadWrite,
+                        FileShare.None);
+                }
+                catch (IOException) when (File.Exists(lockPath))
+                {
+                    return new FileStream(lockPath, FileMode.Open, FileAccess.ReadWrite,
+                        FileShare.None);
+                }
+            }
+            catch (IOException exception)
+            {
+                throw new IOException(
+                    "拒绝并发写入：锁哨兵正被另一个粮荒诊断写入持有 " + lockPath +
+                    "；本次调用未改动任何文件或目录。", exception);
+            }
+            catch (UnauthorizedAccessException exception)
+            {
+                throw new IOException(
+                    "无法取得粮荒诊断的写锁 " + lockPath +
+                    "；本次调用未改动任何文件或目录。", exception);
+            }
+        }
+
+        /// <summary>
+        /// 用 <see cref="FileMode.CreateNew"/> 写出一份新文件：目标已存在时创建即失败，不会覆盖。
+        /// 只有本调用成功打开的文件才记入 <paramref name="created"/>，失败清理时据此只删除自己的
+        /// 产物，不碰既有文件。
+        /// </summary>
+        private static void WriteNewTextFile(string path, string content,
+            ICollection<string> created)
+        {
+            using (var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write,
+                       FileShare.None))
+            {
+                created.Add(path);
+                using (var writer = new StreamWriter(stream, Utf8NoBom))
+                    writer.Write(content);
+            }
+        }
+
+        /// <summary>清理本调用创建的文件；清理本身失败不掩盖原始写入异常。</summary>
+        private static void TryDeleteCreatedFile(string path)
+        {
+            try
+            {
+                File.Delete(path);
+            }
+            catch (IOException)
+            {
+            }
+            catch (UnauthorizedAccessException)
+            {
+            }
+        }
+
+        private static List<M08BFaminePolicyTrace> OrderedFamineTraces(
+            IReadOnlyList<M08BFaminePolicyTrace> traces)
+        {
+            if (traces == null || traces.Count == 0)
+                throw new ArgumentException("至少需要一份轨迹。", nameof(traces));
+            var ordered = new List<M08BFaminePolicyTrace>(traces);
+            ordered.Sort((left, right) =>
+            {
+                int bySeed = left.Seed.CompareTo(right.Seed);
+                return bySeed != 0
+                    ? bySeed
+                    : string.CompareOrdinal(left.PolicyId ?? string.Empty,
+                        right.PolicyId ?? string.Empty);
+            });
+            return ordered;
         }
 
         /// <summary>
@@ -1416,11 +2140,9 @@ namespace SengokuChronicle.Editor
                 M08BIndustryPolicy.Unmanaged);
 
         /// <summary>
-        /// Runs a resumable seed range for one policy. The runner captures the batch provenance
-        /// before it reuses or runs any seed, so the reuse check, every periodic artifact write
-        /// and the final summary/log describe the assembly that produced the rows. Rows may only
-        /// be reused from artifacts whose companion summary proves the same policy, so the two
-        /// policies stay separate.
+        /// 为一种策略运行可续跑的种子区间。运行器在复用或运行任何种子之前抓取批次来源，因此
+        /// 复用判断、每次周期产物写入以及最终汇总与日志都描述产出这些行的程序集。只有配套汇总
+        /// 能证明策略相同的产物才允许复用其中的行，因此两种策略始终分开。
         /// </summary>
         public static IReadOnlyList<M08BSeedResult> RunBatch(int firstSeed, int count, int years,
             string outputRoot, IReadOnlyList<int> checkpointYears, M08BIndustryPolicy policy) =>
@@ -1428,11 +2150,10 @@ namespace SengokuChronicle.Editor
                 CaptureBatchProvenance());
 
         /// <summary>
-        /// Private seam: runs a resumable seed range against one already frozen snapshot. Only
-        /// <see cref="CaptureBatchProvenance"/> produces such a snapshot and no public entry
-        /// accepts one, so callers cannot supply hashes the runner did not observe; the EditMode
-        /// tests reach this overload by reflection to prove a batch keeps the hashes it started
-        /// with after the source changes on disk.
+        /// 私有接缝：用一份已冻结的快照运行可续跑的种子区间。这样的快照只由
+        /// <see cref="CaptureBatchProvenance"/> 产出，也没有公开入口接受它，因此调用者无法提供
+        /// 运行器没观测到的哈希；EditMode 测试通过反射触达这个重载，证明批次在磁盘源码变化后
+        /// 仍保留开始时抓到的哈希。
         /// </summary>
         private static IReadOnlyList<M08BSeedResult> RunBatch(int firstSeed, int count, int years,
             string outputRoot, IReadOnlyList<int> checkpointYears, M08BIndustryPolicy policy,
@@ -1447,11 +2168,9 @@ namespace SengokuChronicle.Editor
             if ((long)firstSeed + count - 1 > uint.MaxValue)
                 throw new ArgumentOutOfRangeException(nameof(count), "seed range exceeds uint range.");
 
-            // The public entry froze the snapshot before this call, so the reuse check, every
-            // artifact write and the final log below describe the assembly that produced the
-            // rows even if the source changes while the batch runs. A null snapshot is only
-            // reachable from inside this type and is captured here before anything is reused or
-            // run.
+            // 公开入口在调用这里之前已经冻结快照，因此即使批次运行期间源码变化，下面的复用
+            // 判断、每次产物写入与最终日志仍描述产出这些行的程序集。null 快照只能从本类型
+            // 内部触达，并在这里、在复用或运行任何东西之前被抓取。
             M08BBatchProvenance frozenProvenance = provenance ?? CaptureBatchProvenance();
             List<int> checkpoints = NormalizeCheckpointYears(checkpointYears);
             string root = ResolveArtifactRoot(outputRoot, policy);
@@ -2026,10 +2745,8 @@ namespace SengokuChronicle.Editor
 
         /// <summary>
         /// Reuses a completed CSV row range only when its companion summary proves the same
-        /// frozen batch provenance (runner source and rule-input hashes captured before this
-        /// batch reused or ran any seed), normalized schema and rule version, and a compatible
-        /// range and checkpoint set. Any doubt rejects the file instead of trusting a stale
-        /// artifact.
+        /// 在本批次复用或运行任何种子之前抓取的运行器源码与规则输入哈希、规范化 schema 与规则
+        /// 版本，以及兼容的区间与检查点集合。任何疑点都拒绝该文件，而不信任过期产物。
         /// </summary>
         private static void TryLoadRange(string root, string seedsPath, int firstSeed, int count,
             int years, IReadOnlyList<int> checkpointYears, M08BIndustryPolicy policy,
@@ -2925,10 +3642,9 @@ namespace SengokuChronicle.Editor
                 M08BIndustryPolicy.Unmanaged);
 
         /// <summary>
-        /// Deterministic summary over the completed seed rows for one policy. The runner captures
-        /// the provenance once here, so a standalone summary describes the disk it is written
-        /// from. Every ratio prints its numerator and denominator; wall-clock timing stays in the
-        /// batch log so the same range always produces the same bytes.
+        /// 针对一种策略、覆盖已完成种子行的确定性汇总。运行器在这里抓取一次来源，因此独立生成
+        /// 的汇总描述它写出时所依据的磁盘状态。每个比率都打印分子与分母；墙钟耗时只留在批量
+        /// 日志里，因此同一区间总是产出同样的字节。
         /// </summary>
         public static string BuildSummaryJson(IReadOnlyList<M08BSeedResult> seeds, int firstSeed,
             int count, int years, IReadOnlyList<int> checkpointYears, M08BIndustryPolicy policy) =>
@@ -2936,11 +3652,9 @@ namespace SengokuChronicle.Editor
                 CaptureBatchProvenance());
 
         /// <summary>
-        /// Private seam: stamps the summary with an already frozen snapshot. Only this type mints
-        /// snapshots and no public entry accepts one, so a caller cannot swap the provenance. A
-        /// batch passes the snapshot it captured before running seeds, so writing the summary
-        /// never re-reads the disk; the EditMode tests reach this overload by reflection to prove
-        /// a source change does not drift the summary hashes.
+        /// 私有接缝：用一份已冻结的快照给汇总盖章。只有本类型能铸造快照，也没有公开入口接受
+        /// 快照，因此调用者无法替换来源。批次传入它运行种子之前抓到的快照，因此写汇总时绝不
+        /// 重新读盘；EditMode 测试通过反射触达这个重载，证明源码变化不会让汇总哈希漂移。
         /// </summary>
         private static string BuildSummaryJson(IReadOnlyList<M08BSeedResult> seeds, int firstSeed,
             int count, int years, IReadOnlyList<int> checkpointYears, M08BIndustryPolicy policy,
